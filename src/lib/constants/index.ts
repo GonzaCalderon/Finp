@@ -1,0 +1,59 @@
+export const ACCOUNT_TYPES = {
+    BANK: 'bank',
+    CASH: 'cash',
+    WALLET: 'wallet',
+    CREDIT_CARD: 'credit_card',
+    DEBT: 'debt',
+    SAVINGS: 'savings',
+} as const
+
+export const TRANSACTION_TYPES = {
+    INCOME: 'income',
+    EXPENSE: 'expense',
+    TRANSFER: 'transfer',
+    CREDIT_CARD_PAYMENT: 'credit_card_payment',
+    DEBT_PAYMENT: 'debt_payment',
+    ADJUSTMENT: 'adjustment',
+} as const
+
+export const CATEGORY_TYPES = {
+    INCOME: 'income',
+    EXPENSE: 'expense',
+} as const
+
+export const CURRENCIES = {
+    ARS: 'ARS',
+    USD: 'USD',
+} as const
+
+export const RECURRENCE_TYPES = {
+    MONTHLY: 'monthly',
+    WEEKLY: 'weekly',
+    ONCE: 'once',
+} as const
+
+export const APPLY_MODES = {
+    MANUAL: 'manual',
+    AUTO_MONTH_START: 'auto_month_start',
+} as const
+
+export const TRANSACTION_STATUS = {
+    CONFIRMED: 'confirmed',
+    PLANNED: 'planned',
+} as const
+
+export const CREATED_FROM = {
+    WEB: 'web',
+    TELEGRAM: 'telegram',
+    SYSTEM: 'system',
+} as const
+
+// Tipos derivados
+export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
+export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
+export type CategoryType = typeof CATEGORY_TYPES[keyof typeof CATEGORY_TYPES]
+export type Currency = typeof CURRENCIES[keyof typeof CURRENCIES]
+export type RecurrenceType = typeof RECURRENCE_TYPES[keyof typeof RECURRENCE_TYPES]
+export type ApplyMode = typeof APPLY_MODES[keyof typeof APPLY_MODES]
+export type TransactionStatus = typeof TRANSACTION_STATUS[keyof typeof TRANSACTION_STATUS]
+export type CreatedFrom = typeof CREATED_FROM[keyof typeof CREATED_FROM]
