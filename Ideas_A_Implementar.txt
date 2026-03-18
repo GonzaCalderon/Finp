@@ -1,0 +1,1 @@
+Las cuentas, que tengan un color asignado.

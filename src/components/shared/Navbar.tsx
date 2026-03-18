@@ -12,6 +12,7 @@ import {
     CreditCard,
     Tag,
     Calendar,
+    TrendingUp,
     Menu,
     LogOut,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
     { href: '/categories', label: 'Categorías', icon: Tag },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
+    { href: '/projection', label: 'Proyección', icon: TrendingUp },
 ]
 
 function NavLinks({ onClose }: { onClose?: () => void }) {
