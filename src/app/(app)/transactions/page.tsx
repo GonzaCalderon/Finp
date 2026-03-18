@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useTransactions } from '@/hooks/useTransactions'
+import { useInstallments } from '@/hooks/useInstallments'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
+import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
 import type { ITransaction } from '@/types'
 
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
@@ -50,21 +52,23 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => {
 
 export default function TransactionsPage() {
     const [month, setMonth] = useState(getCurrentMonth())
-    const [dialogOpen, setDialogOpen] = useState(false)
+    const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
+    const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false)
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
 
     const { transactions, loading, error, createTransaction, updateTransaction, deleteTransaction } = useTransactions({ month })
+    const { createPlan } = useInstallments()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
 
-    const handleCreate = () => {
+    const handleNewTransaction = () => {
         setSelectedTransaction(null)
-        setDialogOpen(true)
+        setTransactionDialogOpen(true)
     }
 
     const handleEdit = (transaction: ITransaction) => {
         setSelectedTransaction(transaction)
-        setDialogOpen(true)
+        setTransactionDialogOpen(true)
     }
 
     const handleDelete = async (id: string) => {
@@ -76,16 +80,25 @@ export default function TransactionsPage() {
         }
     }
 
-    const handleSubmit = async (data: Partial<ITransaction>) => {
+    const handleTransactionSubmit = async (data: Partial<ITransaction>) => {
         try {
             if (selectedTransaction) {
                 await updateTransaction(selectedTransaction._id.toString(), data)
             } else {
                 await createTransaction(data)
             }
-            setDialogOpen(false)
+            setTransactionDialogOpen(false)
         } catch (err) {
             alert(err instanceof Error ? err.message : 'Error al guardar transacción')
+        }
+    }
+
+    const handleInstallmentSubmit = async (data: Record<string, unknown>) => {
+        try {
+            await createPlan(data as never)
+            setInstallmentDialogOpen(false)
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Error al registrar compra en cuotas')
         }
     }
 
@@ -94,25 +107,35 @@ export default function TransactionsPage() {
         .reduce((sum, t) => sum + t.amount, 0)
 
     const totalExpense = transactions
-        .filter((t) => t.type === 'expense')
+        .filter((t) => t.type === 'expense' && !t.installmentPlanId)
         .reduce((sum, t) => sum + t.amount, 0)
 
-    const formatAmount = (amount: number, currency: string) => {
-        return new Intl.NumberFormat('es-AR', {
+    const totalInstallmentDebt = transactions
+        .filter((t) => t.type === 'expense' && t.installmentPlanId)
+        .reduce((sum, t) => sum + t.amount, 0)
+
+    const formatAmount = (amount: number, currency: string) =>
+        new Intl.NumberFormat('es-AR', {
             style: 'currency',
             currency,
             maximumFractionDigits: 0,
         }).format(amount)
-    }
 
     if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando transacciones...</div>
     if (error) return <div className="p-8 text-center text-destructive">{error}</div>
 
     return (
-        <div className="p-6 max-w-4xl mx-auto space-y-6">
+        <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold">Transacciones</h1>
-                <Button onClick={handleCreate}>+ Nueva transacción</Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setInstallmentDialogOpen(true)}>
+                        + Cuotas
+                    </Button>
+                    <Button onClick={handleNewTransaction}>
+                        + Nueva
+                    </Button>
+                </div>
             </div>
 
             <div className="flex items-center gap-4">
@@ -130,7 +153,7 @@ export default function TransactionsPage() {
                 </Select>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                     <CardContent className="pt-6">
                         <p className="text-sm text-muted-foreground">Ingresos</p>
@@ -141,7 +164,7 @@ export default function TransactionsPage() {
                 </Card>
                 <Card>
                     <CardContent className="pt-6">
-                        <p className="text-sm text-muted-foreground">Gastos</p>
+                        <p className="text-sm text-muted-foreground">Gastos reales</p>
                         <p className="text-xl font-bold text-red-600">
                             {formatAmount(totalExpense, 'ARS')}
                         </p>
@@ -152,6 +175,14 @@ export default function TransactionsPage() {
                         <p className="text-sm text-muted-foreground">Balance</p>
                         <p className={`text-xl font-bold ${totalIncome - totalExpense >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {formatAmount(totalIncome - totalExpense, 'ARS')}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-6">
+                        <p className="text-sm text-muted-foreground">Deuda en cuotas</p>
+                        <p className="text-xl font-bold text-orange-500">
+                            {formatAmount(totalInstallmentDebt, 'ARS')}
                         </p>
                     </CardContent>
                 </Card>
@@ -178,6 +209,9 @@ export default function TransactionsPage() {
                                             <p className="text-xs text-muted-foreground">
                                                 {new Date(transaction.date).toLocaleDateString('es-AR')}
                                                 {transaction.merchant && ` · ${transaction.merchant}`}
+                                                {transaction.installmentPlanId && (
+                                                    <span className="ml-1 text-primary">· en cuotas</span>
+                                                )}
                                             </p>
                                         </div>
                                     </div>
@@ -202,12 +236,20 @@ export default function TransactionsPage() {
             )}
 
             <TransactionDialog
-                open={dialogOpen}
-                onOpenChange={setDialogOpen}
+                open={transactionDialogOpen}
+                onOpenChange={setTransactionDialogOpen}
                 transaction={selectedTransaction}
                 accounts={accounts}
                 categories={categories}
-                onSubmit={handleSubmit}
+                onSubmit={handleTransactionSubmit}
+            />
+
+            <InstallmentDialog
+                open={installmentDialogOpen}
+                onOpenChange={setInstallmentDialogOpen}
+                accounts={accounts}
+                categories={categories}
+                onSubmit={handleInstallmentSubmit}
             />
         </div>
     )

@@ -39,6 +39,7 @@ interface DashboardData {
         totalIncome: number
         totalExpense: number
         balance: number
+        totalInstallmentDebt: number
     }
     expenseByCategory: { name: string; color?: string; total: number }[]
     accounts: {
@@ -124,7 +125,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Resumen del mes */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos</CardTitle>
@@ -152,6 +153,16 @@ export default function DashboardPage() {
                     <CardContent>
                         <p className={`text-2xl font-bold ${data.summary.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {fmt(data.summary.balance)}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Deuda en cuotas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-2xl font-bold text-orange-500">
+                            {fmt(data.summary.totalInstallmentDebt)}
                         </p>
                     </CardContent>
                 </Card>
