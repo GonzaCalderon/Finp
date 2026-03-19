@@ -6,8 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'Geist Mono', 'Fira Code', monospace;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -46,7 +46,6 @@
 :root {
   --radius: 0.625rem;
 
-  /* Finp — Light mode */
   --background: #FAFAFA;
   --foreground: #111827;
   --card: #FFFFFF;
@@ -66,12 +65,9 @@
   --input: #E5E7EB;
   --ring: #4A9ECC;
 
-  /* Finp amber */
   --amber: #D4A017;
   --amber-light: #FDF6E3;
   --amber-dark: #A67C00;
-
-  /* Finp sky */
   --sky: #4A9ECC;
   --sky-light: #E8F4FB;
   --sky-dark: #2D7BAA;
@@ -115,7 +111,6 @@
   --amber: #EAB308;
   --amber-light: #1C1500;
   --amber-dark: #FDE68A;
-
   --sky: #60B8E0;
   --sky-light: #0D1F2D;
   --sky-dark: #93D0EE;
@@ -156,11 +151,8 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
 }
-/* Transiciones suaves globales */
-.card, [class*="rounded-xl"] {
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
 
+/* Transiciones globales */
 button {
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
@@ -169,7 +161,7 @@ a {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* Fade in al montar páginas */
+/* Fade in páginas */
 main {
   animation: fadeIn 0.2s ease;
 }
@@ -179,57 +171,18 @@ main {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Skeleton pulse más suave */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-/* Animaciones de Dialog */
-@keyframes dialogOverlayShow {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/* Dialog — aumentar duración de animación */
+[data-slot="dialog-content"] {
+  animation-duration: 220ms !important;
+  transition-duration: 220ms !important;
 }
 
-@keyframes dialogOverlayHide {
-  from { opacity: 1; }
-  to { opacity: 0; }
+[data-slot="dialog-overlay"] {
+  animation-duration: 180ms !important;
 }
 
-@keyframes dialogContentShow {
-  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-@keyframes dialogContentHide {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
-}
-
-@keyframes sheetContentShow {
-  from { opacity: 0; transform: translateX(100%); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes sheetContentHide {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0; transform: translateX(100%); }
-}
-
-[data-radix-dialog-overlay][data-state="open"] {
-  animation: dialogOverlayShow 0.15s ease;
-}
-[data-radix-dialog-overlay][data-state="closed"] {
-  animation: dialogOverlayHide 0.15s ease;
-}
-[data-radix-dialog-content][data-state="open"] {
-  animation: dialogContentShow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-[data-radix-dialog-content][data-state="closed"] {
-  animation: dialogContentHide 0.15s ease;
-}
-[data-radix-sheet-content][data-state="open"] {
-  animation: sheetContentShow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-[data-radix-sheet-content][data-state="closed"] {
-  animation: sheetContentHide 0.18s ease;
+/* Sheet */
+[data-slot="sheet-content"] {
+  animation-duration: 250ms !important;
+  transition-duration: 250ms !important;
 }
