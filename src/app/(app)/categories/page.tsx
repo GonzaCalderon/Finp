@@ -18,6 +18,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CategoryDialog } from '@/components/shared/CategoryDialog'
+import type { CategoryFormData } from '@/lib/validations'
 import type { ICategory } from '@/types'
 
 const CATEGORY_TYPE_LABELS: Record<string, string> = {
@@ -62,7 +63,7 @@ export default function CategoriesPage() {
         }
     }
 
-    const handleSubmit = async (data: Partial<ICategory>) => {
+    const handleSubmit = async (data: CategoryFormData) => {
         try {
             if (selectedCategory) {
                 await updateCategory(selectedCategory._id.toString(), data)

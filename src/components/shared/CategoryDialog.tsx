@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,71 +20,63 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { ColorPicker } from '@/components/shared/ColorPicker'
+import { categorySchema, type CategoryFormData } from '@/lib/validations'
 import type { ICategory } from '@/types'
 
 interface CategoryDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     category: ICategory | null
-    onSubmit: (data: Partial<ICategory>) => Promise<void>
+    onSubmit: (data: CategoryFormData) => Promise<void>
 }
 
 export function CategoryDialog({ open, onOpenChange, category, onSubmit }: CategoryDialogProps) {
-    const [name, setName] = useState('')
-    const [type, setType] = useState('')
-    const [color, setColor] = useState('#6366f1')
-    const [loading, setLoading] = useState(false)
+    const {
+        register,
+        handleSubmit,
+        setValue,
+        watch,
+        reset,
+        formState: { errors, isSubmitting },
+    } = useForm<CategoryFormData>({
+        resolver: zodResolver(categorySchema),
+        defaultValues: { color: '#6366f1' },
+    })
+
+    const color = watch('color') ?? '#6366f1'
+    const type = watch('type')
 
     useEffect(() => {
-        if (category) {
-            setName(category.name)
-            setType(category.type)
-            setColor(category.color ?? '#6366f1')
-        } else {
-            setName('')
-            setType('')
-            setColor('#6366f1')
+        if (open) {
+            if (category) {
+                reset({
+                    name: category.name,
+                    type: category.type,
+                    color: category.color ?? '#6366f1',
+                })
+            } else {
+                reset({ color: '#6366f1' })
+            }
         }
-    }, [category, open])
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        try {
-            await onSubmit({
-                name,
-                type: type as ICategory['type'],
-                color,
-            })
-        } finally {
-            setLoading(false)
-        }
-    }
+    }, [open, category, reset])
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-sm">
                 <DialogHeader>
-                    <DialogTitle>
-                        {category ? 'Editar categoría' : 'Nueva categoría'}
-                    </DialogTitle>
+                    <DialogTitle>{category ? 'Editar categoría' : 'Nueva categoría'}</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Nombre</Label>
-                        <Input
-                            id="name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            required
-                            placeholder="Ej: Supermercado"
-                        />
+                        <Input id="name" placeholder="Ej: Supermercado" {...register('name')} />
+                        {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                     </div>
 
                     <div className="space-y-2">
                         <Label>Tipo</Label>
-                        <Select value={type} onValueChange={setType} required>
+                        <Select value={type} onValueChange={(v) => setValue('type', v as CategoryFormData['type'], { shouldValidate: true })}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Seleccioná un tipo" />
                             </SelectTrigger>
@@ -91,20 +85,17 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
                                 <SelectItem value="expense">Gasto</SelectItem>
                             </SelectContent>
                         </Select>
+                        {errors.type && <p className="text-xs text-destructive">{errors.type.message}</p>}
                     </div>
 
-                    <ColorPicker
-                        label="Color"
-                        value={color}
-                        onChange={setColor}
-                    />
+                    <ColorPicker label="Color" value={color} onChange={(c) => setValue('color', c)} />
 
                     <div className="flex justify-end gap-2 pt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? 'Guardando...' : category ? 'Guardar cambios' : 'Crear categoría'}
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Guardando...' : category ? 'Guardar cambios' : 'Crear categoría'}
                         </Button>
                     </div>
                 </form>

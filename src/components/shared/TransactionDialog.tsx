@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,6 +22,7 @@ import {
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CalendarIcon } from 'lucide-react'
+import { transactionSchema, type TransactionFormData } from '@/lib/validations'
 import type { ITransaction, IAccount, ICategory } from '@/types'
 
 interface TransactionDialogProps {
@@ -28,7 +31,7 @@ interface TransactionDialogProps {
     transaction: ITransaction | null
     accounts: IAccount[]
     categories: ICategory[]
-    onSubmit: (data: Partial<ITransaction>) => Promise<void>
+    onSubmit: (data: TransactionFormData) => Promise<void>
 }
 
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
@@ -48,18 +51,28 @@ export function TransactionDialog({
                                       categories,
                                       onSubmit,
                                   }: TransactionDialogProps) {
-    const [type, setType] = useState('expense')
-    const [amount, setAmount] = useState('')
-    const [currency, setCurrency] = useState('ARS')
-    const [date, setDate] = useState<Date>(new Date())
-    const [description, setDescription] = useState('')
-    const [categoryId, setCategoryId] = useState('')
-    const [sourceAccountId, setSourceAccountId] = useState('')
-    const [destinationAccountId, setDestinationAccountId] = useState('')
-    const [notes, setNotes] = useState('')
-    const [merchant, setMerchant] = useState('')
-    const [calendarOpen, setCalendarOpen] = useState(false)
-    const [loading, setLoading] = useState(false)
+    const {
+        register,
+        handleSubmit,
+        setValue,
+        watch,
+        reset,
+        formState: { errors, isSubmitting },
+    } = useForm<TransactionFormData>({
+        resolver: zodResolver(transactionSchema),
+        defaultValues: {
+            type: 'expense',
+            currency: 'ARS',
+            date: new Date(),
+        },
+    })
+
+    const type = watch('type')
+    const date = watch('date')
+    const currency = watch('currency')
+    const sourceAccountId = watch('sourceAccountId')
+    const destinationAccountId = watch('destinationAccountId')
+    const categoryId = watch('categoryId')
 
     const filteredCategories = categories.filter((c) => {
         if (type === 'income') return c.type === 'income'
@@ -67,70 +80,46 @@ export function TransactionDialog({
         return false
     })
 
-    useEffect(() => {
-        if (transaction) {
-            setType(transaction.type)
-            setAmount(transaction.amount.toString())
-            setCurrency(transaction.currency)
-            setDate(new Date(transaction.date))
-            setDescription(transaction.description)
-            setCategoryId(transaction.categoryId?.toString() ?? '')
-            setSourceAccountId(transaction.sourceAccountId?.toString() ?? '')
-            setDestinationAccountId(transaction.destinationAccountId?.toString() ?? '')
-            setNotes(transaction.notes ?? '')
-            setMerchant(transaction.merchant ?? '')
-        } else {
-            setType('expense')
-            setAmount('')
-            setCurrency('ARS')
-            setDate(new Date())
-            setDescription('')
-            setCategoryId('')
-            setSourceAccountId('')
-            setDestinationAccountId('')
-            setNotes('')
-            setMerchant('')
-        }
-    }, [transaction, open])
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        try {
-            await onSubmit({
-                type: type as ITransaction['type'],
-                amount: parseFloat(amount),
-                currency: currency as ITransaction['currency'],
-                date,
-                description,
-                categoryId: categoryId ? (categoryId as unknown as ITransaction['categoryId']) : undefined,
-                sourceAccountId: sourceAccountId ? (sourceAccountId as unknown as ITransaction['sourceAccountId']) : undefined,
-                destinationAccountId: destinationAccountId ? (destinationAccountId as unknown as ITransaction['destinationAccountId']) : undefined,
-                notes: notes || undefined,
-                merchant: merchant || undefined,
-            })
-        } finally {
-            setLoading(false)
-        }
-    }
-
     const showSource = ['expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(type)
     const showDestination = ['income', 'transfer', 'credit_card_payment', 'debt_payment'].includes(type)
     const showCategory = ['income', 'expense'].includes(type)
+
+    useEffect(() => {
+        if (open) {
+            if (transaction) {
+                reset({
+                    type: transaction.type,
+                    amount: transaction.amount,
+                    currency: transaction.currency,
+                    date: new Date(transaction.date),
+                    description: transaction.description,
+                    categoryId: transaction.categoryId?.toString() ?? '',
+                    sourceAccountId: transaction.sourceAccountId?.toString() ?? '',
+                    destinationAccountId: transaction.destinationAccountId?.toString() ?? '',
+                    notes: transaction.notes ?? '',
+                    merchant: transaction.merchant ?? '',
+                })
+            } else {
+                reset({
+                    type: 'expense',
+                    currency: 'ARS',
+                    date: new Date(),
+                })
+            }
+        }
+    }, [open, transaction, reset])
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>
-                        {transaction ? 'Editar transacción' : 'Nueva transacción'}
-                    </DialogTitle>
+                    <DialogTitle>{transaction ? 'Editar transacción' : 'Nueva transacción'}</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label>Tipo</Label>
-                        <Select value={type} onValueChange={setType}>
+                        <Select value={type} onValueChange={(v) => setValue('type', v as TransactionFormData['type'], { shouldValidate: true })}>
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
@@ -140,28 +129,19 @@ export function TransactionDialog({
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.type && <p className="text-xs text-destructive">{errors.type.message}</p>}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="amount">Monto</Label>
-                            <Input
-                                id="amount"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                required
-                                placeholder="0.00"
-                            />
+                            <Input id="amount" type="number" min="0" step="0.01" placeholder="0.00" {...register('amount')} />
+                            {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
                         </div>
                         <div className="space-y-2">
                             <Label>Moneda</Label>
-                            <Select value={currency} onValueChange={setCurrency}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
+                            <Select value={currency} onValueChange={(v) => setValue('currency', v as TransactionFormData['currency'])}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="ARS">ARS</SelectItem>
                                     <SelectItem value="USD">USD</SelectItem>
@@ -172,50 +152,42 @@ export function TransactionDialog({
 
                     <div className="space-y-2">
                         <Label>Fecha</Label>
-                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                        <Popover>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="w-full justify-start text-left font-normal">
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {date.toLocaleDateString('es-AR')}
+                                    {date ? date.toLocaleDateString('es-AR') : 'Seleccioná fecha'}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
                                 <Calendar
                                     mode="single"
                                     selected={date}
-                                    onSelect={(d) => {
-                                        if (d) {
-                                            setDate(d)
-                                            setCalendarOpen(false)
-                                        }
-                                    }}
+                                    onSelect={(d) => d && setValue('date', d, { shouldValidate: true })}
                                 />
                             </PopoverContent>
                         </Popover>
+                        {errors.date && <p className="text-xs text-destructive">{errors.date.message}</p>}
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="description">Descripción</Label>
-                        <Input
-                            id="description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            required
-                            placeholder="Ej: Supermercado Dia"
-                        />
+                        <Input id="description" placeholder="Ej: Supermercado Dia" {...register('description')} />
+                        {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
                     </div>
 
                     {showCategory && filteredCategories.length > 0 && (
                         <div className="space-y-2">
                             <Label>Categoría</Label>
-                            <Select value={categoryId} onValueChange={setCategoryId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná categoría" />
-                                </SelectTrigger>
+                            <Select value={categoryId} onValueChange={(v) => setValue('categoryId', v)}>
+                                <SelectTrigger><SelectValue placeholder="Seleccioná categoría" /></SelectTrigger>
                                 <SelectContent>
                                     {filteredCategories.map((c) => (
                                         <SelectItem key={c._id.toString()} value={c._id.toString()}>
-                                            {c.name}
+                                            <div className="flex items-center gap-2">
+                                                {c.color && <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />}
+                                                {c.name}
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -226,65 +198,63 @@ export function TransactionDialog({
                     {showSource && (
                         <div className="space-y-2">
                             <Label>Cuenta origen</Label>
-                            <Select value={sourceAccountId} onValueChange={setSourceAccountId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná cuenta" />
-                                </SelectTrigger>
+                            <Select value={sourceAccountId} onValueChange={(v) => setValue('sourceAccountId', v, { shouldValidate: true })}>
+                                <SelectTrigger><SelectValue placeholder="Seleccioná cuenta" /></SelectTrigger>
                                 <SelectContent>
                                     {accounts.map((a) => (
                                         <SelectItem key={a._id.toString()} value={a._id.toString()}>
-                                            {a.name}
+                                            <div className="flex items-center gap-2">
+                                                {(a as IAccount & { color?: string }).color && (
+                                                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: (a as IAccount & { color?: string }).color }} />
+                                                )}
+                                                <span>{a.name}</span>
+                                                <span className="text-xs text-muted-foreground">{a.currency}</span>
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {errors.sourceAccountId && <p className="text-xs text-destructive">{errors.sourceAccountId.message}</p>}
                         </div>
                     )}
 
                     {showDestination && (
                         <div className="space-y-2">
                             <Label>Cuenta destino</Label>
-                            <Select value={destinationAccountId} onValueChange={setDestinationAccountId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná cuenta" />
-                                </SelectTrigger>
+                            <Select value={destinationAccountId} onValueChange={(v) => setValue('destinationAccountId', v, { shouldValidate: true })}>
+                                <SelectTrigger><SelectValue placeholder="Seleccioná cuenta" /></SelectTrigger>
                                 <SelectContent>
                                     {accounts.map((a) => (
                                         <SelectItem key={a._id.toString()} value={a._id.toString()}>
-                                            {a.name}
+                                            <div className="flex items-center gap-2">
+                                                {(a as IAccount & { color?: string }).color && (
+                                                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: (a as IAccount & { color?: string }).color }} />
+                                                )}
+                                                <span>{a.name}</span>
+                                                <span className="text-xs text-muted-foreground">{a.currency}</span>
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {errors.destinationAccountId && <p className="text-xs text-destructive">{errors.destinationAccountId.message}</p>}
                         </div>
                     )}
 
                     <div className="space-y-2">
                         <Label htmlFor="merchant">Comercio (opcional)</Label>
-                        <Input
-                            id="merchant"
-                            value={merchant}
-                            onChange={(e) => setMerchant(e.target.value)}
-                            placeholder="Ej: Carrefour"
-                        />
+                        <Input id="merchant" placeholder="Ej: Carrefour" {...register('merchant')} />
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="notes">Notas (opcional)</Label>
-                        <Input
-                            id="notes"
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Notas adicionales"
-                        />
+                        <Input id="notes" placeholder="Notas adicionales" {...register('notes')} />
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                            Cancelar
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? 'Guardando...' : transaction ? 'Guardar cambios' : 'Crear transacción'}
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Guardando...' : transaction ? 'Guardar cambios' : 'Crear transacción'}
                         </Button>
                     </div>
                 </form>

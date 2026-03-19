@@ -20,7 +20,7 @@ export function useCommitments() {
         }
     }
 
-    const createCommitment = async (body: Partial<IScheduledCommitment>) => {
+    const createCommitment = async (body: Record<string, unknown>) => {
         const res = await fetch('/api/commitments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -32,7 +32,7 @@ export function useCommitments() {
         return data.commitment
     }
 
-    const updateCommitment = async (id: string, body: Partial<IScheduledCommitment>) => {
+    const updateCommitment = async (id: string, body: Record<string, unknown>) => {
         const res = await fetch(`/api/commitments/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },

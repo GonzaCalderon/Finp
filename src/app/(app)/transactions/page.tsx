@@ -29,7 +29,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
-import type { ITransaction } from '@/types'
+import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
+import type { ITransaction, IAccount } from '@/types'
 
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     income: 'Ingreso',
@@ -99,7 +100,7 @@ export default function TransactionsPage() {
         }
     }
 
-    const handleTransactionSubmit = async (data: Partial<ITransaction>) => {
+    const handleTransactionSubmit = async (data: TransactionFormData) => {
         try {
             if (selectedTransaction) {
                 await updateTransaction(selectedTransaction._id.toString(), data)
@@ -114,7 +115,7 @@ export default function TransactionsPage() {
         }
     }
 
-    const handleInstallmentSubmit = async (data: Record<string, unknown>) => {
+    const handleInstallmentSubmit = async (data: InstallmentFormData) => {
         try {
             await createPlan(data as never)
             success('Compra en cuotas registrada correctamente')
@@ -132,10 +133,6 @@ export default function TransactionsPage() {
         .filter((t) => t.type === 'expense' && !t.installmentPlanId)
         .reduce((sum, t) => sum + t.amount, 0)
 
-    const totalInstallmentDebt = transactions
-        .filter((t) => t.type === 'expense' && t.installmentPlanId)
-        .reduce((sum, t) => sum + t.amount, 0)
-
     const formatAmount = (amount: number, currency: string) =>
         new Intl.NumberFormat('es-AR', {
             style: 'currency',
@@ -150,8 +147,8 @@ export default function TransactionsPage() {
                 <Skeleton className="h-10 w-32" />
             </div>
             <Skeleton className="h-10 w-52" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            <div className="grid grid-cols-3 gap-4">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
             </div>
             <div className="space-y-2">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -225,42 +222,67 @@ export default function TransactionsPage() {
                 </Card>
             ) : (
                 <div className="space-y-2">
-                    {transactions.map((transaction) => (
-                        <Card key={transaction._id.toString()}>
-                            <CardContent className="py-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]}>
-                                            {TRANSACTION_TYPE_LABELS[transaction.type]}
-                                        </Badge>
-                                        <div>
-                                            <p className="text-sm font-medium">{transaction.description}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {new Date(transaction.date).toLocaleDateString('es-AR')}
-                                                {transaction.merchant && ` · ${transaction.merchant}`}
-                                                {transaction.installmentPlanId && (
-                                                    <span className="ml-1 text-primary">· en cuotas</span>
-                                                )}
+                    {transactions.map((transaction) => {
+                        const sourceAccount = transaction.sourceAccountId as unknown as IAccount & { color?: string } | null
+                        const destAccount = transaction.destinationAccountId as unknown as IAccount & { color?: string } | null
+
+                        return (
+                            <Card key={transaction._id.toString()}>
+                                <CardContent className="py-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]}>
+                                                {TRANSACTION_TYPE_LABELS[transaction.type]}
+                                            </Badge>
+                                            <div>
+                                                <p className="text-sm font-medium">{transaction.description}</p>
+                                                <div className="flex items-center gap-1 flex-wrap">
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {new Date(transaction.date).toLocaleDateString('es-AR')}
+                                                        {transaction.merchant && ` · ${transaction.merchant}`}
+                                                    </p>
+                                                    {sourceAccount?.name && (
+                                                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              ·
+                                                            {sourceAccount.color && (
+                                                                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: sourceAccount.color }} />
+                                                            )}
+                                                            {sourceAccount.name}
+                            </span>
+                                                    )}
+                                                    {destAccount?.name && (
+                                                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              →
+                                                            {destAccount.color && (
+                                                                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: destAccount.color }} />
+                                                            )}
+                                                            {destAccount.name}
+                            </span>
+                                                    )}
+                                                    {transaction.installmentPlanId && (
+                                                        <span className="text-xs text-primary">· en cuotas</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <p className={`font-semibold ${transaction.type === 'income' ? 'text-green-600' : transaction.type === 'expense' ? 'text-red-600' : ''}`}>
+                                                {formatAmount(transaction.amount, transaction.currency)}
                                             </p>
+                                            <div className="flex gap-1">
+                                                <Button variant="outline" size="sm" onClick={() => handleEdit(transaction)}>
+                                                    Editar
+                                                </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => handleDelete(transaction._id.toString())}>
+                                                    Eliminar
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <p className={`font-semibold ${transaction.type === 'income' ? 'text-green-600' : transaction.type === 'expense' ? 'text-red-600' : ''}`}>
-                                            {formatAmount(transaction.amount, transaction.currency)}
-                                        </p>
-                                        <div className="flex gap-1">
-                                            <Button variant="outline" size="sm" onClick={() => handleEdit(transaction)}>
-                                                Editar
-                                            </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete(transaction._id.toString())}>
-                                                Eliminar
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
                 </div>
             )}
 

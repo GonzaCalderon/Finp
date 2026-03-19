@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +19,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { commitmentSchema, type CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment, ICategory } from '@/types'
 
 interface CommitmentDialogProps {
@@ -24,7 +27,7 @@ interface CommitmentDialogProps {
     onOpenChange: (open: boolean) => void
     commitment: IScheduledCommitment | null
     categories: ICategory[]
-    onSubmit: (data: Partial<IScheduledCommitment>) => Promise<void>
+    onSubmit: (data: CommitmentFormData) => Promise<void>
 }
 
 export function CommitmentDialog({
@@ -34,96 +37,74 @@ export function CommitmentDialog({
                                      categories,
                                      onSubmit,
                                  }: CommitmentDialogProps) {
-    const [description, setDescription] = useState('')
-    const [amount, setAmount] = useState('')
-    const [currency, setCurrency] = useState('ARS')
-    const [recurrence, setRecurrence] = useState('monthly')
-    const [dayOfMonth, setDayOfMonth] = useState('')
-    const [applyMode, setApplyMode] = useState('manual')
-    const [categoryId, setCategoryId] = useState('')
-    const [loading, setLoading] = useState(false)
+    const {
+        register,
+        handleSubmit,
+        setValue,
+        watch,
+        reset,
+        formState: { errors, isSubmitting },
+    } = useForm<CommitmentFormData>({
+        resolver: zodResolver(commitmentSchema),
+        defaultValues: {
+            currency: 'ARS',
+            recurrence: 'monthly',
+            applyMode: 'manual',
+        },
+    })
 
     const expenseCategories = categories.filter((c) => c.type === 'expense')
+    const recurrence = watch('recurrence')
+    const currency = watch('currency')
+    const categoryId = watch('categoryId')
+    const applyMode = watch('applyMode')
 
     useEffect(() => {
-        if (commitment) {
-            setDescription(commitment.description)
-            setAmount(commitment.amount.toString())
-            setCurrency(commitment.currency)
-            setRecurrence(commitment.recurrence)
-            setDayOfMonth(commitment.dayOfMonth?.toString() ?? '')
-            setApplyMode(commitment.applyMode)
-            setCategoryId(commitment.categoryId?.toString() ?? '')
-        } else {
-            setDescription('')
-            setAmount('')
-            setCurrency('ARS')
-            setRecurrence('monthly')
-            setDayOfMonth('')
-            setApplyMode('manual')
-            setCategoryId('')
+        if (open) {
+            if (commitment) {
+                reset({
+                    description: commitment.description,
+                    amount: commitment.amount,
+                    currency: commitment.currency,
+                    recurrence: commitment.recurrence,
+                    dayOfMonth: commitment.dayOfMonth,
+                    applyMode: commitment.applyMode,
+                    categoryId: commitment.categoryId?.toString() ?? '',
+                })
+            } else {
+                reset({
+                    currency: 'ARS',
+                    recurrence: 'monthly',
+                    applyMode: 'manual',
+                })
+            }
         }
-    }, [commitment, open])
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        try {
-            await onSubmit({
-                description,
-                amount: parseFloat(amount),
-                currency: currency as IScheduledCommitment['currency'],
-                recurrence: recurrence as IScheduledCommitment['recurrence'],
-                dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : undefined,
-                applyMode: applyMode as IScheduledCommitment['applyMode'],
-                categoryId: categoryId ? (categoryId as unknown as IScheduledCommitment['categoryId']) : undefined,
-            })
-        } finally {
-            setLoading(false)
-        }
-    }
+    }, [open, commitment, reset])
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>
-                        {commitment ? 'Editar compromiso' : 'Nuevo compromiso'}
-                    </DialogTitle>
+                    <DialogTitle>{commitment ? 'Editar compromiso' : 'Nuevo compromiso'}</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="description">Descripción</Label>
-                        <Input
-                            id="description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            required
-                            placeholder="Ej: Alquiler"
-                        />
+                        <Input id="description" placeholder="Ej: Alquiler" {...register('description')} />
+                        {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="amount">Monto</Label>
-                            <Input
-                                id="amount"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                required
-                                placeholder="0.00"
-                            />
+                            <Input id="amount" type="number" min="0" step="0.01" placeholder="0.00" {...register('amount')} />
+                            {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
                         </div>
                         <div className="space-y-2">
                             <Label>Moneda</Label>
-                            <Select value={currency} onValueChange={setCurrency}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
+                            <Select value={currency} onValueChange={(v) => setValue('currency', v as CommitmentFormData['currency'])}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="ARS">ARS</SelectItem>
                                     <SelectItem value="USD">USD</SelectItem>
@@ -135,10 +116,8 @@ export function CommitmentDialog({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Recurrencia</Label>
-                            <Select value={recurrence} onValueChange={setRecurrence}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
+                            <Select value={recurrence} onValueChange={(v) => setValue('recurrence', v as CommitmentFormData['recurrence'])}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="monthly">Mensual</SelectItem>
                                     <SelectItem value="weekly">Semanal</SelectItem>
@@ -154,20 +133,18 @@ export function CommitmentDialog({
                                     type="number"
                                     min="1"
                                     max="31"
-                                    value={dayOfMonth}
-                                    onChange={(e) => setDayOfMonth(e.target.value)}
                                     placeholder="Ej: 10"
+                                    {...register('dayOfMonth')}
                                 />
+                                {errors.dayOfMonth && <p className="text-xs text-destructive">{errors.dayOfMonth.message}</p>}
                             </div>
                         )}
                     </div>
 
                     <div className="space-y-2">
                         <Label>Modo de aplicación</Label>
-                        <Select value={applyMode} onValueChange={setApplyMode}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
+                        <Select value={applyMode} onValueChange={(v) => setValue('applyMode', v as CommitmentFormData['applyMode'])}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="manual">Manual</SelectItem>
                                 <SelectItem value="auto_month_start">Automático al inicio del mes</SelectItem>
@@ -178,14 +155,15 @@ export function CommitmentDialog({
                     {expenseCategories.length > 0 && (
                         <div className="space-y-2">
                             <Label>Categoría (opcional)</Label>
-                            <Select value={categoryId} onValueChange={setCategoryId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná categoría" />
-                                </SelectTrigger>
+                            <Select value={categoryId} onValueChange={(v) => setValue('categoryId', v)}>
+                                <SelectTrigger><SelectValue placeholder="Seleccioná categoría" /></SelectTrigger>
                                 <SelectContent>
                                     {expenseCategories.map((c) => (
                                         <SelectItem key={c._id.toString()} value={c._id.toString()}>
-                                            {c.name}
+                                            <div className="flex items-center gap-2">
+                                                {c.color && <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />}
+                                                {c.name}
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -194,11 +172,9 @@ export function CommitmentDialog({
                     )}
 
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                            Cancelar
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? 'Guardando...' : commitment ? 'Guardar cambios' : 'Crear compromiso'}
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Guardando...' : commitment ? 'Guardar cambios' : 'Crear compromiso'}
                         </Button>
                     </div>
                 </form>

@@ -19,6 +19,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
+import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
 
 const RECURRENCE_LABELS: Record<string, string> = {
@@ -59,13 +60,13 @@ export default function CommitmentsPage() {
         }
     }
 
-    const handleSubmit = async (data: Partial<IScheduledCommitment>) => {
+    const handleSubmit = async (data: CommitmentFormData) => {
         try {
             if (selected) {
-                await updateCommitment(selected._id.toString(), data)
+                await updateCommitment(selected._id.toString(), data as Record<string, unknown>)
                 success('Compromiso actualizado correctamente')
             } else {
-                await createCommitment(data)
+                await createCommitment(data as Record<string, unknown>)
                 success('Compromiso creado correctamente')
             }
             setDialogOpen(false)

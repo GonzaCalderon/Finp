@@ -18,6 +18,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { AccountDialog } from '@/components/shared/AccountDialog'
+import type { AccountFormData } from '@/lib/validations'
 import type { IAccount } from '@/types'
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -63,7 +64,7 @@ export default function AccountsPage() {
         }
     }
 
-    const handleSubmit = async (data: Partial<IAccount>) => {
+    const handleSubmit = async (data: AccountFormData) => {
         try {
             if (selectedAccount) {
                 await updateAccount(selectedAccount._id.toString(), data)
@@ -109,36 +110,47 @@ export default function AccountsPage() {
                 </Card>
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
-                    {accounts.map((account) => (
-                        <Card key={account._id.toString()}>
-                            <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-base">{account.name}</CardTitle>
-                                    <Badge variant="secondary">
-                                        {ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                                    <span>{CURRENCY_LABELS[account.currency] ?? account.currency}</span>
-                                    {account.institution && <span>{account.institution}</span>}
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" onClick={() => handleEdit(account)}>
-                                        Editar
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setDeleteId(account._id.toString())}
-                                    >
-                                        Desactivar
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                    {accounts.map((account) => {
+                        const accountWithColor = account as IAccount & { color?: string }
+                        return (
+                            <Card key={account._id.toString()}>
+                                <CardHeader className="pb-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            {accountWithColor.color && (
+                                                <div
+                                                    className="w-3 h-3 rounded-full shrink-0"
+                                                    style={{ backgroundColor: accountWithColor.color }}
+                                                />
+                                            )}
+                                            <CardTitle className="text-base">{account.name}</CardTitle>
+                                        </div>
+                                        <Badge variant="secondary">
+                                            {ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
+                                        </Badge>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                        <span>{CURRENCY_LABELS[account.currency] ?? account.currency}</span>
+                                        {account.institution && <span>{account.institution}</span>}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => handleEdit(account)}>
+                                            Editar
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setDeleteId(account._id.toString())}
+                                        >
+                                            Desactivar
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
                 </div>
             )}
 
