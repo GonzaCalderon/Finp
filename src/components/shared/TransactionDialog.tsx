@@ -136,7 +136,14 @@ export function TransactionDialog({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="amount">Monto</Label>
-                            <Input id="amount" type="number" min="0" step="0.01" placeholder="0.00" {...register('amount')} />
+                            <Input
+                                id="amount"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...register('amount', { valueAsNumber: true })}
+                            />
                             {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
                         </div>
                         <div className="space-y-2">

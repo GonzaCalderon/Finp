@@ -184,3 +184,52 @@ main {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+/* Animaciones de Dialog */
+@keyframes dialogOverlayShow {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogOverlayHide {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes dialogContentShow {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes dialogContentHide {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+}
+
+@keyframes sheetContentShow {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes sheetContentHide {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
+}
+
+[data-radix-dialog-overlay][data-state="open"] {
+  animation: dialogOverlayShow 0.15s ease;
+}
+[data-radix-dialog-overlay][data-state="closed"] {
+  animation: dialogOverlayHide 0.15s ease;
+}
+[data-radix-dialog-content][data-state="open"] {
+  animation: dialogContentShow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-radix-dialog-content][data-state="closed"] {
+  animation: dialogContentHide 0.15s ease;
+}
+[data-radix-sheet-content][data-state="open"] {
+  animation: sheetContentShow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-radix-sheet-content][data-state="closed"] {
+  animation: sheetContentHide 0.18s ease;
+}

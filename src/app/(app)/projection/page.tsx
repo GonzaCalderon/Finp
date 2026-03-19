@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
+import {AnimatePresence, motion} from 'framer-motion'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { fadeIn } from '@/lib/utils/animations'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -173,22 +173,42 @@ function ExpandableRow({
                 }}
             >
         <span className="flex items-center gap-2">
-          {hasChildren ? (
-              open ? <ChevronDown size={12} /> : <ChevronRight size={12} />
-          ) : <span className="w-3" />}
-            <span style={{
-                color: level === 0 ? 'var(--foreground)' : 'var(--muted-foreground)',
-                fontWeight: level === 0 ? 500 : 400,
-                fontSize: 13,
-            }}>
+          <motion.span
+              animate={{ rotate: open && hasChildren ? 90 : 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ display: 'flex' }}
+          >
+            {hasChildren
+                ? <ChevronRight size={12} />
+                : <span className="w-3" />}
+          </motion.span>
+          <span style={{
+              color: level === 0 ? 'var(--foreground)' : 'var(--muted-foreground)',
+              fontWeight: level === 0 ? 500 : 400,
+              fontSize: 13,
+          }}>
             {label}
           </span>
         </span>
-                <span className="text-sm tabular-nums" style={{ color: totalARS > 0 ? 'var(--foreground)' : 'var(--muted-foreground)' }}>
+                <span className="text-sm tabular-nums"
+                      style={{ color: totalARS > 0 ? 'var(--foreground)' : 'var(--muted-foreground)' }}>
           {totalARS > 0 ? fmt(totalARS) : '—'}
         </span>
             </button>
-            {open && children}
+
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: [0.0, 0.0, 0.2, 1.0] }}
+                        style={{ overflow: 'hidden' }}
+                    >
+                        {children}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }

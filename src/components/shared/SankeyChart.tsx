@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import * as d3 from 'd3'
 import { sankey, sankeyLinkHorizontal, sankeyLeft } from 'd3-sankey'
 import { Skeleton } from '@/components/ui/skeleton'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface SankeyData {
     income: { name: string; amount: number; color: string }[]
@@ -19,89 +20,66 @@ const MONTH_OPTIONS = [
     { value: 6, label: '6M' },
 ]
 
-export function SankeyChart() {
-    const [months, setMonths] = useState(1)
-    const [data, setData] = useState<SankeyData | null>(null)
-    const [loading, setLoading] = useState(true)
+function SankeyDiagram({ data }: { data: SankeyData }) {
     const svgRef = useRef<SVGSVGElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true)
-                const res = await fetch(`/api/sankey?months=${months}`)
-                const json = await res.json()
-                if (res.ok) setData(json)
-            } finally {
-                setLoading(false)
-            }
-        }
-        fetchData()
-    }, [months])
-
-    useEffect(() => {
-        if (!data || !svgRef.current) return
+        if (!svgRef.current || !containerRef.current) return
 
         const svg = d3.select(svgRef.current)
         svg.selectAll('*').remove()
 
-        const width = svgRef.current.clientWidth || 700
-        const height = 320
-        const padding = { top: 16, right: 180, bottom: 16, left: 160 }
+        const style = getComputedStyle(containerRef.current)
+        const mutedColor = style.getPropertyValue('--muted-foreground').trim() || '#6B7280'
+        const cashflowColor = data.balance >= 0 ? '#10B981' : '#EF4444'
 
-        // Construir nodos y links
+        const width = containerRef.current.clientWidth || 700
+        const height = 400
+
+        const padding = {
+            top: 48,
+            right: 110,
+            bottom: 16,
+            left: 80,
+        }
+
         const nodes: { name: string; color: string; type: string }[] = []
         const links: { source: number; target: number; value: number }[] = []
 
-        // Nodos de ingresos (izquierda)
         data.income.forEach((inc) => {
             nodes.push({ name: inc.name, color: inc.color, type: 'income' })
         })
 
-        // Nodo central "Cashflow"
         const cashflowIndex = nodes.length
-        nodes.push({ name: 'Cashflow', color: 'var(--sky)', type: 'center' })
+        nodes.push({ name: 'Cashflow', color: cashflowColor, type: 'center' })
 
-        // Nodos de gastos (derecha)
         const expenseStartIndex = nodes.length
         data.expenses.forEach((exp) => {
             nodes.push({ name: exp.name, color: exp.color, type: 'expense' })
         })
 
-        // Nodo de superávit si hay balance positivo
         let surplusIndex = -1
         if (data.balance > 0) {
             surplusIndex = nodes.length
             nodes.push({ name: 'Superávit', color: '#10B981', type: 'surplus' })
         }
 
-        // Links: ingresos → cashflow
         data.income.forEach((inc, i) => {
             links.push({ source: i, target: cashflowIndex, value: inc.amount })
         })
 
-        // Links: cashflow → gastos
         data.expenses.forEach((exp, i) => {
-            links.push({
-                source: cashflowIndex,
-                target: expenseStartIndex + i,
-                value: exp.amount,
-            })
+            links.push({ source: cashflowIndex, target: expenseStartIndex + i, value: exp.amount })
         })
 
-        // Link: cashflow → superávit
         if (surplusIndex !== -1 && data.balance > 0) {
-            links.push({
-                source: cashflowIndex,
-                target: surplusIndex,
-                value: data.balance,
-            })
+            links.push({ source: cashflowIndex, target: surplusIndex, value: data.balance })
         }
 
-        // Sankey layout
         const sankeyGenerator = sankey()
-            .nodeWidth(12)
-            .nodePadding(10)
+            .nodeWidth(10)
+            .nodePadding(20)
             .nodeAlign(sankeyLeft)
             .extent([
                 [padding.left, padding.top],
@@ -115,31 +93,71 @@ export function SankeyChart() {
 
         const g = svg.append('g')
 
-        // Links
+        // Gradientes por link
+        const defs = svg.append('defs')
+
+        sankeyLinks.forEach((link, i) => {
+            const sourceNode = link.source as { color: string; x0?: number; x1?: number }
+            const targetNode = link.target as { color: string; x0?: number; x1?: number }
+            const gradientId = `gradient-${i}`
+
+            const gradient = defs.append('linearGradient')
+                .attr('id', gradientId)
+                .attr('gradientUnits', 'userSpaceOnUse')
+                .attr('x1', sourceNode.x1 ?? 0)
+                .attr('x2', targetNode.x0 ?? 0)
+
+            gradient.append('stop')
+                .attr('offset', '0%')
+                .attr('stop-color', sourceNode.color || '#9CA3AF')
+                .attr('stop-opacity', 0.3)
+
+            gradient.append('stop')
+                .attr('offset', '100%')
+                .attr('stop-color', targetNode.color || '#9CA3AF')
+                .attr('stop-opacity', 0.3)
+        })
+
+        // Links con gradiente
         g.append('g')
             .selectAll('path')
             .data(sankeyLinks)
             .join('path')
             .attr('d', sankeyLinkHorizontal())
             .attr('fill', 'none')
-            .attr('stroke', (d) => {
-                const sourceNode = d.source as { color: string }
-                return sourceNode.color || '#9CA3AF'
-            })
+            .attr('stroke', (_, i) => `url(#gradient-${i})`)
             .attr('stroke-width', (d) => Math.max(1, d.width ?? 1))
-            .attr('opacity', 0.25)
+            .attr('opacity', 1)
 
-        // Nodos
-        g.append('g')
-            .selectAll('rect')
-            .data(sankeyNodes)
-            .join('rect')
-            .attr('x', (d) => d.x0 ?? 0)
-            .attr('y', (d) => d.y0 ?? 0)
-            .attr('width', (d) => (d.x1 ?? 0) - (d.x0 ?? 0))
-            .attr('height', (d) => Math.max(1, (d.y1 ?? 0) - (d.y0 ?? 0)))
-            .attr('fill', (d) => (d as { color: string }).color || '#9CA3AF')
-            .attr('rx', 3)
+        // Nodos con redondeo selectivo
+        sankeyNodes.forEach((d) => {
+            const x0 = d.x0 ?? 0
+            const y0 = d.y0 ?? 0
+            const x1 = d.x1 ?? 0
+            const y1 = Math.max(y0 + 1, d.y1 ?? 0)
+            const w = x1 - x0
+            const h = y1 - y0
+            const r = Math.min(4, w / 2, h / 2)
+            const type = (d as { type: string }).type
+            const color = (d as { color: string }).color || '#9CA3AF'
+
+            let path = ''
+
+            if (type === 'income') {
+                // Redondeado izquierda, cuadrado derecha
+                path = `M${x0 + r},${y0} H${x1} V${y1} H${x0 + r} Q${x0},${y1} ${x0},${y1 - r} V${y0 + r} Q${x0},${y0} ${x0 + r},${y0} Z`
+            } else if (type === 'expense' || type === 'surplus') {
+                // Cuadrado izquierda, redondeado derecha
+                path = `M${x0},${y0} H${x1 - r} Q${x1},${y0} ${x1},${y0 + r} V${y1 - r} Q${x1},${y1} ${x1 - r},${y1} H${x0} V${y0} Z`
+            } else {
+                // Cashflow — cuadrado total
+                path = `M${x0},${y0} H${x1} V${y1} H${x0} Z`
+            }
+
+            g.append('path')
+                .attr('d', path)
+                .attr('fill', color)
+        })
 
         const fmt = (v: number) =>
             new Intl.NumberFormat('es-AR', {
@@ -155,7 +173,7 @@ export function SankeyChart() {
             .data(sankeyNodes.filter((d) => (d as { type: string }).type === 'income'))
             .join('text')
             .attr('class', 'left-label')
-            .attr('x', (d) => (d.x0 ?? 0) - 8)
+            .attr('x', (d) => (d.x0 ?? 0) - 10)
             .attr('y', (d) => ((d.y0 ?? 0) + (d.y1 ?? 0)) / 2)
             .attr('text-anchor', 'end')
             .attr('dominant-baseline', 'middle')
@@ -164,14 +182,14 @@ export function SankeyChart() {
                 const node = d as { name: string; value?: number; color: string }
                 el.append('tspan')
                     .text(node.name)
-                    .attr('x', (d.x0 ?? 0) - 8)
-                    .attr('dy', '-0.6em')
+                    .attr('x', (d.x0 ?? 0) - 10)
+                    .attr('dy', '-0.7em')
                     .attr('font-size', '11')
-                    .attr('fill', 'var(--muted-foreground)')
+                    .attr('fill', mutedColor)
                 el.append('tspan')
                     .text(fmt(node.value ?? 0))
-                    .attr('x', (d.x0 ?? 0) - 8)
-                    .attr('dy', '1.2em')
+                    .attr('x', (d.x0 ?? 0) - 10)
+                    .attr('dy', '1.4em')
                     .attr('font-size', '11')
                     .attr('font-weight', '500')
                     .attr('fill', node.color)
@@ -184,25 +202,24 @@ export function SankeyChart() {
             .join('text')
             .attr('class', 'center-label')
             .attr('x', (d) => ((d.x0 ?? 0) + (d.x1 ?? 0)) / 2)
-            .attr('y', (d) => ((d.y0 ?? 0) + (d.y1 ?? 0)) / 2 - 20)
+            .attr('y', (d) => (d.y0 ?? 0) - 22)
             .attr('text-anchor', 'middle')
-            .attr('dominant-baseline', 'middle')
+            .attr('dominant-baseline', 'auto')
             .each(function (d) {
                 const el = d3.select(this)
-                const node = d as { name: string; value?: number }
                 el.append('tspan')
-                    .text(node.name)
+                    .text('Cashflow')
                     .attr('x', ((d.x0 ?? 0) + (d.x1 ?? 0)) / 2)
                     .attr('dy', '0')
                     .attr('font-size', '11')
-                    .attr('fill', 'var(--muted-foreground)')
+                    .attr('fill', mutedColor)
                 el.append('tspan')
-                    .text(fmt(node.value ?? 0))
+                    .text(fmt(data.totalExpense))
                     .attr('x', ((d.x0 ?? 0) + (d.x1 ?? 0)) / 2)
                     .attr('dy', '1.4em')
                     .attr('font-size', '12')
                     .attr('font-weight', '500')
-                    .attr('fill', 'var(--sky)')
+                    .attr('fill', cashflowColor)
             })
 
         // Labels derecha (gastos + superávit)
@@ -214,7 +231,7 @@ export function SankeyChart() {
             }))
             .join('text')
             .attr('class', 'right-label')
-            .attr('x', (d) => (d.x1 ?? 0) + 8)
+            .attr('x', (d) => (d.x1 ?? 0) + 10)
             .attr('y', (d) => ((d.y0 ?? 0) + (d.y1 ?? 0)) / 2)
             .attr('text-anchor', 'start')
             .attr('dominant-baseline', 'middle')
@@ -223,20 +240,46 @@ export function SankeyChart() {
                 const node = d as { name: string; value?: number; color: string }
                 el.append('tspan')
                     .text(node.name)
-                    .attr('x', (d.x1 ?? 0) + 8)
-                    .attr('dy', '-0.6em')
+                    .attr('x', (d.x1 ?? 0) + 10)
+                    .attr('dy', '-0.7em')
                     .attr('font-size', '11')
-                    .attr('fill', 'var(--muted-foreground)')
+                    .attr('fill', mutedColor)
                 el.append('tspan')
                     .text(fmt(node.value ?? 0))
-                    .attr('x', (d.x1 ?? 0) + 8)
-                    .attr('dy', '1.2em')
+                    .attr('x', (d.x1 ?? 0) + 10)
+                    .attr('dy', '1.4em')
                     .attr('font-size', '11')
                     .attr('font-weight', '500')
                     .attr('fill', node.color)
             })
 
     }, [data])
+
+    return (
+        <div ref={containerRef} style={{ width: '100%' }}>
+            <svg ref={svgRef} width="100%" height="400" style={{ overflow: 'visible' }} />
+        </div>
+    )
+}
+
+export function SankeyChart() {
+    const [months, setMonths] = useState(1)
+    const [data, setData] = useState<SankeyData | null>(null)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoading(true)
+                const res = await fetch(`/api/sankey?months=${months}`)
+                const json = await res.json()
+                if (res.ok) setData(json)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchData()
+    }, [months])
 
     return (
         <div
@@ -268,20 +311,25 @@ export function SankeyChart() {
                 </div>
             </div>
 
-            {loading ? (
-                <Skeleton className="h-80 w-full rounded-lg" />
-            ) : !data || (data.income.length === 0 && data.expenses.length === 0) ? (
-                <div className="h-80 flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground">Sin datos para mostrar</p>
-                </div>
-            ) : (
-                <svg
-                    ref={svgRef}
-                    width="100%"
-                    height="320"
-                    style={{ overflow: 'visible' }}
-                />
-            )}
+            <AnimatePresence mode="wait">
+                {loading ? (
+                    <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                        <Skeleton className="h-[400px] w-full rounded-lg" />
+                    </motion.div>
+                ) : !data || (data.income.length === 0 && data.expenses.length === 0) ? (
+                    <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+                                className="h-[400px] flex items-center justify-center">
+                        <p className="text-sm text-muted-foreground">Sin datos para mostrar</p>
+                    </motion.div>
+                ) : (
+                    <motion.div key={`sankey-${months}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                        <SankeyDiagram data={data} />
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
