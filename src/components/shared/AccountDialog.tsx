@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import {useEffect} from 'react'
+import {useForm} from 'react-hook-form'
+import {zodResolver} from '@hookform/resolvers/zod'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Label} from '@/components/ui/label'
 import {
     Dialog,
     DialogContent,
@@ -19,9 +19,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { ColorPicker } from '@/components/shared/ColorPicker'
-import { accountSchema, type AccountFormData } from '@/lib/validations'
-import type { IAccount } from '@/types'
+import {ColorPicker} from '@/components/shared/ColorPicker'
+import {accountSchema, type AccountFormData} from '@/lib/validations'
+import type {IAccount} from '@/types'
+import {Spinner} from "@/components/shared/Spinner";
 
 interface AccountDialogProps {
     open: boolean
@@ -30,14 +31,14 @@ interface AccountDialogProps {
     onSubmit: (data: AccountFormData) => Promise<void>
 }
 
-export function AccountDialog({ open, onOpenChange, account, onSubmit }: AccountDialogProps) {
+export function AccountDialog({open, onOpenChange, account, onSubmit}: AccountDialogProps) {
     const {
         register,
         handleSubmit,
         setValue,
         watch,
         reset,
-        formState: { errors, isSubmitting },
+        formState: {errors, isSubmitting},
     } = useForm<AccountFormData>({
         resolver: zodResolver(accountSchema),
         defaultValues: {
@@ -88,9 +89,10 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
 
                     <div className="space-y-2">
                         <Label>Tipo</Label>
-                        <Select value={type} onValueChange={(v) => setValue('type', v as AccountFormData['type'], { shouldValidate: true })}>
+                        <Select value={type}
+                                onValueChange={(v) => setValue('type', v as AccountFormData['type'], {shouldValidate: true})}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Seleccioná un tipo" />
+                                <SelectValue placeholder="Seleccioná un tipo"/>
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="bank">Banco</SelectItem>
@@ -106,9 +108,10 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
 
                     <div className="space-y-2">
                         <Label>Moneda</Label>
-                        <Select value={watch('currency')} onValueChange={(v) => setValue('currency', v as AccountFormData['currency'], { shouldValidate: true })}>
+                        <Select value={watch('currency')}
+                                onValueChange={(v) => setValue('currency', v as AccountFormData['currency'], {shouldValidate: true})}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Seleccioná moneda" />
+                                <SelectValue placeholder="Seleccioná moneda"/>
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ARS">ARS - Peso argentino</SelectItem>
@@ -126,7 +129,8 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                     <div className="space-y-2">
                         <Label htmlFor="initialBalance">Saldo inicial</Label>
                         <Input id="initialBalance" type="number" placeholder="0" {...register('initialBalance')} />
-                        {errors.initialBalance && <p className="text-xs text-destructive">{errors.initialBalance.message}</p>}
+                        {errors.initialBalance &&
+                            <p className="text-xs text-destructive">{errors.initialBalance.message}</p>}
                     </div>
 
                     <ColorPicker
@@ -184,8 +188,13 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
+
                         <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : account ? 'Guardar cambios' : 'Crear cuenta'}
+                            {isSubmitting ? (
+                                <span className="flex items-center gap-2">
+      <Spinner/> Guardando...
+    </span>
+                            ) : account ? 'Guardar cambios' : 'Crear cuenta'}
                         </Button>
                     </div>
                 </form>

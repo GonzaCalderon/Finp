@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
     Select,
@@ -13,8 +13,10 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
+import { SankeyChart } from '@/components/shared/SankeyChart'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
+import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 
 const getCurrentMonth = () => {
     const now = new Date()
@@ -62,6 +64,7 @@ interface DashboardData {
         currency: string
         includeInNetWorth: boolean
         balance: number
+        color?: string
     }[]
     netWorth: {
         assets: number
@@ -104,9 +107,7 @@ export default function DashboardPage() {
         }
     }
 
-    useEffect(() => {
-        fetchDashboard()
-    }, [month])
+    useEffect(() => { fetchDashboard() }, [month])
 
     const handleApplyCommitment = (commitment: CommitmentItem) => {
         setSelectedCommitment(commitment)
@@ -140,209 +141,229 @@ export default function DashboardPage() {
     if (loading) return (
         <div className="p-6 max-w-5xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
-                <Skeleton className="h-8 w-32" />
-                <Skeleton className="h-10 w-52" />
+                <Skeleton className="h-7 w-32" />
+                <Skeleton className="h-9 w-48" />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Skeleton className="h-80 w-full rounded-xl" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
             </div>
         </div>
     )
 
-    if (error) return <div className="p-8 text-center text-destructive">{error}</div>
+    if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
     if (!data) return null
 
     return (
-        <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
+        <motion.div className="p-6 max-w-5xl mx-auto space-y-6" {...fadeIn}>
+
+            {/* Header */}
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Dashboard</h1>
+                <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
                 <Select value={month} onValueChange={setMonth}>
-                    <SelectTrigger className="w-52">
+                    <SelectTrigger className="w-48 h-8 text-sm">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                         {MONTHS.map((m) => (
-                            <SelectItem key={m.value} value={m.value}>
-                                {m.label}
-                            </SelectItem>
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
             </div>
 
-            {/* Resumen del mes */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold text-green-600">{fmt(data.summary.totalIncome)}</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Gastos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold text-red-600">{fmt(data.summary.totalExpense)}</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Balance</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className={`text-2xl font-bold ${data.summary.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {fmt(data.summary.balance)}
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Deuda total</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold text-orange-500">{fmt(data.summary.totalDebt)}</p>
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Métricas */}
+            <motion.div
+                className="grid grid-cols-2 md:grid-cols-4 gap-3"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
+                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--sky)' }}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Ingresos</p>
+                    <p className="text-2xl font-semibold tracking-tight text-green-500">{fmt(data.summary.totalIncome)}</p>
+                </motion.div>
+                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--destructive)' }}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Gastos</p>
+                    <p className="text-2xl font-semibold tracking-tight text-destructive">{fmt(data.summary.totalExpense)}</p>
+                </motion.div>
+                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--sky)' }}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Balance</p>
+                    <p className="text-2xl font-semibold tracking-tight"
+                       style={{ color: data.summary.balance >= 0 ? 'var(--sky-dark)' : 'var(--destructive)' }}>
+                        {fmt(data.summary.balance)}
+                    </p>
+                </motion.div>
+                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--amber)' }}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Deuda total</p>
+                    <p className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--amber-dark)' }}>
+                        {fmt(data.summary.totalDebt)}
+                    </p>
+                </motion.div>
+            </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Saldos por cuenta */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-base">Saldos por cuenta</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                        {data.accounts.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Sin cuentas</p>
-                        ) : (
-                            data.accounts.map((account) => (
-                                <div key={account._id} className="flex items-center justify-between">
+            {/* Sankey */}
+            <motion.div variants={staggerItem} initial="initial" animate="animate">
+                <SankeyChart />
+            </motion.div>
+
+            {/* Grid principal */}
+            <AnimatePresence mode="wait">
+                <motion.div key={month} className="grid grid-cols-1 md:grid-cols-2 gap-4" {...fadeIn}>
+
+                    {/* Saldos por cuenta */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Saldos por cuenta
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1 pt-0">
+                            {data.accounts.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Sin cuentas</p>
+                            ) : data.accounts.map((account) => (
+                                <div key={account._id} className="flex items-center justify-between py-2 border-b last:border-0"
+                                     style={{ borderColor: 'var(--border)' }}>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium">{account.name}</span>
-                                        <Badge variant="secondary" className="text-xs">
-                                            {ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
-                                        </Badge>
+                                        {account.color && (
+                                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: account.color }} />
+                                        )}
+                                        <span className="text-sm">{account.name}</span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded"
+                                              style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}>
+                      {ACCOUNT_TYPE_LABELS[account.type]}
+                    </span>
                                     </div>
-                                    <span className={`text-sm font-semibold ${account.balance < 0 ? 'text-red-600' : ''}`}>
+                                    <span className="text-sm font-medium tabular-nums"
+                                          style={{ color: account.balance < 0 ? 'var(--destructive)' : 'var(--foreground)' }}>
                     {fmt(account.balance, account.currency)}
                   </span>
                                 </div>
-                            ))
-                        )}
-                    </CardContent>
-                </Card>
+                            ))}
+                        </CardContent>
+                    </Card>
 
-                {/* Gastos por categoría */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-base">Gastos por categoría</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                        {data.expenseByCategory.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Sin gastos este mes</p>
-                        ) : (
-                            data.expenseByCategory.map((cat) => (
-                                <div key={cat.name} className="flex items-center justify-between">
+                    {/* Gastos por categoría */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Gastos por categoría
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1 pt-0">
+                            {data.expenseByCategory.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Sin gastos este mes</p>
+                            ) : data.expenseByCategory.map((cat) => (
+                                <div key={cat.name} className="flex items-center justify-between py-2 border-b last:border-0"
+                                     style={{ borderColor: 'var(--border)' }}>
                                     <div className="flex items-center gap-2">
-                                        {cat.color && (
-                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                                        )}
+                                        <div className="w-2 h-2 rounded-full shrink-0"
+                                             style={{ backgroundColor: cat.color ?? '#9CA3AF' }} />
                                         <span className="text-sm">{cat.name}</span>
                                     </div>
-                                    <span className="text-sm font-semibold text-red-600">{fmt(cat.total)}</span>
+                                    <span className="text-sm font-medium tabular-nums text-destructive">
+                    {fmt(cat.total)}
+                  </span>
                                 </div>
-                            ))
-                        )}
-                    </CardContent>
-                </Card>
+                            ))}
+                        </CardContent>
+                    </Card>
 
-                {/* Compromisos pendientes */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-base">Compromisos pendientes</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                        {data.pendingCommitments.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Sin compromisos pendientes</p>
-                        ) : (
-                            data.pendingCommitments.map((c) => (
-                                <div key={c._id} className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium">{c.description}</p>
+                    {/* Compromisos pendientes */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Compromisos pendientes
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1 pt-0">
+                            {data.pendingCommitments.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Sin compromisos pendientes</p>
+                            ) : data.pendingCommitments.map((c) => (
+                                <div key={c._id} className="flex items-center justify-between py-2 border-b last:border-0"
+                                     style={{ borderColor: 'var(--border)' }}>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm">{c.description}</span>
                                         {c.dayOfMonth && (
-                                            <p className="text-xs text-muted-foreground">Día {c.dayOfMonth}</p>
+                                            <span className="text-xs px-1.5 py-0.5 rounded"
+                                                  style={{ background: 'var(--sky-light)', color: 'var(--sky-dark)' }}>
+                        día {c.dayOfMonth}
+                      </span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">
-                      {fmt(c.amount, c.currency)}
-                    </span>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleApplyCommitment(c)}
-                                        >
+                                        <span className="text-sm font-medium tabular-nums">{fmt(c.amount, c.currency)}</span>
+                                        <Button size="sm" variant="outline" className="h-6 text-xs px-2"
+                                                style={{ borderColor: 'var(--sky)', color: 'var(--sky)' }}
+                                                onClick={() => handleApplyCommitment(c)}>
                                             Aplicar
                                         </Button>
                                     </div>
                                 </div>
-                            ))
-                        )}
-                    </CardContent>
-                </Card>
+                            ))}
+                        </CardContent>
+                    </Card>
 
-                {/* Cuotas del mes */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-base">Cuotas del mes</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                        {data.installmentsThisMonth.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Sin cuotas este mes</p>
-                        ) : (
-                            data.installmentsThisMonth.map((plan) => (
-                                <div key={plan._id} className="flex items-center justify-between">
-                                    <p className="text-sm font-medium">{plan.description}</p>
-                                    <span className="text-sm font-semibold">
+                    {/* Cuotas del mes */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Cuotas del mes
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1 pt-0">
+                            {data.installmentsThisMonth.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Sin cuotas este mes</p>
+                            ) : data.installmentsThisMonth.map((plan) => (
+                                <div key={plan._id} className="flex items-center justify-between py-2 border-b last:border-0"
+                                     style={{ borderColor: 'var(--border)' }}>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm">{plan.description}</span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded"
+                                              style={{ background: 'var(--amber-light)', color: 'var(--amber-dark)' }}>
+                      cuota
+                    </span>
+                                    </div>
+                                    <span className="text-sm font-medium tabular-nums">
                     {fmt(plan.installmentAmount, plan.currency)}
                   </span>
                                 </div>
-                            ))
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            </AnimatePresence>
 
             {/* Patrimonio */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Patrimonio</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div>
-                            <p className="text-sm text-muted-foreground">Activos</p>
-                            <p className="text-lg font-bold text-green-600">{fmt(data.netWorth.assets)}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Pasivos</p>
-                            <p className="text-lg font-bold text-red-600">{fmt(data.netWorth.liabilities)}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Neto</p>
-                            <p className={`text-lg font-bold ${data.netWorth.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {fmt(data.netWorth.total)}
-                            </p>
-                        </div>
+            <motion.div variants={staggerItem} initial="initial" animate="animate"
+                        className="rounded-xl p-4"
+                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Patrimonio</p>
+                <div className="grid grid-cols-3 gap-4">
+                    <div>
+                        <p className="text-xs text-muted-foreground mb-1">Activos</p>
+                        <p className="text-xl font-semibold tracking-tight text-green-500">{fmt(data.netWorth.assets)}</p>
                     </div>
-                </CardContent>
-            </Card>
+                    <div>
+                        <p className="text-xs text-muted-foreground mb-1">Pasivos</p>
+                        <p className="text-xl font-semibold tracking-tight text-destructive">{fmt(data.netWorth.liabilities)}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-muted-foreground mb-1">Neto</p>
+                        <p className="text-xl font-semibold tracking-tight"
+                           style={{ color: data.netWorth.total >= 0 ? 'var(--sky-dark)' : 'var(--destructive)' }}>
+                            {fmt(data.netWorth.total)}
+                        </p>
+                    </div>
+                </div>
+            </motion.div>
 
             <ApplyCommitmentDialog
                 open={applyDialogOpen}
@@ -352,6 +373,6 @@ export default function DashboardPage() {
                 period={month}
                 onSubmit={handleApplySubmit}
             />
-        </div>
+        </motion.div>
     )
 }

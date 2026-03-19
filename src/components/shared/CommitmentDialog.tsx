@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select'
 import { commitmentSchema, type CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment, ICategory } from '@/types'
+import {Spinner} from "@/components/shared/Spinner";
 
 interface CommitmentDialogProps {
     open: boolean
@@ -173,8 +174,14 @@ export function CommitmentDialog({
 
                     <div className="flex justify-end gap-2 pt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+
+
                         <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : commitment ? 'Guardar cambios' : 'Crear compromiso'}
+                            {isSubmitting ? (
+                                <span className="flex items-center gap-2">
+      <Spinner /> Guardando...
+    </span>
+                            ) : commitment ? 'Guardar cambios' : 'Crear cuenta'}
                         </Button>
                     </div>
                 </form>

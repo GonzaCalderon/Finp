@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon } from 'lucide-react'
 import { transactionSchema, type TransactionFormData } from '@/lib/validations'
 import type { ITransaction, IAccount, ICategory } from '@/types'
+import {Spinner} from "@/components/shared/Spinner";
 
 interface TransactionDialogProps {
     open: boolean
@@ -253,8 +254,14 @@ export function TransactionDialog({
 
                     <div className="flex justify-end gap-2 pt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+
+
                         <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : transaction ? 'Guardar cambios' : 'Crear transacción'}
+                            {isSubmitting ? (
+                                <span className="flex items-center gap-2">
+      <Spinner /> Guardando...
+    </span>
+                            ) : transaction ? 'Guardar cambios' : 'Crear cuenta'}
                         </Button>
                     </div>
                 </form>

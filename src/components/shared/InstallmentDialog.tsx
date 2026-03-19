@@ -23,6 +23,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CalendarIcon } from 'lucide-react'
 import { installmentSchema, type InstallmentFormData } from '@/lib/validations'
+import { Spinner } from '@/components/shared/Spinner'
 import type { IAccount, ICategory } from '@/types'
 
 interface InstallmentDialogProps {
@@ -115,7 +116,14 @@ export function InstallmentDialog({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="totalAmount">Monto total</Label>
-                <Input id="totalAmount" type="number" min="0" step="0.01" placeholder="0.00" {...register('totalAmount')} />
+                <Input
+                    id="totalAmount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    {...register('totalAmount', { valueAsNumber: true })}
+                />
                 {errors.totalAmount && <p className="text-xs text-destructive">{errors.totalAmount.message}</p>}
               </div>
               <div className="space-y-2">
@@ -167,16 +175,20 @@ export function InstallmentDialog({
                   <Select value={accountId} onValueChange={(v) => setValue('accountId', v, { shouldValidate: true })}>
                     <SelectTrigger><SelectValue placeholder="Seleccioná tarjeta" /></SelectTrigger>
                     <SelectContent>
-                      {creditCards.map((a) => (
-                          <SelectItem key={a._id.toString()} value={a._id.toString()}>
-                            <div className="flex items-center gap-2">
-                              {(a as IAccount & { color?: string }).color && (
-                                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: (a as IAccount & { color?: string }).color }} />
-                              )}
-                              {a.name}
-                            </div>
-                          </SelectItem>
-                      ))}
+                      {creditCards.map((a) => {
+                        const acc = a as IAccount & { color?: string }
+                        return (
+                            <SelectItem key={acc._id.toString()} value={acc._id.toString()}>
+                              <div className="flex items-center gap-2">
+                                {acc.color && (
+                                    <div className="w-2.5 h-2.5 rounded-full shrink-0"
+                                         style={{ backgroundColor: acc.color }} />
+                                )}
+                                {acc.name}
+                              </div>
+                            </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
               )}
@@ -245,9 +257,13 @@ export function InstallmentDialog({
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
               <Button type="submit" disabled={isSubmitting || creditCards.length === 0}>
-                {isSubmitting ? 'Guardando...' : 'Registrar compra'}
+                {isSubmitting ? (
+                    <span className="flex items-center gap-2"><Spinner />Guardando...</span>
+                ) : 'Registrar compra'}
               </Button>
             </div>
           </form>

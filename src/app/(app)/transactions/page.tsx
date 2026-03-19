@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useInstallments } from '@/hooks/useInstallments'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -8,7 +9,6 @@ import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     Select,
@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
+import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ITransaction, IAccount } from '@/types'
 
@@ -76,16 +77,8 @@ export default function TransactionsPage() {
     const { categories } = useCategories()
     const { success, error: toastError } = useToast()
 
-    const handleNewTransaction = () => {
-        setSelectedTransaction(null)
-        setTransactionDialogOpen(true)
-    }
-
-    const handleEdit = (transaction: ITransaction) => {
-        setSelectedTransaction(transaction)
-        setTransactionDialogOpen(true)
-    }
-
+    const handleNewTransaction = () => { setSelectedTransaction(null); setTransactionDialogOpen(true) }
+    const handleEdit = (t: ITransaction) => { setSelectedTransaction(t); setTransactionDialogOpen(true) }
     const handleDelete = (id: string) => setDeleteId(id)
 
     const handleDeleteConfirm = async () => {
@@ -133,22 +126,20 @@ export default function TransactionsPage() {
         .filter((t) => t.type === 'expense' && !t.installmentPlanId)
         .reduce((sum, t) => sum + t.amount, 0)
 
-    const formatAmount = (amount: number, currency: string) =>
+    const fmt = (amount: number, currency: string) =>
         new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 0,
+            style: 'currency', currency, maximumFractionDigits: 0,
         }).format(amount)
 
     if (loading) return (
         <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
-                <Skeleton className="h-8 w-40" />
-                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-7 w-40" />
+                <Skeleton className="h-8 w-32" />
             </div>
-            <Skeleton className="h-10 w-52" />
-            <div className="grid grid-cols-3 gap-4">
-                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            <Skeleton className="h-8 w-52" />
+            <div className="grid grid-cols-3 gap-3">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
             </div>
             <div className="space-y-2">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -156,135 +147,151 @@ export default function TransactionsPage() {
         </div>
     )
 
-    if (error) return <div className="p-8 text-center text-destructive">{error}</div>
+    if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
 
     return (
-        <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+        <motion.div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6" {...fadeIn}>
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Transacciones</h1>
+                <h1 className="text-xl font-semibold tracking-tight">Transacciones</h1>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setInstallmentDialogOpen(true)}>
+                    <Button variant="outline" size="sm" onClick={() => setInstallmentDialogOpen(true)}>
                         + Cuotas
                     </Button>
-                    <Button onClick={handleNewTransaction}>
+                    <Button size="sm" onClick={handleNewTransaction}>
                         + Nueva
                     </Button>
                 </div>
             </div>
 
-            <div className="flex items-center gap-4">
-                <Select value={month} onValueChange={setMonth}>
-                    <SelectTrigger className="w-52">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {MONTHS.map((m) => (
-                            <SelectItem key={m.value} value={m.value}>
-                                {m.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+            <Select value={month} onValueChange={setMonth}>
+                <SelectTrigger className="w-52 h-8 text-sm">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {MONTHS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
 
-            <div className="grid grid-cols-3 gap-4">
-                <Card>
-                    <CardContent className="pt-6">
-                        <p className="text-sm text-muted-foreground">Ingresos</p>
-                        <p className="text-xl font-bold text-green-600">
-                            {formatAmount(totalIncome, 'ARS')}
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <p className="text-sm text-muted-foreground">Gastos reales</p>
-                        <p className="text-xl font-bold text-red-600">
-                            {formatAmount(totalExpense, 'ARS')}
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <p className="text-sm text-muted-foreground">Balance</p>
-                        <p className={`text-xl font-bold ${totalIncome - totalExpense >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {formatAmount(totalIncome - totalExpense, 'ARS')}
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
+            <motion.div
+                className="grid grid-cols-3 gap-3"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
+                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--sky)' }}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Ingresos</p>
+                    <p className="text-xl font-semibold tracking-tight text-green-500">{fmt(totalIncome, 'ARS')}</p>
+                </motion.div>
+                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--destructive)' }}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Gastos reales</p>
+                    <p className="text-xl font-semibold tracking-tight text-destructive">{fmt(totalExpense, 'ARS')}</p>
+                </motion.div>
+                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--sky)' }}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Balance</p>
+                    <p className="text-xl font-semibold tracking-tight"
+                       style={{ color: totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)' }}>
+                        {fmt(totalIncome - totalExpense, 'ARS')}
+                    </p>
+                </motion.div>
+            </motion.div>
 
-            {transactions.length === 0 ? (
-                <Card>
-                    <CardContent className="p-8 text-center text-muted-foreground">
-                        No hay transacciones este mes.
-                    </CardContent>
-                </Card>
-            ) : (
-                <div className="space-y-2">
-                    {transactions.map((transaction) => {
-                        const sourceAccount = transaction.sourceAccountId as unknown as IAccount & { color?: string } | null
-                        const destAccount = transaction.destinationAccountId as unknown as IAccount & { color?: string } | null
-
-                        return (
-                            <Card key={transaction._id.toString()}>
-                                <CardContent className="py-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]}>
-                                                {TRANSACTION_TYPE_LABELS[transaction.type]}
-                                            </Badge>
-                                            <div>
-                                                <p className="text-sm font-medium">{transaction.description}</p>
-                                                <div className="flex items-center gap-1 flex-wrap">
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {new Date(transaction.date).toLocaleDateString('es-AR')}
-                                                        {transaction.merchant && ` · ${transaction.merchant}`}
-                                                    </p>
-                                                    {sourceAccount?.name && (
-                                                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              ·
-                                                            {sourceAccount.color && (
-                                                                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: sourceAccount.color }} />
-                                                            )}
-                                                            {sourceAccount.name}
-                            </span>
-                                                    )}
-                                                    {destAccount?.name && (
-                                                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              →
-                                                            {destAccount.color && (
-                                                                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: destAccount.color }} />
-                                                            )}
-                                                            {destAccount.name}
-                            </span>
-                                                    )}
-                                                    {transaction.installmentPlanId && (
-                                                        <span className="text-xs text-primary">· en cuotas</span>
-                                                    )}
+            <AnimatePresence mode="wait">
+                <motion.div key={month} className="space-y-2" {...fadeIn}>
+                    {transactions.length === 0 ? (
+                        <div className="rounded-xl p-8 text-center text-sm text-muted-foreground"
+                             style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
+                            No hay transacciones este mes.
+                        </div>
+                    ) : (
+                        <motion.div
+                            className="space-y-2"
+                            variants={staggerContainer}
+                            initial="initial"
+                            animate="animate"
+                        >
+                            {transactions.map((transaction) => {
+                                const sourceAccount = transaction.sourceAccountId as unknown as IAccount & { color?: string } | null
+                                const destAccount = transaction.destinationAccountId as unknown as IAccount & { color?: string } | null
+                                return (
+                                    <motion.div
+                                        key={transaction._id.toString()}
+                                        variants={staggerItem}
+                                        className="rounded-xl"
+                                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                                    >
+                                        <div className="py-3 px-4 flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]}>
+                                                    {TRANSACTION_TYPE_LABELS[transaction.type]}
+                                                </Badge>
+                                                <div>
+                                                    <p className="text-sm font-medium">{transaction.description}</p>
+                                                    <div className="flex items-center gap-1 flex-wrap">
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {new Date(transaction.date).toLocaleDateString('es-AR')}
+                                                            {transaction.merchant && ` · ${transaction.merchant}`}
+                                                        </p>
+                                                        {sourceAccount?.name && (
+                                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                ·
+                                                                {sourceAccount.color && (
+                                                                    <span className="w-2 h-2 rounded-full inline-block"
+                                                                          style={{ backgroundColor: sourceAccount.color }} />
+                                                                )}
+                                                                {sourceAccount.name}
+                              </span>
+                                                        )}
+                                                        {destAccount?.name && (
+                                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                →
+                                                                {destAccount.color && (
+                                                                    <span className="w-2 h-2 rounded-full inline-block"
+                                                                          style={{ backgroundColor: destAccount.color }} />
+                                                                )}
+                                                                {destAccount.name}
+                              </span>
+                                                        )}
+                                                        {transaction.installmentPlanId && (
+                                                            <span className="text-xs" style={{ color: 'var(--sky)' }}>· en cuotas</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <p className="font-semibold tabular-nums text-sm"
+                                                   style={{
+                                                       color: transaction.type === 'income'
+                                                           ? '#10B981'
+                                                           : transaction.type === 'expense'
+                                                               ? 'var(--destructive)'
+                                                               : 'var(--foreground)',
+                                                   }}>
+                                                    {fmt(transaction.amount, transaction.currency)}
+                                                </p>
+                                                <div className="flex gap-1">
+                                                    <Button variant="outline" size="sm" className="h-7 text-xs"
+                                                            onClick={() => handleEdit(transaction)}>
+                                                        Editar
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" className="h-7 text-xs"
+                                                            onClick={() => handleDelete(transaction._id.toString())}>
+                                                        Eliminar
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <p className={`font-semibold ${transaction.type === 'income' ? 'text-green-600' : transaction.type === 'expense' ? 'text-red-600' : ''}`}>
-                                                {formatAmount(transaction.amount, transaction.currency)}
-                                            </p>
-                                            <div className="flex gap-1">
-                                                <Button variant="outline" size="sm" onClick={() => handleEdit(transaction)}>
-                                                    Editar
-                                                </Button>
-                                                <Button variant="ghost" size="sm" onClick={() => handleDelete(transaction._id.toString())}>
-                                                    Eliminar
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )
-                    })}
-                </div>
-            )}
+                                    </motion.div>
+                                )
+                            })}
+                        </motion.div>
+                    )}
+                </motion.div>
+            </AnimatePresence>
 
             <TransactionDialog
                 open={transactionDialogOpen}
@@ -307,18 +314,14 @@ export default function TransactionsPage() {
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Eliminar esta transacción?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta acción no se puede deshacer.
-                        </AlertDialogDescription>
+                        <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm}>
-                            Eliminar
-                        </AlertDialogAction>
+                        <AlertDialogAction onClick={handleDeleteConfirm}>Eliminar</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+        </motion.div>
     )
 }

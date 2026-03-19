@@ -1,12 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useCommitments } from '@/hooks/useCommitments'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     AlertDialog,
@@ -19,6 +18,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
+import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
 
@@ -36,16 +36,8 @@ export default function CommitmentsPage() {
     const [selected, setSelected] = useState<IScheduledCommitment | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
 
-    const handleCreate = () => {
-        setSelected(null)
-        setDialogOpen(true)
-    }
-
-    const handleEdit = (commitment: IScheduledCommitment) => {
-        setSelected(commitment)
-        setDialogOpen(true)
-    }
-
+    const handleCreate = () => { setSelected(null); setDialogOpen(true) }
+    const handleEdit = (c: IScheduledCommitment) => { setSelected(c); setDialogOpen(true) }
     const handleDelete = (id: string) => setDeleteId(id)
 
     const handleDeleteConfirm = async () => {
@@ -75,18 +67,16 @@ export default function CommitmentsPage() {
         }
     }
 
-    const formatAmount = (amount: number, currency: string) =>
+    const fmt = (amount: number, currency: string) =>
         new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 0,
+            style: 'currency', currency, maximumFractionDigits: 0,
         }).format(amount)
 
     if (loading) return (
         <div className="p-6 max-w-3xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
-                <Skeleton className="h-8 w-40" />
-                <Skeleton className="h-10 w-44" />
+                <Skeleton className="h-7 w-40" />
+                <Skeleton className="h-8 w-44" />
             </div>
             <div className="space-y-2">
                 {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -94,57 +84,67 @@ export default function CommitmentsPage() {
         </div>
     )
 
-    if (error) return <div className="p-8 text-center text-destructive">{error}</div>
+    if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
 
     return (
-        <div className="p-6 max-w-3xl mx-auto space-y-6">
+        <motion.div className="p-6 max-w-3xl mx-auto space-y-6" {...fadeIn}>
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Compromisos</h1>
-                <Button onClick={handleCreate}>+ Nuevo compromiso</Button>
+                <h1 className="text-xl font-semibold tracking-tight">Compromisos</h1>
+                <Button size="sm" onClick={handleCreate}>+ Nuevo compromiso</Button>
             </div>
 
             {commitments.length === 0 ? (
-                <Card>
-                    <CardContent className="p-8 text-center text-muted-foreground">
-                        No tenés compromisos programados.
-                    </CardContent>
-                </Card>
+                <div className="rounded-xl p-8 text-center text-sm text-muted-foreground"
+                     style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
+                    No tenés compromisos programados.
+                </div>
             ) : (
-                <div className="space-y-2">
+                <motion.div
+                    className="space-y-2"
+                    variants={staggerContainer}
+                    initial="initial"
+                    animate="animate"
+                >
                     {commitments.map((commitment) => (
-                        <Card key={commitment._id.toString()}>
-                            <CardContent className="py-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <p className="text-sm font-medium">{commitment.description}</p>
-                                            <Badge variant="secondary">
-                                                {RECURRENCE_LABELS[commitment.recurrence]}
-                                            </Badge>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            {commitment.dayOfMonth && `Día ${commitment.dayOfMonth} · `}
-                                            {commitment.applyMode === 'manual' ? 'Aplicación manual' : 'Aplicación automática'}
-                                        </p>
+                        <motion.div
+                            key={commitment._id.toString()}
+                            variants={staggerItem}
+                            className="rounded-xl px-4 py-3"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">{commitment.description}</span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded"
+                                              style={{ background: 'var(--sky-light)', color: 'var(--sky-dark)' }}>
+                      {RECURRENCE_LABELS[commitment.recurrence]}
+                    </span>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <p className="font-semibold">
-                                            {formatAmount(commitment.amount, commitment.currency)}
-                                        </p>
-                                        <div className="flex gap-1">
-                                            <Button variant="outline" size="sm" onClick={() => handleEdit(commitment)}>
-                                                Editar
-                                            </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete(commitment._id.toString())}>
-                                                Desactivar
-                                            </Button>
-                                        </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        {commitment.dayOfMonth && `Día ${commitment.dayOfMonth} · `}
+                                        {commitment.applyMode === 'manual' ? 'Aplicación manual' : 'Aplicación automática'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <p className="font-semibold text-sm tabular-nums">
+                                        {fmt(commitment.amount, commitment.currency)}
+                                    </p>
+                                    <div className="flex gap-1">
+                                        <Button variant="outline" size="sm" className="h-7 text-xs"
+                                                onClick={() => handleEdit(commitment)}>
+                                            Editar
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
+                                                onClick={() => handleDelete(commitment._id.toString())}>
+                                            Desactivar
+                                        </Button>
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </motion.div>
                     ))}
-                </div>
+                </motion.div>
             )}
 
             <CommitmentDialog
@@ -165,12 +165,10 @@ export default function CommitmentsPage() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm}>
-                            Desactivar
-                        </AlertDialogAction>
+                        <AlertDialogAction onClick={handleDeleteConfirm}>Desactivar</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+        </motion.div>
     )
 }

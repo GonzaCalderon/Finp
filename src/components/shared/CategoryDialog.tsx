@@ -22,6 +22,7 @@ import {
 import { ColorPicker } from '@/components/shared/ColorPicker'
 import { categorySchema, type CategoryFormData } from '@/lib/validations'
 import type { ICategory } from '@/types'
+import {Spinner} from "@/components/shared/Spinner";
 
 interface CategoryDialogProps {
     open: boolean
@@ -94,8 +95,14 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
+
+
                         <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : category ? 'Guardar cambios' : 'Crear categoría'}
+                            {isSubmitting ? (
+                                <span className="flex items-center gap-2">
+      <Spinner /> Guardando...
+    </span>
+                            ) : category ? 'Guardar cambios' : 'Crear cuenta'}
                         </Button>
                     </div>
                 </form>

@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import type { IAccount } from '@/types'
+import {Spinner} from "@/components/shared/Spinner";
 
 interface CommitmentToApply {
     _id: string
@@ -176,8 +177,14 @@ export function ApplyCommitmentDialog({
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
-                        <Button type="submit" disabled={isSubmitting || !accountId}>
-                            {isSubmitting ? 'Aplicando...' : 'Aplicar'}
+
+
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? (
+                                <span className="flex items-center gap-2">
+      <Spinner /> Guardando...
+    </span>
+                            ) : commitment ? 'Guardar cambios' : 'Crear cuenta'}
                         </Button>
                     </div>
                 </form>
