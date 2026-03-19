@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
     Select,
     SelectContent,
@@ -10,6 +11,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
+import { useAccounts } from '@/hooks/useAccounts'
+import { useToast } from '@/hooks/useToast'
 
 const getCurrentMonth = () => {
     const now = new Date()
@@ -31,6 +36,14 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
     credit_card: 'Tarjeta',
     debt: 'Deuda',
     savings: 'Ahorro',
+}
+
+interface CommitmentItem {
+    _id: string
+    description: string
+    amount: number
+    currency: string
+    dayOfMonth?: number
 }
 
 interface DashboardData {
@@ -55,13 +68,7 @@ interface DashboardData {
         liabilities: number
         total: number
     }
-    pendingCommitments: {
-        _id: string
-        description: string
-        amount: number
-        currency: string
-        dayOfMonth?: number
-    }[]
+    pendingCommitments: CommitmentItem[]
     installmentsThisMonth: {
         _id: string
         description: string
@@ -77,23 +84,51 @@ export default function DashboardPage() {
     const [data, setData] = useState<DashboardData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [applyDialogOpen, setApplyDialogOpen] = useState(false)
+    const [selectedCommitment, setSelectedCommitment] = useState<CommitmentItem | null>(null)
+
+    const { accounts } = useAccounts()
+    const { success, error: toastError } = useToast()
+
+    const fetchDashboard = async () => {
+        try {
+            setLoading(true)
+            const res = await fetch(`/api/dashboard?month=${month}`)
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            setData(json)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error al cargar dashboard')
+        } finally {
+            setLoading(false)
+        }
+    }
 
     useEffect(() => {
-        const fetchDashboard = async () => {
-            try {
-                setLoading(true)
-                const res = await fetch(`/api/dashboard?month=${month}`)
-                const json = await res.json()
-                if (!res.ok) throw new Error(json.error)
-                setData(json)
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Error al cargar dashboard')
-            } finally {
-                setLoading(false)
-            }
-        }
         fetchDashboard()
     }, [month])
+
+    const handleApplyCommitment = (commitment: CommitmentItem) => {
+        setSelectedCommitment(commitment)
+        setApplyDialogOpen(true)
+    }
+
+    const handleApplySubmit = async (commitmentId: string, data: Record<string, unknown>) => {
+        try {
+            const res = await fetch(`/api/commitments/${commitmentId}/apply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            success('Compromiso aplicado correctamente')
+            setApplyDialogOpen(false)
+            fetchDashboard()
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al aplicar compromiso')
+        }
+    }
 
     const fmt = (amount: number, currency = 'ARS') =>
         new Intl.NumberFormat('es-AR', {
@@ -102,12 +137,26 @@ export default function DashboardPage() {
             maximumFractionDigits: 0,
         }).format(amount)
 
-    if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando dashboard...</div>
+    if (loading) return (
+        <div className="p-6 max-w-5xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-10 w-52" />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
+            </div>
+        </div>
+    )
+
     if (error) return <div className="p-8 text-center text-destructive">{error}</div>
     if (!data) return null
 
     return (
-        <div className="p-6 max-w-5xl mx-auto space-y-6">
+        <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold">Dashboard</h1>
                 <Select value={month} onValueChange={setMonth}>
@@ -131,9 +180,7 @@ export default function DashboardPage() {
                         <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-2xl font-bold text-green-600">
-                            {fmt(data.summary.totalIncome)}
-                        </p>
+                        <p className="text-2xl font-bold text-green-600">{fmt(data.summary.totalIncome)}</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -141,9 +188,7 @@ export default function DashboardPage() {
                         <CardTitle className="text-sm font-medium text-muted-foreground">Gastos</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-2xl font-bold text-red-600">
-                            {fmt(data.summary.totalExpense)}
-                        </p>
+                        <p className="text-2xl font-bold text-red-600">{fmt(data.summary.totalExpense)}</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -161,9 +206,7 @@ export default function DashboardPage() {
                         <CardTitle className="text-sm font-medium text-muted-foreground">Deuda total</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-2xl font-bold text-orange-500">
-                            {fmt(data.summary.totalDebt)}
-                        </p>
+                        <p className="text-2xl font-bold text-orange-500">{fmt(data.summary.totalDebt)}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -236,9 +279,18 @@ export default function DashboardPage() {
                                             <p className="text-xs text-muted-foreground">Día {c.dayOfMonth}</p>
                                         )}
                                     </div>
-                                    <span className="text-sm font-semibold text-red-600">
-                    {fmt(c.amount, c.currency)}
-                  </span>
+                                    <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">
+                      {fmt(c.amount, c.currency)}
+                    </span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleApplyCommitment(c)}
+                                        >
+                                            Aplicar
+                                        </Button>
+                                    </div>
                                 </div>
                             ))
                         )}
@@ -257,7 +309,7 @@ export default function DashboardPage() {
                             data.installmentsThisMonth.map((plan) => (
                                 <div key={plan._id} className="flex items-center justify-between">
                                     <p className="text-sm font-medium">{plan.description}</p>
-                                    <span className="text-sm font-semibold text-red-600">
+                                    <span className="text-sm font-semibold">
                     {fmt(plan.installmentAmount, plan.currency)}
                   </span>
                                 </div>
@@ -291,6 +343,15 @@ export default function DashboardPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            <ApplyCommitmentDialog
+                open={applyDialogOpen}
+                onOpenChange={setApplyDialogOpen}
+                commitment={selectedCommitment}
+                accounts={accounts}
+                period={month}
+                onSubmit={handleApplySubmit}
+            />
         </div>
     )
 }
