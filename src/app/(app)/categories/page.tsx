@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -26,9 +25,9 @@ const CATEGORY_TYPE_LABELS: Record<string, string> = {
     expense: 'Gasto',
 }
 
-const CATEGORY_TYPE_VARIANTS: Record<string, 'default' | 'secondary'> = {
-    income: 'default',
-    expense: 'secondary',
+const CATEGORY_TYPE_COLORS: Record<string, string> = {
+    income: 'text-green-600 bg-green-50 border-green-200',
+    expense: 'text-orange-600 bg-orange-50 border-orange-200',
 }
 
 export default function CategoriesPage() {
@@ -94,26 +93,27 @@ export default function CategoriesPage() {
         list.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">Sin categorías</p>
         ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
                 {list.map((category) => (
                     <div
                         key={category._id.toString()}
-                        className="flex items-center justify-between rounded-md border px-4 py-3"
+                        className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-muted/50 transition-colors"
                     >
-                        <div className="flex items-center gap-3">
-                            {category.color && (
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-                            )}
-                            <span className="text-sm font-medium">{category.name}</span>
-                            <Badge variant={CATEGORY_TYPE_VARIANTS[category.type]}>
-                                {CATEGORY_TYPE_LABELS[category.type]}
-                            </Badge>
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div
+                                className="w-3 h-3 rounded-full shrink-0"
+                                style={{ backgroundColor: category.color ?? '#e5e7eb' }}
+                            />
+                            <span className="text-sm font-medium truncate">{category.name}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${CATEGORY_TYPE_COLORS[category.type]}`}>
+                {CATEGORY_TYPE_LABELS[category.type]}
+              </span>
                         </div>
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleEdit(category)}>
+                        <div className="flex gap-1 shrink-0 ml-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(category)}>
                                 Editar
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setArchiveId(category._id.toString())}>
+                            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveId(category._id.toString())}>
                                 Archivar
                             </Button>
                         </div>
@@ -132,14 +132,14 @@ export default function CategoriesPage() {
 
             <Card>
                 <CardContent className="pt-6 space-y-6">
-                    <div className="space-y-3">
-                        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    <div className="space-y-2">
+                        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3">
                             Ingresos
                         </h2>
                         {renderList(incomeCategories)}
                     </div>
-                    <div className="space-y-3">
-                        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    <div className="space-y-2">
+                        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3">
                             Gastos
                         </h2>
                         {renderList(expenseCategories)}

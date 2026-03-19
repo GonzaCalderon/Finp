@@ -33,11 +33,6 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
     savings: 'Ahorro',
 }
 
-const CURRENCY_LABELS: Record<string, string> = {
-    ARS: '$ ARS',
-    USD: 'U$D',
-}
-
 export default function AccountsPage() {
     const { accounts, loading, error, createAccount, updateAccount, deleteAccount } = useAccounts()
     const { success, error: toastError } = useToast()
@@ -98,7 +93,7 @@ export default function AccountsPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
                 {[...Array(4)].map((_, i) => (
-                    <Skeleton key={i} className="h-32 w-full rounded-xl" />
+                    <Skeleton key={i} className="h-36 w-full rounded-xl" />
                 ))}
             </div>
         </div>
@@ -130,7 +125,7 @@ export default function AccountsPage() {
                                 onClick={() => handleCardClick(acc)}
                             >
                                 <CardHeader className="pb-2">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col gap-1">
                                         <div className="flex items-center gap-2">
                                             {acc.color && (
                                                 <div
@@ -140,22 +135,33 @@ export default function AccountsPage() {
                                             )}
                                             <CardTitle className="text-base">{acc.name}</CardTitle>
                                         </div>
-                                        <Badge variant="secondary">
+                                        <Badge variant="outline" className="text-xs w-fit">
                                             {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
                                         </Badge>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
-                                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                                        <span>{CURRENCY_LABELS[acc.currency] ?? acc.currency}</span>
-                                        {acc.institution && <span>{acc.institution}</span>}
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-muted-foreground">{acc.currency}</span>
+                                        {acc.institution && (
+                                            <span className="text-xs text-muted-foreground truncate max-w-[120px]">{acc.institution}</span>
+                                        )}
                                     </div>
+                                    {(acc as AccountWithColor & { balance?: number }).balance !== undefined && (
+                                        <p className={`text-lg font-bold ${
+                                            ((acc as AccountWithColor & { balance?: number }).balance ?? 0) < 0
+                                                ? 'text-red-600'
+                                                : 'text-foreground'
+                                        }`}>
+                                            {new Intl.NumberFormat('es-AR', {
+                                                style: 'currency',
+                                                currency: acc.currency,
+                                                maximumFractionDigits: 0,
+                                            }).format((acc as AccountWithColor & { balance?: number }).balance ?? 0)}
+                                        </p>
+                                    )}
                                     <div className="flex gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={(e) => handleEdit(acc, e)}
-                                        >
+                                        <Button variant="outline" size="sm" onClick={(e) => handleEdit(acc, e)}>
                                             Editar
                                         </Button>
                                         <Button
