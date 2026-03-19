@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { signOut } from 'next-auth/react'
-import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import {
     LayoutDashboard,
@@ -26,30 +25,59 @@ const NAV_ITEMS = [
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
 ]
 
-function NavLinks({ onClose }: { onClose?: () => void }) {
+function SidebarContent({ onClose }: { onClose?: () => void }) {
     const pathname = usePathname()
 
     return (
-        <nav className="flex flex-col gap-1">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-                const isActive = pathname === href
-                return (
-                    <Link
-                        key={href}
-                        href={href}
-                        onClick={onClose}
-                        className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors
-              ${isActive
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        }`}
-                    >
-                        <Icon className="h-4 w-4" />
-                        {label}
-                    </Link>
-                )
-            })}
-        </nav>
+        <div className="flex flex-col h-full">
+            {/* Logo */}
+            <div className="px-5 py-6">
+        <span className="text-lg font-semibold tracking-tight text-white">
+          fin<span style={{ color: 'var(--sky)' }}>p</span>
+        </span>
+            </div>
+
+            {/* Nav items */}
+            <nav className="flex flex-col gap-0.5 px-3 flex-1">
+                {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+                    const isActive = pathname === href
+                    return (
+                        <Link
+                            key={href}
+                            href={href}
+                            onClick={onClose}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors"
+                            style={{
+                                color: isActive ? '#FFFFFF' : 'var(--sidebar-foreground)',
+                                background: isActive ? 'var(--sidebar-accent)' : 'transparent',
+                                borderRight: isActive ? '2px solid var(--sky)' : '2px solid transparent',
+                            }}
+                        >
+                            <Icon
+                                size={15}
+                                style={{ opacity: isActive ? 1 : 0.6 }}
+                            />
+                            {label}
+                        </Link>
+                    )
+                })}
+            </nav>
+
+            {/* Bottom — user + logout */}
+            <div
+                className="px-3 py-4 mx-3 mb-3 rounded-md"
+                style={{ borderTop: '0.5px solid var(--sidebar-border)' }}
+            >
+                <button
+                    onClick={() => signOut({ callbackUrl: '/login' })}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm w-full transition-colors hover:bg-white/5"
+                    style={{ color: 'var(--sidebar-foreground)' }}
+                >
+                    <LogOut size={14} style={{ opacity: 0.6 }} />
+                    Cerrar sesión
+                </button>
+            </div>
+        </div>
     )
 }
 
@@ -59,47 +87,39 @@ export function Navbar() {
     return (
         <>
             {/* Sidebar desktop */}
-            <aside className="hidden md:flex flex-col w-56 border-r min-h-screen p-4 gap-6">
-                <div className="px-3 py-2">
-                    <h1 className="text-xl font-bold">Finm</h1>
-                </div>
-                <NavLinks />
-                <div className="mt-auto">
-                    <Button
-                        variant="ghost"
-                        className="w-full justify-start text-muted-foreground"
-                        onClick={() => signOut({ callbackUrl: '/login' })}
-                    >
-                        <LogOut className="h-4 w-4 mr-3" />
-                        Cerrar sesión
-                    </Button>
-                </div>
+            <aside
+                className="hidden md:flex flex-col w-52 h-screen sticky top-0"
+                style={{ background: 'var(--sidebar)', borderRight: '0.5px solid var(--sidebar-border)' }}
+            >
+                <SidebarContent />
             </aside>
 
             {/* Header mobile */}
-            <header className="md:hidden flex items-center justify-between border-b px-4 py-3">
-                <h1 className="text-lg font-bold">Finm</h1>
+            <header
+                className="md:hidden flex items-center justify-between px-4 py-3 sticky top-0 z-10"
+                style={{
+                    background: 'var(--sidebar)',
+                    borderBottom: '0.5px solid var(--sidebar-border)',
+                }}
+            >
+        <span className="text-base font-semibold tracking-tight text-white">
+          fin<span style={{ color: 'var(--sky)' }}>p</span>
+        </span>
                 <Sheet open={open} onOpenChange={setOpen}>
                     <SheetTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                            <Menu className="h-5 w-5" />
-                        </Button>
+                        <button
+                            className="p-1.5 rounded-md"
+                            style={{ color: 'var(--sidebar-foreground)' }}
+                        >
+                            <Menu size={18} />
+                        </button>
                     </SheetTrigger>
-                    <SheetContent side="left" className="w-56 p-4 flex flex-col gap-6">
-                        <div className="px-3 py-2">
-                            <h1 className="text-xl font-bold">Finm</h1>
-                        </div>
-                        <NavLinks onClose={() => setOpen(false)} />
-                        <div className="mt-auto">
-                            <Button
-                                variant="ghost"
-                                className="w-full justify-start text-muted-foreground"
-                                onClick={() => signOut({ callbackUrl: '/login' })}
-                            >
-                                <LogOut className="h-4 w-4 mr-3" />
-                                Cerrar sesión
-                            </Button>
-                        </div>
+                    <SheetContent
+                        side="left"
+                        className="w-52 p-0"
+                        style={{ background: 'var(--sidebar)', border: 'none' }}
+                    >
+                        <SidebarContent onClose={() => setOpen(false)} />
                     </SheetContent>
                 </Sheet>
             </header>
