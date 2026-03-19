@@ -29,6 +29,7 @@ export interface IAccount {
     currency: Currency
     institution?: string
     description?: string
+    color?: string
     isActive: boolean
     includeInNetWorth: boolean
     initialBalance?: number

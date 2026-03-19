@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { connectDB } from '@/lib/db'
-import { User } from '@/lib/models'
+import { User, Category } from '@/lib/models'
+import { DEFAULT_CATEGORIES } from '@/lib/constants/defaultCategories'
 
 export async function POST(request: Request) {
     try {
@@ -41,6 +42,16 @@ export async function POST(request: Request) {
             baseCurrency: 'ARS',
             timezone: 'America/Argentina/Buenos_Aires',
         })
+
+        // Crear categorías predeterminadas
+        await Category.insertMany(
+            DEFAULT_CATEGORIES.map((cat) => ({
+                ...cat,
+                userId: user._id,
+                isDefault: true,
+                isArchived: false,
+            }))
+        )
 
         return NextResponse.json(
             {

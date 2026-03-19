@@ -37,10 +37,6 @@ export async function GET(request: Request) {
             .filter((t) => t.type === 'expense' && !t.installmentPlanId)
             .reduce((sum, t) => sum + t.amount, 0)
 
-        const totalInstallmentDebt = transactions
-            .filter((t) => t.type === 'expense' && t.installmentPlanId)
-            .reduce((sum, t) => sum + t.amount, 0)
-
         // Gastos por categoría
         const expenseByCategory: Record<string, { name: string; color?: string; total: number }> = {}
         transactions
@@ -149,7 +145,9 @@ export async function GET(request: Request) {
                 totalIncome,
                 totalExpense,
                 balance: totalIncome - totalExpense,
-                totalInstallmentDebt,
+                totalDebt: accountsWithBalance
+                    .filter((a) => a.balance < 0)
+                    .reduce((sum, a) => sum + Math.abs(a.balance), 0),
             },
             expenseByCategory: Object.values(expenseByCategory).sort((a, b) => b.total - a.total),
             accounts: accountsWithBalance,

@@ -3,9 +3,21 @@
 import { useState } from 'react'
 import { useCommitments } from '@/hooks/useCommitments'
 import { useCategories } from '@/hooks/useCategories'
+import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
 import type { IScheduledCommitment } from '@/types'
 
@@ -18,8 +30,10 @@ const RECURRENCE_LABELS: Record<string, string> = {
 export default function CommitmentsPage() {
     const { commitments, loading, error, createCommitment, updateCommitment, deleteCommitment } = useCommitments()
     const { categories } = useCategories()
+    const { success, error: toastError } = useToast()
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selected, setSelected] = useState<IScheduledCommitment | null>(null)
+    const [deleteId, setDeleteId] = useState<string | null>(null)
 
     const handleCreate = () => {
         setSelected(null)
@@ -31,12 +45,17 @@ export default function CommitmentsPage() {
         setDialogOpen(true)
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('¿Desactivar este compromiso?')) return
+    const handleDelete = (id: string) => setDeleteId(id)
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return
         try {
-            await deleteCommitment(id)
+            await deleteCommitment(deleteId)
+            success('Compromiso desactivado correctamente')
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Error al desactivar')
+            toastError(err instanceof Error ? err.message : 'Error al desactivar')
+        } finally {
+            setDeleteId(null)
         }
     }
 
@@ -44,12 +63,14 @@ export default function CommitmentsPage() {
         try {
             if (selected) {
                 await updateCommitment(selected._id.toString(), data)
+                success('Compromiso actualizado correctamente')
             } else {
                 await createCommitment(data)
+                success('Compromiso creado correctamente')
             }
             setDialogOpen(false)
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Error al guardar compromiso')
+            toastError(err instanceof Error ? err.message : 'Error al guardar compromiso')
         }
     }
 
@@ -60,7 +81,18 @@ export default function CommitmentsPage() {
             maximumFractionDigits: 0,
         }).format(amount)
 
-    if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando compromisos...</div>
+    if (loading) return (
+        <div className="p-6 max-w-3xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <Skeleton className="h-8 w-40" />
+                <Skeleton className="h-10 w-44" />
+            </div>
+            <div className="space-y-2">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+            </div>
+        </div>
+    )
+
     if (error) return <div className="p-8 text-center text-destructive">{error}</div>
 
     return (
@@ -95,7 +127,7 @@ export default function CommitmentsPage() {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <p className="font-semibold text-red-600">
+                                        <p className="font-semibold">
                                             {formatAmount(commitment.amount, commitment.currency)}
                                         </p>
                                         <div className="flex gap-1">
@@ -121,6 +153,23 @@ export default function CommitmentsPage() {
                 categories={categories}
                 onSubmit={handleSubmit}
             />
+
+            <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Desactivar este compromiso?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            El compromiso dejará de aparecer en la proyección.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm}>
+                            Desactivar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

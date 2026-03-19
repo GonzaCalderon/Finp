@@ -17,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { ColorPicker } from '@/components/shared/ColorPicker'
 import type { IAccount } from '@/types'
 
 interface AccountDialogProps {
@@ -32,6 +33,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
     const [currency, setCurrency] = useState('')
     const [institution, setInstitution] = useState('')
     const [initialBalance, setInitialBalance] = useState('0')
+    const [color, setColor] = useState('#6366f1')
     const [closingDay, setClosingDay] = useState('')
     const [dueDay, setDueDay] = useState('')
     const [creditLimit, setCreditLimit] = useState('')
@@ -44,6 +46,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
             setCurrency(account.currency)
             setInstitution(account.institution ?? '')
             setInitialBalance(account.initialBalance?.toString() ?? '0')
+            setColor((account as IAccount & { color?: string }).color ?? '#6366f1')
             setClosingDay(account.creditCardConfig?.closingDay?.toString() ?? '')
             setDueDay(account.creditCardConfig?.dueDay?.toString() ?? '')
             setCreditLimit(account.creditCardConfig?.creditLimit?.toString() ?? '')
@@ -53,6 +56,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
             setCurrency('')
             setInstitution('')
             setInitialBalance('0')
+            setColor('#6366f1')
             setClosingDay('')
             setDueDay('')
             setCreditLimit('')
@@ -63,12 +67,13 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
         e.preventDefault()
         setLoading(true)
 
-        const data: Partial<IAccount> = {
+        const data: Partial<IAccount> & { color?: string } = {
             name,
             type: type as IAccount['type'],
             currency: currency as IAccount['currency'],
             institution: institution || undefined,
             initialBalance: parseFloat(initialBalance) || 0,
+            color,
         }
 
         if (type === 'credit_card') {
@@ -88,7 +93,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{account ? 'Editar cuenta' : 'Nueva cuenta'}</DialogTitle>
                 </DialogHeader>
@@ -156,6 +161,12 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                         />
                     </div>
 
+                    <ColorPicker
+                        label="Color de la cuenta"
+                        value={color}
+                        onChange={setColor}
+                    />
+
                     {type === 'credit_card' && (
                         <div className="space-y-4 rounded-md border p-4">
                             <p className="text-sm font-medium">Configuración de tarjeta</p>
@@ -201,11 +212,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                     )}
 
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                        >
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={loading}>

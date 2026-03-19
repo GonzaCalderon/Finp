@@ -42,6 +42,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ],
     session: {
         strategy: 'jwt',
+        maxAge: 60 * 60,      // 1 hora máximo
+        updateAge: 60 * 30,   // renueva si hay actividad cada 30 minutos
     },
     callbacks: {
         async jwt({ token, user }) {

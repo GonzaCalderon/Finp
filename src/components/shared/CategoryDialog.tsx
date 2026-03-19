@@ -17,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { ColorPicker } from '@/components/shared/ColorPicker'
 import type { ICategory } from '@/types'
 
 interface CategoryDialogProps {
@@ -26,27 +27,21 @@ interface CategoryDialogProps {
     onSubmit: (data: Partial<ICategory>) => Promise<void>
 }
 
-const COLORS = [
-    '#ef4444', '#f97316', '#eab308', '#22c55e',
-    '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899',
-    '#6b7280', '#000000',
-]
-
 export function CategoryDialog({ open, onOpenChange, category, onSubmit }: CategoryDialogProps) {
     const [name, setName] = useState('')
     const [type, setType] = useState('')
-    const [color, setColor] = useState('')
+    const [color, setColor] = useState('#6366f1')
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
         if (category) {
             setName(category.name)
             setType(category.type)
-            setColor(category.color ?? '')
+            setColor(category.color ?? '#6366f1')
         } else {
             setName('')
             setType('')
-            setColor('')
+            setColor('#6366f1')
         }
     }, [category, open])
 
@@ -57,7 +52,7 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
             await onSubmit({
                 name,
                 type: type as ICategory['type'],
-                color: color || undefined,
+                color,
             })
         } finally {
             setLoading(false)
@@ -98,31 +93,14 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
                         </Select>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Color (opcional)</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {COLORS.map((c) => (
-                                <button
-                                    key={c}
-                                    type="button"
-                                    onClick={() => setColor(c)}
-                                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                                    style={{
-                                        backgroundColor: c,
-                                        borderColor: color === c ? 'white' : 'transparent',
-                                        outline: color === c ? `2px solid ${c}` : 'none',
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    </div>
+                    <ColorPicker
+                        label="Color"
+                        value={color}
+                        onChange={setColor}
+                    />
 
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                        >
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={loading}>

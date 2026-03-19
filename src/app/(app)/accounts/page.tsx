@@ -2,9 +2,21 @@
 
 import { useState } from 'react'
 import { useAccounts } from '@/hooks/useAccounts'
+import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { AccountDialog } from '@/components/shared/AccountDialog'
 import type { IAccount } from '@/types'
 
@@ -24,8 +36,10 @@ const CURRENCY_LABELS: Record<string, string> = {
 
 export default function AccountsPage() {
     const { accounts, loading, error, createAccount, updateAccount, deleteAccount } = useAccounts()
+    const { success, error: toastError } = useToast()
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selectedAccount, setSelectedAccount] = useState<IAccount | null>(null)
+    const [deleteId, setDeleteId] = useState<string | null>(null)
 
     const handleCreate = () => {
         setSelectedAccount(null)
@@ -37,12 +51,15 @@ export default function AccountsPage() {
         setDialogOpen(true)
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('¿Desactivar esta cuenta?')) return
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return
         try {
-            await deleteAccount(id)
+            await deleteAccount(deleteId)
+            success('Cuenta desactivada correctamente')
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Error al desactivar cuenta')
+            toastError(err instanceof Error ? err.message : 'Error al desactivar cuenta')
+        } finally {
+            setDeleteId(null)
         }
     }
 
@@ -50,16 +67,31 @@ export default function AccountsPage() {
         try {
             if (selectedAccount) {
                 await updateAccount(selectedAccount._id.toString(), data)
+                success('Cuenta actualizada correctamente')
             } else {
                 await createAccount(data)
+                success('Cuenta creada correctamente')
             }
             setDialogOpen(false)
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Error al guardar cuenta')
+            toastError(err instanceof Error ? err.message : 'Error al guardar cuenta')
         }
     }
 
-    if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando cuentas...</div>
+    if (loading) return (
+        <div className="p-6 max-w-4xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-10 w-36" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+                {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-32 w-full rounded-xl" />
+                ))}
+            </div>
+        </div>
+    )
+
     if (error) return <div className="p-8 text-center text-destructive">{error}</div>
 
     return (
@@ -93,17 +125,13 @@ export default function AccountsPage() {
                                     {account.institution && <span>{account.institution}</span>}
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleEdit(account)}
-                                    >
+                                    <Button variant="outline" size="sm" onClick={() => handleEdit(account)}>
                                         Editar
                                     </Button>
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => handleDelete(account._id.toString())}
+                                        onClick={() => setDeleteId(account._id.toString())}
                                     >
                                         Desactivar
                                     </Button>
@@ -120,6 +148,23 @@ export default function AccountsPage() {
                 account={selectedAccount}
                 onSubmit={handleSubmit}
             />
+
+            <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Desactivar esta cuenta?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            La cuenta dejará de aparecer pero el historial se conserva.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm}>
+                            Desactivar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

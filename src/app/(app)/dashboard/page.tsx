@@ -39,7 +39,7 @@ interface DashboardData {
         totalIncome: number
         totalExpense: number
         balance: number
-        totalInstallmentDebt: number
+        totalDebt: number
     }
     expenseByCategory: { name: string; color?: string; total: number }[]
     accounts: {
@@ -158,11 +158,11 @@ export default function DashboardPage() {
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Deuda en cuotas</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Deuda total</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-2xl font-bold text-orange-500">
-                            {fmt(data.summary.totalInstallmentDebt)}
+                            {fmt(data.summary.totalDebt)}
                         </p>
                     </CardContent>
                 </Card>

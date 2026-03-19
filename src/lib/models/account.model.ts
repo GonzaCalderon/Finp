@@ -10,6 +10,7 @@ const AccountSchema = new Schema<IAccount>(
         currency: { type: String, enum: Object.values(CURRENCIES), required: true },
         institution: { type: String },
         description: { type: String },
+        color: { type: String },
         isActive: { type: Boolean, default: true },
         includeInNetWorth: { type: Boolean, default: true },
         initialBalance: { type: Number, default: 0 },
