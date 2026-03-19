@@ -103,10 +103,10 @@ export default function TransactionsPage() {
     const handleTransactionSubmit = async (data: TransactionFormData) => {
         try {
             if (selectedTransaction) {
-                await updateTransaction(selectedTransaction._id.toString(), data)
+                await updateTransaction(selectedTransaction._id.toString(), data as Record<string, unknown>)
                 success('Transacción actualizada correctamente')
             } else {
-                await createTransaction(data)
+                await createTransaction(data as Record<string, unknown>)
                 success('Transacción registrada correctamente')
             }
             setTransactionDialogOpen(false)

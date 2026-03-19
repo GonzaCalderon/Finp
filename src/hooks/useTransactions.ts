@@ -30,9 +30,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
             const query = buildQuery(f)
             const res = await fetch(`/api/transactions?${query}`)
             const data = await res.json()
-
             if (!res.ok) throw new Error(data.error)
-
             setTransactions(data.transactions)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar transacciones')
@@ -41,7 +39,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
         }
     }
 
-    const createTransaction = async (body: Partial<ITransaction>) => {
+    const createTransaction = async (body: Record<string, unknown>) => {
         const res = await fetch('/api/transactions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -53,7 +51,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
         return data.transaction
     }
 
-    const updateTransaction = async (id: string, body: Partial<ITransaction>) => {
+    const updateTransaction = async (id: string, body: Record<string, unknown>) => {
         const res = await fetch(`/api/transactions/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -66,9 +64,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     }
 
     const deleteTransaction = async (id: string) => {
-        const res = await fetch(`/api/transactions/${id}`, {
-            method: 'DELETE',
-        })
+        const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
         await fetchTransactions()
