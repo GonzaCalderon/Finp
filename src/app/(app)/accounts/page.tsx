@@ -18,8 +18,11 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { AccountDialog } from '@/components/shared/AccountDialog'
+import { AccountDetailSheet } from '@/components/shared/AccountDetailSheet'
 import type { AccountFormData } from '@/lib/validations'
 import type { IAccount } from '@/types'
+
+type AccountWithColor = IAccount & { color?: string }
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
     bank: 'Banco',
@@ -41,15 +44,23 @@ export default function AccountsPage() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selectedAccount, setSelectedAccount] = useState<IAccount | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
+    const [detailOpen, setDetailOpen] = useState(false)
+    const [detailAccountId, setDetailAccountId] = useState<string | null>(null)
 
     const handleCreate = () => {
         setSelectedAccount(null)
         setDialogOpen(true)
     }
 
-    const handleEdit = (account: IAccount) => {
+    const handleEdit = (account: IAccount, e: React.MouseEvent) => {
+        e.stopPropagation()
         setSelectedAccount(account)
         setDialogOpen(true)
+    }
+
+    const handleCardClick = (account: IAccount) => {
+        setDetailAccountId(account._id.toString())
+        setDetailOpen(true)
     }
 
     const handleDeleteConfirm = async () => {
@@ -111,38 +122,49 @@ export default function AccountsPage() {
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                     {accounts.map((account) => {
-                        const accountWithColor = account as IAccount & { color?: string }
+                        const acc = account as AccountWithColor
                         return (
-                            <Card key={account._id.toString()}>
+                            <Card
+                                key={acc._id.toString()}
+                                className="cursor-pointer hover:shadow-md transition-shadow"
+                                onClick={() => handleCardClick(acc)}
+                            >
                                 <CardHeader className="pb-2">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            {accountWithColor.color && (
+                                            {acc.color && (
                                                 <div
                                                     className="w-3 h-3 rounded-full shrink-0"
-                                                    style={{ backgroundColor: accountWithColor.color }}
+                                                    style={{ backgroundColor: acc.color }}
                                                 />
                                             )}
-                                            <CardTitle className="text-base">{account.name}</CardTitle>
+                                            <CardTitle className="text-base">{acc.name}</CardTitle>
                                         </div>
                                         <Badge variant="secondary">
-                                            {ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
+                                            {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
                                         </Badge>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="flex items-center justify-between text-sm text-muted-foreground">
-                                        <span>{CURRENCY_LABELS[account.currency] ?? account.currency}</span>
-                                        {account.institution && <span>{account.institution}</span>}
+                                        <span>{CURRENCY_LABELS[acc.currency] ?? acc.currency}</span>
+                                        {acc.institution && <span>{acc.institution}</span>}
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => handleEdit(account)}>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={(e) => handleEdit(acc, e)}
+                                        >
                                             Editar
                                         </Button>
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => setDeleteId(account._id.toString())}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                setDeleteId(acc._id.toString())
+                                            }}
                                         >
                                             Desactivar
                                         </Button>
@@ -159,6 +181,12 @@ export default function AccountsPage() {
                 onOpenChange={setDialogOpen}
                 account={selectedAccount}
                 onSubmit={handleSubmit}
+            />
+
+            <AccountDetailSheet
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
+                accountId={detailAccountId}
             />
 
             <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
