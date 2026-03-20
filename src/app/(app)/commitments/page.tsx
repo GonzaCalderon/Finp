@@ -163,60 +163,47 @@ export default function CommitmentsPage() {
                                 className="rounded-xl px-4 py-3"
                                 style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
                             >
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-1">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="space-y-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-sm font-medium">{commitment.description}</span>
                                             <span className="text-xs px-1.5 py-0.5 rounded"
                                                   style={{ background: 'var(--sky-light)', color: 'var(--sky-dark)' }}>
-                        {RECURRENCE_LABELS[commitment.recurrence]}
-                      </span>
+        {RECURRENCE_LABELS[commitment.recurrence]}
+      </span>
                                             {isApplied && (
                                                 <motion.span
                                                     initial={{ opacity: 0, scale: 0.8 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded"
-                                                    style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981' }}
-                                                >
+                                                    style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981' }}>
                                                     <CheckCircle size={10} /> Aplicado este mes
                                                 </motion.span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                                             {commitment.dayOfMonth && <span>Día {commitment.dayOfMonth}</span>}
-                                            {commitment.startDate && (
-                                                <span>Desde {fmtDate(commitment.startDate)}</span>
-                                            )}
-                                            {commitment.endDate && (
-                                                <span>Hasta {fmtDate(commitment.endDate)}</span>
-                                            )}
+                                            {commitment.startDate && <span>Desde {fmtDate(commitment.startDate)}</span>}
+                                            {commitment.endDate && <span>Hasta {fmtDate(commitment.endDate)}</span>}
                                             <span>{commitment.applyMode === 'manual' ? 'Manual' : 'Automático'}</span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                                    <div className="flex items-center gap-2 shrink-0">
                                         <p className="font-semibold text-sm tabular-nums">
                                             {fmt(commitment.amount, commitment.currency)}
                                         </p>
-                                        <div className="flex gap-1">
+                                        <div className="flex gap-1 flex-wrap">
                                             {!isApplied && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="h-7 text-xs px-2"
-                                                    style={{ borderColor: 'var(--sky)', color: 'var(--sky)' }}
-                                                    onClick={() => handleApply(commitment)}
-                                                >
+                                                <Button size="sm" variant="outline" className="h-7 text-xs px-2"
+                                                        style={{ borderColor: 'var(--sky)', color: 'var(--sky)' }}
+                                                        onClick={() => handleApply(commitment)}>
                                                     Aplicar
                                                 </Button>
                                             )}
                                             <Button variant="outline" size="sm" className="h-7 text-xs"
-                                                    onClick={() => handleEdit(commitment)}>
-                                                Editar
-                                            </Button>
+                                                    onClick={() => handleEdit(commitment)}>Editar</Button>
                                             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
-                                                    onClick={() => handleDelete(commitment._id.toString())}>
-                                                Desactivar
-                                            </Button>
+                                                    onClick={() => handleDelete(commitment._id.toString())}>Desactivar</Button>
                                         </div>
                                     </div>
                                 </div>

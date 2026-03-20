@@ -234,8 +234,8 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
     }, [data])
 
     return (
-        <div ref={containerRef} style={{ width: '100%' }}>
-            <svg ref={svgRef} width="100%" height="400" style={{ overflow: 'visible' }} />
+        <div ref={containerRef} style={{ width: '100%', overflowX: 'auto' }}>
+            <svg ref={svgRef} width="100%" height="400" style={{ overflow: 'visible', minWidth: '400px' }} />
         </div>
     )
 }

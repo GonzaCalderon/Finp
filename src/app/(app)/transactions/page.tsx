@@ -168,7 +168,7 @@ export default function TransactionsPage() {
     return (
         <motion.div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6" {...fadeIn}>
 
-            {/* Header fijo */}
+            {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <h1 className="text-xl font-semibold tracking-tight">Transacciones</h1>
@@ -178,9 +178,7 @@ export default function TransactionsPage() {
                     <Button variant="outline" size="sm" onClick={() => setInstallmentDialogOpen(true)}>
                         + Cuotas
                     </Button>
-                    <Button size="sm" onClick={handleNewTransaction}>
-                        + Nueva
-                    </Button>
+                    <Button size="sm" onClick={handleNewTransaction}>+ Nueva</Button>
                 </div>
             </div>
 
@@ -197,25 +195,25 @@ export default function TransactionsPage() {
 
             {/* Métricas */}
             <motion.div
-                className="grid grid-cols-3 gap-3"
+                className="grid grid-cols-3 gap-2"
                 variants={staggerContainer}
                 initial="initial"
                 animate="animate"
             >
-                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                <motion.div variants={staggerItem} className="rounded-xl p-3 md:p-4"
                             style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--sky)' }}>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Ingresos</p>
-                    <p className="text-xl font-semibold tracking-tight text-green-500">{fmt(totalIncome, 'ARS')}</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">Ingresos</p>
+                    <p className="text-base md:text-xl font-semibold tracking-tight text-green-500 truncate">{fmt(totalIncome, 'ARS')}</p>
                 </motion.div>
-                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                <motion.div variants={staggerItem} className="rounded-xl p-3 md:p-4"
                             style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--destructive)' }}>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Gastos reales</p>
-                    <p className="text-xl font-semibold tracking-tight text-destructive">{fmt(totalExpense, 'ARS')}</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">Gastos</p>
+                    <p className="text-base md:text-xl font-semibold tracking-tight text-destructive truncate">{fmt(totalExpense, 'ARS')}</p>
                 </motion.div>
-                <motion.div variants={staggerItem} className="rounded-xl p-4"
+                <motion.div variants={staggerItem} className="rounded-xl p-3 md:p-4"
                             style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--sky)' }}>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Balance</p>
-                    <p className="text-xl font-semibold tracking-tight"
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">Balance</p>
+                    <p className="text-base md:text-xl font-semibold tracking-tight truncate"
                        style={{ color: totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)' }}>
                         {fmt(totalIncome - totalExpense, 'ARS')}
                     </p>

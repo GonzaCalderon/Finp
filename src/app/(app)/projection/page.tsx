@@ -320,7 +320,7 @@ export default function ProjectionPage() {
                                     </div>
                                 </div>
 
-                                <div className="hidden md:block px-4 pb-3 space-y-0.5">
+                                <div className="px-4 pb-3 space-y-0.5">
                                     {row.commitments.length > 0 && (
                                         <ExpandableRow label="Compromisos" totalARS={row.totalCommitmentsARS} level={0}>
                                             {row.commitments.map((c) => (
@@ -366,25 +366,25 @@ export default function ProjectionPage() {
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="rounded-xl p-4"
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-xl p-3 md:p-4"
                              style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Compromisos</p>
-                            <p className="text-xl font-semibold tracking-tight">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Compromisos</p>
+                            <p className="text-sm md:text-xl font-semibold tracking-tight truncate">
                                 {fmt(projection.reduce((sum, p) => sum + p.totalCommitmentsARS, 0))}
                             </p>
                         </div>
-                        <div className="rounded-xl p-4"
+                        <div className="rounded-xl p-3 md:p-4"
                              style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Cuotas</p>
-                            <p className="text-xl font-semibold tracking-tight">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cuotas</p>
+                            <p className="text-sm md:text-xl font-semibold tracking-tight truncate">
                                 {fmt(projection.reduce((sum, p) => sum + p.totalInstallmentsARS, 0))}
                             </p>
                         </div>
-                        <div className="rounded-xl p-4"
+                        <div className="rounded-xl p-3 md:p-4"
                              style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--amber)' }}>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Total proyectado</p>
-                            <p className="text-xl font-semibold tracking-tight" style={{ color: 'var(--amber-dark)' }}>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
+                            <p className="text-sm md:text-xl font-semibold tracking-tight truncate" style={{ color: 'var(--amber-dark)' }}>
                                 {fmt(projection.reduce((sum, p) => sum + p.totalARS, 0))}
                             </p>
                         </div>

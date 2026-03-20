@@ -427,9 +427,9 @@ export default function CategoriesPage() {
 
     return (
         <motion.div className="p-6 max-w-3xl mx-auto space-y-6" {...fadeIn}>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h1 className="text-xl font-semibold tracking-tight">Categorías</h1>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" size="sm" onClick={handleOpenDefaults} disabled={loadingDefaults}>
                         <Sparkles size={14} className="mr-1" />
                         {loadingDefaults ? 'Cargando...' : 'Predeterminadas'}

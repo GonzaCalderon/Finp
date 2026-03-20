@@ -419,25 +419,21 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Patrimonio */}
-                    <div className="rounded-xl p-4"
-                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Patrimonio</p>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <p className="text-xs text-muted-foreground mb-1">Activos</p>
-                                <p className="text-xl font-semibold tracking-tight text-green-500">{fmt(data.netWorth.assets)}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-muted-foreground mb-1">Pasivos</p>
-                                <p className="text-xl font-semibold tracking-tight text-destructive">{fmt(data.netWorth.liabilities)}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-muted-foreground mb-1">Neto</p>
-                                <p className="text-xl font-semibold tracking-tight"
-                                   style={{ color: data.netWorth.total >= 0 ? 'var(--sky-dark)' : 'var(--destructive)' }}>
-                                    {fmt(data.netWorth.total)}
-                                </p>
-                            </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Activos</p>
+                            <p className="text-base md:text-xl font-semibold tracking-tight text-green-500 truncate">{fmt(data.netWorth.assets)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Pasivos</p>
+                            <p className="text-base md:text-xl font-semibold tracking-tight text-destructive truncate">{fmt(data.netWorth.liabilities)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Neto</p>
+                            <p className="text-base md:text-xl font-semibold tracking-tight truncate"
+                               style={{ color: data.netWorth.total >= 0 ? 'var(--sky-dark)' : 'var(--destructive)' }}>
+                                {fmt(data.netWorth.total)}
+                            </p>
                         </div>
                     </div>
 
