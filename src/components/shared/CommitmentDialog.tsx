@@ -77,8 +77,12 @@ export function CommitmentDialog({
                     dayOfMonth: commitment.dayOfMonth,
                     applyMode: commitment.applyMode,
                     categoryId: (commitment.categoryId as { _id?: { toString(): string } })?._id?.toString() ?? commitment.categoryId?.toString() ?? '',
-                    startDate: commitment.startDate ? new Date(commitment.startDate) : new Date(),
-                    endDate: commitment.endDate ? new Date(commitment.endDate) : undefined,
+                    startDate: commitment.startDate
+                        ? new Date(String(commitment.startDate))
+                        : new Date(),
+                    endDate: commitment.endDate
+                        ? new Date(String(commitment.endDate))
+                        : undefined,
                 })
             } else {
                 reset({
@@ -176,7 +180,6 @@ export function CommitmentDialog({
                         </div>
                     )}
 
-                    {/* Fechas */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Fecha de inicio <span className="text-destructive">*</span></Label>

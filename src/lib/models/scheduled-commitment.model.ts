@@ -34,5 +34,5 @@ const CommitmentApplicationSchema = new Schema<ICommitmentApplication>({
 
 CommitmentApplicationSchema.index({ userId: 1, commitmentId: 1, period: 1 }, { unique: true })
 
-export const ScheduledCommitment = mongoose.models.ScheduledCommitment || mongoose.model<IScheduledCommitment>('ScheduledCommitment', ScheduledCommitmentSchema)
-export const CommitmentApplication = mongoose.models.CommitmentApplication || mongoose.model<ICommitmentApplication>('CommitmentApplication', CommitmentApplicationSchema)
+export const ScheduledCommitment = mongoose.models.ScheduledCommitment as mongoose.Model<IScheduledCommitment> || mongoose.model<IScheduledCommitment>('ScheduledCommitment', ScheduledCommitmentSchema)
+export const CommitmentApplication = mongoose.models.CommitmentApplication as mongoose.Model<ICommitmentApplication> || mongoose.model<ICommitmentApplication>('CommitmentApplication', CommitmentApplicationSchema)

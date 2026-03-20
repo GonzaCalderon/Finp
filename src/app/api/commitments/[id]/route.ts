@@ -16,11 +16,27 @@ export async function PATCH(
         const { id } = await params
         const body = await request.json()
 
+        const {
+            description, amount, currency, categoryId, recurrence,
+            dayOfMonth, applyMode, startDate, endDate, isActive
+        } = body
+
+        const updateData: Record<string, unknown> = {
+            description, amount, currency, recurrence, applyMode,
+        }
+
+        if (categoryId !== undefined) updateData.categoryId = categoryId || null
+        if (dayOfMonth !== undefined) updateData.dayOfMonth = dayOfMonth
+        if (startDate !== undefined) updateData.startDate = new Date(startDate)
+        if (endDate !== undefined) updateData.endDate = new Date(endDate)
+        if (endDate === null) updateData.endDate = null
+        if (isActive !== undefined) updateData.isActive = isActive
+
         await connectDB()
 
         const commitment = await ScheduledCommitment.findOneAndUpdate(
             { _id: id, userId: session.user.id },
-            { $set: body },
+            { $set: updateData },
             { new: true }
         )
 
