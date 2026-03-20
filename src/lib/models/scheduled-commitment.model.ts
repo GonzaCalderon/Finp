@@ -15,6 +15,8 @@ const ScheduledCommitmentSchema = new Schema<IScheduledCommitment>(
         dueDate: { type: Date },
         applyMode: { type: String, enum: Object.values(APPLY_MODES), required: true, default: 'manual' },
         isActive: { type: Boolean, default: true },
+        startDate: { type: Date, required: true },
+        endDate: { type: Date, required: false },
     },
     { timestamps: true }
 )

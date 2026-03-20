@@ -83,7 +83,7 @@ export function AccountDialog({open, onOpenChange, account, onSubmit}: AccountDi
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Nombre</Label>
-                        <Input id="name" placeholder="Ej: Cuenta corriente" {...register('name')} />
+                        <Input id="name" autoFocus placeholder="Ej: Cuenta corriente" {...register('name')} />
                         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                     </div>
 

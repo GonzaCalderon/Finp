@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useCommitments } from '@/hooks/useCommitments'
 import { useCategories } from '@/hooks/useCategories'
+import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
@@ -19,9 +20,10 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
+import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import { Calendar } from 'lucide-react'
+import { Calendar, CheckCircle } from 'lucide-react'
 import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
 
@@ -31,19 +33,37 @@ const RECURRENCE_LABELS: Record<string, string> = {
     once: 'Una vez',
 }
 
+const getCurrentPeriod = () => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+const fmtDate = (date: Date) =>
+    new Date(date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
 export default function CommitmentsPage() {
     const { commitments, loading, error, createCommitment, updateCommitment, deleteCommitment } = useCommitments()
     const { categories } = useCategories()
+    const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
+
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selected, setSelected] = useState<IScheduledCommitment | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
+    const [applyDialogOpen, setApplyDialogOpen] = useState(false)
+    const [applyCommitment, setApplyCommitment] = useState<IScheduledCommitment | null>(null)
+    const [appliedId, setAppliedId] = useState<string | null>(null)
 
     usePageTitle('Compromisos')
 
     const handleCreate = () => { setSelected(null); setDialogOpen(true) }
     const handleEdit = (c: IScheduledCommitment) => { setSelected(c); setDialogOpen(true) }
     const handleDelete = (id: string) => setDeleteId(id)
+
+    const handleApply = (c: IScheduledCommitment) => {
+        setApplyCommitment(c)
+        setApplyDialogOpen(true)
+    }
 
     const handleDeleteConfirm = async () => {
         if (!deleteId) return
@@ -72,6 +92,24 @@ export default function CommitmentsPage() {
         }
     }
 
+    const handleApplySubmit = async (commitmentId: string, data: Record<string, unknown>) => {
+        try {
+            const res = await fetch(`/api/commitments/${commitmentId}/apply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error)
+            success('Compromiso aplicado correctamente')
+            setApplyDialogOpen(false)
+            setAppliedId(commitmentId)
+            setTimeout(() => setAppliedId(null), 1500)
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al aplicar compromiso')
+        }
+    }
+
     const fmt = (amount: number, currency: string) =>
         new Intl.NumberFormat('es-AR', {
             style: 'currency', currency, maximumFractionDigits: 0,
@@ -84,7 +122,7 @@ export default function CommitmentsPage() {
                 <Skeleton className="h-8 w-44" />
             </div>
             <div className="space-y-2">
-                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
             </div>
         </div>
     )
@@ -116,45 +154,75 @@ export default function CommitmentsPage() {
                     initial="initial"
                     animate="animate"
                 >
-                    {commitments.map((commitment) => (
-                        <motion.div
-                            key={commitment._id.toString()}
-                            variants={staggerItem}
-                            className="rounded-xl px-4 py-3"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium">{commitment.description}</span>
-                                        <span className="text-xs px-1.5 py-0.5 rounded"
-                                              style={{ background: 'var(--sky-light)', color: 'var(--sky-dark)' }}>
-                      {RECURRENCE_LABELS[commitment.recurrence]}
-                    </span>
+                    {commitments.map((commitment) => {
+                        const isApplied = commitment.appliedThisMonth || appliedId === commitment._id.toString()
+                        return (
+                            <motion.div
+                                key={commitment._id.toString()}
+                                variants={staggerItem}
+                                className="rounded-xl px-4 py-3"
+                                style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-medium">{commitment.description}</span>
+                                            <span className="text-xs px-1.5 py-0.5 rounded"
+                                                  style={{ background: 'var(--sky-light)', color: 'var(--sky-dark)' }}>
+                        {RECURRENCE_LABELS[commitment.recurrence]}
+                      </span>
+                                            {isApplied && (
+                                                <motion.span
+                                                    initial={{ opacity: 0, scale: 0.8 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded"
+                                                    style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981' }}
+                                                >
+                                                    <CheckCircle size={10} /> Aplicado este mes
+                                                </motion.span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                            {commitment.dayOfMonth && <span>Día {commitment.dayOfMonth}</span>}
+                                            {commitment.startDate && (
+                                                <span>Desde {fmtDate(commitment.startDate)}</span>
+                                            )}
+                                            {commitment.endDate && (
+                                                <span>Hasta {fmtDate(commitment.endDate)}</span>
+                                            )}
+                                            <span>{commitment.applyMode === 'manual' ? 'Manual' : 'Automático'}</span>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {commitment.dayOfMonth && `Día ${commitment.dayOfMonth} · `}
-                                        {commitment.applyMode === 'manual' ? 'Aplicación manual' : 'Aplicación automática'}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <p className="font-semibold text-sm tabular-nums">
-                                        {fmt(commitment.amount, commitment.currency)}
-                                    </p>
-                                    <div className="flex gap-1">
-                                        <Button variant="outline" size="sm" className="h-7 text-xs"
-                                                onClick={() => handleEdit(commitment)}>
-                                            Editar
-                                        </Button>
-                                        <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
-                                                onClick={() => handleDelete(commitment._id.toString())}>
-                                            Desactivar
-                                        </Button>
+                                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                                        <p className="font-semibold text-sm tabular-nums">
+                                            {fmt(commitment.amount, commitment.currency)}
+                                        </p>
+                                        <div className="flex gap-1">
+                                            {!isApplied && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-7 text-xs px-2"
+                                                    style={{ borderColor: 'var(--sky)', color: 'var(--sky)' }}
+                                                    onClick={() => handleApply(commitment)}
+                                                >
+                                                    Aplicar
+                                                </Button>
+                                            )}
+                                            <Button variant="outline" size="sm" className="h-7 text-xs"
+                                                    onClick={() => handleEdit(commitment)}>
+                                                Editar
+                                            </Button>
+                                            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
+                                                    onClick={() => handleDelete(commitment._id.toString())}>
+                                                Desactivar
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </motion.div>
-                    ))}
+                            </motion.div>
+                        )
+                    })}
                 </motion.div>
             )}
 
@@ -164,6 +232,21 @@ export default function CommitmentsPage() {
                 commitment={selected}
                 categories={categories}
                 onSubmit={handleSubmit}
+            />
+
+            <ApplyCommitmentDialog
+                open={applyDialogOpen}
+                onOpenChange={setApplyDialogOpen}
+                commitment={applyCommitment ? {
+                    _id: applyCommitment._id.toString(),
+                    description: applyCommitment.description,
+                    amount: applyCommitment.amount,
+                    currency: applyCommitment.currency,
+                    dayOfMonth: applyCommitment.dayOfMonth,
+                } : null}
+                accounts={accounts}
+                period={getCurrentPeriod()}
+                onSubmit={handleApplySubmit}
             />
 
             <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>

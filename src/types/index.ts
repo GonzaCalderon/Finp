@@ -113,6 +113,9 @@ export interface IScheduledCommitment {
     isActive: boolean
     createdAt: Date
     updatedAt: Date
+    startDate: Date
+    endDate?: Date
+    appliedThisMonth?: boolean
 }
 
 export interface ICommitmentApplication {

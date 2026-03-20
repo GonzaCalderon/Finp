@@ -71,7 +71,7 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Nombre</Label>
-                        <Input id="name" placeholder="Ej: Supermercado" {...register('name')} />
+                        <Input id="name" placeholder="Ej: Supermercado" {...register('name')} autoFocus />
                         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                     </div>
 

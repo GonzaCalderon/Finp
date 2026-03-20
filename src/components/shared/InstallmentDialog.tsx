@@ -109,7 +109,7 @@ export function InstallmentDialog({
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="description">Descripción</Label>
-              <Input id="description" placeholder="Ej: Smart TV Samsung" {...register('description')} />
+              <Input id="description" placeholder="Ej: Smart TV Samsung" autoFocus {...register('description')} />
               {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
             </div>
 

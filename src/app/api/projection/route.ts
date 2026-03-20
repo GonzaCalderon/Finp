@@ -56,14 +56,23 @@ export async function GET(request: Request) {
             const isPast = month < currentMonth
 
             // Compromisos del mes
-            const monthCommitments = commitments.map((c) => ({
-                _id: c._id.toString(),
-                description: c.description,
-                amount: c.amount,
-                currency: c.currency,
-                amountARS: convertToARS(c.amount, c.currency),
-                dayOfMonth: c.dayOfMonth,
-            }))
+            const monthCommitments = commitments
+                .filter((c) => {
+                    const start = c.startDate ? new Date(c.startDate) : null
+                    const end = c.endDate ? new Date(c.endDate) : null
+                    // El mes debe estar dentro del rango startDate - endDate
+                    if (start && monthDate < new Date(start.getFullYear(), start.getMonth(), 1)) return false
+                    if (end && monthDate > new Date(end.getFullYear(), end.getMonth(), 1)) return false
+                    return true
+                })
+                .map((c) => ({
+                    _id: c._id.toString(),
+                    description: c.description,
+                    amount: c.amount,
+                    currency: c.currency,
+                    amountARS: convertToARS(c.amount, c.currency),
+                    dayOfMonth: c.dayOfMonth,
+                }))
 
             const totalCommitmentsARS = monthCommitments.reduce((sum, c) => sum + c.amountARS, 0)
 

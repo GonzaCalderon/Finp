@@ -11,9 +11,7 @@ export function useCategories() {
             setLoading(true)
             const res = await fetch('/api/categories')
             const data = await res.json()
-
             if (!res.ok) throw new Error(data.error)
-
             setCategories(data.categories)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar categorías')
@@ -46,13 +44,37 @@ export function useCategories() {
         return data.category
     }
 
-    const archiveCategory = async (id: string) => {
+    const deleteCategory = async (id: string, migrateTo?: string) => {
         const res = await fetch(`/api/categories/${id}`, {
             method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ migrateTo }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
         await fetchCategories()
+    }
+
+    const addDefaultCategories = async (names: string[]) => {
+        const res = await fetch('/api/categories/defaults', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ names }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        await fetchCategories()
+        return data.created
+    }
+
+    const fetchMissingDefaults = async () => {
+        const res = await fetch('/api/categories/defaults')
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        return data as {
+            missing: { name: string; type: string; color: string }[]
+            existing: { name: string; type: string; color: string }[]
+        }
     }
 
     useEffect(() => {
@@ -66,6 +88,8 @@ export function useCategories() {
         fetchCategories,
         createCategory,
         updateCategory,
-        archiveCategory,
+        deleteCategory,
+        addDefaultCategories,
+        fetchMissingDefaults,
     }
 }

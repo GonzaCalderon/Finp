@@ -19,7 +19,7 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import {TrendingUp, TrendingDown, CheckCircle} from 'lucide-react'
 
 const getCurrentMonth = () => {
     const now = new Date()
@@ -127,6 +127,7 @@ export default function DashboardPage() {
     const [error, setError] = useState<string | null>(null)
     const [applyDialogOpen, setApplyDialogOpen] = useState(false)
     const [selectedCommitment, setSelectedCommitment] = useState<CommitmentItem | null>(null)
+    const [appliedId, setAppliedId] = useState<string | null>(null)
 
     const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
@@ -170,7 +171,11 @@ export default function DashboardPage() {
             if (!res.ok) throw new Error(json.error)
             success('Compromiso aplicado correctamente')
             setApplyDialogOpen(false)
-            fetchDashboard(true)
+            setAppliedId(commitmentId)
+            setTimeout(() => {
+                setAppliedId(null)
+                fetchDashboard(true)
+            }, 1000)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al aplicar compromiso')
         }
@@ -356,14 +361,30 @@ export default function DashboardPage() {
                         </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-medium tabular-nums">{fmt(c.amount, c.currency)}</span>
-                                            <Button size="sm" variant="outline" className="h-6 text-xs px-2"
+                                        <motion.div
+                                            key={c._id}
+                                            animate={appliedId === c._id ? { scale: [1, 1.1, 1] } : {}}
+                                            transition={{ duration: 0.3 }}
+                                        >
+                                            {appliedId === c._id ? (
+                                                <span
+                                                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium"
+                                                    style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981' }}
+                                                >
+      <CheckCircle size={12} /> Aplicado
+    </span>
+                                            ) : (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-6 text-xs px-2"
                                                     style={{ borderColor: 'var(--sky)', color: 'var(--sky)' }}
-                                                    onClick={() => handleApplyCommitment(c)}>
-                                                Aplicar
-                                            </Button>
-                                        </div>
+                                                    onClick={() => handleApplyCommitment(c)}
+                                                >
+                                                    Aplicar
+                                                </Button>
+                                            )}
+                                        </motion.div>
                                     </div>
                                 ))}
                             </CardContent>

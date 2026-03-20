@@ -118,6 +118,7 @@ export function ApplyCommitmentDialog({
                             type="number"
                             min="0"
                             step="0.01"
+                            autoFocus
                             {...register('amount', { valueAsNumber: true })}
                         />
                     </div>

@@ -8,6 +8,8 @@ export const commitmentSchema = z.object({
     dayOfMonth: z.number().min(1).max(31).optional(),
     applyMode: z.enum(['manual', 'auto_month_start']).optional(),
     categoryId: z.string().optional(),
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date().optional(),
 })
 
 export type CommitmentFormData = z.infer<typeof commitmentSchema>

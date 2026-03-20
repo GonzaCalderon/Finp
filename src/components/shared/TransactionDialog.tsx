@@ -142,6 +142,7 @@ export function TransactionDialog({
                                 min="0"
                                 step="0.01"
                                 placeholder="0.00"
+                                autoFocus
                                 {...register('amount', { valueAsNumber: true })}
                             />
                             {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}

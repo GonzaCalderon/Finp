@@ -19,9 +19,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { CalendarIcon } from 'lucide-react'
 import { commitmentSchema, type CommitmentFormData } from '@/lib/validations'
+import { Spinner } from '@/components/shared/Spinner'
 import type { IScheduledCommitment, ICategory } from '@/types'
-import {Spinner} from "@/components/shared/Spinner";
 
 interface CommitmentDialogProps {
     open: boolean
@@ -46,11 +49,12 @@ export function CommitmentDialog({
         reset,
         formState: { errors, isSubmitting },
     } = useForm<CommitmentFormData>({
-        resolver: zodResolver(commitmentSchema),
+        resolver: zodResolver(commitmentSchema) as any,
         defaultValues: {
             currency: 'ARS',
             recurrence: 'monthly',
             applyMode: 'manual',
+            startDate: new Date(),
         },
     })
 
@@ -59,6 +63,8 @@ export function CommitmentDialog({
     const currency = watch('currency')
     const categoryId = watch('categoryId')
     const applyMode = watch('applyMode')
+    const startDate = watch('startDate')
+    const endDate = watch('endDate')
 
     useEffect(() => {
         if (open) {
@@ -70,13 +76,16 @@ export function CommitmentDialog({
                     recurrence: commitment.recurrence,
                     dayOfMonth: commitment.dayOfMonth,
                     applyMode: commitment.applyMode,
-                    categoryId: commitment.categoryId?.toString() ?? '',
+                    categoryId: (commitment.categoryId as { _id?: { toString(): string } })?._id?.toString() ?? commitment.categoryId?.toString() ?? '',
+                    startDate: commitment.startDate ? new Date(commitment.startDate) : new Date(),
+                    endDate: commitment.endDate ? new Date(commitment.endDate) : undefined,
                 })
             } else {
                 reset({
                     currency: 'ARS',
                     recurrence: 'monthly',
                     applyMode: 'manual',
+                    startDate: new Date(),
                 })
             }
         }
@@ -84,7 +93,7 @@ export function CommitmentDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{commitment ? 'Editar compromiso' : 'Nuevo compromiso'}</DialogTitle>
                 </DialogHeader>
@@ -92,14 +101,15 @@ export function CommitmentDialog({
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="description">Descripción</Label>
-                        <Input id="description" placeholder="Ej: Alquiler" {...register('description')} />
+                        <Input id="description" placeholder="Ej: Alquiler" autoFocus {...register('description')} />
                         {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="amount">Monto</Label>
-                            <Input id="amount" type="number" min="0" step="0.01" placeholder="0.00" {...register('amount')} />
+                            <Input id="amount" type="number" min="0" step="0.01" placeholder="0.00"
+                                   {...register('amount', { valueAsNumber: true })} />
                             {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
                         </div>
                         <div className="space-y-2">
@@ -129,14 +139,8 @@ export function CommitmentDialog({
                         {recurrence === 'monthly' && (
                             <div className="space-y-2">
                                 <Label htmlFor="dayOfMonth">Día del mes</Label>
-                                <Input
-                                    id="dayOfMonth"
-                                    type="number"
-                                    min="1"
-                                    max="31"
-                                    placeholder="Ej: 10"
-                                    {...register('dayOfMonth')}
-                                />
+                                <Input id="dayOfMonth" type="number" min="1" max="31" placeholder="Ej: 10"
+                                       {...register('dayOfMonth', { valueAsNumber: true })} />
                                 {errors.dayOfMonth && <p className="text-xs text-destructive">{errors.dayOfMonth.message}</p>}
                             </div>
                         )}
@@ -172,16 +176,66 @@ export function CommitmentDialog({
                         </div>
                     )}
 
+                    {/* Fechas */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Fecha de inicio <span className="text-destructive">*</span></Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {startDate ? startDate.toLocaleDateString('es-AR') : 'Seleccioná fecha'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={startDate}
+                                        onSelect={(d) => d && setValue('startDate', d, { shouldValidate: true })}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            {errors.startDate && <p className="text-xs text-destructive">{errors.startDate.message}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Fecha de fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {endDate ? endDate.toLocaleDateString('es-AR') : 'Sin fecha de fin'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={endDate}
+                                        onSelect={(d) => setValue('endDate', d ?? undefined)}
+                                        disabled={(date) => startDate ? date < startDate : false}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            {endDate && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                                    onClick={() => setValue('endDate', undefined)}
+                                >
+                                    Quitar fecha de fin
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-
-
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                            Cancelar
+                        </Button>
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? (
-                                <span className="flex items-center gap-2">
-      <Spinner /> Guardando...
-    </span>
-                            ) : commitment ? 'Guardar cambios' : 'Crear cuenta'}
+                                <span className="flex items-center gap-2"><Spinner />Guardando...</span>
+                            ) : commitment ? 'Guardar cambios' : 'Crear compromiso'}
                         </Button>
                     </div>
                 </form>
