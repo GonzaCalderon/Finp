@@ -94,9 +94,9 @@ export function TransactionDialog({
                     currency: transaction.currency,
                     date: new Date(transaction.date),
                     description: transaction.description,
-                    categoryId: transaction.categoryId?.toString() ?? '',
-                    sourceAccountId: transaction.sourceAccountId?.toString() ?? '',
-                    destinationAccountId: transaction.destinationAccountId?.toString() ?? '',
+                    categoryId: (transaction.categoryId as { _id?: { toString(): string } })?._id?.toString() ?? transaction.categoryId?.toString() ?? '',
+                    sourceAccountId: (transaction.sourceAccountId as { _id?: { toString(): string } })?._id?.toString() ?? transaction.sourceAccountId?.toString() ?? '',
+                    destinationAccountId: (transaction.destinationAccountId as { _id?: { toString(): string } })?._id?.toString() ?? transaction.destinationAccountId?.toString() ?? '',
                     notes: transaction.notes ?? '',
                     merchant: transaction.merchant ?? '',
                 })

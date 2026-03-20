@@ -12,6 +12,7 @@ export const DEFAULT_CATEGORIES = [
     { name: 'Hogar', type: 'expense', color: '#a16207', sortOrder: 9 },
     { name: 'Viajes', type: 'expense', color: '#06b6d4', sortOrder: 10 },
     { name: 'Impuestos', type: 'expense', color: '#dc2626', sortOrder: 11 },
+    { name: 'Pago de préstamos', type: 'expense', color: '#8B5CF6' },
     { name: 'Otros gastos', type: 'expense', color: '#9ca3af', sortOrder: 12 },
 
     // Ingresos
@@ -19,5 +20,6 @@ export const DEFAULT_CATEGORIES = [
     { name: 'Bonos (Sueldo)', type: 'income', color: '#15803d', sortOrder: 1 },
     { name: 'Freelance', type: 'income', color: '#2563eb', sortOrder: 2 },
     { name: 'Alquileres', type: 'income', color: '#7c3aed', sortOrder: 3 },
+    { name: 'Préstamos', type: 'income', color: '#8B5CF6' },
     { name: 'Otros ingresos', type: 'income', color: '#9ca3af', sortOrder: 4 },
 ] as const

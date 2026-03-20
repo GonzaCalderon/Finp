@@ -33,6 +33,8 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
         const style = getComputedStyle(containerRef.current)
         const mutedColor = style.getPropertyValue('--muted-foreground').trim() || '#6B7280'
         const cashflowColor = data.balance >= 0 ? '#10B981' : '#EF4444'
+        const hasDeficit = data.totalExpense > data.totalIncome
+        const deficitAmount = hasDeficit ? data.totalExpense - data.totalIncome : 0
 
         const width = containerRef.current.clientWidth || 700
         const height = 400
@@ -47,35 +49,41 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
         const nodes: { name: string; color: string; type: string }[] = []
         const links: { source: number; target: number; value: number }[] = []
 
+        // Nodos de ingresos
         data.income.forEach((inc) => {
             nodes.push({ name: inc.name, color: inc.color, type: 'income' })
         })
 
+        // Nodo déficit si gastos > ingresos
+        const deficitIndex = hasDeficit ? nodes.length : -1
+        if (hasDeficit) {
+            nodes.push({ name: 'Déficit', color: '#EF4444', type: 'income' })
+        }
+
+        // Nodo cashflow
         const cashflowIndex = nodes.length
         nodes.push({ name: 'Cashflow', color: cashflowColor, type: 'center' })
 
+        // Nodos de gastos
         const expenseStartIndex = nodes.length
         data.expenses.forEach((exp) => {
             nodes.push({ name: exp.name, color: exp.color, type: 'expense' })
         })
 
-        let surplusIndex = -1
-        if (data.balance > 0) {
-            surplusIndex = nodes.length
-            nodes.push({ name: 'Superávit', color: '#10B981', type: 'surplus' })
-        }
-
+        // Links: ingresos → cashflow
         data.income.forEach((inc, i) => {
             links.push({ source: i, target: cashflowIndex, value: inc.amount })
         })
 
+        // Link: déficit → cashflow
+        if (hasDeficit && deficitIndex !== -1) {
+            links.push({ source: deficitIndex, target: cashflowIndex, value: deficitAmount })
+        }
+
+        // Links: cashflow → gastos
         data.expenses.forEach((exp, i) => {
             links.push({ source: cashflowIndex, target: expenseStartIndex + i, value: exp.amount })
         })
-
-        if (surplusIndex !== -1 && data.balance > 0) {
-            links.push({ source: cashflowIndex, target: surplusIndex, value: data.balance })
-        }
 
         const sankeyGenerator = sankey()
             .nodeWidth(10)
@@ -118,7 +126,7 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
                 .attr('stop-opacity', 0.3)
         })
 
-        // Links con gradiente
+        // Links
         g.append('g')
             .selectAll('path')
             .data(sankeyLinks)
@@ -142,21 +150,15 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
             const color = (d as { color: string }).color || '#9CA3AF'
 
             let path = ''
-
             if (type === 'income') {
-                // Redondeado izquierda, cuadrado derecha
                 path = `M${x0 + r},${y0} H${x1} V${y1} H${x0 + r} Q${x0},${y1} ${x0},${y1 - r} V${y0 + r} Q${x0},${y0} ${x0 + r},${y0} Z`
-            } else if (type === 'expense' || type === 'surplus') {
-                // Cuadrado izquierda, redondeado derecha
+            } else if (type === 'expense') {
                 path = `M${x0},${y0} H${x1 - r} Q${x1},${y0} ${x1},${y0 + r} V${y1 - r} Q${x1},${y1} ${x1 - r},${y1} H${x0} V${y0} Z`
             } else {
-                // Cashflow — cuadrado total
                 path = `M${x0},${y0} H${x1} V${y1} H${x0} Z`
             }
 
-            g.append('path')
-                .attr('d', path)
-                .attr('fill', color)
+            g.append('path').attr('d', path).attr('fill', color)
         })
 
         const fmt = (v: number) =>
@@ -167,7 +169,7 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
                 notation: 'compact',
             }).format(v)
 
-        // Labels izquierda (ingresos)
+        // Labels izquierda (ingresos + déficit)
         g.append('g')
             .selectAll('text.left-label')
             .data(sankeyNodes.filter((d) => (d as { type: string }).type === 'income'))
@@ -180,19 +182,12 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
             .each(function (d) {
                 const el = d3.select(this)
                 const node = d as { name: string; value?: number; color: string }
-                el.append('tspan')
-                    .text(node.name)
-                    .attr('x', (d.x0 ?? 0) - 10)
-                    .attr('dy', '-0.7em')
-                    .attr('font-size', '11')
-                    .attr('fill', mutedColor)
-                el.append('tspan')
-                    .text(fmt(node.value ?? 0))
-                    .attr('x', (d.x0 ?? 0) - 10)
-                    .attr('dy', '1.4em')
-                    .attr('font-size', '11')
-                    .attr('font-weight', '500')
-                    .attr('fill', node.color)
+                el.append('tspan').text(node.name)
+                    .attr('x', (d.x0 ?? 0) - 10).attr('dy', '-0.7em')
+                    .attr('font-size', '11').attr('fill', mutedColor)
+                el.append('tspan').text(fmt(node.value ?? 0))
+                    .attr('x', (d.x0 ?? 0) - 10).attr('dy', '1.4em')
+                    .attr('font-size', '11').attr('font-weight', '500').attr('fill', node.color)
             })
 
         // Label central (Cashflow)
@@ -207,28 +202,18 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
             .attr('dominant-baseline', 'auto')
             .each(function (d) {
                 const el = d3.select(this)
-                el.append('tspan')
-                    .text('Cashflow')
-                    .attr('x', ((d.x0 ?? 0) + (d.x1 ?? 0)) / 2)
-                    .attr('dy', '0')
-                    .attr('font-size', '11')
-                    .attr('fill', mutedColor)
-                el.append('tspan')
-                    .text(fmt(data.totalExpense))
-                    .attr('x', ((d.x0 ?? 0) + (d.x1 ?? 0)) / 2)
-                    .attr('dy', '1.4em')
-                    .attr('font-size', '12')
-                    .attr('font-weight', '500')
-                    .attr('fill', cashflowColor)
+                el.append('tspan').text('Cashflow')
+                    .attr('x', ((d.x0 ?? 0) + (d.x1 ?? 0)) / 2).attr('dy', '0')
+                    .attr('font-size', '11').attr('fill', mutedColor)
+                el.append('tspan').text(fmt(data.totalExpense))
+                    .attr('x', ((d.x0 ?? 0) + (d.x1 ?? 0)) / 2).attr('dy', '1.4em')
+                    .attr('font-size', '12').attr('font-weight', '500').attr('fill', cashflowColor)
             })
 
-        // Labels derecha (gastos + superávit)
+        // Labels derecha (gastos)
         g.append('g')
             .selectAll('text.right-label')
-            .data(sankeyNodes.filter((d) => {
-                const type = (d as { type: string }).type
-                return type === 'expense' || type === 'surplus'
-            }))
+            .data(sankeyNodes.filter((d) => (d as { type: string }).type === 'expense'))
             .join('text')
             .attr('class', 'right-label')
             .attr('x', (d) => (d.x1 ?? 0) + 10)
@@ -238,19 +223,12 @@ function SankeyDiagram({ data }: { data: SankeyData }) {
             .each(function (d) {
                 const el = d3.select(this)
                 const node = d as { name: string; value?: number; color: string }
-                el.append('tspan')
-                    .text(node.name)
-                    .attr('x', (d.x1 ?? 0) + 10)
-                    .attr('dy', '-0.7em')
-                    .attr('font-size', '11')
-                    .attr('fill', mutedColor)
-                el.append('tspan')
-                    .text(fmt(node.value ?? 0))
-                    .attr('x', (d.x1 ?? 0) + 10)
-                    .attr('dy', '1.4em')
-                    .attr('font-size', '11')
-                    .attr('font-weight', '500')
-                    .attr('fill', node.color)
+                el.append('tspan').text(node.name)
+                    .attr('x', (d.x1 ?? 0) + 10).attr('dy', '-0.7em')
+                    .attr('font-size', '11').attr('fill', mutedColor)
+                el.append('tspan').text(fmt(node.value ?? 0))
+                    .attr('x', (d.x1 ?? 0) + 10).attr('dy', '1.4em')
+                    .attr('font-size', '11').attr('font-weight', '500').attr('fill', node.color)
             })
 
     }, [data])
@@ -290,10 +268,8 @@ export function SankeyChart() {
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Flujo de dinero
                 </p>
-                <div
-                    className="flex rounded-md overflow-hidden"
-                    style={{ border: '0.5px solid var(--border)' }}
-                >
+                <div className="flex rounded-md overflow-hidden"
+                     style={{ border: '0.5px solid var(--border)' }}>
                     {MONTH_OPTIONS.map((opt) => (
                         <button
                             key={opt.value}
