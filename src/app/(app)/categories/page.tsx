@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -17,7 +18,9 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CategoryDialog } from '@/components/shared/CategoryDialog'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { Tag } from 'lucide-react'
 import type { CategoryFormData } from '@/lib/validations'
 import type { ICategory } from '@/types'
 
@@ -27,6 +30,8 @@ export default function CategoriesPage() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selectedCategory, setSelectedCategory] = useState<ICategory | null>(null)
     const [archiveId, setArchiveId] = useState<string | null>(null)
+
+    usePageTitle('Categorías')
 
     const incomeCategories = categories.filter((c) => c.type === 'income')
     const expenseCategories = categories.filter((c) => c.type === 'expense')
@@ -75,7 +80,12 @@ export default function CategoriesPage() {
 
     const renderList = (list: ICategory[], type: 'income' | 'expense') => (
         list.length === 0 ? (
-            <p className="text-sm text-muted-foreground px-4 py-3">Sin categorías</p>
+            <EmptyState
+                icon={Tag}
+                title={type === 'income' ? 'Sin categorías de ingreso' : 'Sin categorías de gasto'}
+                actionLabel="+ Nueva categoría"
+                onAction={handleCreate}
+            />
         ) : (
             <motion.div variants={staggerContainer} initial="initial" animate="animate">
                 {list.map((category) => (
@@ -103,13 +113,9 @@ export default function CategoriesPage() {
                         </div>
                         <div className="flex gap-1 shrink-0 ml-2">
                             <Button variant="ghost" size="sm" className="h-7 text-xs"
-                                    onClick={() => handleEdit(category)}>
-                                Editar
-                            </Button>
+                                    onClick={() => handleEdit(category)}>Editar</Button>
                             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
-                                    onClick={() => setArchiveId(category._id.toString())}>
-                                Archivar
-                            </Button>
+                                    onClick={() => setArchiveId(category._id.toString())}>Archivar</Button>
                         </div>
                     </motion.div>
                 ))}

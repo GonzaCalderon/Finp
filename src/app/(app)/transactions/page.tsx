@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useInstallments } from '@/hooks/useInstallments'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
+import { usePageTitle } from '@/hooks/usePageTitle'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,7 +31,10 @@ import {
 } from '@/components/ui/alert-dialog'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { Spinner } from '@/components/shared/Spinner'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { ArrowLeftRight } from 'lucide-react'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ITransaction, IAccount } from '@/types'
 
@@ -71,15 +76,26 @@ export default function TransactionsPage() {
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
 
-    const { transactions, loading, error, createTransaction, updateTransaction, deleteTransaction } = useTransactions({ month })
+    const { transactions, loading, refreshing, error, createTransaction, updateTransaction, deleteTransaction } = useTransactions({ month })
     const { createPlan } = useInstallments()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
     const { success, error: toastError } = useToast()
 
-    const handleNewTransaction = () => { setSelectedTransaction(null); setTransactionDialogOpen(true) }
+    usePageTitle('Transacciones')
+
+    const handleNewTransaction = useCallback(() => {
+        setSelectedTransaction(null)
+        setTransactionDialogOpen(true)
+    }, [])
+
+    useKeyboardShortcuts([
+        { key: 'n', handler: handleNewTransaction },
+    ])
+
     const handleEdit = (t: ITransaction) => { setSelectedTransaction(t); setTransactionDialogOpen(true) }
     const handleDelete = (id: string) => setDeleteId(id)
+
 
     const handleDeleteConfirm = async () => {
         if (!deleteId) return
@@ -151,8 +167,13 @@ export default function TransactionsPage() {
 
     return (
         <motion.div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6" {...fadeIn}>
+
+            {/* Header fijo */}
             <div className="flex items-center justify-between">
-                <h1 className="text-xl font-semibold tracking-tight">Transacciones</h1>
+                <div className="flex items-center gap-2">
+                    <h1 className="text-xl font-semibold tracking-tight">Transacciones</h1>
+                    {refreshing && <Spinner className="text-muted-foreground" />}
+                </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => setInstallmentDialogOpen(true)}>
                         + Cuotas
@@ -174,6 +195,7 @@ export default function TransactionsPage() {
                 </SelectContent>
             </Select>
 
+            {/* Métricas */}
             <motion.div
                 className="grid grid-cols-3 gap-3"
                 variants={staggerContainer}
@@ -200,12 +222,19 @@ export default function TransactionsPage() {
                 </motion.div>
             </motion.div>
 
+            {/* Transacciones */}
             <AnimatePresence mode="wait">
                 <motion.div key={month} className="space-y-2" {...fadeIn}>
                     {transactions.length === 0 ? (
-                        <div className="rounded-xl p-8 text-center text-sm text-muted-foreground"
+                        <div className="rounded-xl"
                              style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
-                            No hay transacciones este mes.
+                            <EmptyState
+                                icon={ArrowLeftRight}
+                                title="Sin transacciones este mes"
+                                description="Registrá tu primera transacción del mes"
+                                actionLabel="+ Nueva transacción"
+                                onAction={handleNewTransaction}
+                            />
                         </div>
                     ) : (
                         <motion.div

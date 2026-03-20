@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ITransaction } from '@/types'
 
 interface TransactionFilters {
@@ -12,7 +12,9 @@ interface TransactionFilters {
 export function useTransactions(filters: TransactionFilters = {}) {
     const [transactions, setTransactions] = useState<ITransaction[]>([])
     const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const isFirstLoad = useRef(true)
 
     const buildQuery = (f: TransactionFilters) => {
         const params = new URLSearchParams()
@@ -26,7 +28,11 @@ export function useTransactions(filters: TransactionFilters = {}) {
 
     const fetchTransactions = async (f: TransactionFilters = filters) => {
         try {
-            setLoading(true)
+            if (isFirstLoad.current) {
+                setLoading(true)
+            } else {
+                setRefreshing(true)
+            }
             const query = buildQuery(f)
             const res = await fetch(`/api/transactions?${query}`)
             const data = await res.json()
@@ -36,6 +42,8 @@ export function useTransactions(filters: TransactionFilters = {}) {
             setError(err instanceof Error ? err.message : 'Error al cargar transacciones')
         } finally {
             setLoading(false)
+            setRefreshing(false)
+            isFirstLoad.current = false
         }
     }
 
@@ -77,6 +85,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     return {
         transactions,
         loading,
+        refreshing,
         error,
         fetchTransactions,
         createTransaction,

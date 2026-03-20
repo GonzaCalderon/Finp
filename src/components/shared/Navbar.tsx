@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { signOut } from 'next-auth/react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import {
     LayoutDashboard,
     ArrowLeftRight,
@@ -63,11 +64,12 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                 })}
             </nav>
 
-            {/* Bottom — user + logout */}
+            {/* Bottom — theme + logout */}
             <div
-                className="px-3 py-4 mx-3 mb-3 rounded-md"
+                className="px-3 py-4 mx-3 mb-3 rounded-md space-y-1"
                 style={{ borderTop: '0.5px solid var(--sidebar-border)' }}
             >
+                <ThemeToggle />
                 <button
                     onClick={() => signOut({ callbackUrl: '/login' })}
                     className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm w-full transition-colors hover:bg-white/5"

@@ -49,11 +49,16 @@ export async function PATCH(
         const { id } = await params
         const body = await request.json()
 
+        // Limpiar campos ObjectId vacíos
+        const cleanBody = Object.fromEntries(
+            Object.entries(body).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+        )
+
         await connectDB()
 
         const transaction = await Transaction.findOneAndUpdate(
             { _id: id, userId: session.user.id },
-            { $set: body },
+            { $set: cleanBody },
             { new: true }
         )
 

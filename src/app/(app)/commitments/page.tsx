@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { useCommitments } from '@/hooks/useCommitments'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -18,7 +19,9 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { Calendar } from 'lucide-react'
 import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
 
@@ -35,6 +38,8 @@ export default function CommitmentsPage() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selected, setSelected] = useState<IScheduledCommitment | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
+
+    usePageTitle('Compromisos')
 
     const handleCreate = () => { setSelected(null); setDialogOpen(true) }
     const handleEdit = (c: IScheduledCommitment) => { setSelected(c); setDialogOpen(true) }
@@ -94,9 +99,15 @@ export default function CommitmentsPage() {
             </div>
 
             {commitments.length === 0 ? (
-                <div className="rounded-xl p-8 text-center text-sm text-muted-foreground"
+                <div className="rounded-xl"
                      style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
-                    No tenés compromisos programados.
+                    <EmptyState
+                        icon={Calendar}
+                        title="Sin compromisos programados"
+                        description="Agregá gastos fijos como alquiler, servicios o cuotas"
+                        actionLabel="+ Nuevo compromiso"
+                        onAction={handleCreate}
+                    />
                 </div>
             ) : (
                 <motion.div

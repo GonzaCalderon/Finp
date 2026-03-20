@@ -93,9 +93,8 @@ export async function POST(request: Request) {
             categoryId: categoryId || undefined,
             sourceAccountId: sourceAccountId || undefined,
             destinationAccountId: destinationAccountId || undefined,
-            notes,
-            tags,
-            merchant,
+            notes: notes || undefined,
+            merchant: merchant || undefined,
             status: status ?? 'confirmed',
             createdFrom: 'web',
         })

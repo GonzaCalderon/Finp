@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -18,7 +19,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { AccountDialog } from '@/components/shared/AccountDialog'
 import { AccountDetailSheet } from '@/components/shared/AccountDetailSheet'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { CreditCard } from 'lucide-react'
 import type { AccountFormData } from '@/lib/validations'
 import type { IAccount } from '@/types'
 
@@ -41,6 +44,8 @@ export default function AccountsPage() {
     const [deleteId, setDeleteId] = useState<string | null>(null)
     const [detailOpen, setDetailOpen] = useState(false)
     const [detailAccountId, setDetailAccountId] = useState<string | null>(null)
+
+    usePageTitle('Cuentas')
 
     const handleCreate = () => { setSelectedAccount(null); setDialogOpen(true) }
 
@@ -106,9 +111,15 @@ export default function AccountsPage() {
             </div>
 
             {accounts.length === 0 ? (
-                <div className="rounded-xl p-8 text-center text-sm text-muted-foreground"
+                <div className="rounded-xl"
                      style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
-                    No tenés cuentas todavía. Creá tu primera cuenta.
+                    <EmptyState
+                        icon={CreditCard}
+                        title="Sin cuentas todavía"
+                        description="Creá tu primera cuenta para empezar a registrar movimientos"
+                        actionLabel="+ Nueva cuenta"
+                        onAction={handleCreate}
+                    />
                 </div>
             ) : (
                 <motion.div

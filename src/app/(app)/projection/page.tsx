@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import {AnimatePresence, motion} from 'framer-motion'
+import { motion } from 'framer-motion'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
 import { fadeIn } from '@/lib/utils/animations'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const USD_TO_ARS = 1450
 
@@ -178,9 +180,7 @@ function ExpandableRow({
               transition={{ duration: 0.15 }}
               style={{ display: 'flex' }}
           >
-            {hasChildren
-                ? <ChevronRight size={12} />
-                : <span className="w-3" />}
+            {hasChildren ? <ChevronRight size={12} /> : <span className="w-3" />}
           </motion.span>
           <span style={{
               color: level === 0 ? 'var(--foreground)' : 'var(--muted-foreground)',
@@ -220,6 +220,8 @@ export default function ProjectionPage() {
     const [projection, setProjection] = useState<MonthProjection[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+
+    usePageTitle('Proyección')
 
     useEffect(() => {
         const fetchProjection = async () => {
