@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction } from '@/lib/models'
+import { Transaction, Account } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
 
 const PAGE_LIMIT = 30
@@ -37,7 +37,6 @@ export async function GET(request: Request) {
             filter.$or = [{ sourceAccountId: accountId }, { destinationAccountId: accountId }]
         }
 
-        // Sort
         const sortMap: Record<string, Record<string, 1 | -1>> = {
             date_desc: { date: -1 },
             date_asc: { date: 1 },
@@ -89,6 +88,44 @@ export async function POST(request: Request) {
         await connectDB()
 
         const data = parsed.data
+
+        // Validar saldo si la cuenta no permite negativo
+        if (data.sourceAccountId) {
+            const sourceAccount = await Account.findOne({
+                _id: data.sourceAccountId,
+                userId: session.user.id,
+            })
+
+            if (sourceAccount && sourceAccount.allowNegativeBalance === false) {
+                const allTransactions = await Transaction.find({
+                    userId: session.user.id,
+                    $or: [
+                        { sourceAccountId: data.sourceAccountId },
+                        { destinationAccountId: data.sourceAccountId },
+                    ],
+                })
+
+                const balance = (sourceAccount.initialBalance ?? 0) + allTransactions.reduce((sum, t) => {
+                    if (t.destinationAccountId?.toString() === data.sourceAccountId?.toString()) return sum + t.amount
+                    if (t.sourceAccountId?.toString() === data.sourceAccountId?.toString()) return sum - t.amount
+                    return sum
+                }, 0)
+
+                if (balance - data.amount < 0) {
+                    return NextResponse.json(
+                        {
+                            error: `Saldo insuficiente en "${sourceAccount.name}". Disponible: ${new Intl.NumberFormat('es-AR', {
+                                style: 'currency',
+                                currency: sourceAccount.currency,
+                                maximumFractionDigits: 0,
+                            }).format(balance)}`,
+                        },
+                        { status: 400 }
+                    )
+                }
+            }
+        }
+
         const transaction = await Transaction.create({
             userId: session.user.id,
             type: data.type,

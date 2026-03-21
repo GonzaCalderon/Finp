@@ -14,6 +14,7 @@ const AccountSchema = new Schema<IAccount>(
         isActive: { type: Boolean, default: true },
         includeInNetWorth: { type: Boolean, default: true },
         initialBalance: { type: Number, default: 0 },
+        allowNegativeBalance: { type: Boolean, default: true },
         creditCardConfig: {
             closingDay: { type: Number },
             dueDay: { type: Number },

@@ -44,6 +44,7 @@ export interface IAccount {
     }
     createdAt: Date
     updatedAt: Date
+    allowNegativeBalance?: boolean
 }
 
 export interface ICategory {

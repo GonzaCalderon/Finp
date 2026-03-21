@@ -7,6 +7,7 @@ export const accountSchema = z.object({
     institution: z.string().optional(),
     initialBalance: z.number().optional(),
     color: z.string().optional(),
+    allowNegativeBalance: z.boolean().default(true),
     creditCardConfig: z.object({
         closingDay: z.number().min(1).max(31),
         dueDay: z.number().min(1).max(31),
@@ -32,3 +33,4 @@ export const accountSchema = z.object({
 })
 
 export type AccountFormData = z.infer<typeof accountSchema>
+export type AccountFormInput = z.input<typeof accountSchema>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { connectDB } from '@/lib/db'
-import { User, Category } from '@/lib/models'
+import { User, Category, Account } from '@/lib/models'
 import { DEFAULT_CATEGORIES } from '@/lib/constants/defaultCategories'
 
 export async function POST(request: Request) {
@@ -52,6 +52,19 @@ export async function POST(request: Request) {
                 isArchived: false,
             }))
         )
+
+        // Crear cuenta Efectivo predeterminada
+        await Account.create({
+            userId: user._id,
+            name: 'Efectivo',
+            type: 'cash',
+            currency: 'ARS',
+            initialBalance: 0,
+            color: '#10B981',
+            isActive: true,
+            includeInNetWorth: true,
+            allowNegativeBalance: false,
+        })
 
         return NextResponse.json(
             {
