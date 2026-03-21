@@ -3,56 +3,102 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Transaction } from '@/lib/models'
 
+type BalanceBucket = {
+    _id: string
+    total: number
+}
+
+type TransactionFlowsResult = {
+    incoming: BalanceBucket[]
+    outgoing: BalanceBucket[]
+}
+
+type AccountBalanceMap = Record<string, number>
+
 export async function GET() {
     try {
         const session = await auth()
+
         if (!session) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
         await connectDB()
 
-        const accounts = await Account.find({
-            userId: session.user.id,
-            isActive: true,
-        }).sort({ createdAt: -1 })
+        const accounts = await Account.find({ userId: session.user.id })
+            .sort({ createdAt: 1 })
+            .lean()
 
-        // Calcular saldo de cada cuenta
-        const accountsWithBalance = await Promise.all(
-            accounts.map(async (account) => {
-                const received = await Transaction.aggregate([
-                    {
-                        $match: {
-                            userId: account.userId,
-                            destinationAccountId: account._id,
-                            type: { $in: ['income', 'transfer', 'credit_card_payment', 'debt_payment'] },
+        if (accounts.length === 0) {
+            return NextResponse.json({ accounts: [] })
+        }
+
+        const accountIds = accounts.map((account) => account._id)
+
+        const transactionFlows = await Transaction.aggregate<TransactionFlowsResult>([
+            {
+                $match: {
+                    userId: accounts[0].userId,
+                    $or: [
+                        { sourceAccountId: { $in: accountIds } },
+                        { destinationAccountId: { $in: accountIds } },
+                    ],
+                },
+            },
+            {
+                $project: {
+                    amount: 1,
+                    incomingAccountId: '$destinationAccountId',
+                    outgoingAccountId: '$sourceAccountId',
+                },
+            },
+            {
+                $facet: {
+                    incoming: [
+                        {
+                            $match: {
+                                incomingAccountId: { $ne: null },
+                            },
                         },
-                    },
-                    { $group: { _id: null, total: { $sum: '$amount' } } },
-                ])
-
-                const sent = await Transaction.aggregate([
-                    {
-                        $match: {
-                            userId: account.userId,
-                            sourceAccountId: account._id,
-                            type: { $in: ['expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'] },
+                        {
+                            $group: {
+                                _id: '$incomingAccountId',
+                                total: { $sum: '$amount' },
+                            },
                         },
-                    },
-                    { $group: { _id: null, total: { $sum: '$amount' } } },
-                ])
+                    ],
+                    outgoing: [
+                        {
+                            $match: {
+                                outgoingAccountId: { $ne: null },
+                            },
+                        },
+                        {
+                            $group: {
+                                _id: '$outgoingAccountId',
+                                total: { $sum: '$amount' },
+                            },
+                        },
+                    ],
+                },
+            },
+        ])
 
-                const balance =
-                    (account.initialBalance ?? 0) +
-                    (received[0]?.total ?? 0) -
-                    (sent[0]?.total ?? 0)
+        const balanceMap: AccountBalanceMap = {}
+        const flowResult = transactionFlows[0]
 
-                return {
-                    ...account.toObject(),
-                    balance,
-                }
-            })
-        )
+        for (const bucket of flowResult?.incoming ?? []) {
+            balanceMap[String(bucket._id)] = (balanceMap[String(bucket._id)] ?? 0) + bucket.total
+        }
+
+        for (const bucket of flowResult?.outgoing ?? []) {
+            balanceMap[String(bucket._id)] = (balanceMap[String(bucket._id)] ?? 0) - bucket.total
+        }
+
+        const accountsWithBalance = accounts.map((account) => ({
+            ...account,
+            balance: (account.initialBalance ?? 0) + (balanceMap[String(account._id)] ?? 0),
+        }))
 
         return NextResponse.json({ accounts: accountsWithBalance })
     } catch (error) {
@@ -64,12 +110,13 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const session = await auth()
+
         if (!session) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
         const body = await request.json()
-        const { name, type, currency, institution, description, initialBalance, creditCardConfig, debtConfig, includeInNetWorth, color } = body
+        const { name, type, currency, initialBalance, color, icon, bankName, lastFourDigits } = body
 
         if (!name || !type || !currency) {
             return NextResponse.json(
@@ -85,14 +132,11 @@ export async function POST(request: Request) {
             name,
             type,
             currency,
-            institution,
-            description,
-            initialBalance: initialBalance ?? 0,
-            includeInNetWorth: includeInNetWorth ?? true,
-            creditCardConfig: type === 'credit_card' ? creditCardConfig : undefined,
-            debtConfig: type === 'debt' ? debtConfig : undefined,
+            initialBalance: initialBalance || 0,
             color,
-            isActive: true,
+            icon,
+            bankName,
+            lastFourDigits,
         })
 
         return NextResponse.json({ account }, { status: 201 })
