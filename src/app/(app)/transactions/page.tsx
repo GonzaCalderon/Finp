@@ -126,19 +126,33 @@ function FilterChip({
             {open && (
                 <>
                     <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-                    <div className="absolute top-full mt-1 left-0 z-20 rounded-lg min-w-36 shadow-lg overflow-hidden"
-                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
+                    <div
+                        className="absolute top-full mt-1 left-0 z-20 rounded-lg min-w-36 shadow-lg overflow-hidden"
+                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                    >
                         <button
-                            onClick={() => { onChange(''); setOpen(false) }}
+                            onClick={() => {
+                                onChange('')
+                                setOpen(false)
+                            }}
                             className="w-full text-left px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
-                            style={{ color: !value ? 'var(--sky)' : 'var(--muted-foreground)' }}>
+                            style={{ color: !value ? 'var(--sky)' : 'var(--muted-foreground)' }}
+                        >
                             Todos
                         </button>
                         {options.map((opt) => (
-                            <button key={opt.value}
-                                    onClick={() => { onChange(opt.value); setOpen(false) }}
-                                    className="w-full text-left px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
-                                    style={{ color: value === opt.value ? 'var(--sky)' : 'var(--foreground)', fontWeight: value === opt.value ? 500 : 400 }}>
+                            <button
+                                key={opt.value}
+                                onClick={() => {
+                                    onChange(opt.value)
+                                    setOpen(false)
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
+                                style={{
+                                    color: value === opt.value ? 'var(--sky)' : 'var(--foreground)',
+                                    fontWeight: value === opt.value ? 500 : 400,
+                                }}
+                            >
                                 {opt.label}
                             </button>
                         ))}
@@ -191,7 +205,6 @@ function FilterSheet({
                         className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl pb-safe"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
                     >
-                        {/* Handle */}
                         <div className="flex justify-center pt-3 pb-1">
                             <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border)' }} />
                         </div>
@@ -200,87 +213,98 @@ function FilterSheet({
                             <div className="flex items-center justify-between py-2">
                                 <h3 className="text-sm font-semibold">Filtros</h3>
                                 {activeCount > 0 && (
-                                    <button onClick={() => { onClear(); onClose() }}
-                                            className="flex items-center gap-1 text-xs"
-                                            style={{ color: 'var(--sky)' }}>
+                                    <button
+                                        onClick={() => {
+                                            onClear()
+                                            onClose()
+                                        }}
+                                        className="flex items-center gap-1 text-xs"
+                                        style={{ color: 'var(--sky)' }}
+                                    >
                                         <X size={12} /> Limpiar filtros
                                     </button>
                                 )}
                             </div>
 
-                            {/* Tipo */}
                             <div className="space-y-2">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tipo</p>
                                 <div className="flex flex-wrap gap-2">
                                     {[{ value: '', label: 'Todos' }, ...typeOptions].map((opt) => (
-                                        <button key={opt.value}
-                                                onClick={() => onChange('type', opt.value)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                                                style={{
-                                                    background: filters.type === opt.value ? 'var(--sky)' : 'var(--secondary)',
-                                                    color: filters.type === opt.value ? '#fff' : 'var(--foreground)',
-                                                }}>
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => onChange('type', opt.value)}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                            style={{
+                                                background: filters.type === opt.value ? 'var(--sky)' : 'var(--secondary)',
+                                                color: filters.type === opt.value ? '#fff' : 'var(--foreground)',
+                                            }}
+                                        >
                                             {opt.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Categoría */}
                             <div className="space-y-2">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Categoría</p>
                                 <div className="flex flex-wrap gap-2">
                                     {[{ value: '', label: 'Todas' }, ...categoryOptions].map((opt) => (
-                                        <button key={opt.value}
-                                                onClick={() => onChange('categoryId', opt.value)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                                                style={{
-                                                    background: filters.categoryId === opt.value ? 'var(--sky)' : 'var(--secondary)',
-                                                    color: filters.categoryId === opt.value ? '#fff' : 'var(--foreground)',
-                                                }}>
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => onChange('categoryId', opt.value)}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                            style={{
+                                                background: filters.categoryId === opt.value ? 'var(--sky)' : 'var(--secondary)',
+                                                color: filters.categoryId === opt.value ? '#fff' : 'var(--foreground)',
+                                            }}
+                                        >
                                             {opt.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Cuenta */}
                             <div className="space-y-2">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cuenta</p>
                                 <div className="flex flex-wrap gap-2">
                                     {[{ value: '', label: 'Todas' }, ...accountOptions].map((opt) => (
-                                        <button key={opt.value}
-                                                onClick={() => onChange('accountId', opt.value)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                                                style={{
-                                                    background: filters.accountId === opt.value ? 'var(--sky)' : 'var(--secondary)',
-                                                    color: filters.accountId === opt.value ? '#fff' : 'var(--foreground)',
-                                                }}>
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => onChange('accountId', opt.value)}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                            style={{
+                                                background: filters.accountId === opt.value ? 'var(--sky)' : 'var(--secondary)',
+                                                color: filters.accountId === opt.value ? '#fff' : 'var(--foreground)',
+                                            }}
+                                        >
                                             {opt.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Ordenar */}
                             <div className="space-y-2">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Ordenar por</p>
                                 <div className="flex flex-wrap gap-2">
                                     {SORT_OPTIONS.map((opt) => (
-                                        <button key={opt.value}
-                                                onClick={() => onChange('sort', opt.value)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                                                style={{
-                                                    background: filters.sort === opt.value ? 'var(--sky)' : 'var(--secondary)',
-                                                    color: filters.sort === opt.value ? '#fff' : 'var(--foreground)',
-                                                }}>
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => onChange('sort', opt.value)}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                            style={{
+                                                background: filters.sort === opt.value ? 'var(--sky)' : 'var(--secondary)',
+                                                color: filters.sort === opt.value ? '#fff' : 'var(--foreground)',
+                                            }}
+                                        >
                                             {opt.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            <Button className="w-full" onClick={onClose}>Aplicar</Button>
+                            <Button className="w-full" onClick={onClose}>
+                                Aplicar
+                            </Button>
                         </div>
                     </motion.div>
                 </>
@@ -298,7 +322,8 @@ export default function TransactionsPage() {
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
 
-    const { transactions, loading, refreshing, error, createTransaction, updateTransaction, deleteTransaction } = useTransactions({ month })
+    const { transactions, loading, refreshing, error, createTransaction, updateTransaction, deleteTransaction } =
+        useTransactions({ month })
     const { createPlan } = useInstallments()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
@@ -314,7 +339,11 @@ export default function TransactionsPage() {
 
     useKeyboardShortcuts([{ key: 'n', handler: handleNewTransaction }])
 
-    const handleEdit = (t: ITransaction) => { setSelectedTransaction(t); setTransactionDialogOpen(true) }
+    const handleEdit = (t: ITransaction) => {
+        setSelectedTransaction(t)
+        setTransactionDialogOpen(true)
+    }
+
     const handleDelete = (id: string) => setDeleteId(id)
 
     const handleDeleteConfirm = async () => {
@@ -332,10 +361,10 @@ export default function TransactionsPage() {
     const handleTransactionSubmit = async (data: TransactionFormData) => {
         try {
             if (selectedTransaction) {
-                await updateTransaction(selectedTransaction._id.toString(), data as Record<string, unknown>)
+                await updateTransaction(selectedTransaction._id.toString(), data)
                 success('Transacción actualizada correctamente')
             } else {
-                await createTransaction(data as Record<string, unknown>)
+                await createTransaction(data)
                 success('Transacción registrada correctamente')
             }
             setTransactionDialogOpen(false)
@@ -360,7 +389,6 @@ export default function TransactionsPage() {
 
     const clearFilters = () => setFilters(DEFAULT_FILTERS)
 
-    // Contar filtros activos (excluir sort default)
     const activeFilterCount = useMemo(() => {
         let count = 0
         if (filters.type) count++
@@ -369,20 +397,18 @@ export default function TransactionsPage() {
         return count
     }, [filters])
 
-    // Opciones para los filtros
     const typeOptions = Object.entries(TRANSACTION_TYPE_LABELS).map(([value, label]) => ({ value, label }))
 
-    const categoryOptions = useMemo(() =>
-            categories.map((c) => ({ value: c._id.toString(), label: c.name })),
+    const categoryOptions = useMemo(
+        () => categories.map((c) => ({ value: c._id.toString(), label: c.name })),
         [categories]
     )
 
-    const accountOptions = useMemo(() =>
-            accounts.map((a) => ({ value: a._id.toString(), label: a.name })),
+    const accountOptions = useMemo(
+        () => accounts.map((a) => ({ value: a._id.toString(), label: a.name })),
         [accounts]
     )
 
-    // Filtrar y ordenar en cliente
     const filteredTransactions = useMemo(() => {
         let result = [...transactions]
 
@@ -392,18 +418,21 @@ export default function TransactionsPage() {
 
         if (filters.categoryId) {
             result = result.filter((t) => {
-                const catId = (t.categoryId as { _id?: { toString(): string } })?._id?.toString()
-                    ?? t.categoryId?.toString()
+                const catId =
+                    (t.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
+                    t.categoryId?.toString()
                 return catId === filters.categoryId
             })
         }
 
         if (filters.accountId) {
             result = result.filter((t) => {
-                const srcId = (t.sourceAccountId as { _id?: { toString(): string } })?._id?.toString()
-                    ?? t.sourceAccountId?.toString()
-                const dstId = (t.destinationAccountId as { _id?: { toString(): string } })?._id?.toString()
-                    ?? t.destinationAccountId?.toString()
+                const srcId =
+                    (t.sourceAccountId as { _id?: { toString(): string } })?._id?.toString() ??
+                    t.sourceAccountId?.toString()
+                const dstId =
+                    (t.destinationAccountId as { _id?: { toString(): string } })?._id?.toString() ??
+                    t.destinationAccountId?.toString()
                 return srcId === filters.accountId || dstId === filters.accountId
             })
         }
@@ -430,33 +459,40 @@ export default function TransactionsPage() {
     }, [transactions, filters])
 
     const totalIncome = transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
-    const totalExpense = transactions.filter((t) => t.type === 'expense' && !t.installmentPlanId).reduce((sum, t) => sum + t.amount, 0)
+    const totalExpense = transactions
+        .filter((t) => t.type === 'expense' && !t.installmentPlanId)
+        .reduce((sum, t) => sum + t.amount, 0)
 
     const fmt = (amount: number, currency: string) =>
-        hidden ? '••••' : new Intl.NumberFormat('es-AR', {
-            style: 'currency', currency, maximumFractionDigits: 0,
-        }).format(amount)
+        hidden
+            ? '••••'
+            : new Intl.NumberFormat('es-AR', {
+                style: 'currency',
+                currency,
+                maximumFractionDigits: 0,
+            }).format(amount)
 
-    if (loading) return (
-        <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
-                <Skeleton className="h-7 w-40" />
-                <Skeleton className="h-8 w-32" />
+    if (loading)
+        return (
+            <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+                <div className="flex items-center justify-between">
+                    <Skeleton className="h-7 w-40" />
+                    <Skeleton className="h-8 w-32" />
+                </div>
+                <Skeleton className="h-8 w-52" />
+                <Skeleton className="h-24 w-full rounded-xl" />
+                <div className="space-y-2">
+                    {[...Array(5)].map((_, i) => (
+                        <Skeleton key={i} className="h-16 rounded-xl" />
+                    ))}
+                </div>
             </div>
-            <Skeleton className="h-8 w-52" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-            <div className="space-y-2">
-                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
-            </div>
-        </div>
-    )
+        )
 
     if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
 
     return (
         <motion.div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4" {...fadeIn}>
-
-            {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <h1 className="text-xl font-semibold tracking-tight">Transacciones</h1>
@@ -466,25 +502,29 @@ export default function TransactionsPage() {
                     <Button variant="outline" size="sm" onClick={() => setInstallmentDialogOpen(true)}>
                         + Cuotas
                     </Button>
-                    <Button size="sm" onClick={handleNewTransaction}>+ Nueva</Button>
+                    <Button size="sm" onClick={handleNewTransaction}>
+                        + Nueva
+                    </Button>
                 </div>
             </div>
 
-            {/* Selector de mes */}
             <Select value={month} onValueChange={setMonth}>
                 <SelectTrigger className="w-52 h-8 text-sm">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                     {MONTHS.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                        <SelectItem key={m.value} value={m.value}>
+                            {m.label}
+                        </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
 
-            {/* Métricas agrupadas */}
-            <div className="rounded-xl overflow-hidden"
-                 style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
+            <div
+                className="rounded-xl overflow-hidden"
+                style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+            >
                 <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid #10B981' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Ingresos</p>
@@ -500,15 +540,18 @@ export default function TransactionsPage() {
                     </div>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--sky)' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Balance</p>
-                        <p className="text-base md:text-xl font-semibold tracking-tight truncate"
-                           style={{ color: totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)' }}>
+                        <p
+                            className="text-base md:text-xl font-semibold tracking-tight truncate"
+                            style={{
+                                color: totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)',
+                            }}
+                        >
                             {fmt(totalIncome - totalExpense, 'ARS')}
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* Filtros — desktop */}
             <div className="hidden md:flex items-center gap-2 flex-wrap">
                 <FilterChip
                     label="Tipo"
@@ -539,15 +582,16 @@ export default function TransactionsPage() {
                     onChange={(v) => setFilter('sort', v)}
                 />
                 {activeFilterCount > 0 && (
-                    <button onClick={clearFilters}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
-                            style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}>
+                    <button
+                        onClick={clearFilters}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                        style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
+                    >
                         <X size={12} /> Limpiar
                     </button>
                 )}
             </div>
 
-            {/* Filtros — mobile */}
             <div className="flex md:hidden items-center gap-2">
                 <button
                     onClick={() => setFilterSheetOpen(true)}
@@ -556,7 +600,8 @@ export default function TransactionsPage() {
                         background: activeFilterCount > 0 ? 'var(--sky)' : 'var(--secondary)',
                         color: activeFilterCount > 0 ? '#fff' : 'var(--muted-foreground)',
                         border: `0.5px solid ${activeFilterCount > 0 ? 'var(--sky)' : 'var(--border)'}`,
-                    }}>
+                    }}
+                >
                     <SlidersHorizontal size={13} />
                     Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                 </button>
@@ -567,29 +612,37 @@ export default function TransactionsPage() {
                         background: filters.sort !== 'date_desc' ? 'var(--sky)' : 'var(--secondary)',
                         color: filters.sort !== 'date_desc' ? '#fff' : 'var(--muted-foreground)',
                         border: `0.5px solid ${filters.sort !== 'date_desc' ? 'var(--sky)' : 'var(--border)'}`,
-                    }}>
+                    }}
+                >
                     <ArrowUpDown size={13} />
                     {SORT_OPTIONS.find((o) => o.value === filters.sort)?.label ?? 'Ordenar'}
                 </button>
                 {activeFilterCount > 0 && (
-                    <button onClick={clearFilters}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
-                            style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}>
+                    <button
+                        onClick={clearFilters}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                        style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
+                    >
                         <X size={12} /> Limpiar
                     </button>
                 )}
             </div>
 
-            {/* Lista de transacciones */}
             <AnimatePresence mode="wait">
                 <motion.div key={`${month}-${JSON.stringify(filters)}`} className="space-y-2" {...fadeIn}>
                     {filteredTransactions.length === 0 ? (
-                        <div className="rounded-xl"
-                             style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
+                        <div
+                            className="rounded-xl"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        >
                             <EmptyState
                                 icon={ArrowLeftRight}
                                 title={activeFilterCount > 0 ? 'Sin resultados' : 'Sin transacciones este mes'}
-                                description={activeFilterCount > 0 ? 'Probá con otros filtros' : 'Registrá tu primera transacción del mes'}
+                                description={
+                                    activeFilterCount > 0
+                                        ? 'Probá con otros filtros'
+                                        : 'Registrá tu primera transacción del mes'
+                                }
                                 actionLabel={activeFilterCount > 0 ? 'Limpiar filtros' : '+ Nueva transacción'}
                                 onAction={activeFilterCount > 0 ? clearFilters : handleNewTransaction}
                             />
@@ -602,8 +655,11 @@ export default function TransactionsPage() {
                             animate="animate"
                         >
                             {filteredTransactions.map((transaction) => {
-                                const sourceAccount = transaction.sourceAccountId as unknown as IAccount & { color?: string } | null
-                                const destAccount = transaction.destinationAccountId as unknown as IAccount & { color?: string } | null
+                                const sourceAccount =
+                                    (transaction.sourceAccountId as unknown as (IAccount & { color?: string }) | null)
+                                const destAccount =
+                                    (transaction.destinationAccountId as unknown as (IAccount & { color?: string }) | null)
+
                                 return (
                                     <motion.div
                                         key={transaction._id.toString()}
@@ -613,7 +669,10 @@ export default function TransactionsPage() {
                                     >
                                         <div className="py-3 px-4 flex items-center justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]} className="shrink-0">
+                                                <Badge
+                                                    variant={TRANSACTION_TYPE_COLORS[transaction.type]}
+                                                    className="shrink-0"
+                                                >
                                                     {TRANSACTION_TYPE_LABELS[transaction.type]}
                                                 </Badge>
                                                 <div className="min-w-0">
@@ -627,8 +686,10 @@ export default function TransactionsPage() {
                                                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                                 ·
                                                                 {sourceAccount.color && (
-                                                                    <span className="w-2 h-2 rounded-full inline-block"
-                                                                          style={{ backgroundColor: sourceAccount.color }} />
+                                                                    <span
+                                                                        className="w-2 h-2 rounded-full inline-block"
+                                                                        style={{ backgroundColor: sourceAccount.color }}
+                                                                    />
                                                                 )}
                                                                 {sourceAccount.name}
                                                             </span>
@@ -637,36 +698,51 @@ export default function TransactionsPage() {
                                                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                                 →
                                                                 {destAccount.color && (
-                                                                    <span className="w-2 h-2 rounded-full inline-block"
-                                                                          style={{ backgroundColor: destAccount.color }} />
+                                                                    <span
+                                                                        className="w-2 h-2 rounded-full inline-block"
+                                                                        style={{ backgroundColor: destAccount.color }}
+                                                                    />
                                                                 )}
                                                                 {destAccount.name}
                                                             </span>
                                                         )}
                                                         {transaction.installmentPlanId && (
-                                                            <span className="text-xs" style={{ color: 'var(--sky)' }}>· en cuotas</span>
+                                                            <span className="text-xs" style={{ color: 'var(--sky)' }}>
+                                                                · en cuotas
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <p className="font-semibold tabular-nums text-sm"
-                                                   style={{
-                                                       color: transaction.type === 'income'
-                                                           ? '#10B981'
-                                                           : transaction.type === 'expense'
-                                                               ? 'var(--destructive)'
-                                                               : 'var(--foreground)',
-                                                   }}>
+                                                <p
+                                                    className="font-semibold tabular-nums text-sm"
+                                                    style={{
+                                                        color:
+                                                            transaction.type === 'income'
+                                                                ? '#10B981'
+                                                                : transaction.type === 'expense'
+                                                                    ? 'var(--destructive)'
+                                                                    : 'var(--foreground)',
+                                                    }}
+                                                >
                                                     {fmt(transaction.amount, transaction.currency)}
                                                 </p>
                                                 <div className="flex gap-1">
-                                                    <Button variant="outline" size="sm" className="h-7 text-xs"
-                                                            onClick={() => handleEdit(transaction)}>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 text-xs"
+                                                        onClick={() => handleEdit(transaction)}
+                                                    >
                                                         Editar
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" className="h-7 text-xs"
-                                                            onClick={() => handleDelete(transaction._id.toString())}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 text-xs"
+                                                        onClick={() => handleDelete(transaction._id.toString())}
+                                                    >
                                                         Eliminar
                                                     </Button>
                                                 </div>
@@ -680,7 +756,6 @@ export default function TransactionsPage() {
                 </motion.div>
             </AnimatePresence>
 
-            {/* Filter Sheet mobile */}
             <FilterSheet
                 open={filterSheetOpen}
                 onClose={() => setFilterSheetOpen(false)}
