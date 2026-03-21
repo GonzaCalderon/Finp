@@ -20,6 +20,8 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import {TrendingUp, TrendingDown, CheckCircle} from 'lucide-react'
+import {useHideAmounts} from "@/contexts/HideAmountsContext";
+
 
 const getCurrentMonth = () => {
     const now = new Date()
@@ -128,7 +130,7 @@ export default function DashboardPage() {
     const [applyDialogOpen, setApplyDialogOpen] = useState(false)
     const [selectedCommitment, setSelectedCommitment] = useState<CommitmentItem | null>(null)
     const [appliedId, setAppliedId] = useState<string | null>(null)
-
+    const { hidden } = useHideAmounts()
     const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
 
@@ -182,10 +184,8 @@ export default function DashboardPage() {
     }
 
     const fmt = (amount: number, currency = 'ARS') =>
-        new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 0,
+        hidden ? '••••' : new Intl.NumberFormat('es-AR', {
+            style: 'currency', currency, maximumFractionDigits: 0,
         }).format(amount)
 
     if (loading) return (

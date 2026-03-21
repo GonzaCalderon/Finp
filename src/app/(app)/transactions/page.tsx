@@ -37,6 +37,7 @@ import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { ArrowLeftRight } from 'lucide-react'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ITransaction, IAccount } from '@/types'
+import {useHideAmounts} from "@/contexts/HideAmountsContext";
 
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     income: 'Ingreso',
@@ -81,6 +82,7 @@ export default function TransactionsPage() {
     const { accounts } = useAccounts()
     const { categories } = useCategories()
     const { success, error: toastError } = useToast()
+    const { hidden } = useHideAmounts()
 
     usePageTitle('Transacciones')
 
@@ -143,7 +145,7 @@ export default function TransactionsPage() {
         .reduce((sum, t) => sum + t.amount, 0)
 
     const fmt = (amount: number, currency: string) =>
-        new Intl.NumberFormat('es-AR', {
+        hidden ? '••••' : new Intl.NumberFormat('es-AR', {
             style: 'currency', currency, maximumFractionDigits: 0,
         }).format(amount)
 
