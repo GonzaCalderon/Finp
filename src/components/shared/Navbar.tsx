@@ -42,7 +42,7 @@ const MORE_ITEMS = [
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
     const pathname = usePathname()
-    const { hidden, toggle } = useHideAmounts()
+    const { hidden, toggleHidden } = useHideAmounts()
 
     return (
         <div className="flex flex-col h-full">
@@ -72,7 +72,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
             <div className="px-3 py-4 mx-3 mb-3 rounded-md space-y-1"
                  style={{ borderTop: '0.5px solid var(--sidebar-border)' }}>
-                <button onClick={toggle}
+                <button onClick={toggleHidden}
                         className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm w-full transition-colors hover:bg-white/5"
                         style={{ color: 'var(--sidebar-foreground)' }}>
                     {hidden ? <Eye size={14} style={{ opacity: 0.6 }} /> : <EyeOff size={14} style={{ opacity: 0.6 }} />}
@@ -94,7 +94,7 @@ function MobileBottomBar() {
     const pathname = usePathname()
     const [moreOpen, setMoreOpen] = useState(false)
     const [txDialogOpen, setTxDialogOpen] = useState(false)
-    const { hidden, toggle } = useHideAmounts()
+    const { hidden, toggleHidden } = useHideAmounts()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
     const { success, error: toastError } = useToast()
@@ -191,7 +191,7 @@ function MobileBottomBar() {
 
                                 <div className="px-4 pb-6 pt-4 space-y-1"
                                      style={{ borderTop: '0.5px solid rgba(255,255,255,0.1)' }}>
-                                    <button onClick={toggle}
+                                    <button onClick={toggleHidden}
                                             className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full transition-colors"
                                             style={{ color: 'rgba(255,255,255,0.7)' }}>
                                         {hidden
