@@ -24,6 +24,7 @@ import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { CreditCard } from 'lucide-react'
 import type { AccountFormData } from '@/lib/validations'
 import type { IAccount } from '@/types'
+import {useHideAmounts} from "@/contexts/HideAmountsContext";
 
 type AccountWithColor = IAccount & { color?: string; balance?: number }
 
@@ -44,6 +45,7 @@ export default function AccountsPage() {
     const [deleteId, setDeleteId] = useState<string | null>(null)
     const [detailOpen, setDetailOpen] = useState(false)
     const [detailAccountId, setDetailAccountId] = useState<string | null>(null)
+    const { hidden } = useHideAmounts()
 
     usePageTitle('Cuentas')
 
@@ -162,7 +164,7 @@ export default function AccountsPage() {
                                     {acc.balance !== undefined && (
                                         <p className="text-lg font-semibold tracking-tight"
                                            style={{ color: acc.balance < 0 ? 'var(--destructive)' : 'var(--foreground)' }}>
-                                            {new Intl.NumberFormat('es-AR', {
+                                            {hidden ? '••••' : new Intl.NumberFormat('es-AR', {
                                                 style: 'currency',
                                                 currency: acc.currency,
                                                 maximumFractionDigits: 0,
