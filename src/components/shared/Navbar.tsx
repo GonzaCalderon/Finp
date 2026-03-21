@@ -26,9 +26,11 @@ const NAV_ITEMS = [
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
 ]
 
-const BOTTOM_NAV_LEFT = { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight }
-const BOTTOM_NAV_RIGHT = [
+const BOTTOM_NAV_LEFT = [
+    { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight },
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+]
+const BOTTOM_NAV_RIGHT = [
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
 ]
 
@@ -123,148 +125,149 @@ function MobileBottomBar() {
 
     const BOTTOM_BAR_HEIGHT = 65
 
+    const NavItem = ({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) => {
+        const isActive = pathname === href && !moreOpen
+        return (
+            <Link href={href} onClick={closeMore}
+                  className="flex flex-col items-center justify-center gap-1 w-full h-full">
+                <Icon size={20} style={{ color: isActive ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }} />
+                <span className="text-[9px] leading-none text-center w-full truncate px-1"
+                      style={{ color: isActive ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }}>
+                    {label}
+                </span>
+            </Link>
+        )
+    }
+
     return (
         <>
             {/* Panel Más */}
-            <AnimatePresence>
-                {moreOpen && (
-                    <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="fixed inset-0 z-40"
-                            style={{ bottom: BOTTOM_BAR_HEIGHT, background: 'rgba(0,0,0,0.5)' }}
-                            onClick={closeMore}
-                        />
-                        <motion.div
-                            initial={{ x: '100%' }}
-                            animate={{ x: 0 }}
-                            exit={{ x: '100%' }}
-                            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                            className="fixed top-0 right-0 z-50 flex flex-col w-72"
-                            style={{
-                                bottom: BOTTOM_BAR_HEIGHT,
-                                background: 'var(--sidebar)',
-                                borderLeft: '0.5px solid var(--sidebar-border)',
-                            }}
-                        >
-                            <div className="px-6 pt-12 pb-6">
+                <AnimatePresence>
+                    {moreOpen && (
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="fixed inset-0 z-40"
+                                style={{ bottom: BOTTOM_BAR_HEIGHT, background: 'rgba(0,0,0,0.5)' }}
+                                onClick={closeMore}
+                            />
+                            <motion.div
+                                initial={{ x: '100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '100%' }}
+                                transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+                                className="fixed top-0 right-0 z-50 flex flex-col w-72"
+                                style={{
+                                    bottom: BOTTOM_BAR_HEIGHT,
+                                    background: 'var(--sidebar)',
+                                    borderLeft: '0.5px solid var(--sidebar-border)',
+                                }}
+                            >
+                                <div className="px-6 pt-12 pb-6">
                                 <span className="text-lg font-semibold tracking-tight text-white">
                                     fin<span style={{ color: 'var(--sky)' }}>p</span>
                                 </span>
-                            </div>
-
-                            <div className="flex-1 px-4 space-y-1 overflow-y-auto">
-                                {MORE_ITEMS.map(({ href, label, icon: Icon }) => {
-                                    const isActive = pathname === href
-                                    return (
-                                        <Link key={href} href={href} onClick={closeMore}
-                                              className="flex items-center gap-4 px-4 py-4 rounded-xl text-base transition-colors"
-                                              style={{
-                                                  color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
-                                                  background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
-                                              }}>
-                                            <Icon size={20} style={{ opacity: isActive ? 1 : 0.7 }} />
-                                            {label}
-                                        </Link>
-                                    )
-                                })}
-                            </div>
-
-                            <div className="px-4 pb-6 pt-4 space-y-1"
-                                 style={{ borderTop: '0.5px solid rgba(255,255,255,0.1)' }}>
-                                <button onClick={toggle}
-                                        className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full transition-colors"
-                                        style={{ color: 'rgba(255,255,255,0.7)' }}>
-                                    {hidden
-                                        ? <Eye size={20} style={{ opacity: 0.7 }} />
-                                        : <EyeOff size={20} style={{ opacity: 0.7 }} />}
-                                    {hidden ? 'Mostrar montos' : 'Ocultar montos'}
-                                </button>
-                                <div className="px-4 py-1">
-                                    <ThemeToggle />
                                 </div>
-                                <button onClick={() => signOut({ callbackUrl: '/login' })}
-                                        className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
-                                        style={{ color: 'rgba(255,255,255,0.5)' }}>
-                                    <LogOut size={20} style={{ opacity: 0.6 }} />
-                                    Cerrar sesión
-                                </button>
-                            </div>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
+
+                                <div className="flex-1 px-4 space-y-1 overflow-y-auto">
+                                    {MORE_ITEMS.map(({ href, label, icon: Icon }) => {
+                                        const isActive = pathname === href
+                                        return (
+                                            <Link key={href} href={href} onClick={closeMore}
+                                                  className="flex items-center gap-4 px-4 py-4 rounded-xl text-base transition-colors"
+                                                  style={{
+                                                      color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
+                                                      background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
+                                                  }}>
+                                                <Icon size={20} style={{ opacity: isActive ? 1 : 0.7 }} />
+                                                {label}
+                                            </Link>
+                                        )
+                                    })}
+                                </div>
+
+                                <div className="px-4 pb-6 pt-4 space-y-1"
+                                     style={{ borderTop: '0.5px solid rgba(255,255,255,0.1)' }}>
+                                    <button onClick={toggle}
+                                            className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full transition-colors"
+                                            style={{ color: 'rgba(255,255,255,0.7)' }}>
+                                        {hidden
+                                            ? <Eye size={20} style={{ opacity: 0.7 }} />
+                                            : <EyeOff size={20} style={{ opacity: 0.7 }} />}
+                                        {hidden ? 'Mostrar montos' : 'Ocultar montos'}
+                                    </button>
+                                    <div className="px-4 py-1">
+                                        <ThemeToggle />
+                                    </div>
+                                    <button onClick={() => signOut({ callbackUrl: '/login' })}
+                                            className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
+                                            style={{ color: 'rgba(255,255,255,0.5)' }}>
+                                        <LogOut size={20} style={{ opacity: 0.6 }} />
+                                        Cerrar sesión
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
 
             {/* Bottom bar */}
-            <div
-                className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around px-2"
-                style={{
-                    background: 'var(--sidebar)',
-                    borderTop: '0.5px solid var(--sidebar-border)',
-                    paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-                    paddingTop: '8px',
-                    height: BOTTOM_BAR_HEIGHT,
-                }}
-            >
-                {/* Transacciones — izquierda del + */}
-                {(() => {
-                    const { href, label, icon: Icon } = BOTTOM_NAV_LEFT
-                    const isActive = pathname === href && !moreOpen
-                    return (
-                        <Link href={href} onClick={closeMore}
-                              className="flex flex-col items-center gap-1 px-3 py-1">
-                            <Icon size={22} style={{ color: isActive ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }} />
-                            <span className="text-[10px]" style={{ color: isActive ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }}>
-                                {label}
-                            </span>
-                        </Link>
-                    )
-                })()}
+                <div
+                    className="fixed bottom-0 left-0 right-0 z-50"
+                    style={{
+                        background: 'var(--sidebar)',
+                        borderTop: '0.5px solid var(--sidebar-border)',
+                        paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+                        height: BOTTOM_BAR_HEIGHT,
+                    }}
+                >
+                    <div
+                        className="grid h-full items-center"
+                        style={{ gridTemplateColumns: '1fr 1fr 56px 1fr 1fr' }}
+                    >
+                        {/* Transacciones */}
+                        <NavItem href="/transactions" label="Transacciones" icon={ArrowLeftRight} />
 
-                {/* + Nueva transacción — centrado */}
-                <button
-                    onClick={() => { closeMore(); setTxDialogOpen(true) }}
-                    className="flex items-center justify-center w-14 h-14 rounded-full -mt-6 shadow-lg"
-                    style={{ background: 'var(--sky)' }}>
-                    <Plus size={26} color="white" />
-                </button>
+                        {/* Dashboard */}
+                        <NavItem href="/dashboard" label="Dashboard" icon={LayoutDashboard} />
 
-                {/* Dashboard y Proyección — derecha del + */}
-                {BOTTOM_NAV_RIGHT.map(({ href, label, icon: Icon }) => {
-                    const isActive = pathname === href && !moreOpen
-                    return (
-                        <Link key={href} href={href} onClick={closeMore}
-                              className="flex flex-col items-center gap-1 px-3 py-1">
-                            <Icon size={22} style={{ color: isActive ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }} />
-                            <span className="text-[10px]" style={{ color: isActive ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }}>
-                                {label}
-                            </span>
-                        </Link>
-                    )
-                })}
+                        {/* + Nueva transacción — centrado exacto */}
+                        <div className="flex items-center justify-center">
+                            <button
+                                onClick={() => { closeMore(); setTxDialogOpen(true) }}
+                                className="flex items-center justify-center w-14 h-14 rounded-full shadow-lg"
+                                style={{ background: 'var(--sky)', marginTop: '-24px' }}>
+                                <Plus size={26} color="white" />
+                            </button>
+                        </div>
 
-                {/* Más */}
-                <button
-                    onClick={() => setMoreOpen((p) => !p)}
-                    className="flex flex-col items-center gap-1 px-3 py-1">
-                    <MoreHorizontal size={22} style={{ color: moreOpen ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }} />
-                    <span className="text-[10px]" style={{ color: moreOpen ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }}>
-                        Más
-                    </span>
-                </button>
-            </div>
+                        {/* Proyección */}
+                        <NavItem href="/projection" label="Proyección" icon={TrendingUp} />
 
-            <TransactionDialog
-                open={txDialogOpen}
-                onOpenChange={setTxDialogOpen}
-                transaction={null}
-                accounts={accounts}
-                categories={categories}
-                onSubmit={handleCreateTransaction}
-            />
+                        {/* Más */}
+                        <button
+                            onClick={() => setMoreOpen((p) => !p)}
+                            className="flex flex-col items-center justify-center gap-1 w-full h-full">
+                            <MoreHorizontal size={20} style={{ color: moreOpen ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }} />
+                            <span className="text-[9px] leading-none"
+                                  style={{ color: moreOpen ? 'var(--sky)' : 'rgba(255,255,255,0.5)' }}>
+                            Más
+                        </span>
+                        </button>
+                    </div>
+                </div>
+
+                <TransactionDialog
+                    open={txDialogOpen}
+                    onOpenChange={setTxDialogOpen}
+                    transaction={null}
+                    accounts={accounts}
+                    categories={categories}
+                    onSubmit={handleCreateTransaction}
+                />
         </>
     )
 }
