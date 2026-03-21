@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction } from '@/lib/models'
+import { transactionSchema } from '@/lib/validations'
 
 export async function GET(
     request: Request,
@@ -9,6 +10,7 @@ export async function GET(
 ) {
     try {
         const session = await auth()
+
         if (!session) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
@@ -42,6 +44,7 @@ export async function PATCH(
 ) {
     try {
         const session = await auth()
+
         if (!session) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
@@ -49,18 +52,48 @@ export async function PATCH(
         const { id } = await params
         const body = await request.json()
 
-        // Limpiar campos ObjectId vacíos
-        const cleanBody = Object.fromEntries(
-            Object.entries(body).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
-        )
+        const parsed = transactionSchema.safeParse(body)
+
+        if (!parsed.success) {
+            return NextResponse.json(
+                {
+                    error: 'Datos de transacción inválidos',
+                    details: parsed.error.flatten(),
+                },
+                { status: 400 }
+            )
+        }
 
         await connectDB()
 
+        const data = parsed.data
+
         const transaction = await Transaction.findOneAndUpdate(
-            { _id: id, userId: session.user.id },
-            { $set: cleanBody },
-            { new: true }
+            {
+                _id: id,
+                userId: session.user.id,
+            },
+            {
+                $set: {
+                    type: data.type,
+                    amount: data.amount,
+                    currency: data.currency,
+                    date: data.date,
+                    description: data.description,
+                    categoryId: data.categoryId,
+                    sourceAccountId: data.sourceAccountId,
+                    destinationAccountId: data.destinationAccountId,
+                    notes: data.notes,
+                    merchant: data.merchant,
+                },
+            },
+            {
+                new: true,
+            }
         )
+            .populate('categoryId', 'name color type')
+            .populate('sourceAccountId', 'name type currency')
+            .populate('destinationAccountId', 'name type currency')
 
         if (!transaction) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
@@ -79,6 +112,7 @@ export async function DELETE(
 ) {
     try {
         const session = await auth()
+
         if (!session) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }

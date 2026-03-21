@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction } from '@/lib/models'
+import { transactionSchema } from '@/lib/validations'
 
 export async function GET(request: Request) {
     try {
         const session = await auth()
+
         if (!session) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
@@ -15,31 +17,34 @@ export async function GET(request: Request) {
         const type = searchParams.get('type')
         const categoryId = searchParams.get('categoryId')
         const accountId = searchParams.get('accountId')
-        const limit = parseInt(searchParams.get('limit') ?? '50')
+        const limit = Number.parseInt(searchParams.get('limit') ?? '50', 10)
 
         await connectDB()
 
-        const filter: Record<string, unknown> = { userId: session.user.id }
+        const filter: Record<string, unknown> = {
+            userId: session.user.id,
+        }
 
         if (month) {
             const [year, m] = month.split('-').map(Number)
-            const start = new Date(year, m - 1, 1)
-            const end = new Date(year, m, 1)
-            filter.date = { $gte: start, $lt: end }
+
+            if (!Number.isNaN(year) && !Number.isNaN(m)) {
+                const start = new Date(year, m - 1, 1)
+                const end = new Date(year, m, 1)
+                filter.date = { $gte: start, $lt: end }
+            }
         }
 
         if (type) filter.type = type
         if (categoryId) filter.categoryId = categoryId
+
         if (accountId) {
-            filter.$or = [
-                { sourceAccountId: accountId },
-                { destinationAccountId: accountId },
-            ]
+            filter.$or = [{ sourceAccountId: accountId }, { destinationAccountId: accountId }]
         }
 
         const transactions = await Transaction.find(filter)
             .sort({ date: -1 })
-            .limit(limit)
+            .limit(Number.isNaN(limit) ? 50 : limit)
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency')
             .populate('destinationAccountId', 'name type currency')
@@ -54,52 +59,50 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const session = await auth()
+
         if (!session) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
         const body = await request.json()
-        const {
-            type,
-            amount,
-            currency,
-            date,
-            description,
-            categoryId,
-            sourceAccountId,
-            destinationAccountId,
-            notes,
-            tags,
-            merchant,
-            status,
-        } = body
+        const parsed = transactionSchema.safeParse(body)
 
-        if (!type || !amount || !currency || !date || !description) {
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'Tipo, monto, moneda, fecha y descripción son requeridos' },
+                {
+                    error: 'Datos de transacción inválidos',
+                    details: parsed.error.flatten(),
+                },
                 { status: 400 }
             )
         }
 
         await connectDB()
 
+        const data = parsed.data
+
         const transaction = await Transaction.create({
             userId: session.user.id,
-            type,
-            amount,
-            currency,
-            date: new Date(date),
-            description,
-            categoryId: categoryId || undefined,
-            sourceAccountId: sourceAccountId || undefined,
-            destinationAccountId: destinationAccountId || undefined,
-            notes: notes || undefined,
-            merchant: merchant || undefined,
-            status: status ?? 'confirmed',
+            type: data.type,
+            amount: data.amount,
+            currency: data.currency,
+            date: data.date,
+            description: data.description,
+            categoryId: data.categoryId,
+            sourceAccountId: data.sourceAccountId,
+            destinationAccountId: data.destinationAccountId,
+            notes: data.notes,
+            merchant: data.merchant,
+            status: 'confirmed',
             createdFrom: 'web',
         })
 
-        return NextResponse.json({ transaction }, { status: 201 })
+        const populatedTransaction = await Transaction.findById(transaction._id)
+            .populate('categoryId', 'name color type')
+            .populate('sourceAccountId', 'name type currency')
+            .populate('destinationAccountId', 'name type currency')
+
+        return NextResponse.json({ transaction: populatedTransaction }, { status: 201 })
     } catch (error) {
         console.error('Error al crear transacción:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
