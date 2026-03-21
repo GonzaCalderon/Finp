@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react'
 import type { IInstallmentPlan } from '@/types'
+import type { InstallmentFormData } from '@/lib/validations'
+
+interface InstallmentsResponse {
+    plans: IInstallmentPlan[]
+}
+
+interface CreatePlanResponse {
+    plan: IInstallmentPlan
+}
 
 export function useInstallments() {
     const [plans, setPlans] = useState<IInstallmentPlan[]>([])
@@ -9,9 +18,13 @@ export function useInstallments() {
     const fetchPlans = async () => {
         try {
             setLoading(true)
+            setError(null)
+
             const res = await fetch('/api/installments')
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error)
+            const data: InstallmentsResponse & { error?: string } = await res.json()
+
+            if (!res.ok) throw new Error(data.error || 'Error al cargar planes')
+
             setPlans(data.plans)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar planes')
@@ -20,22 +33,30 @@ export function useInstallments() {
         }
     }
 
-    const createPlan = async (body: Partial<IInstallmentPlan>) => {
+    const createPlan = async (body: InstallmentFormData) => {
         const res = await fetch('/api/installments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error)
+
+        const data: CreatePlanResponse & { error?: string } = await res.json()
+
+        if (!res.ok) throw new Error(data.error || 'Error al crear plan de cuotas')
+
         await fetchPlans()
-        return data
+        return data.plan
     }
 
     const deletePlan = async (id: string) => {
-        const res = await fetch(`/api/installments/${id}`, { method: 'DELETE' })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error)
+        const res = await fetch(`/api/installments/${id}`, {
+            method: 'DELETE',
+        })
+
+        const data: { error?: string } = await res.json()
+
+        if (!res.ok) throw new Error(data.error || 'Error al eliminar plan de cuotas')
+
         await fetchPlans()
     }
 
@@ -43,5 +64,12 @@ export function useInstallments() {
         fetchPlans()
     }, [])
 
-    return { plans, loading, error, fetchPlans, createPlan, deletePlan }
+    return {
+        plans,
+        loading,
+        error,
+        fetchPlans,
+        createPlan,
+        deletePlan,
+    }
 }

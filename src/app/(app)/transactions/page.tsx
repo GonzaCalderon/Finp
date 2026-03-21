@@ -375,7 +375,7 @@ export default function TransactionsPage() {
 
     const handleInstallmentSubmit = async (data: InstallmentFormData) => {
         try {
-            await createPlan(data as never)
+            await createPlan(data)
             success('Compra en cuotas registrada correctamente')
             setInstallmentDialogOpen(false)
         } catch (err) {
