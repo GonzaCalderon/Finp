@@ -139,7 +139,8 @@ function FmtAmount({
     const compact = new Intl.NumberFormat('es-AR', {
         style: 'currency',
         currency,
-        maximumFractionDigits: 0,
+        maximumFractionDigits: 1,
+        minimumFractionDigits: 0,
         notation: 'compact',
     }).format(amount)
 
