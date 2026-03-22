@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
     LayoutDashboard,
     ArrowLeftRight,
@@ -94,7 +94,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                 })}
             </nav>
 
-            <div className="px-2 pb-3 space-y-1">
+            <div className="mt-auto px-2 pb-3 space-y-1">
                 <button
                     type="button"
                     onClick={toggleHidden}
@@ -120,7 +120,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </div>
     )
 }
-
 function MobileBottomBar() {
     const pathname = usePathname()
     const [moreOpen, setMoreOpen] = useState(false)
@@ -218,175 +217,187 @@ function MobileBottomBar() {
 
     return (
         <>
-            {moreOpen && (
-                <>
-                    <button
-                        type="button"
-                        className="fixed inset-0 z-40 bg-black/40 md:hidden"
-                        onClick={closeMore}
-                        aria-label="Cerrar panel más"
-                    />
+            <AnimatePresence>
+                {moreOpen && (
+                    <>
+                        <motion.button
+                            type="button"
+                            className="fixed inset-0 z-40 bg-black/40 md:hidden"
+                            onClick={closeMore}
+                            aria-label="Cerrar panel más"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        />
 
-                    <motion.div
-                        className="fixed inset-x-3 bottom-[84px] z-50 md:hidden rounded-2xl border p-3 shadow-2xl"
-                        style={{
-                            background: 'var(--sidebar)',
-                            borderColor: 'rgba(255,255,255,0.08)',
-                        }}
-                        initial={{ opacity: 0, y: 16, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 16, scale: 0.98 }}
-                    >
-                        <div
-                            className="mb-3 text-lg font-semibold"
-                            style={{ color: 'var(--sidebar-foreground)' }}
+                        <motion.div
+                            className="fixed inset-x-3 bottom-[84px] z-50 md:hidden rounded-2xl border p-3 shadow-2xl"
+                            style={{
+                                background: 'var(--sidebar)',
+                                borderColor: 'rgba(255,255,255,0.08)',
+                            }}
+                            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 16, scale: 0.98 }}
                         >
-                            fin <span style={{ color: 'var(--sky)' }}>p</span>
-                        </div>
+                            <div
+                                className="mb-3 text-lg font-semibold"
+                                style={{ color: 'var(--sidebar-foreground)' }}
+                            >
+                                fin <span style={{ color: 'var(--sky)' }}>p</span>
+                            </div>
 
-                        <div className="space-y-1">
-                            {MORE_ITEMS.map(({ href, label, icon: Icon }) => {
-                                const isActive = pathname === href
+                            <div className="space-y-1">
+                                {MORE_ITEMS.map(({ href, label, icon: Icon }) => {
+                                    const isActive = pathname === href
 
-                                return (
-                                    <Link
-                                        key={href}
-                                        href={href}
-                                        onClick={closeMore}
-                                        className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
-                                        style={{
-                                            color: isActive ? '#fff' : 'rgba(255,255,255,0.8)',
-                                            background: isActive ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
-                                        }}
+                                    return (
+                                        <Link
+                                            key={href}
+                                            href={href}
+                                            onClick={closeMore}
+                                            className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
+                                            style={{
+                                                color: isActive ? '#fff' : 'rgba(255,255,255,0.8)',
+                                                background: isActive
+                                                    ? 'rgba(56, 189, 248, 0.18)'
+                                                    : 'transparent',
+                                            }}
+                                        >
+                                            <Icon size={18} />
+                                            {label}
+                                        </Link>
+                                    )
+                                })}
+
+                                <button
+                                    type="button"
+                                    onClick={toggleHidden}
+                                    className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
+                                    style={{ color: 'rgba(255,255,255,0.8)' }}
+                                >
+                                    {hidden ? <Eye size={18} /> : <EyeOff size={18} />}
+                                    {hidden ? 'Mostrar montos' : 'Ocultar montos'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => signOut({ callbackUrl: '/login' })}
+                                    className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
+                                    style={{ color: 'rgba(255,255,255,0.5)' }}
+                                >
+                                    <LogOut size={18} />
+                                    Cerrar sesión
+                                </button>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {actionSheetOpen && (
+                    <>
+                        <motion.button
+                            type="button"
+                            className="fixed inset-0 z-40 bg-black/40 md:hidden"
+                            onClick={closeActionSheet}
+                            aria-label="Cerrar acciones rápidas"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        />
+
+                        <motion.div
+                            className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl"
+                            style={{
+                                background: 'var(--background)',
+                                borderColor: 'var(--border)',
+                            }}
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                        >
+                            <div className="mx-auto mt-3 mb-2 h-1.5 w-12 rounded-full bg-muted" />
+
+                            <div className="px-4 pb-5">
+                                <div className="mb-4 flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-base font-semibold">Agregar</h3>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Elegí qué querés registrar.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={closeActionSheet}
+                                        className="rounded-full p-2 transition-colors hover:bg-muted"
+                                        aria-label="Cerrar"
                                     >
-                                        <Icon size={18} />
-                                        {label}
-                                    </Link>
-                                )
-                            })}
-
-                            <button
-                                type="button"
-                                onClick={toggleHidden}
-                                className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
-                                style={{ color: 'rgba(255,255,255,0.8)' }}
-                            >
-                                {hidden ? <Eye size={18} /> : <EyeOff size={18} />}
-                                {hidden ? 'Mostrar montos' : 'Ocultar montos'}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => signOut({ callbackUrl: '/login' })}
-                                className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full"
-                                style={{ color: 'rgba(255,255,255,0.5)' }}
-                            >
-                                <LogOut size={18} />
-                                Cerrar sesión
-                            </button>
-                        </div>
-                    </motion.div>
-                </>
-            )}
-
-            {actionSheetOpen && (
-                <>
-                    <button
-                        type="button"
-                        className="fixed inset-0 z-40 bg-black/40 md:hidden"
-                        onClick={closeActionSheet}
-                        aria-label="Cerrar acciones rápidas"
-                    />
-
-                    <motion.div
-                        className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl"
-                        style={{
-                            background: 'var(--background)',
-                            borderColor: 'var(--border)',
-                        }}
-                        initial={{ y: '100%' }}
-                        animate={{ y: 0 }}
-                        exit={{ y: '100%' }}
-                        transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-                    >
-                        <div className="mx-auto mt-3 mb-2 h-1.5 w-12 rounded-full bg-muted" />
-
-                        <div className="px-4 pb-5">
-                            <div className="mb-4 flex items-center justify-between">
-                                <div>
-                                    <h3 className="text-base font-semibold">Agregar</h3>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Elegí qué querés registrar.
-                                    </p>
+                                        <X size={16} />
+                                    </button>
                                 </div>
 
-                                <button
-                                    type="button"
-                                    onClick={closeActionSheet}
-                                    className="rounded-full p-2 transition-colors hover:bg-muted"
-                                    aria-label="Cerrar"
-                                >
-                                    <X size={16} />
-                                </button>
-                            </div>
-
-                            <div className="space-y-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        closeActionSheet()
-                                        setTxDialogOpen(true)
-                                    }}
-                                    className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left"
-                                    style={{ borderColor: 'var(--border)' }}
-                                >
-                                    <div
-                                        className="flex h-10 w-10 items-center justify-center rounded-xl"
-                                        style={{
-                                            background: 'rgba(56, 189, 248, 0.14)',
-                                            color: 'var(--sky)',
+                                <div className="space-y-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            closeActionSheet()
+                                            setTxDialogOpen(true)
                                         }}
+                                        className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left"
+                                        style={{ borderColor: 'var(--border)' }}
                                     >
-                                        <Plus size={18} />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium">Nueva transacción</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            Gasto o ingreso rápido
-                                        </p>
-                                    </div>
-                                </button>
+                                        <div
+                                            className="flex h-10 w-10 items-center justify-center rounded-xl"
+                                            style={{
+                                                background: 'rgba(56, 189, 248, 0.14)',
+                                                color: 'var(--sky)',
+                                            }}
+                                        >
+                                            <Plus size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium">Nueva transacción</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Gasto o ingreso rápido
+                                            </p>
+                                        </div>
+                                    </button>
 
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        closeActionSheet()
-                                        setInstallmentDialogOpen(true)
-                                    }}
-                                    className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left"
-                                    style={{ borderColor: 'var(--border)' }}
-                                >
-                                    <div
-                                        className="flex h-10 w-10 items-center justify-center rounded-xl"
-                                        style={{
-                                            background: 'rgba(245, 158, 11, 0.14)',
-                                            color: 'var(--amber-dark)',
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            closeActionSheet()
+                                            setInstallmentDialogOpen(true)
                                         }}
+                                        className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left"
+                                        style={{ borderColor: 'var(--border)' }}
                                     >
-                                        <ShoppingBag size={18} />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium">Compra en cuotas</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            Registrar tarjeta y plan
-                                        </p>
-                                    </div>
-                                </button>
+                                        <div
+                                            className="flex h-10 w-10 items-center justify-center rounded-xl"
+                                            style={{
+                                                background: 'rgba(245, 158, 11, 0.14)',
+                                                color: 'var(--amber-dark)',
+                                            }}
+                                        >
+                                            <ShoppingBag size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium">Compra en cuotas</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Registrar tarjeta y plan
+                                            </p>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </motion.div>
-                </>
-            )}
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
 
             <div
                 className="fixed bottom-0 left-0 right-0 z-30 md:hidden border-t backdrop-blur supports-[backdrop-filter]:bg-background/90"
@@ -464,7 +475,7 @@ export function Navbar() {
     return (
         <>
             <aside
-                className="hidden md:flex md:w-64 md:flex-col md:min-h-screen"
+                className="hidden md:flex md:w-64 md:flex-col md:sticky md:top-0 md:h-screen md:self-start"
                 style={{ background: 'var(--sidebar)' }}
             >
                 <SidebarContent />
