@@ -228,6 +228,7 @@ function MobileBottomBar() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18 }}
                         />
 
                         <motion.div
@@ -239,6 +240,7 @@ function MobileBottomBar() {
                             initial={{ opacity: 0, y: 16, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                            transition={{ duration: 0.18 }}
                         >
                             <div
                                 className="mb-3 text-lg font-semibold"
@@ -306,6 +308,7 @@ function MobileBottomBar() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18 }}
                         />
 
                         <motion.div
@@ -317,7 +320,7 @@ function MobileBottomBar() {
                             initial={{ y: '100%' }}
                             animate={{ y: 0 }}
                             exit={{ y: '100%' }}
-                            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                            transition={{ type: 'tween', duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                         >
                             <div className="mx-auto mt-3 mb-2 h-1.5 w-12 rounded-full bg-muted" />
 
