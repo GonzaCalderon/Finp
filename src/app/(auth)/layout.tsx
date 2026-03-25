@@ -18,9 +18,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                     }}
                 />
                 <div className="relative z-10">
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-white text-3xl font-bold tracking-tight">fin</span>
-                        <span className="text-white/60 text-3xl font-light">p</span>
+                    <div className="flex items-baseline">
+                        <span className="text-white text-3xl font-bold tracking-tight">Fin</span>
+                        <span className="text-3xl font-bold tracking-tight" style={{ color: 'var(--sky)' }}>p</span>
                     </div>
                 </div>
 
@@ -48,9 +48,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             >
                 {/* Mobile logo — only visible on mobile/tablet */}
                 <div className="lg:hidden mb-8 text-center">
-                    <div className="flex items-baseline justify-center gap-1">
-                        <span className="text-foreground text-3xl font-bold tracking-tight">fin</span>
-                        <span className="text-muted-foreground text-3xl font-light">p</span>
+                    <div className="flex items-baseline justify-center">
+                        <span className="text-foreground text-3xl font-bold tracking-tight">Fin</span>
+                        <span className="text-3xl font-bold tracking-tight" style={{ color: 'var(--sky)' }}>p</span>
                     </div>
                 </div>
 
