@@ -2,6 +2,23 @@
 
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import type { DefaultView } from '@/hooks/usePreferences'
+
+const DEFAULT_VIEW_ROUTES: Record<DefaultView, string> = {
+    dashboard: '/dashboard',
+    transactions: '/transactions',
+    accounts: '/accounts',
+    projection: '/projection',
+}
+
+function getDefaultRoute(): string {
+    try {
+        const view = localStorage.getItem('finp-default-view') as DefaultView | null
+        return (view && DEFAULT_VIEW_ROUTES[view]) ? DEFAULT_VIEW_ROUTES[view] : '/dashboard'
+    } catch {
+        return '/dashboard'
+    }
+}
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -42,7 +59,7 @@ export default function LoginPage() {
             return
         }
 
-        router.push('/dashboard')
+        router.push(getDefaultRoute())
     }
 
     return (
