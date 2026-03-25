@@ -4,7 +4,7 @@ import { useTheme } from 'next-themes'
 import { Sun, Moon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-export function ThemeToggle() {
+export function ThemeToggle({ className, iconSize, style }: { className?: string; iconSize?: number; style?: React.CSSProperties } = {}) {
     const { theme, setTheme } = useTheme()
     const [mounted, setMounted] = useState(false)
 
@@ -14,13 +14,13 @@ export function ThemeToggle() {
     return (
         <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm w-full transition-colors hover:bg-white/5"
-            style={{ color: 'var(--sidebar-foreground)' }}
+            className={className ?? 'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm w-full transition-colors hover:bg-white/5'}
+            style={style ?? { color: 'var(--sidebar-foreground)' }}
         >
             {theme === 'dark' ? (
-                <Sun size={14} style={{ opacity: 0.6 }} />
+                <Sun size={iconSize ?? 14} style={{ opacity: 0.6 }} />
             ) : (
-                <Moon size={14} style={{ opacity: 0.6 }} />
+                <Moon size={iconSize ?? 14} style={{ opacity: 0.6 }} />
             )}
             {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
         </button>
