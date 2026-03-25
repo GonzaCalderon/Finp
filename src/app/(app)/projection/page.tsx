@@ -7,6 +7,10 @@ import { AnimatePresence } from 'framer-motion'
 import { fadeIn } from '@/lib/utils/animations'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid,
+    Tooltip, ResponsiveContainer,
+} from 'recharts'
 
 const USD_TO_ARS = 1450
 
@@ -16,9 +20,16 @@ const MONTH_NAMES: Record<string, string> = {
     '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
 }
 
-const formatMonth = (month: string) => {
-    const [, m] = month.split('-')
-    return MONTH_NAMES[m]
+const formatMonth = (month: string, showYear = false) => {
+    const [y, m] = month.split('-')
+    const name = MONTH_NAMES[m]
+    return showYear ? `${name} '${y.slice(2)}` : name
+}
+
+const formatMonthCompact = (month: string, showYear = false) => {
+    const [y, m] = month.split('-')
+    const name = MONTH_NAMES[m].slice(0, 3)
+    return showYear ? `${name} '${y.slice(2)}` : name
 }
 
 const fmt = (amount: number) =>
@@ -62,6 +73,43 @@ interface MonthProjection {
     totalCommitmentsARS: number
     totalInstallmentsARS: number
     totalARS: number
+}
+
+const fmtCompact = (amount: number) =>
+    new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency: 'ARS',
+        maximumFractionDigits: 0,
+        notation: 'compact',
+    }).format(amount)
+
+const ProjectionTooltip = ({ active, payload, label }: {
+    active?: boolean
+    payload?: { value: number; name: string; color: string }[]
+    label?: string
+}) => {
+    if (!active || !payload?.length) return null
+    const total = payload.reduce((sum, e) => sum + e.value, 0)
+    return (
+        <div className="rounded-lg p-3 text-sm space-y-1.5"
+             style={{ background: 'var(--card)', border: '0.5px solid var(--border)', minWidth: 160 }}>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{label}</p>
+            {payload.map((entry) => (
+                <div key={entry.name} className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                        <span className="text-muted-foreground">{entry.name === 'compromisos' ? 'Compromisos' : 'Cuotas'}</span>
+                    </div>
+                    <span className="font-medium tabular-nums">{fmt(entry.value)}</span>
+                </div>
+            ))}
+            <div className="my-1" style={{ borderTop: '0.5px solid var(--border)' }} />
+            <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-semibold tabular-nums">{fmt(total)}</span>
+            </div>
+        </div>
+    )
 }
 
 const currentYear = new Date().getFullYear()
@@ -244,6 +292,7 @@ export default function ProjectionPage() {
     }, [mode, year, months])
 
     const maxTotal = Math.max(...projection.map((p) => p.totalARS), 1)
+    const isMultiYear = new Set(projection.map((p) => p.month.split('-')[0])).size > 1
 
     if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
 
@@ -263,10 +312,53 @@ export default function ProjectionPage() {
 
             {loading ? (
                 <div className="space-y-2">
+                    <Skeleton className="h-44 rounded-xl" />
                     {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
                 </div>
             ) : (
                 <>
+                    {/* Gráfico de proyección */}
+                    <div className="rounded-xl p-4"
+                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">
+                            Gastos proyectados
+                        </p>
+                        <div className="[&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none [&_*:focus]:outline-none">
+                        <ResponsiveContainer width="100%" height={160}>
+                            <BarChart
+                                data={projection.map((p) => ({
+                                    label: formatMonthCompact(p.month, isMultiYear),
+                                    compromisos: p.totalCommitmentsARS,
+                                    cuotas: p.totalInstallmentsARS,
+                                    isPast: p.isPast,
+                                }))}
+                                barCategoryGap="30%"
+                                margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+                            >
+                                <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
+                                <XAxis dataKey="label" axisLine={false} tickLine={false}
+                                       tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                                <YAxis axisLine={false} tickLine={false} width={56}
+                                       tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+                                       tickFormatter={fmtCompact} />
+                                <Tooltip content={<ProjectionTooltip />} cursor={{ fill: 'var(--muted)', opacity: 0.3 }} />
+                                <Bar dataKey="compromisos" stackId="a" fill="var(--sky)" radius={[0, 0, 0, 0]} opacity={0.9} />
+                                <Bar dataKey="cuotas" stackId="a" fill="#F59E0B" radius={[3, 3, 0, 0]} opacity={0.85} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                        </div>
+                        <div className="flex items-center gap-4 mt-3">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full" style={{ background: 'var(--sky)' }} />
+                                <span className="text-xs text-muted-foreground">Compromisos</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-amber-400" />
+                                <span className="text-xs text-muted-foreground">Cuotas</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="rounded-xl overflow-hidden"
                          style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}>
                         <div className="grid grid-cols-4 gap-2 px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider"
@@ -289,7 +381,7 @@ export default function ProjectionPage() {
                                 <div className="grid grid-cols-4 gap-2 px-4 py-3 text-sm">
                   <span className="font-medium flex items-center gap-2"
                         style={{ color: row.isPast ? 'var(--muted-foreground)' : 'var(--foreground)' }}>
-                    {formatMonth(row.month)}
+                    {formatMonth(row.month, isMultiYear)}
                       {row.isCurrentMonth && (
                           <span className="text-xs px-1.5 py-0.5 rounded"
                                 style={{ background: 'var(--sky-light)', color: 'var(--sky-dark)' }}>

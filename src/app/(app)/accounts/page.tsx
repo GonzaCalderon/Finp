@@ -21,7 +21,7 @@ import { AccountDialog } from '@/components/shared/AccountDialog'
 import { AccountDetailSheet } from '@/components/shared/AccountDetailSheet'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import { CreditCard } from 'lucide-react'
+import { CreditCard, Pencil, EyeOff } from 'lucide-react'
 import type { AccountFormData } from '@/lib/validations'
 import type { IAccount } from '@/types'
 import {useHideAmounts} from "@/contexts/HideAmountsContext";
@@ -124,71 +124,134 @@ export default function AccountsPage() {
                     />
                 </div>
             ) : (
-                <motion.div
-                    className="grid gap-4 sm:grid-cols-2"
-                    variants={staggerContainer}
-                    initial="initial"
-                    animate="animate"
-                >
-                    {accounts.map((account) => {
-                        const acc = account as AccountWithColor
-                        return (
-                            <motion.div
-                                key={acc._id.toString()}
-                                variants={staggerItem}
-                                className="rounded-xl cursor-pointer"
-                                style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                                whileHover={{ borderColor: 'var(--sky)', transition: { duration: 0.15 } }}
-                                onClick={() => handleCardClick(acc)}
-                            >
-                                <div className="p-4 space-y-3">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2">
-                                            {acc.color && (
-                                                <div className="w-3 h-3 rounded-full shrink-0"
-                                                     style={{ backgroundColor: acc.color }} />
-                                            )}
-                                            <span className="text-base font-medium">{acc.name}</span>
-                                        </div>
-                                        <span className="text-xs px-1.5 py-0.5 rounded w-fit"
-                                              style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}>
-                      {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
-                    </span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-muted-foreground">{acc.currency}</span>
-                                        {acc.institution && (
-                                            <span className="text-muted-foreground truncate max-w-[120px]">{acc.institution}</span>
+                <>
+                    {/* Mobile: lista compacta */}
+                    <motion.div
+                        className="sm:hidden rounded-xl overflow-hidden"
+                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                    >
+                        {accounts.map((account, index) => {
+                            const acc = account as AccountWithColor
+                            const balance = acc.balance
+                            const formattedBalance = balance !== undefined
+                                ? (hidden ? '••••' : new Intl.NumberFormat('es-AR', {
+                                    style: 'currency',
+                                    currency: acc.currency,
+                                    maximumFractionDigits: 0,
+                                }).format(balance))
+                                : null
+
+                            return (
+                                <motion.div
+                                    key={acc._id.toString()}
+                                    variants={staggerItem}
+                                    className="flex items-center justify-between px-4 py-3 cursor-pointer"
+                                    style={index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
+                                    onClick={() => handleCardClick(acc)}
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        {acc.color && (
+                                            <div className="w-2.5 h-2.5 rounded-full shrink-0"
+                                                 style={{ backgroundColor: acc.color }} />
                                         )}
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium truncate">{acc.name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
+                                            </p>
+                                        </div>
                                     </div>
-                                    {acc.balance !== undefined && (
-                                        <p className="text-lg font-semibold tracking-tight"
-                                           style={{ color: acc.balance < 0 ? 'var(--destructive)' : 'var(--foreground)' }}>
-                                            {hidden ? '••••' : new Intl.NumberFormat('es-AR', {
-                                                style: 'currency',
-                                                currency: acc.currency,
-                                                maximumFractionDigits: 0,
-                                            }).format(acc.balance)}
-                                        </p>
-                                    )}
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" className="h-7 text-xs"
-                                                onClick={(e) => handleEdit(acc, e)}>
-                                            Editar
+                                    <div className="flex items-center gap-1 shrink-0 ml-3">
+                                        {formattedBalance && (
+                                            <span
+                                                className="text-sm font-semibold tabular-nums mr-1"
+                                                style={{ color: balance !== undefined && balance < 0 ? 'var(--destructive)' : 'var(--foreground)' }}
+                                            >
+                                                {formattedBalance}
+                                            </span>
+                                        )}
+                                        <Button variant="ghost" size="icon-sm" onClick={(e) => handleEdit(acc, e)} aria-label="Editar">
+                                            <Pencil />
                                         </Button>
-                                        <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    setDeleteId(acc._id.toString())
-                                                }}>
-                                            Desactivar
+                                        <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); setDeleteId(acc._id.toString()) }} aria-label="Desactivar">
+                                            <EyeOff />
                                         </Button>
                                     </div>
-                                </div>
-                            </motion.div>
-                        )
-                    })}
-                </motion.div>
+                                </motion.div>
+                            )
+                        })}
+                    </motion.div>
+
+                    {/* Desktop: grid de cards */}
+                    <motion.div
+                        className="hidden sm:grid gap-4 sm:grid-cols-2"
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                    >
+                        {accounts.map((account) => {
+                            const acc = account as AccountWithColor
+                            return (
+                                <motion.div
+                                    key={acc._id.toString()}
+                                    variants={staggerItem}
+                                    className="rounded-xl cursor-pointer"
+                                    style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                                    whileHover={{ borderColor: 'var(--sky)', transition: { duration: 0.15 } }}
+                                    onClick={() => handleCardClick(acc)}
+                                >
+                                    <div className="p-4 space-y-3">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2">
+                                                {acc.color && (
+                                                    <div className="w-3 h-3 rounded-full shrink-0"
+                                                         style={{ backgroundColor: acc.color }} />
+                                                )}
+                                                <span className="text-base font-medium">{acc.name}</span>
+                                            </div>
+                                            <span className="text-xs px-1.5 py-0.5 rounded w-fit"
+                                                  style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}>
+                                                {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-muted-foreground">{acc.currency}</span>
+                                            {acc.institution && (
+                                                <span className="text-muted-foreground truncate max-w-[120px]">{acc.institution}</span>
+                                            )}
+                                        </div>
+                                        {acc.balance !== undefined && (
+                                            <p className="text-lg font-semibold tracking-tight"
+                                               style={{ color: acc.balance < 0 ? 'var(--destructive)' : 'var(--foreground)' }}>
+                                                {hidden ? '••••' : new Intl.NumberFormat('es-AR', {
+                                                    style: 'currency',
+                                                    currency: acc.currency,
+                                                    maximumFractionDigits: 0,
+                                                }).format(acc.balance)}
+                                            </p>
+                                        )}
+                                        <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" className="h-7 text-xs"
+                                                    onClick={(e) => handleEdit(acc, e)}>
+                                                Editar
+                                            </Button>
+                                            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setDeleteId(acc._id.toString())
+                                                    }}>
+                                                Desactivar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )
+                        })}
+                    </motion.div>
+                </>
             )}
 
             <AccountDialog

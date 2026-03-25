@@ -17,6 +17,7 @@ const ROUTE_LABELS: Record<string, string> = {
     categories: 'Categorías',
     commitments: 'Compromisos',
     projection: 'Proyección',
+    settings: 'Configuración',
 }
 
 export function AppBreadcrumb() {

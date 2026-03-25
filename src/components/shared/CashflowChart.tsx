@@ -151,6 +151,7 @@ export function CashflowChart() {
             {loading ? (
                 <Skeleton className="h-52 w-full rounded-lg" />
             ) : (
+                <div className="[&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none [&_*:focus]:outline-none">
                 <ResponsiveContainer width="100%" height={200}>
                     <BarChart
                         data={data}
@@ -199,6 +200,7 @@ export function CashflowChart() {
                         />
                     </BarChart>
                 </ResponsiveContainer>
+                </div>
             )}
         </div>
     )
