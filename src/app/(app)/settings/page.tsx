@@ -14,12 +14,6 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
-    Tabs,
-    TabsList,
-    TabsTrigger,
-    TabsContent,
-} from '@/components/ui/tabs'
-import {
     Dialog,
     DialogContent,
     DialogHeader,
@@ -983,30 +977,39 @@ export default function SettingsPage() {
     ]
 
     return (
-        <motion.div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6" {...fadeIn}>
+        <motion.div className="p-4 md:p-6 max-w-2xl mx-auto space-y-6" {...fadeIn}>
             <h1 className="text-xl font-semibold tracking-tight">Configuración</h1>
 
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
-                <TabsList className="w-full sm:w-auto">
-                    {tabs.map(({ key, label }) => (
-                        <TabsTrigger key={key} value={key} className="flex-1 sm:flex-none">
-                            {label}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
+            {/* Tab nav */}
+            <div
+                className="flex gap-0"
+                style={{ borderBottom: '0.5px solid var(--border)' }}
+            >
+                {tabs.map(({ key, label }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => setActiveTab(key)}
+                        className="px-4 py-2 text-sm font-medium transition-colors"
+                        style={{
+                            color: activeTab === key ? 'var(--sky)' : 'var(--muted-foreground)',
+                            borderBottom: activeTab === key
+                                ? '2px solid var(--sky)'
+                                : '2px solid transparent',
+                            marginBottom: '-0.5px',
+                        }}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
 
-                <TabsContent value="cuenta" className="mt-4">
-                    <AccountSection />
-                </TabsContent>
-
-                <TabsContent value="preferencias" className="mt-4">
-                    <PreferencesSection />
-                </TabsContent>
-
-                <TabsContent value="categorias" className="mt-4">
-                    <CategoriesSection />
-                </TabsContent>
-            </Tabs>
+            {/* Content */}
+            <div>
+                {activeTab === 'cuenta' && <AccountSection />}
+                {activeTab === 'preferencias' && <PreferencesSection />}
+                {activeTab === 'categorias' && <CategoriesSection />}
+            </div>
         </motion.div>
     )
 }
