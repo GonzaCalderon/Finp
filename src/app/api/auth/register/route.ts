@@ -6,11 +6,26 @@ import { DEFAULT_CATEGORIES } from '@/lib/constants/defaultCategories'
 
 export async function POST(request: Request) {
     try {
-        const { email, password, displayName } = await request.json()
+        const body = await request.json()
+        const { email, password, displayName } = body as {
+            email?: string
+            password?: string
+            displayName?: string
+        }
 
         if (!email || !password || !displayName) {
             return NextResponse.json(
                 { error: 'Todos los campos son requeridos' },
+                { status: 400 }
+            )
+        }
+
+        const trimmedName = displayName.trim()
+        const normalizedEmail = email.toLowerCase().trim()
+
+        if (trimmedName.length < 2 || trimmedName.length > 60) {
+            return NextResponse.json(
+                { error: 'El nombre debe tener entre 2 y 60 caracteres' },
                 { status: 400 }
             )
         }
@@ -22,9 +37,23 @@ export async function POST(request: Request) {
             )
         }
 
+        if (!/[a-zA-Z]/.test(password)) {
+            return NextResponse.json(
+                { error: 'La contraseña debe contener al menos una letra' },
+                { status: 400 }
+            )
+        }
+
+        if (!/[0-9]/.test(password)) {
+            return NextResponse.json(
+                { error: 'La contraseña debe contener al menos un número' },
+                { status: 400 }
+            )
+        }
+
         await connectDB()
 
-        const existingUser = await User.findOne({ email: email.toLowerCase() })
+        const existingUser = await User.findOne({ email: normalizedEmail })
 
         if (existingUser) {
             return NextResponse.json(
@@ -36,9 +65,9 @@ export async function POST(request: Request) {
         const passwordHash = await bcrypt.hash(password, 12)
 
         const user = await User.create({
-            email: email.toLowerCase(),
+            email: normalizedEmail,
             passwordHash,
-            displayName,
+            displayName: trimmedName,
             baseCurrency: 'ARS',
             timezone: 'America/Argentina/Buenos_Aires',
         })
