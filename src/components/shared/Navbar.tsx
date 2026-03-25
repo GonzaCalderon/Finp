@@ -282,6 +282,12 @@ function MobileBottomBar() {
                                     {hidden ? 'Mostrar montos' : 'Ocultar montos'}
                                 </button>
 
+                                <ThemeToggle
+                                    className="flex items-center gap-4 px-4 py-3 rounded-xl text-base w-full transition-colors hover:bg-white/5"
+                                    iconSize={18}
+                                    style={{ color: 'rgba(255,255,255,0.8)' }}
+                                />
+
                                 <button
                                     type="button"
                                     onClick={() => signOut({ callbackUrl: '/login' })}
