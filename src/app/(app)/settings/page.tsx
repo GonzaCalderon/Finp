@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -962,7 +962,7 @@ function CategoriesSection() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
+function SettingsContent() {
     const searchParams = useSearchParams()
     const [activeTab, setActiveTab] = useState<TabKey>('cuenta')
 
@@ -1022,5 +1022,13 @@ export default function SettingsPage() {
                 </motion.div>
             </AnimatePresence>
         </motion.div>
+    )
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense>
+            <SettingsContent />
+        </Suspense>
     )
 }
