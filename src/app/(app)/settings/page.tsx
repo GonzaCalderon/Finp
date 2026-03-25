@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
 import { motion } from 'framer-motion'
 import { useCategories } from '@/hooks/useCategories'
@@ -340,8 +339,11 @@ function DeleteCategoryDialog({
 // ─── Section: Cuenta ──────────────────────────────────────────────────────────
 
 function AccountSection() {
-    const { data: session, update: updateSession } = useSession()
     const { success, error: toastError } = useToast()
+
+    const [displayName, setDisplayName] = useState('')
+    const [email, setEmail] = useState('')
+    const [loadingUser, setLoadingUser] = useState(true)
 
     const [editingName, setEditingName] = useState(false)
     const [nameValue, setNameValue] = useState('')
@@ -353,8 +355,17 @@ function AccountSection() {
     const [confirmPassword, setConfirmPassword] = useState('')
     const [savingPassword, setSavingPassword] = useState(false)
 
-    const displayName = session?.user?.name ?? ''
-    const email = session?.user?.email ?? ''
+    useEffect(() => {
+        fetch('/api/user')
+            .then((r) => r.json())
+            .then((data: { user?: { displayName?: string; email?: string } }) => {
+                setDisplayName(data.user?.displayName ?? '')
+                setEmail(data.user?.email ?? '')
+            })
+            .catch(() => toastError('Error al cargar datos del usuario'))
+            .finally(() => setLoadingUser(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     const handleEditName = () => {
         setNameValue(displayName)
@@ -377,7 +388,7 @@ function AccountSection() {
             })
             const json = await res.json() as { error?: string }
             if (!res.ok) throw new Error(json.error ?? 'Error al actualizar nombre')
-            await updateSession({ name: nameValue.trim() })
+            setDisplayName(nameValue.trim())
             success('Nombre actualizado correctamente')
             setEditingName(false)
         } catch (err) {
@@ -462,6 +473,8 @@ function AccountSection() {
                                 className="h-7 text-sm max-w-xs"
                                 autoFocus
                             />
+                        ) : loadingUser ? (
+                            <Skeleton className="h-4 w-32" />
                         ) : (
                             <p className="text-sm font-medium">{displayName || '—'}</p>
                         )}
@@ -488,7 +501,10 @@ function AccountSection() {
                 <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex-1 min-w-0">
                         <p className="text-xs text-muted-foreground mb-1">Email</p>
-                        <p className="text-sm font-medium text-muted-foreground">{email || '—'}</p>
+                        {loadingUser
+                            ? <Skeleton className="h-4 w-44" />
+                            : <p className="text-sm font-medium text-muted-foreground">{email || '—'}</p>
+                        }
                     </div>
                     <span
                         className="text-xs px-2 py-0.5 rounded shrink-0"
