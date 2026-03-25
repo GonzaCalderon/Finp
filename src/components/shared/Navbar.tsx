@@ -68,7 +68,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                     className="text-xl font-semibold tracking-tight"
                     style={{ color: 'var(--sidebar-foreground)' }}
                 >
-                    fin <span style={{ color: 'var(--sky)' }}>p</span>
+                    Fin<span style={{ color: 'var(--sky)' }}>p</span>
                 </div>
             </div>
 
@@ -246,7 +246,7 @@ function MobileBottomBar() {
                                 className="mb-3 text-lg font-semibold"
                                 style={{ color: 'var(--sidebar-foreground)' }}
                             >
-                                fin <span style={{ color: 'var(--sky)' }}>p</span>
+                                Fin<span style={{ color: 'var(--sky)' }}>p</span>
                             </div>
 
                             <div className="space-y-1">
