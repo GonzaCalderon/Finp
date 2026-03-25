@@ -995,16 +995,20 @@ export default function SettingsPage() {
                         key={key}
                         type="button"
                         onClick={() => setActiveTab(key)}
-                        className="px-4 py-2 text-sm font-medium transition-colors"
+                        className="relative px-4 py-2 text-sm font-medium transition-colors"
                         style={{
                             color: activeTab === key ? 'var(--sky)' : 'var(--muted-foreground)',
-                            borderBottom: activeTab === key
-                                ? '2px solid var(--sky)'
-                                : '2px solid transparent',
-                            marginBottom: '-0.5px',
                         }}
                     >
                         {label}
+                        {activeTab === key && (
+                            <motion.div
+                                layoutId="tab-indicator"
+                                className="absolute bottom-0 left-0 right-0 h-0.5"
+                                style={{ background: 'var(--sky)', marginBottom: '-0.5px' }}
+                                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                            />
+                        )}
                     </button>
                 ))}
             </div>
