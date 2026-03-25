@@ -102,6 +102,7 @@ function TrendBadge({ value, inverse = false }: { value: number | null; inverse?
 
     return (
         <span
+            title="vs mes anterior"
             className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-md font-medium"
             style={{
                 background: isNeutral
@@ -287,10 +288,11 @@ export default function DashboardPage() {
                         initial="initial"
                         animate="animate"
                     >
-                        <div className="px-4 py-2.5" style={{ borderBottom: '0.5px solid var(--border)' }}>
+                        <div className="px-4 py-2.5 flex items-baseline gap-2" style={{ borderBottom: '0.5px solid var(--border)' }}>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                 Mensual
                             </p>
+                            <p className="text-[10px] text-muted-foreground">vs mes anterior</p>
                         </div>
                         <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
                             <motion.div
