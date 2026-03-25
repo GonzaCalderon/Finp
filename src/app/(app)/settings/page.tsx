@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -37,7 +37,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { CategoryDialog } from '@/components/shared/CategoryDialog'
-import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { fadeIn, fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import {
     User,
     Lock,
@@ -436,9 +436,10 @@ function AccountSection() {
     }
 
     return (
-        <div className="space-y-4">
+        <motion.div className="space-y-4" variants={staggerContainer} initial="initial" animate="animate">
             {/* Datos personales */}
-            <div
+            <motion.div
+                variants={staggerItem}
                 className="rounded-xl overflow-hidden"
                 style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
             >
@@ -507,10 +508,11 @@ function AccountSection() {
                         Solo lectura
                     </span>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Seguridad */}
-            <div
+            <motion.div
+                variants={staggerItem}
                 className="rounded-xl overflow-hidden"
                 style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
             >
@@ -541,10 +543,11 @@ function AccountSection() {
                         Tus datos están protegidos con encriptación de extremo a extremo. Las contraseñas se almacenan con hash bcrypt y nunca se guardan en texto plano.
                     </p>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Sesión */}
-            <div
+            <motion.div
+                variants={staggerItem}
                 className="rounded-xl overflow-hidden"
                 style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
             >
@@ -560,7 +563,7 @@ function AccountSection() {
                         Tu sesión expira automáticamente después de 1 hora de inactividad. Si estuviste activo, se renueva cada 30 minutos.
                     </p>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Dialog: cambiar contraseña */}
             <Dialog open={passwordDialogOpen} onOpenChange={handlePasswordDialogClose}>
@@ -612,7 +615,7 @@ function AccountSection() {
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+        </motion.div>
     )
 }
 
@@ -654,9 +657,10 @@ function PreferencesSection() {
     ]
 
     return (
-        <div className="space-y-4">
+        <motion.div className="space-y-4" variants={staggerContainer} initial="initial" animate="animate">
             {/* Apariencia */}
-            <div
+            <motion.div
+                variants={staggerItem}
                 className="rounded-xl overflow-hidden"
                 style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
             >
@@ -688,10 +692,11 @@ function PreferencesSection() {
                         })}
                     </div>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Navegación */}
-            <div
+            <motion.div
+                variants={staggerItem}
                 className="rounded-xl overflow-hidden"
                 style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
             >
@@ -749,8 +754,8 @@ function PreferencesSection() {
                         </Select>
                     </div>
                 </div>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     )
 }
 
@@ -1005,11 +1010,13 @@ export default function SettingsPage() {
             </div>
 
             {/* Content */}
-            <div>
-                {activeTab === 'cuenta' && <AccountSection />}
-                {activeTab === 'preferencias' && <PreferencesSection />}
-                {activeTab === 'categorias' && <CategoriesSection />}
-            </div>
+            <AnimatePresence mode="wait">
+                <motion.div key={activeTab} {...fadeInFast}>
+                    {activeTab === 'cuenta' && <AccountSection />}
+                    {activeTab === 'preferencias' && <PreferencesSection />}
+                    {activeTab === 'categorias' && <CategoriesSection />}
+                </motion.div>
+            </AnimatePresence>
         </motion.div>
     )
 }
