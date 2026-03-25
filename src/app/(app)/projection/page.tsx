@@ -323,6 +323,7 @@ export default function ProjectionPage() {
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">
                             Gastos proyectados
                         </p>
+                        <div className="[&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none [&_*:focus]:outline-none">
                         <ResponsiveContainer width="100%" height={160}>
                             <BarChart
                                 data={projection.map((p) => ({
@@ -345,6 +346,7 @@ export default function ProjectionPage() {
                                 <Bar dataKey="cuotas" stackId="a" fill="#F59E0B" radius={[3, 3, 0, 0]} opacity={0.85} />
                             </BarChart>
                         </ResponsiveContainer>
+                        </div>
                         <div className="flex items-center gap-4 mt-3">
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2 h-2 rounded-full" style={{ background: 'var(--sky)' }} />
