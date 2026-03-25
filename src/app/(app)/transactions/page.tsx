@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown } from 'lucide-react'
+import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2 } from 'lucide-react'
 
 import { useTransactions } from '@/hooks/useTransactions'
 import { useInstallments } from '@/hooks/useInstallments'
@@ -860,28 +860,27 @@ export default function TransactionsPage() {
                     <h1 className="text-xl font-semibold tracking-tight">Transacciones</h1>
                     {refreshing && <Spinner className="text-muted-foreground" />}
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setInstallmentDialogOpen(true)}>
+                <div className="flex items-center gap-2">
+                    <Select value={month} onValueChange={setMonth}>
+                        <SelectTrigger className="w-36 sm:w-44 h-8 text-sm">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {MONTHS.map((monthOption) => (
+                                <SelectItem key={monthOption.value} value={monthOption.value}>
+                                    {monthOption.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => setInstallmentDialogOpen(true)}>
                         + Cuotas
                     </Button>
-                    <Button size="sm" onClick={handleNewTransaction}>
+                    <Button size="sm" className="hidden sm:flex" onClick={handleNewTransaction}>
                         + Nueva
                     </Button>
                 </div>
             </div>
-
-            <Select value={month} onValueChange={setMonth}>
-                <SelectTrigger className="w-52 h-8 text-sm">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    {MONTHS.map((monthOption) => (
-                        <SelectItem key={monthOption.value} value={monthOption.value}>
-                            {monthOption.label}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
 
             <div
                 className="rounded-xl overflow-hidden"
@@ -1054,19 +1053,37 @@ export default function TransactionsPage() {
                                                     <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]} className="shrink-0">
                                                         {TRANSACTION_TYPE_LABELS[transaction.type]}
                                                     </Badge>
-                                                    <p
-                                                        className="font-semibold tabular-nums text-sm"
-                                                        style={{
-                                                            color:
-                                                                transaction.type === 'income'
-                                                                    ? '#10B981'
-                                                                    : transaction.type === 'expense'
-                                                                        ? 'var(--destructive)'
-                                                                        : 'var(--foreground)',
-                                                        }}
-                                                    >
-                                                        {fmt(transaction.amount, transaction.currency)}
-                                                    </p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p
+                                                            className="font-semibold tabular-nums text-sm"
+                                                            style={{
+                                                                color:
+                                                                    transaction.type === 'income'
+                                                                        ? '#10B981'
+                                                                        : transaction.type === 'expense'
+                                                                            ? 'var(--destructive)'
+                                                                            : 'var(--foreground)',
+                                                            }}
+                                                        >
+                                                            {fmt(transaction.amount, transaction.currency)}
+                                                        </p>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            onClick={() => handleEdit(transaction)}
+                                                            aria-label="Editar"
+                                                        >
+                                                            <Pencil />
+                                                        </Button>
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="icon-sm"
+                                                            onClick={() => handleDelete(transaction._id.toString())}
+                                                            aria-label="Eliminar"
+                                                        >
+                                                            <Trash2 />
+                                                        </Button>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-3 min-w-0">
@@ -1166,24 +1183,6 @@ export default function TransactionsPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex sm:hidden items-center gap-2 justify-end">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-7 text-xs"
-                                                        onClick={() => handleEdit(transaction)}
-                                                    >
-                                                        Editar
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 text-xs"
-                                                        onClick={() => handleDelete(transaction._id.toString())}
-                                                    >
-                                                        Eliminar
-                                                    </Button>
-                                                </div>
                                             </div>
                                         </motion.div>
                                     )
