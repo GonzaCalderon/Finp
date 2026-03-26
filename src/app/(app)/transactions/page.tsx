@@ -1134,6 +1134,7 @@ export default function TransactionsPage() {
                                                             size="sm"
                                                             className="h-7 text-xs"
                                                             onClick={() => handleEdit(transaction)}
+                                                            data-testid="btn-editar-transaccion"
                                                         >
                                                             Editar
                                                         </Button>
@@ -1142,6 +1143,7 @@ export default function TransactionsPage() {
                                                             size="sm"
                                                             className="h-7 text-xs"
                                                             onClick={() => handleDelete(transaction._id.toString())}
+                                                            data-testid="btn-eliminar-transaccion"
                                                         >
                                                             Eliminar
                                                         </Button>
