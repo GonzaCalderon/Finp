@@ -9,7 +9,6 @@ import {
     LayoutDashboard,
     ArrowLeftRight,
     CreditCard,
-    Tag,
     Calendar,
     TrendingUp,
     LogOut,
@@ -19,6 +18,7 @@ import {
     EyeOff,
     ShoppingBag,
     X,
+    Settings,
 } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
@@ -34,9 +34,9 @@ const NAV_ITEMS = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight },
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
-    { href: '/categories', label: 'Categorías', icon: Tag },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
+    { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
 const BOTTOM_NAV_LEFT = [
@@ -51,7 +51,7 @@ const BOTTOM_NAV_RIGHT = [
 const MORE_ITEMS = [
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
-    { href: '/categories', label: 'Categorías', icon: Tag },
+    { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
@@ -68,7 +68,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                     className="text-xl font-semibold tracking-tight"
                     style={{ color: 'var(--sidebar-foreground)' }}
                 >
-                    fin <span style={{ color: 'var(--sky)' }}>p</span>
+                    Fin<span style={{ color: 'var(--sky)' }}>p</span>
                 </div>
             </div>
 
@@ -246,7 +246,7 @@ function MobileBottomBar() {
                                 className="mb-3 text-lg font-semibold"
                                 style={{ color: 'var(--sidebar-foreground)' }}
                             >
-                                fin <span style={{ color: 'var(--sky)' }}>p</span>
+                                Fin<span style={{ color: 'var(--sky)' }}>p</span>
                             </div>
 
                             <div className="space-y-1">
