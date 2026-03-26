@@ -971,6 +971,7 @@ function SettingsContent() {
     useEffect(() => {
         const tab = searchParams.get('tab') as TabKey | null
         if (tab && ['cuenta', 'preferencias', 'categorias'].includes(tab)) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setActiveTab(tab)
         }
     }, [searchParams])

@@ -35,7 +35,7 @@ function LoginForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [showPassword, setShowPassword] = useState(false)
-    const [registeredBanner, setRegisteredBanner] = useState(false)
+    const registeredBanner = searchParams.get('registered') === 'true'
     const emailRef = useRef<HTMLInputElement | null>(null)
 
     const {
@@ -49,12 +49,6 @@ function LoginForm() {
 
     // Register email ref for autofocus
     const { ref: emailFormRef, ...emailRest } = register('email')
-
-    useEffect(() => {
-        if (searchParams.get('registered') === 'true') {
-            setRegisteredBanner(true)
-        }
-    }, [searchParams])
 
     useEffect(() => {
         emailRef.current?.focus()
