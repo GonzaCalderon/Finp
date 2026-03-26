@@ -22,13 +22,24 @@ const DEFAULT_VIEW_ROUTES: Record<DefaultView, string> = {
     projection: '/projection',
 }
 
-function getDefaultRoute(): string {
+async function getDefaultRoute(): Promise<string> {
+    try {
+        const res = await fetch('/api/preferences')
+        if (res.ok) {
+            const data = await res.json() as { preferences?: { defaultView?: DefaultView } }
+            const view = data.preferences?.defaultView
+            if (view && DEFAULT_VIEW_ROUTES[view]) return DEFAULT_VIEW_ROUTES[view]
+        }
+    } catch {
+        // fall through to localStorage
+    }
     try {
         const view = localStorage.getItem('finp-default-view') as DefaultView | null
-        return (view && DEFAULT_VIEW_ROUTES[view]) ? DEFAULT_VIEW_ROUTES[view] : '/dashboard'
+        if (view && DEFAULT_VIEW_ROUTES[view]) return DEFAULT_VIEW_ROUTES[view]
     } catch {
-        return '/dashboard'
+        // ignore
     }
+    return '/dashboard'
 }
 
 function LoginForm() {
@@ -68,7 +79,7 @@ function LoginForm() {
             return
         }
 
-        router.push(getDefaultRoute())
+        router.push(await getDefaultRoute())
     }
 
     return (

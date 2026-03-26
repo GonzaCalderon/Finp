@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account, ScheduledCommitment, CommitmentApplication, InstallmentPlan } from '@/lib/models'
+import { Transaction, Account, ScheduledCommitment, CommitmentApplication, InstallmentPlan, User } from '@/lib/models'
+import { calculateAccountBalance } from '@/lib/utils/balance'
+import { parseFinancialPeriod, getCurrentFinancialPeriod } from '@/lib/utils/period'
 
 export async function GET(request: Request) {
     try {
@@ -11,21 +13,27 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url)
-        const monthParam = searchParams.get('month')
         const now = new Date()
-        const month = monthParam ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-        const [year, m] = month.split('-').map(Number)
-        const startOfMonth = new Date(year, m - 1, 1)
-        const endOfMonth = new Date(year, m, 1)
-
-        // Mes anterior
-        const prevDate = new Date(year, m - 2, 1)
-        const startOfPrevMonth = new Date(prevDate.getFullYear(), prevDate.getMonth(), 1)
-        const endOfPrevMonth = new Date(year, m - 1, 1)
 
         await connectDB()
 
         const userId = session.user.id
+
+        // Leer preferencias del usuario para respetar el inicio del mes financiero
+        const userDoc = await User.findById(userId, { 'preferences.monthStartDay': 1 })
+        const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+
+        const monthParam = searchParams.get('month')
+        const month = monthParam ?? getCurrentFinancialPeriod(now, monthStartDay)
+        const [year, m] = month.split('-').map(Number)
+
+        const { start: startOfMonth, end: endOfMonth } = parseFinancialPeriod(month, monthStartDay)
+
+        // Período anterior (mismo desplazamiento)
+        const prevM = m === 1 ? 12 : m - 1
+        const prevY = m === 1 ? year - 1 : year
+        const prevPeriod = `${prevY}-${String(prevM).padStart(2, '0')}`
+        const { start: startOfPrevMonth, end: endOfPrevMonth } = parseFinancialPeriod(prevPeriod, monthStartDay)
 
         // Transacciones del mes actual
         const transactions = await Transaction.find({
@@ -85,32 +93,11 @@ export async function GET(request: Request) {
 
         const accountsWithBalance = await Promise.all(
             accounts.map(async (account) => {
-                const received = await Transaction.aggregate([
-                    {
-                        $match: {
-                            userId: account.userId,
-                            destinationAccountId: account._id,
-                            type: { $in: ['income', 'transfer', 'credit_card_payment', 'debt_payment'] },
-                        },
-                    },
-                    { $group: { _id: null, total: { $sum: '$amount' } } },
-                ])
-
-                const sent = await Transaction.aggregate([
-                    {
-                        $match: {
-                            userId: account.userId,
-                            sourceAccountId: account._id,
-                            type: { $in: ['expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'] },
-                        },
-                    },
-                    { $group: { _id: null, total: { $sum: '$amount' } } },
-                ])
-
-                const balance =
-                    (account.initialBalance ?? 0) +
-                    (received[0]?.total ?? 0) -
-                    (sent[0]?.total ?? 0)
+                const balance = await calculateAccountBalance(
+                    account._id,
+                    account.userId,
+                    account.initialBalance ?? 0
+                )
 
                 return {
                     _id: account._id,

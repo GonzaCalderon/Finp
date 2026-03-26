@@ -35,28 +35,71 @@ function readFromStorage(): Preferences {
     }
 }
 
-export function usePreferences() {
-    const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES)
+function writeToStorage(prefs: Preferences) {
+    try {
+        localStorage.setItem(STORAGE_KEYS.defaultView, prefs.defaultView)
+        localStorage.setItem(STORAGE_KEYS.monthStartDay, String(prefs.monthStartDay))
+    } catch {
+        // ignore
+    }
+}
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { setPreferences(readFromStorage()) }, [])
+function isDefaultPreferences(prefs: Preferences): boolean {
+    return prefs.defaultView === DEFAULT_PREFERENCES.defaultView &&
+        prefs.monthStartDay === DEFAULT_PREFERENCES.monthStartDay
+}
+
+async function patchPreferences(patch: Partial<Preferences>): Promise<void> {
+    await fetch('/api/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+    })
+}
+
+export function usePreferences() {
+    // Initialize from localStorage immediately to avoid flash of defaults
+    const [preferences, setPreferences] = useState<Preferences>(() => readFromStorage())
+
+    useEffect(() => {
+        fetch('/api/preferences')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data: { preferences: Preferences } | null) => {
+                if (!data?.preferences) return
+
+                const apiPrefs = data.preferences
+
+                // If backend has default values, check whether localStorage has a
+                // non-default config that should be migrated (existing users).
+                if (isDefaultPreferences(apiPrefs)) {
+                    const localPrefs = readFromStorage()
+                    if (!isDefaultPreferences(localPrefs)) {
+                        // Migrate localStorage → backend (one-time)
+                        patchPreferences(localPrefs).catch(() => {})
+                        setPreferences(localPrefs)
+                        return
+                    }
+                }
+
+                // Backend has explicit values → backend wins
+                setPreferences(apiPrefs)
+                writeToStorage(apiPrefs) // keep localStorage in sync as cache
+            })
+            .catch(() => {
+                // API unavailable → localStorage fallback already in state
+            })
+    }, [])
 
     const setDefaultView = useCallback((view: DefaultView) => {
-        try {
-            localStorage.setItem(STORAGE_KEYS.defaultView, view)
-        } catch {
-            // ignore
-        }
         setPreferences((prev) => ({ ...prev, defaultView: view }))
+        writeToStorage({ ...readFromStorage(), defaultView: view })
+        patchPreferences({ defaultView: view }).catch(() => {})
     }, [])
 
     const setMonthStartDay = useCallback((day: MonthStartDay) => {
-        try {
-            localStorage.setItem(STORAGE_KEYS.monthStartDay, String(day))
-        } catch {
-            // ignore
-        }
         setPreferences((prev) => ({ ...prev, monthStartDay: day }))
+        writeToStorage({ ...readFromStorage(), monthStartDay: day })
+        patchPreferences({ monthStartDay: day }).catch(() => {})
     }, [])
 
     return {

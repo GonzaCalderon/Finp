@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account } from '@/lib/models'
+import { Transaction, Account, User } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
+import { calculateAccountBalance } from '@/lib/utils/balance'
+import { parseFinancialPeriod } from '@/lib/utils/period'
 
 const PAGE_LIMIT = 30
 
@@ -27,7 +29,10 @@ export async function GET(request: Request) {
         if (month) {
             const [year, m] = month.split('-').map(Number)
             if (!Number.isNaN(year) && !Number.isNaN(m)) {
-                filter.date = { $gte: new Date(year, m - 1, 1), $lt: new Date(year, m, 1) }
+                const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
+                const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+                const { start, end } = parseFinancialPeriod(month, monthStartDay)
+                filter.date = { $gte: start, $lt: end }
             }
         }
 
@@ -89,27 +94,19 @@ export async function POST(request: Request) {
 
         const data = parsed.data
 
-        // Validar saldo si la cuenta no permite negativo
+        // Validar saldo si la cuenta no permite saldo negativo
         if (data.sourceAccountId) {
             const sourceAccount = await Account.findOne({
                 _id: data.sourceAccountId,
                 userId: session.user.id,
             })
 
-            if (sourceAccount && sourceAccount.allowNegativeBalance === false) {
-                const allTransactions = await Transaction.find({
-                    userId: session.user.id,
-                    $or: [
-                        { sourceAccountId: data.sourceAccountId },
-                        { destinationAccountId: data.sourceAccountId },
-                    ],
-                })
-
-                const balance = (sourceAccount.initialBalance ?? 0) + allTransactions.reduce((sum, t) => {
-                    if (t.destinationAccountId?.toString() === data.sourceAccountId?.toString()) return sum + t.amount
-                    if (t.sourceAccountId?.toString() === data.sourceAccountId?.toString()) return sum - t.amount
-                    return sum
-                }, 0)
+            if (sourceAccount?.allowNegativeBalance === false) {
+                const balance = await calculateAccountBalance(
+                    sourceAccount._id,
+                    sourceAccount.userId,
+                    sourceAccount.initialBalance ?? 0
+                )
 
                 if (balance - data.amount < 0) {
                     return NextResponse.json(
