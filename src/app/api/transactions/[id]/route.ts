@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction } from '@/lib/models'
+import { Transaction, Account } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
+import { calculateAccountBalance } from '@/lib/utils/balance'
 
 export async function GET(
     request: Request,
@@ -67,6 +68,42 @@ export async function PATCH(
         await connectDB()
 
         const data = parsed.data
+
+        // Validar saldo si la cuenta destino del débito no permite saldo negativo
+        if (data.sourceAccountId) {
+            const [oldTransaction, sourceAccount] = await Promise.all([
+                Transaction.findOne({ _id: id, userId: session.user.id }),
+                Account.findOne({ _id: data.sourceAccountId, userId: session.user.id }),
+            ])
+
+            if (sourceAccount?.allowNegativeBalance === false) {
+                const currentBalance = await calculateAccountBalance(
+                    sourceAccount._id,
+                    sourceAccount.userId,
+                    sourceAccount.initialBalance ?? 0
+                )
+
+                // Si la transacción anterior ya debitaba de esta misma cuenta,
+                // devolver ese monto al saldo para evaluar el nuevo débito limpiamente
+                const previousDebit =
+                    oldTransaction?.sourceAccountId?.toString() === data.sourceAccountId
+                        ? oldTransaction.amount
+                        : 0
+
+                if (currentBalance + previousDebit - data.amount < 0) {
+                    return NextResponse.json(
+                        {
+                            error: `Saldo insuficiente en "${sourceAccount.name}". Disponible: ${new Intl.NumberFormat('es-AR', {
+                                style: 'currency',
+                                currency: sourceAccount.currency,
+                                maximumFractionDigits: 0,
+                            }).format(currentBalance + previousDebit)}`,
+                        },
+                        { status: 400 }
+                    )
+                }
+            }
+        }
 
         const transaction = await Transaction.findOneAndUpdate(
             {

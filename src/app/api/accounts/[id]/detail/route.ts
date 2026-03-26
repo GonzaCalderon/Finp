@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Transaction, InstallmentPlan } from '@/lib/models'
+import { calculateAccountBalance } from '@/lib/utils/balance'
 
 export async function GET(
     request: Request,
@@ -21,33 +22,12 @@ export async function GET(
             return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
         }
 
-        // Calcular saldo actual
-        const received = await Transaction.aggregate([
-            {
-                $match: {
-                    userId: account.userId,
-                    destinationAccountId: account._id,
-                    type: { $in: ['income', 'transfer', 'credit_card_payment', 'debt_payment'] },
-                },
-            },
-            { $group: { _id: null, total: { $sum: '$amount' } } },
-        ])
-
-        const sent = await Transaction.aggregate([
-            {
-                $match: {
-                    userId: account.userId,
-                    sourceAccountId: account._id,
-                    type: { $in: ['expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'] },
-                },
-            },
-            { $group: { _id: null, total: { $sum: '$amount' } } },
-        ])
-
-        const balance =
-            (account.initialBalance ?? 0) +
-            (received[0]?.total ?? 0) -
-            (sent[0]?.total ?? 0)
+        // Calcular saldo actual usando la función compartida (fuente única de verdad)
+        const balance = await calculateAccountBalance(
+            account._id,
+            account.userId,
+            account.initialBalance ?? 0
+        )
 
         // Últimas 10 transacciones de esta cuenta
         const recentTransactions = await Transaction.find({
