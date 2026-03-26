@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Lint ────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+  # ─── Build ───────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      # Variables mínimas para que Next.js compile sin DB real
+      MONGODB_URI: mongodb://localhost:27017/finp-ci-build
+      NEXTAUTH_SECRET: ci-secret-placeholder
+      NEXTAUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  # ─── Unit tests ──────────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Coverage report
+        run: npm run test:coverage
+        continue-on-error: true   # No falla el workflow si la cobertura es baja
+
+  # ─── E2E (desactivado por defecto, listo para activar) ───────────────────────
+  # Para activar los E2E en CI:
+  # 1. Descomentá este job
+  # 2. Agregá los secrets en GitHub:
+  #    - MONGODB_URI_TEST → tu DB de test (puede ser MongoDB Atlas)
+  #    - NEXTAUTH_SECRET_TEST
+  #    - TEST_USER_EMAIL
+  #    - TEST_USER_PASSWORD
+  # 3. El usuario de test debe existir en la DB antes de correr los tests
+  #
+  # e2e:
+  #   name: E2E Tests
+  #   runs-on: ubuntu-latest
+  #   needs: [lint, build]
+  #   env:
+  #     MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
+  #     NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET_TEST }}
+  #     NEXTAUTH_URL: http://localhost:3000
+  #     TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+  #     TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+  #     CI: true
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: npm
+  #
+  #     - name: Instalar dependencias
+  #       run: npm ci
+  #
+  #     - name: Instalar browsers de Playwright
+  #       run: npx playwright install chromium --with-deps
+  #
+  #     - name: Build
+  #       run: npm run build
+  #
+  #     - name: Levantar servidor y correr E2E
+  #       run: |
+  #         npm run start &
+  #         sleep 5
+  #         npm run test:e2e
+  #
+  #     - name: Upload Playwright report
+  #       uses: actions/upload-artifact@v4
+  #       if: failure()
+  #       with:
+  #         name: playwright-report
+  #         path: playwright-report/
+  #         retention-days: 7

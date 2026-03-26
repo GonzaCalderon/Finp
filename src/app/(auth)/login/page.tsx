@@ -53,7 +53,7 @@ export default function LoginPage() {
                     <CardDescription>Ingresá a tu cuenta</CardDescription>
                 </CardHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)}>
+                <form onSubmit={handleSubmit(onSubmit)} data-testid="login-form">
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>
@@ -61,6 +61,7 @@ export default function LoginPage() {
                                 id="email"
                                 type="email"
                                 placeholder="tu@email.com"
+                                data-testid="login-email"
                                 {...register('email')}
                             />
                             {errors.email && (
@@ -74,6 +75,7 @@ export default function LoginPage() {
                                 id="password"
                                 type="password"
                                 placeholder="••••••••"
+                                data-testid="login-password"
                                 {...register('password')}
                             />
                             {errors.password && (
@@ -82,12 +84,12 @@ export default function LoginPage() {
                         </div>
 
                         {errors.root && (
-                            <p className="text-sm text-destructive">{errors.root.message}</p>
+                            <p className="text-sm text-destructive" data-testid="login-error">{errors.root.message}</p>
                         )}
                     </CardContent>
 
                     <CardFooter className="flex flex-col gap-4">
-                        <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        <Button type="submit" className="w-full" disabled={isSubmitting} data-testid="login-submit">
                             {isSubmitting ? 'Ingresando...' : 'Ingresar'}
                         </Button>
                         <p className="text-center text-sm text-muted-foreground">

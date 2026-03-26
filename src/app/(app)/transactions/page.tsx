@@ -40,6 +40,8 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
 
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
+import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
 
@@ -92,19 +94,6 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => {
     return { value, label }
 })
 
-type Filters = {
-    type: string
-    categoryId: string
-    accountId: string
-}
-
-type CategoryOption = {
-    value: string
-    label: string
-    type: string
-    color?: string
-}
-
 type BasicOption = {
     value: string
     label: string
@@ -127,33 +116,6 @@ const CATEGORY_TYPE_META: Record<string, { bg: string; border: string; text: str
         border: 'rgba(239, 68, 68, 0.22)',
         text: '#DC2626',
     },
-}
-
-function isCategoryCompatible(categoryType: string, selectedType: string) {
-    if (!selectedType) return true
-    return categoryType === selectedType
-}
-
-function normalizeFilters(filters: Filters, categories: CategoryOption[]): Filters {
-    if (!filters.categoryId) return filters
-
-    const selectedCategory = categories.find((category) => category.value === filters.categoryId)
-
-    if (!selectedCategory) {
-        return {
-            ...filters,
-            categoryId: '',
-        }
-    }
-
-    if (!isCategoryCompatible(selectedCategory.type, filters.type)) {
-        return {
-            ...filters,
-            categoryId: '',
-        }
-    }
-
-    return filters
 }
 
 function BasicFilterChip({
@@ -876,7 +838,7 @@ export default function TransactionsPage() {
                     <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => setInstallmentDialogOpen(true)}>
                         + Cuotas
                     </Button>
-                    <Button size="sm" className="hidden sm:flex" onClick={handleNewTransaction}>
+                    <Button size="sm" className="hidden sm:flex" onClick={handleNewTransaction} data-testid="btn-nueva-transaccion">
                         + Nueva
                     </Button>
                 </div>
@@ -1046,6 +1008,7 @@ export default function TransactionsPage() {
                                             key={transaction._id.toString()}
                                             variants={staggerItem}
                                             className="rounded-xl"
+                                            data-testid="transaction-item"
                                             style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
                                         >
                                             <div className="py-3 px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1072,6 +1035,7 @@ export default function TransactionsPage() {
                                                             size="icon-sm"
                                                             onClick={() => handleEdit(transaction)}
                                                             aria-label="Editar"
+                                                            data-testid="btn-editar-transaccion"
                                                         >
                                                             <Pencil />
                                                         </Button>
@@ -1080,6 +1044,7 @@ export default function TransactionsPage() {
                                                             size="icon-sm"
                                                             onClick={() => handleDelete(transaction._id.toString())}
                                                             aria-label="Eliminar"
+                                                            data-testid="btn-eliminar-transaccion"
                                                         >
                                                             <Trash2 />
                                                         </Button>
