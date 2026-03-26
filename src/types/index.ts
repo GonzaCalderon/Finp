@@ -10,6 +10,11 @@ import type {
     TransactionType,
 } from '@/lib/constants'
 
+export interface UserPreferences {
+    defaultView: 'dashboard' | 'transactions' | 'accounts' | 'projection'
+    monthStartDay: number // 1-28
+}
+
 export interface IUser {
     _id: Types.ObjectId
     email: string
@@ -17,6 +22,7 @@ export interface IUser {
     displayName: string
     baseCurrency: Currency
     timezone: string
+    preferences: UserPreferences
     createdAt: Date
     updatedAt: Date
 }

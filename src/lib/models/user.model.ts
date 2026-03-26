@@ -8,6 +8,14 @@ const UserSchema = new Schema<IUser>(
         displayName: { type: String, required: true, trim: true },
         baseCurrency: { type: String, enum: ['ARS', 'USD'], required: true },
         timezone: { type: String, required: true },
+        preferences: {
+            defaultView: {
+                type: String,
+                enum: ['dashboard', 'transactions', 'accounts', 'projection'],
+                default: 'dashboard',
+            },
+            monthStartDay: { type: Number, min: 1, max: 28, default: 1 },
+        },
     },
     { timestamps: true }
 )
