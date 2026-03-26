@@ -35,7 +35,7 @@ function LoginForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [showPassword, setShowPassword] = useState(false)
-    const [registeredBanner, setRegisteredBanner] = useState(false)
+    const registeredBanner = searchParams.get('registered') === 'true'
     const emailRef = useRef<HTMLInputElement | null>(null)
 
     const {
@@ -49,12 +49,6 @@ function LoginForm() {
 
     // Register email ref for autofocus
     const { ref: emailFormRef, ...emailRest } = register('email')
-
-    useEffect(() => {
-        if (searchParams.get('registered') === 'true') {
-            setRegisteredBanner(true)
-        }
-    }, [searchParams])
 
     useEffect(() => {
         emailRef.current?.focus()
@@ -114,7 +108,7 @@ function LoginForm() {
             </AnimatePresence>
 
             {/* Form */}
-            <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <form onSubmit={handleSubmit(onSubmit)} noValidate data-testid="login-form">
                 <div className="space-y-5">
                     {/* Email */}
                     <motion.div variants={staggerItem} className="space-y-1.5">
@@ -129,6 +123,7 @@ function LoginForm() {
                             placeholder="tu@email.com"
                             className="h-11 text-base"
                             aria-invalid={!!errors.email}
+                            data-testid="login-email"
                             ref={(el) => {
                                 emailFormRef(el)
                                 emailRef.current = el
@@ -164,6 +159,7 @@ function LoginForm() {
                                 placeholder="••••••••"
                                 className="h-11 text-base pr-10"
                                 aria-invalid={!!errors.password}
+                                data-testid="login-password"
                                 {...register('password')}
                             />
                             <button
@@ -206,6 +202,7 @@ function LoginForm() {
                                 exit={{ opacity: 0, y: -4 }}
                                 transition={{ duration: 0.18 }}
                                 className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3"
+                                data-testid="login-error"
                             >
                                 <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
                                 <p className="text-sm text-destructive">
@@ -221,6 +218,7 @@ function LoginForm() {
                             type="submit"
                             className="w-full h-11 text-base font-medium"
                             disabled={isSubmitting}
+                            data-testid="login-submit"
                         >
                             {isSubmitting ? (
                                 <>

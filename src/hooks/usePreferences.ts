@@ -38,9 +38,8 @@ function readFromStorage(): Preferences {
 export function usePreferences() {
     const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES)
 
-    useEffect(() => {
-        setPreferences(readFromStorage())
-    }, [])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(() => { setPreferences(readFromStorage()) }, [])
 
     const setDefaultView = useCallback((view: DefaultView) => {
         try {

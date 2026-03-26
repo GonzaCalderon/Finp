@@ -49,6 +49,7 @@ export function CommitmentDialog({
         reset,
         formState: { errors, isSubmitting },
     } = useForm<CommitmentFormData>({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         resolver: zodResolver(commitmentSchema) as any,
         defaultValues: {
             currency: 'ARS',
