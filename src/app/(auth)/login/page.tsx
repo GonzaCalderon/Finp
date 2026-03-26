@@ -78,64 +78,24 @@ function LoginForm() {
     }
 
     return (
-        <motion.div
-            className="w-full space-y-6"
-            variants={staggerContainer}
-            initial="initial"
-            animate="animate"
-        >
-            {/* Header */}
-            <motion.div variants={staggerItem} className="space-y-1">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                    Bienvenido de vuelta
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                    Ingresá a tu cuenta para continuar
-                </p>
-            </motion.div>
+        <div className="min-h-screen flex items-center justify-center bg-background">
+            <Card className="w-full max-w-sm">
+                <CardHeader className="space-y-1 text-center">
+                    <CardTitle className="text-3xl font-bold">Finp</CardTitle>
+                    <CardDescription>Ingresá a tu cuenta</CardDescription>
+                </CardHeader>
 
-            {/* Success banner */}
-            <AnimatePresence>
-                {registeredBanner && (
-                    <motion.div
-                        key="success-banner"
-                        initial={fadeIn.initial}
-                        animate={fadeIn.animate}
-                        exit={fadeIn.exit}
-                        transition={fadeIn.transition}
-                        className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800/50 dark:bg-emerald-950/30"
-                    >
-                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                        <p className="text-sm text-emerald-700 dark:text-emerald-300">
-                            ¡Cuenta creada! Ya podés iniciar sesión.
-                        </p>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit(onSubmit)} noValidate>
-                <div className="space-y-5">
-                    {/* Email */}
-                    <motion.div variants={staggerItem} className="space-y-1.5">
-                        <Label htmlFor="email" className="text-sm font-medium">
-                            Email
-                        </Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            inputMode="email"
-                            autoComplete="email"
-                            placeholder="tu@email.com"
-                            className="h-11 text-base"
-                            aria-invalid={!!errors.email}
-                            ref={(el) => {
-                                emailFormRef(el)
-                                emailRef.current = el
-                            }}
-                            {...emailRest}
-                        />
-                        <AnimatePresence>
+                <form onSubmit={handleSubmit(onSubmit)} data-testid="login-form">
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="tu@email.com"
+                                data-testid="login-email"
+                                {...register('email')}
+                            />
                             {errors.email && (
                                 <motion.p
                                     key="email-error"
@@ -162,8 +122,7 @@ function LoginForm() {
                                 type={showPassword ? 'text' : 'password'}
                                 autoComplete="current-password"
                                 placeholder="••••••••"
-                                className="h-11 text-base pr-10"
-                                aria-invalid={!!errors.password}
+                                data-testid="login-password"
                                 {...register('password')}
                             />
                             <button
@@ -199,37 +158,13 @@ function LoginForm() {
                     {/* Root/server error */}
                     <AnimatePresence>
                         {errors.root && (
-                            <motion.div
-                                key="root-error"
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
-                                transition={{ duration: 0.18 }}
-                                className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3"
-                            >
-                                <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                                <p className="text-sm text-destructive">
-                                    {errors.root.message}
-                                </p>
-                            </motion.div>
+                            <p className="text-sm text-destructive" data-testid="login-error">{errors.root.message}</p>
                         )}
                     </AnimatePresence>
 
-                    {/* Submit */}
-                    <motion.div variants={staggerItem}>
-                        <Button
-                            type="submit"
-                            className="w-full h-11 text-base font-medium"
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="size-4 animate-spin" />
-                                    Ingresando...
-                                </>
-                            ) : (
-                                'Ingresar'
-                            )}
+                    <CardFooter className="flex flex-col gap-4">
+                        <Button type="submit" className="w-full" disabled={isSubmitting} data-testid="login-submit">
+                            {isSubmitting ? 'Ingresando...' : 'Ingresar'}
                         </Button>
                     </motion.div>
                 </div>
