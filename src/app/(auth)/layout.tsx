@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     return (
         <div className="min-h-screen bg-background flex flex-col lg:flex-row">
             {/* Left branded panel — only visible on desktop */}
-            <div className="hidden lg:flex lg:w-[45%] xl:w-[40%] flex-col justify-between bg-[--primary] dark:bg-[#0D1F2D] p-12 relative overflow-hidden">
+            <div className="hidden lg:flex lg:w-[45%] xl:w-[40%] flex-col justify-between bg-[var(--sidebar)] p-12 relative overflow-hidden">
                 {/* Background decoration */}
                 <div
                     aria-hidden
