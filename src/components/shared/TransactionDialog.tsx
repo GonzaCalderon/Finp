@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarIcon, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
@@ -33,6 +33,7 @@ import type { ITransaction, IAccount, ICategory, ITransactionRule } from '@/type
 import { Spinner } from '@/components/shared/Spinner'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { evaluateRules } from '@/lib/utils/rules'
+import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 
 interface TransactionDialogProps {
     open: boolean
@@ -71,7 +72,7 @@ export function TransactionDialog({
         setValue,
         watch,
         reset,
-        formState: { errors, isSubmitting },
+        formState: { errors, isSubmitting, submitCount },
     } = useForm<TransactionFormInput, unknown, TransactionFormData>({
         resolver: zodResolver(transactionSchema),
         defaultValues: {
@@ -92,6 +93,9 @@ export function TransactionDialog({
     // Tracks whether the user manually picked a category (overrides rule suggestion)
     const [categoryManuallySet, setCategoryManuallySet] = useState(false)
     const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
+
+    const scrollRef = useRef<HTMLDivElement>(null)
+    useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const watchedValues = watch()
 
@@ -286,7 +290,8 @@ export function TransactionDialog({
                     onSubmit={handleSubmit(handleFormSubmit)}
                     className="flex max-h-[85vh] flex-col"
                 >
-                    <div className="overflow-y-auto px-5 py-4 space-y-5">
+                    <div ref={scrollRef} className="overflow-y-auto px-5 py-4 space-y-5">
+                        {/* Tipo */}
                         <div className="space-y-2">
                             <Label>Tipo</Label>
                             <div className="grid grid-cols-2 gap-2">
@@ -343,23 +348,24 @@ export function TransactionDialog({
                             ) : null}
                         </div>
 
-                        <FormattedAmountInput
-                            id="amount"
-                            label="Monto"
-                            value={amount}
-                            currency={currency}
-                            autoFocus
-                            error={errors.amount?.message}
-                            onValueChangeAction={(nextAmount) =>
-                                setValue('amount', nextAmount, {
-                                    shouldValidate: true,
-                                    shouldDirty: true,
-                                })
-                            }
-                        />
-
-                        {/* Moneda + Descripción en la misma fila */}
-                        <div className="grid grid-cols-3 gap-3">
+                        {/* Monto + Moneda en la misma fila */}
+                        <div className="grid grid-cols-3 gap-3 items-start">
+                            <div className="col-span-2">
+                                <FormattedAmountInput
+                                    id="amount"
+                                    label="Monto"
+                                    value={amount}
+                                    currency={currency}
+                                    autoFocus
+                                    error={errors.amount?.message}
+                                    onValueChangeAction={(nextAmount) =>
+                                        setValue('amount', nextAmount, {
+                                            shouldValidate: true,
+                                            shouldDirty: true,
+                                        })
+                                    }
+                                />
+                            </div>
                             <div className="space-y-2">
                                 <Label>Moneda</Label>
                                 <Select
@@ -384,36 +390,104 @@ export function TransactionDialog({
                                     <p className="text-sm text-destructive">{errors.currency.message}</p>
                                 ) : null}
                             </div>
-
-                            <div className="col-span-2 space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="description">Descripción</Label>
-                                    {isQuickFlow && !transaction && (
-                                        <span
-                                            className="text-xs"
-                                            style={{ color: 'var(--muted-foreground)' }}
-                                        >
-                                            Dispara reglas
-                                        </span>
-                                    )}
-                                </div>
-                                <Input
-                                    id="description"
-                                    value={description}
-                                    onChange={(e) =>
-                                        setValue('description', e.target.value, {
-                                            shouldValidate: true,
-                                            shouldDirty: true,
-                                        })
-                                    }
-                                    placeholder="Ej: Compra en kiosco"
-                                />
-                                {errors.description ? (
-                                    <p className="text-sm text-destructive">{errors.description.message}</p>
-                                ) : null}
-                            </div>
                         </div>
 
+                        {/* Descripción — full width */}
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Descripción</Label>
+                            <Input
+                                id="description"
+                                value={description}
+                                onChange={(e) =>
+                                    setValue('description', e.target.value, {
+                                        shouldValidate: true,
+                                        shouldDirty: true,
+                                    })
+                                }
+                                placeholder="Ej: Compra en kiosco"
+                            />
+                            {errors.description ? (
+                                <p className="text-sm text-destructive">{errors.description.message}</p>
+                            ) : isQuickFlow && !transaction && rules.length > 0 ? (
+                                <p
+                                    className="flex items-center gap-1.5 text-xs"
+                                    style={{ color: 'var(--muted-foreground)' }}
+                                >
+                                    <Wand2 size={10} className="shrink-0" />
+                                    La descripción puede disparar reglas automáticas
+                                </p>
+                            ) : null}
+                        </div>
+
+                        {/* Cuenta de origen — antes de categoría */}
+                        {showSource && (
+                            <div className="space-y-2">
+                                <Label>Cuenta de origen</Label>
+                                <Select
+                                    value={sourceAccountId}
+                                    onValueChange={(value) =>
+                                        setValue('sourceAccountId', value || undefined, {
+                                            shouldValidate: true,
+                                        })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccioná cuenta de origen" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {suggestedAccounts.map((account) => (
+                                            <SelectItem
+                                                key={account._id.toString()}
+                                                value={account._id.toString()}
+                                            >
+                                                {account.name} · {account.currency}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.sourceAccountId ? (
+                                    <p className="text-sm text-destructive">
+                                        {errors.sourceAccountId.message}
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
+
+                        {/* Cuenta destino (ingresos) — antes de categoría */}
+                        {showDestination && type === 'income' && (
+                            <div className="space-y-2">
+                                <Label>Cuenta destino</Label>
+                                <Select
+                                    value={destinationAccountId}
+                                    onValueChange={(value) =>
+                                        setValue('destinationAccountId', value || undefined, {
+                                            shouldValidate: true,
+                                        })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccioná cuenta destino" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {accounts.map((account) => (
+                                            <SelectItem
+                                                key={account._id.toString()}
+                                                value={account._id.toString()}
+                                            >
+                                                {account.name} · {account.currency}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.destinationAccountId ? (
+                                    <p className="text-sm text-destructive">
+                                        {errors.destinationAccountId.message}
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
+
+                        {/* Categoría */}
                         {showCategory && (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
@@ -485,40 +559,8 @@ export function TransactionDialog({
                             </div>
                         )}
 
-                        {showSource && (
-                            <div className="space-y-2">
-                                <Label>Cuenta origen</Label>
-                                <Select
-                                    value={sourceAccountId}
-                                    onValueChange={(value) =>
-                                        setValue('sourceAccountId', value || undefined, {
-                                            shouldValidate: true,
-                                        })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccioná cuenta origen" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {suggestedAccounts.map((account) => (
-                                            <SelectItem
-                                                key={account._id.toString()}
-                                                value={account._id.toString()}
-                                            >
-                                                {account.name} · {account.currency}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.sourceAccountId ? (
-                                    <p className="text-sm text-destructive">
-                                        {errors.sourceAccountId.message}
-                                    </p>
-                                ) : null}
-                            </div>
-                        )}
-
-                        {showDestination && (
+                        {/* Cuenta destino (transferencias y otros) */}
+                        {showDestination && type !== 'income' && (
                             <div className="space-y-2">
                                 <Label>Cuenta destino</Label>
                                 <Select

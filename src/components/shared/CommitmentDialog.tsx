@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ import { CalendarIcon } from 'lucide-react'
 import { commitmentSchema, type CommitmentFormData } from '@/lib/validations'
 import { Spinner } from '@/components/shared/Spinner'
 import type { IScheduledCommitment, ICategory } from '@/types'
+import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 
 interface CommitmentDialogProps {
     open: boolean
@@ -47,7 +48,7 @@ export function CommitmentDialog({
         setValue,
         watch,
         reset,
-        formState: { errors, isSubmitting },
+        formState: { errors, isSubmitting, submitCount },
     } = useForm<CommitmentFormData>({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         resolver: zodResolver(commitmentSchema) as any,
@@ -58,6 +59,9 @@ export function CommitmentDialog({
             startDate: new Date(),
         },
     })
+
+    const scrollRef = useRef<HTMLFormElement>(null)
+    useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const expenseCategories = categories.filter((c) => c.type === 'expense')
     const recurrence = watch('recurrence')
@@ -103,7 +107,7 @@ export function CommitmentDialog({
                     <DialogTitle>{commitment ? 'Editar compromiso' : 'Nuevo compromiso'}</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <form ref={scrollRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="description">Descripción</Label>
                         <Input id="description" placeholder="Ej: Alquiler" autoFocus {...register('description')} />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,7 @@ import { ColorPicker } from '@/components/shared/ColorPicker'
 import {accountSchema, type AccountFormData, AccountFormInput} from '@/lib/validations'
 import type { IAccount } from '@/types'
 import { Spinner } from '@/components/shared/Spinner'
+import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 
 interface AccountDialogProps {
     open: boolean
@@ -38,7 +39,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
         setValue,
         watch,
         reset,
-        formState: { errors, isSubmitting },
+        formState: { errors, isSubmitting, submitCount },
     } = useForm<AccountFormInput>({
         resolver: zodResolver(accountSchema),
         defaultValues: {
@@ -49,6 +50,9 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
             allowNegativeBalance: true,
         },
     })
+
+    const scrollRef = useRef<HTMLFormElement>(null)
+    useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const type = watch('type')
     const color = watch('color') ?? '#6366f1'
@@ -84,7 +88,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                     <DialogTitle>{account ? 'Editar cuenta' : 'Nueva cuenta'}</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit((data) => onSubmit(data as AccountFormData))} className="space-y-4">
+                <form ref={scrollRef} onSubmit={handleSubmit((data) => onSubmit(data as AccountFormData))} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Nombre</Label>
                         <Input id="name" autoFocus placeholder="Ej: Cuenta corriente" {...register('name')} />
