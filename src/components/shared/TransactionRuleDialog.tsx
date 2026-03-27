@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -24,13 +24,14 @@ import {
 import { Spinner } from '@/components/shared/Spinner'
 import type { ICategory, ITransactionRule } from '@/types'
 import { RULE_APPLIES_TO, RULE_CONDITIONS, RULE_FIELDS } from '@/lib/constants'
+import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
 const ruleFormSchema = z.object({
     name: z.string().min(1, 'El nombre es requerido').max(100),
-    isActive: z.boolean().default(true),
-    priority: z.coerce.number().int().min(0).max(9999).default(0),
+    isActive: z.boolean(),
+    priority: z.number().int().min(0, 'La prioridad mínima es 0').max(9999, 'La prioridad máxima es 9999'),
     appliesTo: z.enum([RULE_APPLIES_TO.EXPENSE, RULE_APPLIES_TO.INCOME, RULE_APPLIES_TO.ANY]),
     field: z.enum([RULE_FIELDS.DESCRIPTION, RULE_FIELDS.MERCHANT]),
     condition: z.enum([RULE_CONDITIONS.CONTAINS, RULE_CONDITIONS.EQUALS, RULE_CONDITIONS.STARTS_WITH]),
@@ -84,7 +85,7 @@ export function TransactionRuleDialog({
         setValue,
         watch,
         reset,
-        formState: { errors, isSubmitting },
+        formState: { errors, isSubmitting, submitCount },
     } = useForm<RuleFormValues>({
         resolver: zodResolver(ruleFormSchema),
         defaultValues: {
@@ -101,11 +102,15 @@ export function TransactionRuleDialog({
         },
     })
 
+    const scrollRef = useRef<HTMLDivElement>(null)
+    useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
+
     const watchedAppliesTo = watch('appliesTo')
     const watchedField = watch('field')
     const watchedCondition = watch('condition')
     const watchedCategoryId = watch('categoryId')
     const watchedSetType = watch('setType')
+    const isActive = watch('isActive')
 
     // Filter categories based on appliesTo
     const filteredCategories = categories.filter((c) => {
@@ -161,7 +166,7 @@ export function TransactionRuleDialog({
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(handleFormSubmit)} className="flex max-h-[85vh] flex-col">
-                    <div className="overflow-y-auto px-5 py-4 space-y-5">
+                    <div ref={scrollRef} className="overflow-y-auto px-5 py-4 space-y-5">
 
                         {/* Name */}
                         <div className="space-y-2">
@@ -373,44 +378,45 @@ export function TransactionRuleDialog({
                             </div>
                         </div>
 
-                        {/* Priority + Active */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Prioridad + Estado activo */}
+                        <div
+                            className="space-y-4 rounded-xl border p-4"
+                            style={{ borderColor: 'var(--border)' }}
+                        >
+                            {/* Active toggle */}
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium">Regla activa</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {isActive
+                                            ? 'Se aplica automáticamente al crear transacciones'
+                                            : 'No se evaluará hasta que la actives'}
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={isActive}
+                                    onCheckedChange={(checked) => setValue('isActive', checked)}
+                                />
+                            </div>
+
+                            {/* Priority */}
                             <div className="space-y-2">
                                 <Label htmlFor="priority">
                                     Prioridad
-                                    <span className="ml-1 text-xs text-muted-foreground">(mayor = primero)</span>
+                                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                        (mayor número = se evalúa primero)
+                                    </span>
                                 </Label>
                                 <Input
                                     id="priority"
                                     type="number"
                                     min={0}
                                     max={9999}
-                                    {...register('priority')}
+                                    {...register('priority', { valueAsNumber: true })}
                                 />
                                 {errors.priority && (
                                     <p className="text-sm text-destructive">{errors.priority.message}</p>
                                 )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Estado</Label>
-                                <div
-                                    className="flex items-center justify-between rounded-xl border px-3 py-2.5"
-                                    style={{ borderColor: 'var(--border)' }}
-                                >
-                                    <span
-                                        className="text-sm"
-                                        style={{
-                                            color: watch('isActive') ? 'var(--foreground)' : 'var(--muted-foreground)',
-                                        }}
-                                    >
-                                        {watch('isActive') ? 'Activa' : 'Inactiva'}
-                                    </span>
-                                    <Switch
-                                        checked={watch('isActive')}
-                                        onCheckedChange={(checked) => setValue('isActive', checked)}
-                                    />
-                                </div>
                             </div>
                         </div>
                     </div>
