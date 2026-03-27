@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account, User } from '@/lib/models'
+import { Transaction, Account, User, TransactionRule } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
 import { calculateAccountBalance } from '@/lib/utils/balance'
 import { parseFinancialPeriod } from '@/lib/utils/period'
+import { evaluateRules } from '@/lib/utils/rules'
 
 const PAGE_LIMIT = 30
 
@@ -123,6 +124,37 @@ export async function POST(request: Request) {
             }
         }
 
+        // Evaluate categorization rules (only for expense/income)
+        let resolvedCategoryId = data.categoryId
+        let resolvedMerchant = data.merchant
+        let appliedRuleId: string | undefined
+        let appliedRuleNameSnapshot: string | undefined
+
+        if (data.type === 'expense' || data.type === 'income') {
+            const rules = await TransactionRule.find({
+                userId: session.user.id,
+                isActive: true,
+            }).sort({ priority: -1 })
+
+            const { matched, rule } = evaluateRules(rules, {
+                type: data.type,
+                description: data.description,
+                merchant: data.merchant,
+            })
+
+            if (matched && rule) {
+                appliedRuleId = rule._id.toString()
+                appliedRuleNameSnapshot = rule.name
+                // Apply rule actions only when user hasn't provided those values
+                if (!resolvedCategoryId && rule.categoryId) {
+                    resolvedCategoryId = rule.categoryId.toString()
+                }
+                if (!resolvedMerchant && rule.normalizeMerchant) {
+                    resolvedMerchant = rule.normalizeMerchant
+                }
+            }
+        }
+
         const transaction = await Transaction.create({
             userId: session.user.id,
             type: data.type,
@@ -130,13 +162,15 @@ export async function POST(request: Request) {
             currency: data.currency,
             date: data.date,
             description: data.description,
-            categoryId: data.categoryId,
+            categoryId: resolvedCategoryId,
             sourceAccountId: data.sourceAccountId,
             destinationAccountId: data.destinationAccountId,
             notes: data.notes,
-            merchant: data.merchant,
+            merchant: resolvedMerchant,
             status: 'confirmed',
             createdFrom: 'web',
+            appliedRuleId,
+            appliedRuleNameSnapshot,
         })
 
         const populated = await Transaction.findById(transaction._id)

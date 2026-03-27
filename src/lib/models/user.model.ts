@@ -15,6 +15,7 @@ const UserSchema = new Schema<IUser>(
                 default: 'dashboard',
             },
             monthStartDay: { type: Number, min: 1, max: 28, default: 1 },
+            defaultAccountId: { type: Schema.Types.ObjectId, ref: 'Account' },
         },
     },
     { timestamps: true }

@@ -19,6 +19,8 @@ const TransactionSchema = new Schema<ITransaction>(
         status: { type: String, enum: Object.values(TRANSACTION_STATUS) },
         installmentPlanId: { type: Schema.Types.ObjectId, ref: 'InstallmentPlan' },
         createdFrom: { type: String, enum: Object.values(CREATED_FROM), required: true, default: 'web' },
+        appliedRuleId: { type: Schema.Types.ObjectId, ref: 'TransactionRule' },
+        appliedRuleNameSnapshot: { type: String },
     },
     { timestamps: true }
 )

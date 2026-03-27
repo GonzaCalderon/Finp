@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { useTransactionRules } from '@/hooks/useTransactionRules'
+import { usePreferences } from '@/hooks/usePreferences'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -628,6 +630,8 @@ export default function TransactionsPage() {
 
     const { accounts } = useAccounts()
     const { categories } = useCategories()
+    const { rules } = useTransactionRules()
+    const { preferences } = usePreferences()
 
     const categoryOptions = useMemo<CategoryOption[]>(
         () =>
@@ -1194,6 +1198,8 @@ export default function TransactionsPage() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleTransactionSubmit}
+                rules={rules}
+                defaultAccountId={preferences.defaultAccountId}
             />
 
             <InstallmentDialog

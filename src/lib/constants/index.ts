@@ -48,6 +48,23 @@ export const CREATED_FROM = {
     SYSTEM: 'system',
 } as const
 
+export const RULE_APPLIES_TO = {
+    EXPENSE: 'expense',
+    INCOME: 'income',
+    ANY: 'any',
+} as const
+
+export const RULE_FIELDS = {
+    DESCRIPTION: 'description',
+    MERCHANT: 'merchant',
+} as const
+
+export const RULE_CONDITIONS = {
+    CONTAINS: 'contains',
+    EQUALS: 'equals',
+    STARTS_WITH: 'starts_with',
+} as const
+
 // Tipos derivados
 export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
@@ -57,3 +74,6 @@ export type RecurrenceType = typeof RECURRENCE_TYPES[keyof typeof RECURRENCE_TYP
 export type ApplyMode = typeof APPLY_MODES[keyof typeof APPLY_MODES]
 export type TransactionStatus = typeof TRANSACTION_STATUS[keyof typeof TRANSACTION_STATUS]
 export type CreatedFrom = typeof CREATED_FROM[keyof typeof CREATED_FROM]
+export type RuleAppliesTo = typeof RULE_APPLIES_TO[keyof typeof RULE_APPLIES_TO]
+export type RuleField = typeof RULE_FIELDS[keyof typeof RULE_FIELDS]
+export type RuleCondition = typeof RULE_CONDITIONS[keyof typeof RULE_CONDITIONS]

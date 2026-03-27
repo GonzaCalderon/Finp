@@ -8,16 +8,19 @@ export type MonthStartDay = number // 1-28
 interface Preferences {
     defaultView: DefaultView
     monthStartDay: MonthStartDay
+    defaultAccountId?: string
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
     defaultView: 'dashboard',
     monthStartDay: 1,
+    defaultAccountId: undefined,
 }
 
 const STORAGE_KEYS = {
     defaultView: 'finp-default-view',
     monthStartDay: 'finp-month-start-day',
+    defaultAccountId: 'finp-default-account-id',
 } as const
 
 function readFromStorage(): Preferences {
@@ -26,9 +29,11 @@ function readFromStorage(): Preferences {
         const defaultView = (localStorage.getItem(STORAGE_KEYS.defaultView) as DefaultView | null) ?? DEFAULT_PREFERENCES.defaultView
         const monthStartDayRaw = localStorage.getItem(STORAGE_KEYS.monthStartDay)
         const monthStartDay: MonthStartDay = monthStartDayRaw ? parseInt(monthStartDayRaw, 10) : DEFAULT_PREFERENCES.monthStartDay
+        const defaultAccountId = localStorage.getItem(STORAGE_KEYS.defaultAccountId) ?? undefined
         return {
             defaultView,
             monthStartDay: isNaN(monthStartDay) ? DEFAULT_PREFERENCES.monthStartDay : monthStartDay,
+            defaultAccountId: defaultAccountId || undefined,
         }
     } catch {
         return DEFAULT_PREFERENCES
@@ -39,6 +44,11 @@ function writeToStorage(prefs: Preferences) {
     try {
         localStorage.setItem(STORAGE_KEYS.defaultView, prefs.defaultView)
         localStorage.setItem(STORAGE_KEYS.monthStartDay, String(prefs.monthStartDay))
+        if (prefs.defaultAccountId) {
+            localStorage.setItem(STORAGE_KEYS.defaultAccountId, prefs.defaultAccountId)
+        } else {
+            localStorage.removeItem(STORAGE_KEYS.defaultAccountId)
+        }
     } catch {
         // ignore
     }
@@ -102,9 +112,16 @@ export function usePreferences() {
         patchPreferences({ monthStartDay: day }).catch(() => {})
     }, [])
 
+    const setDefaultAccountId = useCallback((accountId: string | undefined) => {
+        setPreferences((prev) => ({ ...prev, defaultAccountId: accountId }))
+        writeToStorage({ ...readFromStorage(), defaultAccountId: accountId })
+        patchPreferences({ defaultAccountId: accountId ?? null } as Partial<Preferences>).catch(() => {})
+    }, [])
+
     return {
         preferences,
         setDefaultView,
         setMonthStartDay,
+        setDefaultAccountId,
     }
 }

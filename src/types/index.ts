@@ -6,6 +6,9 @@ import type {
     CreatedFrom,
     Currency,
     RecurrenceType,
+    RuleAppliesTo,
+    RuleCondition,
+    RuleField,
     TransactionStatus,
     TransactionType,
 } from '@/lib/constants'
@@ -13,6 +16,7 @@ import type {
 export interface UserPreferences {
     defaultView: 'dashboard' | 'transactions' | 'accounts' | 'projection'
     monthStartDay: number // 1-28
+    defaultAccountId?: string // ObjectId as string
 }
 
 export interface IUser {
@@ -84,6 +88,26 @@ export interface ITransaction {
     status?: TransactionStatus
     installmentPlanId?: Types.ObjectId
     createdFrom: CreatedFrom
+    appliedRuleId?: Types.ObjectId
+    appliedRuleNameSnapshot?: string
+    createdAt: Date
+    updatedAt: Date
+}
+
+export interface ITransactionRule {
+    _id: Types.ObjectId
+    userId: Types.ObjectId
+    name: string
+    isActive: boolean
+    priority: number
+    appliesTo: RuleAppliesTo
+    field: RuleField
+    condition: RuleCondition
+    value: string
+    // Actions
+    categoryId?: Types.ObjectId
+    setType?: 'expense' | 'income'
+    normalizeMerchant?: string
     createdAt: Date
     updatedAt: Date
 }

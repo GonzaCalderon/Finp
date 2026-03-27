@@ -25,6 +25,7 @@ export async function GET() {
         const preferences: UserPreferences = {
             defaultView: user.preferences?.defaultView ?? 'dashboard',
             monthStartDay: user.preferences?.monthStartDay ?? 1,
+            defaultAccountId: user.preferences?.defaultAccountId?.toString(),
         }
 
         return NextResponse.json({ preferences })
@@ -60,6 +61,12 @@ export async function PATCH(request: Request) {
             update['preferences.monthStartDay'] = day
         }
 
+        if ('defaultAccountId' in body) {
+            // null or empty string clears the default account
+            update['preferences.defaultAccountId'] =
+                body.defaultAccountId ? body.defaultAccountId : null
+        }
+
         if (Object.keys(update).length === 0) {
             return NextResponse.json({ error: 'No hay campos válidos para actualizar' }, { status: 400 })
         }
@@ -79,6 +86,7 @@ export async function PATCH(request: Request) {
         const preferences: UserPreferences = {
             defaultView: user.preferences?.defaultView ?? 'dashboard',
             monthStartDay: user.preferences?.monthStartDay ?? 1,
+            defaultAccountId: user.preferences?.defaultAccountId?.toString(),
         }
 
         return NextResponse.json({ preferences })

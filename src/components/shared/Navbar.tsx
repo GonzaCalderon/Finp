@@ -19,6 +19,7 @@ import {
     ShoppingBag,
     X,
     Settings,
+    Wand2,
 } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
@@ -28,6 +29,8 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { useTransactionRules } from '@/hooks/useTransactionRules'
+import { usePreferences } from '@/hooks/usePreferences'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 
 const NAV_ITEMS = [
@@ -36,6 +39,7 @@ const NAV_ITEMS = [
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
+    { href: '/rules', label: 'Reglas', icon: Wand2 },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
@@ -51,6 +55,7 @@ const BOTTOM_NAV_RIGHT = [
 const MORE_ITEMS = [
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
+    { href: '/rules', label: 'Reglas', icon: Wand2 },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
@@ -130,6 +135,8 @@ function MobileBottomBar() {
     const { hidden, toggleHidden } = useHideAmounts()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
+    const { rules } = useTransactionRules()
+    const { preferences } = usePreferences()
     const { success, error: toastError } = useToast()
 
     useEffect(() => {
@@ -467,6 +474,8 @@ function MobileBottomBar() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleCreateTransaction}
+                rules={rules}
+                defaultAccountId={preferences.defaultAccountId}
             />
 
             <InstallmentDialog

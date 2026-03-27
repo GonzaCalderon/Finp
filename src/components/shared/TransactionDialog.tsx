@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CalendarIcon, ChevronDown, ChevronUp } from 'lucide-react'
+import { CalendarIcon, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,9 +29,10 @@ import {
     type TransactionFormInput,
     type TransactionFormData,
 } from '@/lib/validations'
-import type { ITransaction, IAccount, ICategory } from '@/types'
+import type { ITransaction, IAccount, ICategory, ITransactionRule } from '@/types'
 import { Spinner } from '@/components/shared/Spinner'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { evaluateRules } from '@/lib/utils/rules'
 
 interface TransactionDialogProps {
     open: boolean
@@ -40,6 +41,8 @@ interface TransactionDialogProps {
     accounts: IAccount[]
     categories: ICategory[]
     onSubmit: (data: TransactionFormData) => Promise<void>
+    rules?: ITransactionRule[]
+    defaultAccountId?: string
 }
 
 const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
@@ -60,6 +63,8 @@ export function TransactionDialog({
                                       accounts,
                                       categories,
                                       onSubmit,
+                                      rules = [],
+                                      defaultAccountId,
                                   }: TransactionDialogProps) {
     const {
         handleSubmit,
@@ -84,6 +89,9 @@ export function TransactionDialog({
     })
 
     const [showMoreOptions, setShowMoreOptions] = useState(false)
+    // Tracks whether the user manually picked a category (overrides rule suggestion)
+    const [categoryManuallySet, setCategoryManuallySet] = useState(false)
+    const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
 
     const watchedValues = watch()
 
@@ -169,6 +177,9 @@ export function TransactionDialog({
     useEffect(() => {
         if (!open) return
 
+        setCategoryManuallySet(false)
+        setAppliedRuleName(null)
+
         if (transaction) {
             reset({
                 type: transaction.type,
@@ -204,13 +215,13 @@ export function TransactionDialog({
             date: new Date(),
             description: '',
             categoryId: undefined,
-            sourceAccountId: undefined,
+            sourceAccountId: defaultAccountId,
             destinationAccountId: undefined,
             notes: '',
             merchant: '',
         })
         setShowMoreOptions(false)
-    }, [open, transaction, reset])
+    }, [open, transaction, reset, defaultAccountId])
 
     useEffect(() => {
         if (!showCategory) {
@@ -226,6 +237,37 @@ export function TransactionDialog({
             setValue('destinationAccountId', undefined, { shouldValidate: true })
         }
     }, [showSource, showDestination, setValue])
+
+    // Rule suggestion: evaluate rules when description or merchant changes (only for new transactions)
+    useEffect(() => {
+        if (transaction) return // don't apply rules when editing
+        if (!isQuickFlow) return // only for expense/income
+        if (categoryManuallySet) return // user overrode, respect that
+
+        const activeRules = rules.filter((r) => r.isActive)
+        if (activeRules.length === 0) return
+
+        const { matched, rule } = evaluateRules(activeRules, {
+            type,
+            description,
+            merchant,
+        })
+
+        if (matched && rule) {
+            const ruleCategoryId =
+                (rule.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
+                rule.categoryId?.toString()
+            if (ruleCategoryId) {
+                setValue('categoryId', ruleCategoryId, { shouldValidate: true })
+            }
+            if (!merchant && rule.normalizeMerchant) {
+                setValue('merchant', rule.normalizeMerchant, { shouldValidate: true })
+            }
+            setAppliedRuleName(rule.name)
+        } else {
+            setAppliedRuleName(null)
+        }
+    }, [description, merchant, type, rules, transaction, isQuickFlow, categoryManuallySet, setValue])
 
     const handleFormSubmit = async (data: TransactionFormData) => {
         await onSubmit(data)
@@ -316,38 +358,79 @@ export function TransactionDialog({
                             }
                         />
 
-                        <div className="space-y-2">
-                            <Label>Moneda</Label>
-                            <Select
-                                value={currency}
-                                onValueChange={(value) =>
-                                    setValue(
-                                        'currency',
-                                        value as TransactionFormInput['currency'],
-                                        {
+                        {/* Moneda + Descripción en la misma fila */}
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-2">
+                                <Label>Moneda</Label>
+                                <Select
+                                    value={currency}
+                                    onValueChange={(value) =>
+                                        setValue(
+                                            'currency',
+                                            value as TransactionFormInput['currency'],
+                                            { shouldValidate: true }
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Moneda" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ARS">ARS</SelectItem>
+                                        <SelectItem value="USD">USD</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {errors.currency ? (
+                                    <p className="text-sm text-destructive">{errors.currency.message}</p>
+                                ) : null}
+                            </div>
+
+                            <div className="col-span-2 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="description">Descripción</Label>
+                                    {isQuickFlow && !transaction && (
+                                        <span
+                                            className="text-xs"
+                                            style={{ color: 'var(--muted-foreground)' }}
+                                        >
+                                            Dispara reglas
+                                        </span>
+                                    )}
+                                </div>
+                                <Input
+                                    id="description"
+                                    value={description}
+                                    onChange={(e) =>
+                                        setValue('description', e.target.value, {
                                             shouldValidate: true,
-                                        }
-                                    )
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná moneda" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ARS">ARS</SelectItem>
-                                    <SelectItem value="USD">USD</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {errors.currency ? (
-                                <p className="text-sm text-destructive">
-                                    {errors.currency.message}
-                                </p>
-                            ) : null}
+                                            shouldDirty: true,
+                                        })
+                                    }
+                                    placeholder="Ej: Compra en kiosco"
+                                />
+                                {errors.description ? (
+                                    <p className="text-sm text-destructive">{errors.description.message}</p>
+                                ) : null}
+                            </div>
                         </div>
 
                         {showCategory && (
                             <div className="space-y-2">
-                                <Label>Categoría</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label>Categoría</Label>
+                                    {appliedRuleName && !transaction && (
+                                        <span
+                                            className="inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5"
+                                            style={{
+                                                background: 'rgba(56,189,248,0.10)',
+                                                color: 'var(--sky)',
+                                            }}
+                                        >
+                                            <Wand2 size={10} />
+                                            {appliedRuleName}
+                                        </span>
+                                    )}
+                                </div>
 
                                 {filteredCategories.length > 0 ? (
                                     <div className="flex flex-wrap gap-2">
@@ -357,11 +440,13 @@ export function TransactionDialog({
                                                 <button
                                                     key={category._id.toString()}
                                                     type="button"
-                                                    onClick={() =>
+                                                    onClick={() => {
                                                         setValue('categoryId', category._id.toString(), {
                                                             shouldValidate: true,
                                                         })
-                                                    }
+                                                        setCategoryManuallySet(true)
+                                                        setAppliedRuleName(null)
+                                                    }}
                                                     className="rounded-full border px-3 py-2 text-xs font-medium transition-colors"
                                                     style={{
                                                         background: selected
@@ -466,6 +551,7 @@ export function TransactionDialog({
                             </div>
                         )}
 
+                        {/* Más opciones (fecha, comercio, notas) */}
                         <div className="space-y-2">
                             <button
                                 type="button"
@@ -513,26 +599,6 @@ export function TransactionDialog({
                                         {errors.date ? (
                                             <p className="text-sm text-destructive">
                                                 {errors.date.message}
-                                            </p>
-                                        ) : null}
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="description">Descripción</Label>
-                                        <Input
-                                            id="description"
-                                            value={description}
-                                            onChange={(e) =>
-                                                setValue('description', e.target.value, {
-                                                    shouldValidate: true,
-                                                    shouldDirty: true,
-                                                })
-                                            }
-                                            placeholder="Ej: Compra en kiosco"
-                                        />
-                                        {errors.description ? (
-                                            <p className="text-sm text-destructive">
-                                                {errors.description.message}
                                             </p>
                                         ) : null}
                                     </div>

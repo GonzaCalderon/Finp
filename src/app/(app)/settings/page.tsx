@@ -632,8 +632,19 @@ const MONTH_START_DAYS = Array.from({ length: 28 }, (_, i) => i + 1)
 
 function PreferencesSection() {
     const { theme, setTheme } = useTheme()
-    const { preferences, setDefaultView, setMonthStartDay } = usePreferences()
+    const { preferences, setDefaultView, setMonthStartDay, setDefaultAccountId } = usePreferences()
     const { success } = useToast()
+
+    // Import accounts for default account selection
+    const [accounts, setAccounts] = useState<{ _id: string; name: string; currency: string; type: string }[]>([])
+    useEffect(() => {
+        fetch('/api/accounts')
+            .then((r) => r.ok ? r.json() : null)
+            .then((d: { accounts?: { _id: string; name: string; currency: string; type: string }[] } | null) => {
+                if (d?.accounts) setAccounts(d.accounts)
+            })
+            .catch(() => {})
+    }, [])
 
     const handleThemeChange = (value: string) => {
         setTheme(value)
@@ -648,6 +659,12 @@ function PreferencesSection() {
     const handleMonthStartDayChange = (value: string) => {
         setMonthStartDay(parseInt(value, 10))
         success('Día de inicio actualizado')
+    }
+
+    const handleDefaultAccountChange = (value: string) => {
+        const newValue = value === '__none__' ? undefined : value
+        setDefaultAccountId(newValue)
+        success('Cuenta predeterminada actualizada')
     }
 
     const themeOptions = [
@@ -731,7 +748,10 @@ function PreferencesSection() {
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between px-4 py-3">
+                <div
+                    className="flex items-center justify-between px-4 py-3"
+                    style={{ borderBottom: '0.5px solid var(--border)' }}
+                >
                     <div className="flex-1 min-w-0 mr-4">
                         <p className="text-sm font-medium">Inicio del mes financiero</p>
                         <p className="text-xs text-muted-foreground mt-0.5">Día de inicio para cálculos mensuales</p>
@@ -748,6 +768,31 @@ function PreferencesSection() {
                                 {MONTH_START_DAYS.map((day) => (
                                     <SelectItem key={day} value={String(day)}>
                                         Día {day}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex-1 min-w-0 mr-4">
+                        <p className="text-sm font-medium">Cuenta predeterminada</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Se preselecciona al crear transacciones</p>
+                    </div>
+                    <div className="shrink-0 w-44">
+                        <Select
+                            value={preferences.defaultAccountId ?? '__none__'}
+                            onValueChange={handleDefaultAccountChange}
+                        >
+                            <SelectTrigger className="h-8 text-sm">
+                                <SelectValue placeholder="Ninguna" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">Ninguna</SelectItem>
+                                {accounts.map((account) => (
+                                    <SelectItem key={account._id} value={account._id}>
+                                        {account.name} · {account.currency}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
