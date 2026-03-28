@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2, Upload } from 'lucide-react'
+import Link from 'next/link'
 
 import { useTransactions } from '@/hooks/useTransactions'
 import { useInstallments } from '@/hooks/useInstallments'
@@ -839,6 +840,12 @@ export default function TransactionsPage() {
                             ))}
                         </SelectContent>
                     </Select>
+                    <Button variant="outline" size="sm" className="hidden sm:flex" asChild>
+                        <Link href="/transactions/import">
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            Importar
+                        </Link>
+                    </Button>
                     <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => setInstallmentDialogOpen(true)}>
                         + Cuotas
                     </Button>

@@ -5,6 +5,9 @@ import type {
     CategoryType,
     CreatedFrom,
     Currency,
+    ImportBatchStatus,
+    ImportRowStatus,
+    ImportSourceType,
     RecurrenceType,
     RuleAppliesTo,
     RuleCondition,
@@ -90,8 +93,66 @@ export interface ITransaction {
     createdFrom: CreatedFrom
     appliedRuleId?: Types.ObjectId
     appliedRuleNameSnapshot?: string
+    importBatchId?: Types.ObjectId
+    importedAt?: Date
+    importSourceType?: ImportSourceType
     createdAt: Date
     updatedAt: Date
+}
+
+export interface ImportParsedData {
+    date?: Date
+    type?: string
+    description?: string
+    amount?: number
+    currency?: string
+    categoryId?: string
+    categoryName?: string
+    sourceAccountId?: string
+    destinationAccountId?: string
+    accountName?: string
+    paymentMethod?: string
+    cardName?: string
+    installmentCount?: number
+    installmentNumber?: number
+    notes?: string
+    ignored?: boolean
+}
+
+export interface IImportBatch {
+    _id: Types.ObjectId
+    userId: Types.ObjectId
+    fileName: string
+    sourceType: ImportSourceType
+    status: ImportBatchStatus
+    summary: {
+        total: number
+        valid: number
+        invalid: number
+        incomplete: number
+        possibleDuplicate: number
+        ignored: number
+        imported: number
+    }
+    createdAt: Date
+    confirmedAt?: Date
+    revertedAt?: Date
+    updatedAt: Date
+}
+
+export interface IImportRow {
+    _id: Types.ObjectId
+    batchId: Types.ObjectId
+    rowNumber: number
+    rawData: Record<string, string>
+    parsedData: ImportParsedData
+    reviewedData?: ImportParsedData
+    status: ImportRowStatus
+    warnings: string[]
+    errors: string[]
+    possibleDuplicateId?: Types.ObjectId
+    createdTransactionId?: Types.ObjectId
+    ignored: boolean
 }
 
 export interface ITransactionRule {

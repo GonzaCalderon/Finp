@@ -17,6 +17,7 @@ import {
     Eye,
     EyeOff,
     ShoppingBag,
+    Upload,
     X,
     Settings,
     Wand2,
@@ -408,6 +409,29 @@ function MobileBottomBar() {
                                             </p>
                                         </div>
                                     </button>
+
+                                    <Link
+                                        href="/transactions/import"
+                                        onClick={closeActionSheet}
+                                        className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left"
+                                        style={{ borderColor: 'var(--border)' }}
+                                    >
+                                        <div
+                                            className="flex h-10 w-10 items-center justify-center rounded-xl"
+                                            style={{
+                                                background: 'rgba(14, 165, 233, 0.14)',
+                                                color: 'var(--sky)',
+                                            }}
+                                        >
+                                            <Upload size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium">Importar desde Excel</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Subir planilla de movimientos
+                                            </p>
+                                        </div>
+                                    </Link>
                                 </div>
                             </div>
                         </motion.div>

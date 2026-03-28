@@ -65,6 +65,25 @@ export const RULE_CONDITIONS = {
     STARTS_WITH: 'starts_with',
 } as const
 
+export const IMPORT_SOURCE_TYPES = {
+    XLSX_TEMPLATE: 'xlsx_template',
+} as const
+
+export const IMPORT_BATCH_STATUS = {
+    DRAFT: 'draft',
+    CONFIRMED: 'confirmed',
+    REVERTED: 'reverted',
+} as const
+
+export const IMPORT_ROW_STATUS = {
+    OK: 'ok',
+    INCOMPLETE: 'incomplete',
+    INVALID: 'invalid',
+    POSSIBLE_DUPLICATE: 'possible_duplicate',
+    IGNORED: 'ignored',
+    IMPORTED: 'imported',
+} as const
+
 // Tipos derivados
 export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
@@ -77,3 +96,6 @@ export type CreatedFrom = typeof CREATED_FROM[keyof typeof CREATED_FROM]
 export type RuleAppliesTo = typeof RULE_APPLIES_TO[keyof typeof RULE_APPLIES_TO]
 export type RuleField = typeof RULE_FIELDS[keyof typeof RULE_FIELDS]
 export type RuleCondition = typeof RULE_CONDITIONS[keyof typeof RULE_CONDITIONS]
+export type ImportSourceType = typeof IMPORT_SOURCE_TYPES[keyof typeof IMPORT_SOURCE_TYPES]
+export type ImportBatchStatus = typeof IMPORT_BATCH_STATUS[keyof typeof IMPORT_BATCH_STATUS]
+export type ImportRowStatus = typeof IMPORT_ROW_STATUS[keyof typeof IMPORT_ROW_STATUS]
