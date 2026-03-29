@@ -17,17 +17,28 @@ interface SankeyItem {
     color: string
 }
 
+interface CreditCardSankeyItem {
+    id: string
+    name: string
+    color: string
+    totalExpenses: number
+    totalPaid: number
+    netOwed: number
+}
+
 interface SankeyApiData {
     income: SankeyItem[]
     expenses: SankeyItem[]
     totalIncome: number
     totalExpense: number
     balance: number
+    creditCards?: CreditCardSankeyItem[]
 }
 
 type NodeType =
     | 'income-source'
     | 'income-total'
+    | 'credit-card-source'
     | 'expense-total'
     | 'available'
     | 'deficit'
@@ -169,6 +180,7 @@ function normalizeData(data: SankeyApiData): SankeyApiData {
         totalIncome,
         totalExpense,
         balance: rawBalance,
+        creditCards: data.creditCards,
     }
 }
 
@@ -178,13 +190,23 @@ function buildGraph(data: SankeyApiData) {
 
     const totalIncome = normalized.totalIncome
     const totalExpense = normalized.totalExpense
-    const available = Math.max(0, totalIncome - totalExpense)
-    const deficit = Math.max(0, totalExpense - totalIncome)
+
+    // Prorrateo de tarjetas: gastos en tarjeta aún no pagados en el período
+    // netOwed = max(0, gastos_en_tarjeta - pagos_realizados_este_período)
+    const creditCards = (normalized.creditCards ?? []).filter((cc) => cc.netOwed > 0)
+    const totalCcOwed = creditCards.reduce((sum, cc) => sum + cc.netOwed, 0)
+
+    // Gastos que requieren financiamiento real (ingreso o déficit), descontando deuda pendiente de tarjetas
+    const realFundedExpenses = Math.max(0, totalExpense - totalCcOwed)
+
+    const available = Math.max(0, totalIncome - realFundedExpenses)
+    const deficit = Math.max(0, realFundedExpenses - totalIncome)
     const hasDeficit = deficit > 0
 
     const nodes: ChartNode[] = []
     const links: ChartLink[] = []
 
+    // Layer 0: fuentes de ingreso por categoría
     normalized.income.forEach((item, index) => {
         const id = `income-source-${index}`
 
@@ -205,6 +227,7 @@ function buildGraph(data: SankeyApiData) {
         })
     })
 
+    // Layer 1: nodo de ingresos totales
     nodes.push({
         id: 'income-total',
         name: 'Ingresos',
@@ -214,6 +237,29 @@ function buildGraph(data: SankeyApiData) {
         layer: 1,
     })
 
+    // Layer 1: nodos de tarjetas con deuda pendiente (prorrateo)
+    // Solo aparecen si el gasto en tarjeta supera los pagos realizados en el período
+    creditCards.forEach((cc, index) => {
+        const id = `cc-source-${index}`
+
+        nodes.push({
+            id,
+            name: cc.name,
+            color: cc.color,
+            type: 'credit-card-source',
+            value: cc.netOwed,
+            layer: 1,
+        })
+
+        links.push({
+            source: id,
+            target: 'expense-total',
+            value: cc.netOwed,
+            color: cc.color,
+        })
+    })
+
+    // Layer 2: nodo de gastos totales
     nodes.push({
         id: 'expense-total',
         name: 'Gastos',
@@ -223,12 +269,16 @@ function buildGraph(data: SankeyApiData) {
         layer: 2,
     })
 
-    links.push({
-        source: 'income-total',
-        target: 'expense-total',
-        value: Math.min(totalIncome, totalExpense),
-        color: '#F59E0B',
-    })
+    // Flujo ingresos → gastos: solo la porción financiada con dinero real
+    const incomeToExpense = Math.min(totalIncome, realFundedExpenses)
+    if (incomeToExpense > 0) {
+        links.push({
+            source: 'income-total',
+            target: 'expense-total',
+            value: incomeToExpense,
+            color: '#F59E0B',
+        })
+    }
 
     if (hasDeficit) {
         nodes.push({
@@ -266,6 +316,7 @@ function buildGraph(data: SankeyApiData) {
         }
     }
 
+    // Layer 3: categorías de gasto
     expenseCategories.forEach((item, index) => {
         const id = `expense-category-${index}`
 
@@ -290,6 +341,7 @@ function buildGraph(data: SankeyApiData) {
         nodes,
         links,
         hasDeficit,
+        hasCreditCards: creditCards.length > 0,
         totals: {
             income: totalIncome,
             expense: totalExpense,
@@ -299,6 +351,11 @@ function buildGraph(data: SankeyApiData) {
         legends: {
             income: normalized.income,
             expense: expenseCategories,
+            creditCards: creditCards.map((cc) => ({
+                name: cc.name,
+                amount: cc.netOwed,
+                color: cc.color,
+            })),
         },
     }
 }
@@ -456,6 +513,12 @@ function getNodePath(node: LayoutNode) {
                 roundRight: false,
                 radius: 0,
             })
+        case 'credit-card-source':
+            return roundedRectSelectivePath(x0, y0, x1, y1, {
+                roundLeft: false,
+                roundRight: false,
+                radius: 0,
+            })
         case 'expense-category':
             return roundedRectSelectivePath(x0, y0, x1, y1, {
                 roundLeft: false,
@@ -494,7 +557,7 @@ function buildActiveFromNode(
     const amount = node.value ?? 0
     const percentOfIncome = totals.income > 0 ? (amount / totals.income) * 100 : 0
     const percentOfExpense =
-        node.type === 'expense-category' && totals.expense > 0
+        (node.type === 'expense-category' || node.type === 'credit-card-source') && totals.expense > 0
             ? (amount / totals.expense) * 100
             : undefined
 
@@ -676,6 +739,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
         'income-total',
         'expense-total',
         graph.hasDeficit ? 'deficit' : 'available',
+        ...graph.nodes
+            .filter((n) => n.type === 'credit-card-source')
+            .map((n) => String(n.id)),
     ])
 
     return (
@@ -868,6 +934,28 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                     </text>
                                 )}
 
+                                {showDesktopLabels && node.type === 'credit-card-source' && (
+                                    <text
+                                        x={(bounds.x0 + bounds.x1) / 2}
+                                        y={bounds.y1 + 16}
+                                        textAnchor="middle"
+                                        style={{ fontFamily: 'inherit' }}
+                                    >
+                                        <tspan fontSize={11} fill="var(--muted-foreground)">
+                                            {truncate(node.name ?? '', 18)}
+                                        </tspan>
+                                        <tspan
+                                            x={(bounds.x0 + bounds.x1) / 2}
+                                            dy="1.2em"
+                                            fontSize={11}
+                                            fontWeight={600}
+                                            fill={node.color}
+                                        >
+                                            {formatCompactARS(node.value ?? 0)}
+                                        </tspan>
+                                    </text>
+                                )}
+
                                 {showDesktopLabels && node.type === 'expense-category' && (
                                     <text
                                         x={bounds.x1 + 10}
@@ -928,6 +1016,14 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                             totals={graph.totals}
                             onSelect={setActive}
                         />
+                        {graph.legends.creditCards.length > 0 && (
+                            <MobileLegend
+                                title="Tarjetas (deuda pendiente)"
+                                items={graph.legends.creditCards}
+                                totals={graph.totals}
+                                onSelect={setActive}
+                            />
+                        )}
                     </div>
 
                     <SankeyTooltip
