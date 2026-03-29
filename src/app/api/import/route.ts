@@ -129,8 +129,13 @@ export async function POST(request: Request) {
 
         if (data.accountName) {
             const accId = accountByName.get(data.accountName.toLowerCase().trim())
-            if (accId) data.sourceAccountId = accId
-            else row.warnings.push(`Cuenta "${data.accountName}" no encontrada en Finp.`)
+            if (accId) {
+                data.sourceAccountId = accId
+            } else {
+                // Cuenta especificada pero inexistente → error bloqueante
+                row.errors.push(`Cuenta "${data.accountName}" no existe en Finp. Asigná una cuenta válida para importar esta fila.`)
+                row.status = IMPORT_ROW_STATUS.INVALID
+            }
         }
 
         let possibleDuplicateId: string | undefined

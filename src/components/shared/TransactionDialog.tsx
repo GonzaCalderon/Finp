@@ -166,15 +166,23 @@ export function TransactionDialog({
 
     const suggestedAccounts = useMemo(() => {
         if (type === 'income') {
-            return accounts.filter(
-                (account) => account.type !== 'credit_card' && account.type !== 'debt'
-            )
+            // Destino ingreso: no puede ser tarjeta ni deuda
+            return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         }
-
         if (type === 'expense') {
-            return accounts.filter((account) => account.type !== 'debt')
+            // Gasto: cualquier cuenta excepto deuda (credit_card OK para pago en 1 cuota)
+            return accounts.filter(a => a.type !== 'debt')
         }
+        if (type === 'credit_card_payment' || type === 'debt_payment') {
+            // Origen del pago: no puede ser tarjeta ni deuda (se paga desde banco/efectivo/etc.)
+            return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
+        }
+        return accounts
+    }, [accounts, type])
 
+    const destinationAccounts = useMemo(() => {
+        if (type === 'credit_card_payment') return accounts.filter(a => a.type === 'credit_card')
+        if (type === 'debt_payment') return accounts.filter(a => a.type === 'debt')
         return accounts
     }, [accounts, type])
 
@@ -469,7 +477,7 @@ export function TransactionDialog({
                                         <SelectValue placeholder="Seleccioná cuenta destino" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {accounts.map((account) => (
+                                        {destinationAccounts.map((account) => (
                                             <SelectItem
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}
@@ -562,7 +570,11 @@ export function TransactionDialog({
                         {/* Cuenta destino (transferencias y otros) */}
                         {showDestination && type !== 'income' && (
                             <div className="space-y-2">
-                                <Label>Cuenta destino</Label>
+                                <Label>
+                                    {type === 'credit_card_payment' ? 'Tarjeta a pagar'
+                                        : type === 'debt_payment' ? 'Deuda a pagar'
+                                        : 'Cuenta destino'}
+                                </Label>
                                 <Select
                                     value={destinationAccountId}
                                     onValueChange={(value) =>
@@ -572,10 +584,14 @@ export function TransactionDialog({
                                     }
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Seleccioná cuenta destino" />
+                                        <SelectValue placeholder={
+                                            type === 'credit_card_payment' ? 'Seleccioná tarjeta'
+                                            : type === 'debt_payment' ? 'Seleccioná deuda'
+                                            : 'Seleccioná cuenta destino'
+                                        } />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {accounts.map((account) => (
+                                        {destinationAccounts.map((account) => (
                                             <SelectItem
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}

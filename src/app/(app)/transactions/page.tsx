@@ -86,6 +86,7 @@ const getCurrentMonth = () => {
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => {
     const date = new Date()
+    date.setDate(1) // evita overflow (ej. 31 mar - 1 mes → 31 feb → 3 mar duplicado)
     date.setMonth(date.getMonth() - i)
 
     const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -932,7 +933,7 @@ export default function TransactionsPage() {
                 )}
             </div>
 
-            <div className="flex md:hidden items-center gap-2">
+            <div className="flex md:hidden items-center gap-2 w-full">
                 <button
                     type="button"
                     onClick={openFilterSheet}
@@ -968,6 +969,19 @@ export default function TransactionsPage() {
                         <X size={12} /> Limpiar
                     </button>
                 )}
+
+                <Link
+                    href="/transactions/import"
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
+                    style={{
+                        background: 'var(--secondary)',
+                        color: 'var(--muted-foreground)',
+                        border: '0.5px solid var(--border)',
+                    }}
+                >
+                    <Upload size={13} />
+                    Importar
+                </Link>
             </div>
 
             {total > 0 && (

@@ -10,6 +10,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Spinner } from '@/components/shared/Spinner'
 import { ImportRowEditDialog } from '@/components/shared/ImportRowEditDialog'
 import {
@@ -81,6 +91,30 @@ function InstallmentBadge({ current, total }: { current?: number; total?: number
     )
 }
 
+/** Devuelve las cuentas compatibles según tipo y cuotas.
+ *  Reglas:
+ *  - cuotas > 1         → solo credit_card (compra financiada)
+ *  - cuotas == 1 o sin cuotas + expense → todas (1 pago con tarjeta es válido)
+ *  - credit_card_payment / debt_payment → excluye credit_card y debt como origen
+ *  - resto              → todas
+ */
+function getCompatibleAccounts(accounts: IAccount[], type: string | undefined, installmentCount: number | undefined) {
+    const count = installmentCount ?? 0
+    // Compra en múltiples cuotas financiadas → obligatorio tarjeta
+    if (count > 1) return accounts.filter(a => a.type === 'credit_card')
+    // Pago de tarjeta / deuda → la cuenta origen no puede ser tarjeta ni deuda
+    if (type === 'credit_card_payment' || type === 'debt_payment')
+        return accounts.filter(a => !['credit_card', 'debt'].includes(a.type))
+    // Gasto en 1 pago (incluyendo con tarjeta), ingreso, transferencia → todas
+    return accounts
+}
+
+function accountFieldLabel(type: string | undefined, installmentCount: number | undefined) {
+    if ((installmentCount ?? 0) > 1) return 'Tarjeta'
+    if (type === 'credit_card_payment' || type === 'debt_payment') return 'Cuenta origen'
+    return 'Cuenta'
+}
+
 function formatAmount(amount: number | undefined, currency: string | undefined) {
     if (!amount) return '—'
     return new Intl.NumberFormat('es-AR', {
@@ -142,9 +176,13 @@ function RowCard({
                         )}
                     </div>
                     {hasUnresolvedAccount && !row.ignored && (
-                        <p className="text-xs mt-1.5" style={{ color: '#d97706' }}>
-                            ⚠ Cuenta &quot;{data.accountName}&quot; no encontrada — tocá para editar
-                        </p>
+                        <div
+                            className="mt-1.5 px-2 py-1 rounded-md text-xs flex items-center gap-1.5"
+                            style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}
+                        >
+                            <XCircle className="w-3 h-3 flex-shrink-0" />
+                            Cuenta <strong>&quot;{data.accountName}&quot;</strong> no existe en Finp — asigná una cuenta para importar
+                        </div>
                     )}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
@@ -186,16 +224,25 @@ function RowCard({
                     >
                         <div className="px-3 pb-3 space-y-1.5 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
                             {row.errors.map((e, i) => (
-                                <p key={i} className="text-xs" style={{ color: 'var(--destructive)' }}>⚠ {e}</p>
+                                <p key={i} className="text-xs font-medium" style={{ color: 'var(--destructive)' }}>⚠ {e}</p>
                             ))}
                             {row.warnings.filter(w => !w.includes('Cuenta')).map((w, i) => (
                                 <p key={i} className="text-xs text-muted-foreground">• {w}</p>
                             ))}
-                            {data.accountName && data.sourceAccountId && (
-                                <p className="text-xs text-muted-foreground">Cuenta: {data.accountName}</p>
+                            {data.sourceAccountId && (
+                                <p className="text-xs text-muted-foreground">
+                                    Cuenta: {accounts.find(a => String(a._id) === data.sourceAccountId)?.name ?? data.accountName ?? '—'}
+                                </p>
                             )}
-                            {data.categoryName && (
-                                <p className="text-xs text-muted-foreground">Categoría: {data.categoryName}</p>
+                            {data.categoryId && (
+                                <p className="text-xs text-muted-foreground">
+                                    Categoría: {data.categoryName ?? '—'}
+                                </p>
+                            )}
+                            {!data.categoryId && data.categoryName && (
+                                <p className="text-xs" style={{ color: '#d97706' }}>
+                                    ⚠ Categoría &quot;{data.categoryName}&quot; no encontrada → Sin categoría
+                                </p>
                             )}
                             {data.cardName && (
                                 <p className="text-xs text-muted-foreground">Tarjeta: {data.cardName}</p>
@@ -245,6 +292,11 @@ function ReviewTableRow({
     const expenseCategories = categories.filter(c => c.type === 'expense')
     const incomeCategories = categories.filter(c => c.type === 'income')
     const relevantCategories = (editData.type ?? effectiveData.type) === 'income' ? incomeCategories : expenseCategories
+
+    const activeType = editData.type ?? effectiveData.type
+    const activeInstCount = editData.installmentCount ?? effectiveData.installmentCount
+    const compatibleAccounts = getCompatibleAccounts(accounts, activeType, activeInstCount)
+    const acctLabel = accountFieldLabel(activeType, activeInstCount)
 
     const startEdit = () => {
         setEditData({ ...effectiveData })
@@ -373,17 +425,24 @@ function ReviewTableRow({
                 {editing ? (
                     <Select
                         value={editData.sourceAccountId || '__none__'}
-                        onValueChange={v => setEditData(d => ({ ...d, sourceAccountId: v === '__none__' ? undefined : v }))}
+                        onValueChange={v => {
+                            const acc = accounts.find(a => String(a._id) === v)
+                            setEditData(d => ({
+                                ...d,
+                                sourceAccountId: v === '__none__' ? undefined : v,
+                                cardName: acc?.type === 'credit_card' ? acc.name : d.cardName,
+                            }))
+                        }}
                     >
                         <SelectTrigger className={cn(
                             'h-7 text-xs min-w-[140px]',
-                            !editData.sourceAccountId && effectiveData.accountName ? 'border-orange-400' : ''
+                            !editData.sourceAccountId && effectiveData.accountName ? 'border-destructive' : ''
                         )}>
-                            <SelectValue placeholder="Seleccioná cuenta" />
+                            <SelectValue placeholder={acctLabel} />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="__none__">Sin cuenta</SelectItem>
-                            {accounts.map(a => (
+                            {compatibleAccounts.map(a => (
                                 <SelectItem key={String(a._id)} value={String(a._id)}>
                                     {a.name} · {a.currency}
                                 </SelectItem>
@@ -392,17 +451,19 @@ function ReviewTableRow({
                     </Select>
                 ) : (
                     <span className="text-xs" style={{
-                        color: !resolvedAccountName && effectiveData.accountName ? '#d97706' : 'var(--muted-foreground)'
+                        color: !resolvedAccountName && effectiveData.accountName ? '#dc2626' : 'var(--muted-foreground)'
                     }}>
                         {resolvedAccountName
-                            ?? (effectiveData.accountName ? `⚠ ${effectiveData.accountName}` : '—')}
+                            ?? (effectiveData.accountName ? `✕ ${effectiveData.accountName}` : '—')}
                     </span>
                 )}
             </td>
 
             {/* Category */}
             <td className="px-2 py-1.5">
-                {editing ? (
+                {activeType === 'credit_card_payment' || activeType === 'debt_payment' ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                ) : editing ? (
                     <Select
                         value={editData.categoryId || '__none__'}
                         onValueChange={v => setEditData(d => ({ ...d, categoryId: v === '__none__' ? undefined : v }))}
@@ -522,30 +583,9 @@ function ReviewTableRow({
                                 value={editData.installmentCount ?? ''}
                                 onChange={e => setEditData(d => ({ ...d, installmentCount: parseInt(e.target.value) || undefined }))}
                             />
-                            <span className="text-xs text-muted-foreground ml-2">Tarjeta:</span>
-                            <Select
-                                value={editData.sourceAccountId || '__none__'}
-                                onValueChange={v => {
-                                    const acc = accounts.find(a => String(a._id) === v)
-                                    setEditData(d => ({
-                                        ...d,
-                                        sourceAccountId: v === '__none__' ? undefined : v,
-                                        cardName: acc?.name,
-                                    }))
-                                }}
-                            >
-                                <SelectTrigger className="h-6 text-xs w-44">
-                                    <SelectValue placeholder="Seleccioná tarjeta" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">Sin tarjeta</SelectItem>
-                                    {accounts.filter(a => a.type === 'credit_card').map(a => (
-                                        <SelectItem key={String(a._id)} value={String(a._id)}>
-                                            {a.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <span className="text-xs text-muted-foreground ml-2">
+                                — Tarjeta: columna <em>Cuenta</em> (solo credit_card)
+                            </span>
                         </div>
                     </div>
                 </td>
@@ -622,6 +662,7 @@ export default function ImportReviewPage() {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
     const [editingRow, setEditingRow] = useState<IImportRow | null>(null)
     const [confirming, setConfirming] = useState(false)
+    const [showNoCategoryDialog, setShowNoCategoryDialog] = useState(false)
 
     useEffect(() => {
         fetchDetail()
@@ -649,7 +690,7 @@ export default function ImportReviewPage() {
         await handleUpdateRow(String(row._id), { ignored: !row.ignored })
     }, [handleUpdateRow])
 
-    const handleConfirm = async () => {
+    const doConfirm = async () => {
         setConfirming(true)
         try {
             const result = await confirmImport()
@@ -659,6 +700,22 @@ export default function ImportReviewPage() {
             toastError(err instanceof Error ? err.message : 'Error al confirmar importación')
         } finally {
             setConfirming(false)
+            setShowNoCategoryDialog(false)
+        }
+    }
+
+    const handleConfirm = () => {
+        if (!detail) return
+        // Si hay filas importables sin categoría resuelta, pedir confirmación explícita
+        const noCatCount = detail.rows.filter(r => {
+            if (r.ignored || r.status === 'invalid' || r.status === 'imported') return false
+            const d = { ...(r.parsedData ?? {}), ...(r.reviewedData ?? {}) } as Record<string, unknown>
+            return d.categoryName && !d.categoryId
+        }).length
+        if (noCatCount > 0) {
+            setShowNoCategoryDialog(true)
+        } else {
+            doConfirm()
         }
     }
 
@@ -701,7 +758,7 @@ export default function ImportReviewPage() {
 
     type FilterChip = { value: StatusFilter; label: string; count: number; color?: string }
     const filterChips: FilterChip[] = ([
-        { value: 'all' as StatusFilter, label: 'Todas', count: summary.total },
+        { value: 'all' as StatusFilter, label: 'Todas', count: summary.total, color: '#0284c7' },
         { value: 'ok' as StatusFilter, label: 'Listas', count: summary.valid, color: '#16a34a' },
         { value: 'incomplete' as StatusFilter, label: 'Pendientes', count: summary.incomplete, color: '#d97706' },
         { value: 'invalid' as StatusFilter, label: 'Con error', count: summary.invalid, color: '#dc2626' },
@@ -732,15 +789,19 @@ export default function ImportReviewPage() {
                 {blockingCount > 0 && !isConfirmed && (
                     <div
                         className="rounded-xl p-3 mb-4 flex items-start gap-2 text-sm"
-                        style={{ background: 'rgba(220, 38, 38, 0.08)', color: '#dc2626' }}
+                        style={{ background: 'rgba(220, 38, 38, 0.08)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.2)' }}
                     >
                         <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>
-                            {blockingCount === 1
-                                ? '1 fila tiene errores que impiden su importación.'
-                                : `${blockingCount} filas tienen errores que impiden su importación.`}{' '}
-                            Corregí o ignoralas antes de confirmar.
-                        </span>
+                        <div className="space-y-0.5">
+                            <p className="font-medium">
+                                {blockingCount === 1
+                                    ? '1 fila tiene errores que bloquean la importación'
+                                    : `${blockingCount} filas tienen errores que bloquean la importación`}
+                            </p>
+                            <p className="text-xs opacity-80">
+                                Las filas con <strong>cuenta no asignada</strong> o <strong>datos inválidos</strong> deben corregirse o ignorarse antes de confirmar.
+                            </p>
+                        </div>
                     </div>
                 )}
                 {isConfirmed && (
@@ -869,7 +930,7 @@ export default function ImportReviewPage() {
                 </div>
             )}
 
-            {/* Dialog — mobile only */}
+            {/* Dialog edición — mobile only */}
             <ImportRowEditDialog
                 row={editingRow}
                 open={!!editingRow}
@@ -878,6 +939,40 @@ export default function ImportReviewPage() {
                 categories={categories}
                 onSave={handleSaveEdit}
             />
+
+            {/* Confirmación sin categoría */}
+            <AlertDialog open={showNoCategoryDialog} onOpenChange={setShowNoCategoryDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Categorías no reconocidas</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div>
+                                {(() => {
+                                    const n = detail?.rows.filter(r => {
+                                        if (r.ignored || r.status === 'invalid' || r.status === 'imported') return false
+                                        const d = { ...(r.parsedData ?? {}), ...(r.reviewedData ?? {}) } as Record<string, unknown>
+                                        return d.categoryName && !d.categoryId
+                                    }).length ?? 0
+                                    return (
+                                        <p className="text-sm text-muted-foreground">
+                                            <span className="font-semibold text-foreground">{n}</span>{' '}
+                                            {n === 1 ? 'transacción se importará' : 'transacciones se importarán'} como{' '}
+                                            <span className="font-semibold text-foreground">Sin categoría</span>{' '}
+                                            porque las categorías del archivo no existen en Finp. Podés volver y asignarlas manualmente, o confirmar e importar igual.
+                                        </p>
+                                    )
+                                })()}
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Volver y revisar</AlertDialogCancel>
+                        <AlertDialogAction onClick={doConfirm} disabled={confirming}>
+                            {confirming ? 'Importando...' : 'Importar igual'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

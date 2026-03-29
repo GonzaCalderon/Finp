@@ -34,6 +34,27 @@ const CURRENCY_OPTIONS = [
     { value: 'USD', label: 'USD' },
 ]
 
+/** Devuelve las cuentas compatibles según tipo de transacción y si tiene cuotas.
+ *  - cuotas > 1         → solo credit_card (compra financiada en cuotas)
+ *  - cuotas == 1 + expense → todas (1 pago con tarjeta es gasto válido)
+ *  - credit_card_payment / debt_payment → excluye credit_card y debt como origen
+ *  - resto              → todas
+ */
+function getCompatibleAccounts(accounts: IAccount[], type: string | undefined, installmentCount: number | undefined) {
+    const count = installmentCount ?? 0
+    if (count > 1) return accounts.filter(a => a.type === 'credit_card')
+    if (type === 'credit_card_payment' || type === 'debt_payment')
+        return accounts.filter(a => !['credit_card', 'debt'].includes(a.type))
+    return accounts
+}
+
+/** Label del campo cuenta según contexto */
+function accountFieldLabel(type: string | undefined, installmentCount: number | undefined) {
+    if ((installmentCount ?? 0) > 1) return 'Tarjeta de crédito'
+    if (type === 'credit_card_payment' || type === 'debt_payment') return 'Cuenta origen'
+    return 'Cuenta'
+}
+
 interface ImportRowEditDialogProps {
     row: IImportRow | null
     open: boolean
@@ -91,6 +112,9 @@ export function ImportRowEditDialog({
     const incomeCategories = categories.filter((c) => c.type === 'income')
     const relevantCategories = data.type === 'income' ? incomeCategories : expenseCategories
 
+    const compatibleAccounts = getCompatibleAccounts(accounts, data.type, data.installmentCount ?? effectiveData.installmentCount)
+    const acctLabel = accountFieldLabel(data.type, data.installmentCount ?? effectiveData.installmentCount)
+
     const handleSave = async () => {
         if (!row) return
         setSaving(true)
@@ -127,10 +151,10 @@ export function ImportRowEditDialog({
                     )}
                     {hasUnresolvedAccount && !ignored && (
                         <div className="rounded-lg p-3 flex items-start gap-2 text-xs"
-                            style={{ background: 'rgba(217,119,6,0.10)', color: '#d97706' }}>
+                            style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}>
                             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                             <span>
-                                La cuenta <strong>{data.accountName ?? effectiveData.accountName}</strong> no existe en Finp.
+                                La cuenta <strong>&quot;{data.accountName ?? effectiveData.accountName}&quot;</strong> no existe en Finp.
                                 Asigná una cuenta válida para poder importar esta fila.
                             </span>
                         </div>
@@ -220,17 +244,30 @@ export function ImportRowEditDialog({
 
                             {/* Cuenta */}
                             <div className="space-y-2">
-                                <Label>Cuenta</Label>
+                                <Label>
+                                    {acctLabel}
+                                    {hasInstallments && (
+                                        <span className="ml-1.5 text-xs text-muted-foreground font-normal">solo tarjetas</span>
+                                    )}
+                                </Label>
                                 <Select
                                     value={data.sourceAccountId || '__none__'}
-                                    onValueChange={(v) => setData((d) => ({ ...d, sourceAccountId: v === '__none__' ? undefined : v }))}
+                                    onValueChange={(v) => {
+                                        const acc = accounts.find(a => String(a._id) === v)
+                                        setData((d) => ({
+                                            ...d,
+                                            sourceAccountId: v === '__none__' ? undefined : v,
+                                            // auto-poblar cardName si es tarjeta de crédito
+                                            cardName: acc?.type === 'credit_card' ? acc.name : d.cardName,
+                                        }))
+                                    }}
                                 >
-                                    <SelectTrigger className={hasUnresolvedAccount ? 'border-orange-400' : ''}>
+                                    <SelectTrigger className={hasUnresolvedAccount ? 'border-destructive' : ''}>
                                         <SelectValue placeholder="Seleccioná cuenta" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="__none__">Sin cuenta</SelectItem>
-                                        {accounts.map((a) => (
+                                        {compatibleAccounts.map((a) => (
                                             <SelectItem key={String(a._id)} value={String(a._id)}>
                                                 {a.name} · {a.currency}
                                             </SelectItem>
@@ -239,26 +276,28 @@ export function ImportRowEditDialog({
                                 </Select>
                             </div>
 
-                            {/* Categoría */}
-                            <div className="space-y-2">
-                                <Label>Categoría <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                                <Select
-                                    value={data.categoryId || '__none__'}
-                                    onValueChange={(v) => setData((d) => ({ ...d, categoryId: v === '__none__' ? undefined : v }))}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccioná categoría" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="__none__">Sin categoría</SelectItem>
-                                        {relevantCategories.map((c) => (
-                                            <SelectItem key={String(c._id)} value={String(c._id)}>
-                                                {c.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {/* Categoría — no aplica para pagos de tarjeta */}
+                            {data.type !== 'credit_card_payment' && data.type !== 'debt_payment' && (
+                                <div className="space-y-2">
+                                    <Label>Categoría <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                                    <Select
+                                        value={data.categoryId || '__none__'}
+                                        onValueChange={(v) => setData((d) => ({ ...d, categoryId: v === '__none__' ? undefined : v }))}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Seleccioná categoría" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Sin categoría</SelectItem>
+                                            {relevantCategories.map((c) => (
+                                                <SelectItem key={String(c._id)} value={String(c._id)}>
+                                                    {c.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
 
                             {/* Cuotas (si aplica) */}
                             {hasInstallments && (
@@ -287,32 +326,9 @@ export function ImportRowEditDialog({
                                             />
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs">Tarjeta</Label>
-                                        <Select
-                                            value={data.sourceAccountId || '__none__'}
-                                            onValueChange={(v) => {
-                                                const acc = accounts.find(a => String(a._id) === v)
-                                                setData((d) => ({
-                                                    ...d,
-                                                    sourceAccountId: v === '__none__' ? undefined : v,
-                                                    cardName: acc?.name,
-                                                }))
-                                            }}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Seleccioná tarjeta" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="__none__">Sin tarjeta</SelectItem>
-                                                {accounts.filter(a => a.type === 'credit_card').map((a) => (
-                                                    <SelectItem key={String(a._id)} value={String(a._id)}>
-                                                        {a.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        La tarjeta se asigna en el campo <strong>Cuenta</strong> de arriba (filtrado a tarjetas de crédito).
+                                    </p>
                                 </div>
                             )}
 

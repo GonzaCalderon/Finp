@@ -67,9 +67,9 @@ function recalculateStatus(data: Record<string, unknown>, errors: string[]): str
         !data.date || !data.type || !data.description || !data.amount || !data.currency
     if (missingRequired) return IMPORT_ROW_STATUS.INCOMPLETE
 
-    // If an account name was given but could not be resolved to a valid account ID,
-    // the row stays incomplete until the user picks a valid account
-    if (data.accountName && !data.sourceAccountId) return IMPORT_ROW_STATUS.INCOMPLETE
+    // Cuenta especificada pero no resuelta: es un error bloqueante —
+    // la transacción no puede imputarse a una cuenta inexistente en Finp
+    if (data.accountName && !data.sourceAccountId) return IMPORT_ROW_STATUS.INVALID
 
     return IMPORT_ROW_STATUS.OK
 }

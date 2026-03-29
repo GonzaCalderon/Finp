@@ -29,6 +29,7 @@ const getCurrentMonth = () => {
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => {
     const date = new Date()
+    date.setDate(1) // evita overflow (ej. 31 ene - 1 mes = 31 dic → se va a ene)
     date.setMonth(date.getMonth() - i)
     const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
     const label = date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
