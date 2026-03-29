@@ -56,6 +56,12 @@ const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
 }
 
 const QUICK_TYPES: TransactionFormInput['type'][] = ['expense', 'income']
+const SECONDARY_TYPES: TransactionFormInput['type'][] = ['transfer', 'credit_card_payment', 'adjustment']
+const SECONDARY_TYPE_LABELS: Partial<Record<TransactionFormInput['type'], string>> = {
+    transfer: 'Transferencia',
+    credit_card_payment: 'Pago de tarjeta',
+    adjustment: 'Ajuste',
+}
 
 export function TransactionDialog({
                                       open,
@@ -181,7 +187,10 @@ export function TransactionDialog({
     }, [accounts, type])
 
     const destinationAccounts = useMemo(() => {
-        if (type === 'credit_card_payment') return accounts.filter(a => a.type === 'credit_card')
+        // credit_card_payment cubre tanto tarjetas como deudas (son el mismo flujo desde el usuario)
+        if (type === 'credit_card_payment') {
+            return accounts.filter(a => a.type === 'credit_card' || a.type === 'debt')
+        }
         if (type === 'debt_payment') return accounts.filter(a => a.type === 'debt')
         return accounts
     }, [accounts, type])
@@ -329,33 +338,35 @@ export function TransactionDialog({
                                 })}
                             </div>
 
-                            {/* Tipos secundarios: siempre accesibles, jerarquía menor */}
-                            <Select
-                                value={isQuickFlow ? '' : type}
-                                onValueChange={(value) =>
-                                    setValue('type', value as TransactionFormInput['type'], {
-                                        shouldValidate: true,
-                                    })
-                                }
-                            >
-                                <SelectTrigger
-                                    className="h-8 text-xs"
-                                    style={{
-                                        color: isQuickFlow
-                                            ? 'var(--muted-foreground)'
-                                            : 'var(--foreground)',
-                                        borderStyle: isQuickFlow ? 'dashed' : 'solid',
-                                    }}
-                                >
-                                    <SelectValue placeholder="Otro tipo de movimiento…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="transfer">Transferencia</SelectItem>
-                                    <SelectItem value="credit_card_payment">Pago de tarjeta</SelectItem>
-                                    <SelectItem value="debt_payment">Pago de deuda</SelectItem>
-                                    <SelectItem value="adjustment">Ajuste</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            {/* Tipos secundarios: 3 botones compactos */}
+                            <div className="grid grid-cols-3 gap-1.5">
+                                {SECONDARY_TYPES.map((option) => {
+                                    const selected = type === option
+                                    return (
+                                        <button
+                                            key={option}
+                                            type="button"
+                                            onClick={() =>
+                                                setValue('type', option, { shouldValidate: true })
+                                            }
+                                            className="rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors"
+                                            style={{
+                                                background: selected
+                                                    ? 'rgba(99,102,241,0.12)'
+                                                    : 'var(--secondary)',
+                                                color: selected
+                                                    ? '#6366F1'
+                                                    : 'var(--muted-foreground)',
+                                                borderColor: selected
+                                                    ? 'rgba(99,102,241,0.5)'
+                                                    : 'var(--border)',
+                                            }}
+                                        >
+                                            {SECONDARY_TYPE_LABELS[option]}
+                                        </button>
+                                    )
+                                })}
+                            </div>
 
                             {errors.type ? (
                                 <p className="text-sm text-destructive">{errors.type.message}</p>
@@ -577,8 +588,8 @@ export function TransactionDialog({
                         {showDestination && type !== 'income' && (
                             <div className="space-y-2">
                                 <Label>
-                                    {type === 'credit_card_payment' ? 'Tarjeta a pagar'
-                                        : type === 'debt_payment' ? 'Deuda a pagar'
+                                    {['credit_card_payment', 'debt_payment'].includes(type)
+                                        ? 'Tarjeta o cuenta a pagar'
                                         : 'Cuenta destino'}
                                 </Label>
                                 <Select
@@ -591,9 +602,9 @@ export function TransactionDialog({
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder={
-                                            type === 'credit_card_payment' ? 'Seleccioná tarjeta'
-                                            : type === 'debt_payment' ? 'Seleccioná deuda'
-                                            : 'Seleccioná cuenta destino'
+                                            ['credit_card_payment', 'debt_payment'].includes(type)
+                                                ? 'Seleccioná tarjeta o deuda'
+                                                : 'Seleccioná cuenta destino'
                                         } />
                                     </SelectTrigger>
                                     <SelectContent>
