@@ -302,6 +302,8 @@ export function TransactionDialog({
                         {/* Tipo */}
                         <div className="space-y-2">
                             <Label>Tipo</Label>
+
+                            {/* Tipos principales: gasto e ingreso como acceso rápido */}
                             <div className="grid grid-cols-2 gap-2">
                                 {QUICK_TYPES.map((option) => {
                                     const selected = type === option
@@ -327,29 +329,33 @@ export function TransactionDialog({
                                 })}
                             </div>
 
-                            {!isQuickFlow && (
-                                <Select
-                                    value={type}
-                                    onValueChange={(value) =>
-                                        setValue('type', value as TransactionFormInput['type'], {
-                                            shouldValidate: true,
-                                        })
-                                    }
+                            {/* Tipos secundarios: siempre accesibles, jerarquía menor */}
+                            <Select
+                                value={isQuickFlow ? '' : type}
+                                onValueChange={(value) =>
+                                    setValue('type', value as TransactionFormInput['type'], {
+                                        shouldValidate: true,
+                                    })
+                                }
+                            >
+                                <SelectTrigger
+                                    className="h-8 text-xs"
+                                    style={{
+                                        color: isQuickFlow
+                                            ? 'var(--muted-foreground)'
+                                            : 'var(--foreground)',
+                                        borderStyle: isQuickFlow ? 'dashed' : 'solid',
+                                    }}
                                 >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccioná tipo" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Object.entries(TRANSACTION_TYPE_LABELS).map(
-                                            ([value, label]) => (
-                                                <SelectItem key={value} value={value}>
-                                                    {label}
-                                                </SelectItem>
-                                            )
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            )}
+                                    <SelectValue placeholder="Otro tipo de movimiento…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="transfer">Transferencia</SelectItem>
+                                    <SelectItem value="credit_card_payment">Pago de tarjeta</SelectItem>
+                                    <SelectItem value="debt_payment">Pago de deuda</SelectItem>
+                                    <SelectItem value="adjustment">Ajuste</SelectItem>
+                                </SelectContent>
+                            </Select>
 
                             {errors.type ? (
                                 <p className="text-sm text-destructive">{errors.type.message}</p>
