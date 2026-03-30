@@ -424,13 +424,8 @@ export function TransactionDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className={cn(
-                    'p-0 overflow-hidden',
-                    // Mobile: fullscreen
-                    'max-sm:!top-0 max-sm:!left-0 max-sm:![transform:none] max-sm:!w-screen max-sm:!h-[100dvh] max-sm:!max-w-none max-sm:!rounded-none',
-                    // Desktop
-                    'sm:max-w-lg',
-                )}
+                variant="fullscreen-mobile"
+                className="p-0 overflow-hidden sm:max-w-lg"
             >
                 <DialogHeader className="shrink-0 px-5 pt-5 pb-0">
                     <DialogTitle>
@@ -444,7 +439,7 @@ export function TransactionDialog({
 
                 <form
                     onSubmit={handleSubmit(handleFormSubmit)}
-                    className="flex flex-col overflow-hidden max-sm:h-[calc(100dvh-64px)] sm:max-h-[85vh]"
+                    className="flex flex-col overflow-hidden flex-1 sm:max-h-[85vh]"
                 >
                     <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
 

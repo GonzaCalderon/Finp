@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction } from '@/lib/models'
+import { Transaction, InstallmentPlan } from '@/lib/models'
 
 export async function GET(request: Request) {
     try {
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url)
-        const months = parseInt(searchParams.get('months') ?? '1')
+        const months = Math.max(1, parseInt(searchParams.get('months') ?? '1'))
 
         await connectDB()
 
@@ -19,9 +19,16 @@ export async function GET(request: Request) {
         const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1)
         const end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
-        // Ingresos/gastos del período (sin cuotas de planes)
-        // + sourceAccountId para detectar gastos en tarjeta de crédito
-        const [transactions, ccPayments] = await Promise.all([
+        // ── Build list of months in the period ────────────────────────────────
+        const monthsInPeriod: { year: number; month: number; date: Date }[] = []
+        for (let i = months - 1; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+            monthsInPeriod.push({ year: d.getFullYear(), month: d.getMonth() + 1, date: d })
+        }
+
+        // ── Fetch data in parallel ─────────────────────────────────────────────
+        const [transactions, ccPayments, installmentPlans] = await Promise.all([
+            // Regular income/expense transactions (not installment plan lump-sums)
             Transaction.find({
                 userId: session.user.id,
                 date: { $gte: start, $lt: end },
@@ -31,18 +38,22 @@ export async function GET(request: Request) {
                 .populate('categoryId', 'name color')
                 .populate('sourceAccountId', 'name type color'),
 
-            // Pagos de tarjeta del período (para prorrateo de deuda)
+            // Credit card payments in the period (for prorrateo)
             Transaction.find({
                 userId: session.user.id,
                 date: { $gte: start, $lt: end },
                 type: 'credit_card_payment',
             }).select('amount destinationAccountId'),
+
+            // Installment plans: use projection logic to find cuotas per month
+            InstallmentPlan.find({ userId: session.user.id })
+                .populate('accountId', 'name type color')
+                .populate('categoryId', 'name color'),
         ])
 
+        // ── Process regular transactions ───────────────────────────────────────
         const incomeMap: Record<string, { name: string; amount: number; color: string }> = {}
         const expenseMap: Record<string, { name: string; amount: number; color: string }> = {}
-
-        // Gastos en tarjeta de crédito por cuenta (para prorrateo)
         const ccExpenseByCard: Record<string, { name: string; color: string; totalExpenses: number }> = {}
 
         transactions.forEach((t) => {
@@ -58,7 +69,7 @@ export async function GET(request: Request) {
                 if (!expenseMap[key]) expenseMap[key] = { name, amount: 0, color }
                 expenseMap[key].amount += t.amount
 
-                // Rastrear gastos imputados a tarjeta de crédito
+                // Track expenses charged to credit card
                 const src = t.sourceAccountId as {
                     _id: { toString: () => string }
                     type: string
@@ -69,18 +80,59 @@ export async function GET(request: Request) {
                 if (src?.type === 'credit_card') {
                     const cardKey = src._id.toString()
                     if (!ccExpenseByCard[cardKey]) {
-                        ccExpenseByCard[cardKey] = {
-                            name: src.name,
-                            color: src.color ?? '#6366F1',
-                            totalExpenses: 0,
-                        }
+                        ccExpenseByCard[cardKey] = { name: src.name, color: src.color ?? '#6366F1', totalExpenses: 0 }
                     }
                     ccExpenseByCard[cardKey].totalExpenses += t.amount
                 }
             }
         })
 
-        // Pagos de tarjeta agrupados por cuenta destino
+        // ── Process installment plan cuotas per month (projection logic) ───────
+        // For each month in the period, check which installments are active
+        // and add installmentAmount to expenses/ccExpenseByCard
+        for (const { year, month, date: monthDate } of monthsInPeriod) {
+            for (const plan of installmentPlans) {
+                if (!plan.firstClosingMonth) continue
+
+                const [fy, fm] = plan.firstClosingMonth.split('-').map(Number)
+                const firstMonth = new Date(fy, fm - 1, 1)
+                const lastMonth = new Date(fy, fm - 1 + plan.installmentCount - 1, 1)
+
+                // Check if this month has an active installment for this plan
+                if (monthDate < firstMonth || monthDate > lastMonth) continue
+
+                const cat = plan.categoryId as { _id: { toString: () => string }; name: string; color?: string } | null
+                const catKey = cat?._id?.toString() ?? 'sin-categoria'
+                const catName = cat?.name ?? 'Sin categoría'
+                const catColor = cat?.color ?? '#9CA3AF'
+
+                // Add installment amount to expense category
+                if (!expenseMap[catKey]) expenseMap[catKey] = { name: catName, amount: 0, color: catColor }
+                expenseMap[catKey].amount += plan.installmentAmount
+
+                // Add to credit card tracking (installments always use credit cards)
+                const account = plan.accountId as {
+                    _id: { toString: () => string }
+                    type: string
+                    name: string
+                    color?: string
+                } | null
+
+                if (account?.type === 'credit_card') {
+                    const cardKey = account._id.toString()
+                    if (!ccExpenseByCard[cardKey]) {
+                        ccExpenseByCard[cardKey] = {
+                            name: account.name,
+                            color: account.color ?? '#6366F1',
+                            totalExpenses: 0,
+                        }
+                    }
+                    ccExpenseByCard[cardKey].totalExpenses += plan.installmentAmount
+                }
+            }
+        }
+
+        // ── Credit card payments grouped by destination account ────────────────
         const ccPaymentByCard: Record<string, number> = {}
         for (const t of ccPayments) {
             const destId = String(t.destinationAccountId)
@@ -89,8 +141,8 @@ export async function GET(request: Request) {
             }
         }
 
-        // Prorrateo: deuda neta por tarjeta = gastos en tarjeta - pagos realizados en el período
-        // Si se pagó más de lo gastado en el período, netOwed = 0 (cubre deuda anterior también)
+        // ── Prorrateo: net owed per card = expenses - payments ─────────────────
+        // netOwed = 0 if payments exceed expenses in the period
         const creditCards = Object.entries(ccExpenseByCard)
             .map(([id, card]) => {
                 const totalPaid = ccPaymentByCard[id] ?? 0
@@ -104,7 +156,7 @@ export async function GET(request: Request) {
                     netOwed,
                 }
             })
-            .filter((cc) => cc.totalExpenses > 0) // solo tarjetas usadas en el período
+            .filter((cc) => cc.totalExpenses > 0)
 
         const income = Object.values(incomeMap).sort((a, b) => b.amount - a.amount)
         const expenses = Object.values(expenseMap).sort((a, b) => b.amount - a.amount)

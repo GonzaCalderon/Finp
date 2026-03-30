@@ -16,6 +16,7 @@ import {
     MoreHorizontal,
     Eye,
     EyeOff,
+    ChevronDown,
     Upload,
     X,
     Settings,
@@ -73,6 +74,21 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     const pathname = usePathname()
     const { hidden, toggleHidden } = useHideAmounts()
 
+    // Expand section if currently on that path; user can toggle manually
+    const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+        const initial: Record<string, boolean> = {}
+        NAV_ITEMS.forEach(item => {
+            if (item.subItems && (pathname === item.href || pathname.startsWith(item.href + '/'))) {
+                initial[item.href] = true
+            }
+        })
+        return initial
+    })
+
+    const toggleSection = (href: string) => {
+        setExpandedSections(prev => ({ ...prev, [href]: !prev[href] }))
+    }
+
     return (
         <div className="flex h-full flex-col">
             <div
@@ -91,24 +107,47 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                 {NAV_ITEMS.map(({ href, label, icon: Icon, subItems }) => {
                     const isActive = pathname === href
                     const isSectionActive = pathname === href || pathname.startsWith(href + '/')
+                    const isExpanded = expandedSections[href] ?? false
 
                     return (
                         <div key={href}>
-                            <Link
-                                href={href}
-                                onClick={onClose}
-                                className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors"
-                                style={{
-                                    color: isActive ? '#fff' : 'var(--sidebar-foreground)',
-                                    background: isActive ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
-                                }}
-                            >
-                                <Icon size={16} />
-                                {label}
-                            </Link>
+                            {/* Item principal */}
+                            <div className="flex items-center gap-0.5">
+                                <Link
+                                    href={href}
+                                    onClick={onClose}
+                                    className="flex flex-1 items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors"
+                                    style={{
+                                        color: isSectionActive ? '#fff' : 'var(--sidebar-foreground)',
+                                        background: isActive ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
+                                    }}
+                                >
+                                    <Icon size={16} />
+                                    {label}
+                                </Link>
 
-                            {subItems && (isSectionActive || true) && (
-                                <div className="ml-3 mt-0.5 mb-0.5 space-y-0.5 border-l pl-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                                {subItems && (
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleSection(href)}
+                                        className="flex items-center justify-center w-7 h-7 rounded-md transition-colors hover:bg-white/8"
+                                        style={{ color: 'rgba(255,255,255,0.4)' }}
+                                        aria-label={isExpanded ? 'Contraer' : 'Expandir'}
+                                    >
+                                        <ChevronDown
+                                            size={13}
+                                            style={{
+                                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                transition: 'transform 0.18s ease',
+                                            }}
+                                        />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Sub-items desplegables */}
+                            {subItems && isExpanded && (
+                                <div className="ml-3 mt-0.5 mb-1 space-y-0.5 border-l pl-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
                                     {subItems.map((sub) => {
                                         const subActive = pathname === sub.href || pathname.startsWith(sub.href + '/')
                                         return (
