@@ -25,6 +25,11 @@ export function isCategoryCompatible(categoryType: string, selectedType: string)
     return categoryType === selectedType
 }
 
+/** Determina si un tipo de transacción es un consumo con tarjeta de crédito. */
+export function isCCExpenseType(type: string): boolean {
+    return type === 'credit_card_expense'
+}
+
 /**
  * Normaliza los filtros activos: si la categoría seleccionada no existe
  * o no es compatible con el tipo seleccionado, la limpia automáticamente.

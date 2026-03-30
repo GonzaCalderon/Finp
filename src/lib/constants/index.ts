@@ -10,9 +10,10 @@ export const ACCOUNT_TYPES = {
 export const TRANSACTION_TYPES = {
     INCOME: 'income',
     EXPENSE: 'expense',
+    CREDIT_CARD_EXPENSE: 'credit_card_expense',
     TRANSFER: 'transfer',
     CREDIT_CARD_PAYMENT: 'credit_card_payment',
-    DEBT_PAYMENT: 'debt_payment',
+    DEBT_PAYMENT: 'debt_payment',      // kept for backwards compat — display as "Pago de tarjeta"
     ADJUSTMENT: 'adjustment',
 } as const
 

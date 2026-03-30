@@ -3,6 +3,7 @@ import { z } from 'zod'
 const transactionTypeSchema = z.enum([
     'income',
     'expense',
+    'credit_card_expense',
     'transfer',
     'credit_card_payment',
     'debt_payment',
@@ -37,7 +38,7 @@ const amountSchema = z.preprocess((value) => {
     }
 
     return value
-}, z.number().min(0.01, 'El monto debe ser mayor a 0'))
+}, z.number().refine(n => n !== 0, 'El monto debe ser distinto de cero'))
 
 const dateSchema = z.preprocess((value) => {
     if (value instanceof Date) return value
@@ -68,6 +69,14 @@ export const transactionSchema = z
         merchant: optionalTrimmedString,
     })
     .superRefine((data, ctx) => {
+        if (data.type !== 'adjustment' && data.amount < 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'El monto debe ser mayor a 0',
+                path: ['amount'],
+            })
+        }
+
         if (data.type === 'income' && !data.destinationAccountId) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
@@ -77,7 +86,7 @@ export const transactionSchema = z
         }
 
         if (
-            ['expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(
+            ['expense', 'credit_card_expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(
                 data.type
             ) &&
             !data.sourceAccountId

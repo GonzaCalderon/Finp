@@ -44,6 +44,7 @@ const NAV_ITEMS: NavItemDef[] = [
         label: 'Transacciones',
         icon: ArrowLeftRight,
         subItems: [
+            { href: '/transactions/credit-card', label: 'Gastos con TC', icon: CreditCard },
             { href: '/transactions/import', label: 'Importar', icon: Upload },
         ],
     },
@@ -63,7 +64,20 @@ const BOTTOM_NAV_RIGHT = [
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
 ]
 
-const MORE_ITEMS = [
+type MoreItem =
+    | { href: string; label: string; icon: React.ElementType; subItems?: never }
+    | { href: string; label: string; icon: React.ElementType; subItems: { href: string; label: string; icon: React.ElementType }[] }
+
+const MORE_ITEMS: MoreItem[] = [
+    {
+        href: '/transactions',
+        label: 'Transacciones',
+        icon: ArrowLeftRight,
+        subItems: [
+            { href: '/transactions/credit-card', label: 'Gastos con TC', icon: CreditCard },
+            { href: '/transactions/import', label: 'Importar', icon: Upload },
+        ],
+    },
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
     { href: '/rules', label: 'Reglas', icon: Wand2 },
@@ -204,6 +218,13 @@ function MobileBottomBar() {
     const [moreOpen, setMoreOpen] = useState(false)
     const [actionSheetOpen, setActionSheetOpen] = useState(false)
     const [txDialogOpen, setTxDialogOpen] = useState(false)
+    const [moreExpandedSections, setMoreExpandedSections] = useState<Record<string, boolean>>({
+        '/transactions': pathname.startsWith('/transactions/'),
+    })
+
+    const toggleMoreSection = (href: string) => {
+        setMoreExpandedSections(prev => ({ ...prev, [href]: !prev[href] }))
+    }
 
     const { hidden, toggleHidden } = useHideAmounts()
     const { accounts } = useAccounts()
@@ -319,8 +340,74 @@ function MobileBottomBar() {
                             </div>
 
                             <div className="space-y-1">
-                                {MORE_ITEMS.map(({ href, label, icon: Icon }) => {
+                                {MORE_ITEMS.map((item) => {
+                                    const { href, label, icon: Icon, subItems } = item
                                     const isActive = pathname === href
+                                    const isSectionActive = pathname === href || pathname.startsWith(href + '/')
+                                    const isExpanded = moreExpandedSections[href] ?? false
+
+                                    if (subItems) {
+                                        return (
+                                            <div key={href}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleMoreSection(href)}
+                                                    className="flex items-center justify-between w-full px-4 py-3 rounded-xl text-base transition-colors"
+                                                    style={{
+                                                        color: isSectionActive ? '#fff' : 'rgba(255,255,255,0.8)',
+                                                        background: isSectionActive && !isExpanded
+                                                            ? 'rgba(56,189,248,0.18)'
+                                                            : 'transparent',
+                                                    }}
+                                                >
+                                                    <span className="flex items-center gap-4">
+                                                        <Icon size={18} />
+                                                        {label}
+                                                    </span>
+                                                    <ChevronDown
+                                                        size={15}
+                                                        style={{
+                                                            color: 'rgba(255,255,255,0.4)',
+                                                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                            transition: 'transform 0.18s ease',
+                                                        }}
+                                                    />
+                                                </button>
+                                                <AnimatePresence initial={false}>
+                                                    {isExpanded && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="ml-4 pl-4 border-l space-y-0.5 py-1" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                                                                {subItems.map(sub => {
+                                                                    const subActive = pathname === sub.href || pathname.startsWith(sub.href + '/')
+                                                                    return (
+                                                                        <Link
+                                                                            key={sub.href}
+                                                                            href={sub.href}
+                                                                            onClick={closeMore}
+                                                                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm w-full transition-colors"
+                                                                            style={{
+                                                                                color: subActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                                                                                background: subActive ? 'rgba(56,189,248,0.14)' : 'transparent',
+                                                                            }}
+                                                                        >
+                                                                            <sub.icon size={15} />
+                                                                            {sub.label}
+                                                                        </Link>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        )
+                                    }
 
                                     return (
                                         <Link

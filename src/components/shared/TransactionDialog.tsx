@@ -68,17 +68,19 @@ interface TransactionDialogProps {
 const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
     income: 'Ingreso',
     expense: 'Gasto',
+    credit_card_expense: 'Gasto con TC',
     transfer: 'Transferencia',
     credit_card_payment: 'Pago de tarjeta',
-    debt_payment: 'Pago de deuda',
+    debt_payment: 'Pago de tarjeta',   // backwards compat
     adjustment: 'Ajuste',
 }
 
 const QUICK_TYPES: TransactionFormInput['type'][] = ['expense', 'income']
+// debt_payment removed from selector — unified into credit_card_payment
 const SECONDARY_TYPES: TransactionFormInput['type'][] = ['transfer', 'credit_card_payment', 'adjustment']
 const SECONDARY_TYPE_LABELS: Partial<Record<TransactionFormInput['type'], string>> = {
     transfer: 'Transferencia',
-    credit_card_payment: 'Pago de tarjeta',
+    credit_card_payment: 'Pago tarjeta',
     adjustment: 'Ajuste',
 }
 
@@ -169,6 +171,9 @@ export function TransactionDialog({
     const [categoryManuallySet, setCategoryManuallySet] = useState(false)
     const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
 
+    // Adjustment sign state
+    const [adjustmentSign, setAdjustmentSign] = useState<'+' | '-'>('+')
+
     // Installment / payment method state (expense only)
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('debit')
     const [installmentCount, setInstallmentCount] = useState(1)
@@ -197,18 +202,18 @@ export function TransactionDialog({
     // ─── Derived flags ────────────────────────────────────────────────────────
 
     const isEditing = Boolean(transaction)
-    const isExpense = type === 'expense'
-    const isQuickFlow = type === 'income' || type === 'expense'
+    const isExpense = type === 'expense' || type === 'credit_card_expense'
+    const isQuickFlow = type === 'income' || type === 'expense' || type === 'credit_card_expense'
 
-    // Payment method section only for NEW expenses
-    const showPaymentMethod = isExpense && !isEditing
+    // Payment method section for all expenses (new and editing)
+    const showPaymentMethod = isExpense
     const isCardExpense = isExpense && paymentMethod === 'credit_card'
     // Installment mode: credit card expense with >1 cuota on a NEW transaction
     const isInstallmentMode = isCardExpense && installmentCount > 1 && !isEditing && Boolean(onInstallmentSubmit)
 
-    const showSource = ['expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(type)
+    const showSource = ['expense', 'credit_card_expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(type)
     const showDestination = ['income', 'transfer', 'credit_card_payment', 'debt_payment'].includes(type)
-    const showCategory = ['income', 'expense'].includes(type)
+    const showCategory = ['income', 'expense', 'credit_card_expense'].includes(type)
 
     // ─── Account lists ────────────────────────────────────────────────────────
 
@@ -266,9 +271,10 @@ export function TransactionDialog({
         setFirstClosingMonth('')
 
         if (transaction) {
+            setAdjustmentSign(transaction.type === 'adjustment' && transaction.amount < 0 ? '-' : '+')
             reset({
                 type: transaction.type,
-                amount: transaction.amount,
+                amount: Math.abs(transaction.amount),
                 currency: transaction.currency,
                 date: new Date(transaction.date),
                 description: transaction.description,
@@ -312,6 +318,7 @@ export function TransactionDialog({
         })
         setShowMoreOptions(false)
         setInstallmentCount(1)
+        setAdjustmentSign('+')
 
         // Auto-detectar medio de pago según el tipo de cuenta por defecto
         const defaultAccount = defaultAccountId
@@ -335,12 +342,12 @@ export function TransactionDialog({
 
     // When paymentMethod changes, clear sourceAccountId if no longer compatible
     useEffect(() => {
-        if (!isExpense || isEditing) return
+        if (!isExpense) return
         const compatible = expenseAccounts.some(a => a._id.toString() === sourceAccountId)
         if (sourceAccountId && !compatible) {
             setValue('sourceAccountId', undefined, { shouldValidate: true })
         }
-    }, [paymentMethod, expenseAccounts, sourceAccountId, isExpense, isEditing, setValue])
+    }, [paymentMethod, expenseAccounts, sourceAccountId, isExpense, setValue])
 
     // Rule suggestions for description/merchant
     useEffect(() => {
@@ -408,7 +415,17 @@ export function TransactionDialog({
             })
             return
         }
-        await onSubmit(data)
+        // Map expense + credit card payment method → credit_card_expense type
+        let finalData = data.type === 'expense' && paymentMethod === 'credit_card'
+            ? { ...data, type: 'credit_card_expense' as TransactionFormInput['type'] }
+            : data
+
+        // Apply adjustment sign if negative
+        if (finalData.type === 'adjustment' && adjustmentSign === '-') {
+            finalData = { ...finalData, amount: -finalData.amount }
+        }
+
+        await onSubmit(finalData)
     }
 
     const fmtCurrency = (n: number) =>
@@ -520,7 +537,7 @@ export function TransactionDialog({
 
                         {/* ── Monto + Moneda ── */}
                         <div className="grid grid-cols-3 gap-3 items-start">
-                            <div className="col-span-2">
+                            <div className={type === 'adjustment' ? 'col-span-1' : 'col-span-2'}>
                                 <FormattedAmountInput
                                     id="amount"
                                     label="Monto"
@@ -532,6 +549,36 @@ export function TransactionDialog({
                                     }
                                 />
                             </div>
+                            {type === 'adjustment' && (
+                                <div className="space-y-2">
+                                    <Label>Signo</Label>
+                                    <div className="grid grid-cols-2 gap-1">
+                                        {(['+', '-'] as const).map(sign => (
+                                            <button
+                                                key={sign}
+                                                type="button"
+                                                onClick={() => setAdjustmentSign(sign)}
+                                                className="rounded-lg border py-2 text-sm font-semibold transition-colors"
+                                                style={{
+                                                    background: adjustmentSign === sign
+                                                        ? sign === '+'
+                                                            ? 'rgba(16,185,129,0.15)'
+                                                            : 'rgba(239,68,68,0.15)'
+                                                        : 'var(--secondary)',
+                                                    color: adjustmentSign === sign
+                                                        ? sign === '+' ? '#059669' : '#DC2626'
+                                                        : 'var(--muted-foreground)',
+                                                    borderColor: adjustmentSign === sign
+                                                        ? sign === '+' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'
+                                                        : 'var(--border)',
+                                                }}
+                                            >
+                                                {sign}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <Label>Moneda</Label>
                                 <Select
@@ -665,7 +712,7 @@ export function TransactionDialog({
                                         </div>
 
                                         {/* Cuotas stepper + Primera cuota */}
-                                        <div className="grid grid-cols-2 gap-3 items-start">
+                                        {!isEditing && <div className="grid grid-cols-2 gap-3 items-start">
                                             <div className="space-y-2">
                                                 <Label>Cuotas</Label>
                                                 <div className="flex items-center gap-1">
@@ -729,10 +776,10 @@ export function TransactionDialog({
                                                         <p className="text-sm text-destructive">{firstMonthError}</p>
                                                     )}
                                                 </div>
-                                        </div>
+                                        </div>}
 
                                         {/* Plan de cuotas preview */}
-                                        {installmentAmount > 0 && (
+                                        {!isEditing && installmentAmount > 0 && (
                                             <div
                                                 className="rounded-lg border px-3 py-2.5"
                                                 style={{
@@ -792,8 +839,8 @@ export function TransactionDialog({
                             </div>
                         )}
 
-                        {/* ── Cuenta origen (editing expense / otros tipos) ── */}
-                        {(!isExpense || isEditing) && showSource && (
+                        {/* ── Cuenta origen (otros tipos, no expense) ── */}
+                        {!isExpense && showSource && (
                             <div className="space-y-2">
                                 <Label>Cuenta de origen</Label>
                                 <Select

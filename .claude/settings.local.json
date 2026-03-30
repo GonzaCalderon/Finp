@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(tasklist /fi \"pid eq 6140\" /fo list)",
+      "Bash(tasklist)",
+      "Bash(taskkill /PID 6140 /F)",
+      "Bash(kill 6140)",
+      "Bash(npx kill-port:*)",
+      "Bash(powershell.exe -Command \"Stop-Process -Id 6140 -Force\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(grep -l \"Dialog\\\\|Sheet\" ./src/components/shared/*.tsx)",
+      "Bash(wc -l ./src/components/shared/*.tsx)",
+      "Bash(head -50 ./src/app/\\\\\\(app\\\\\\)/accounts/page.tsx)",
+      "Bash(npm install:*)",
+      "Bash(npm list:*)",
+      "Bash(mkdir -p \"C:/Users/gonza/WebstormProjects/Finp/finm/src/app/api/import/[batchId]/rows/[rowId]\")",
+      "Bash(mkdir -p \"C:/Users/gonza/WebstormProjects/Finp/finm/src/app/api/import/[batchId]/confirm\")",
+      "Bash(npx next:*)",
+      "Bash(cat -n src/app/\\\\\\(app\\\\\\)/dashboard/page.tsx)",
+      "Bash(wc -l src/app/\\\\\\(app\\\\\\)/transactions/page.tsx src/app/\\\\\\(app\\\\\\)/transactions/import/[batchId]/page.tsx src/app/api/import/[batchId]/confirm/route.ts src/app/api/import/route.ts)",
+      "Bash(taskkill /PID 20728 /F)",
+      "Bash(cmd /c \"taskkill /PID 20728 /F\")",
+      "Bash(find src:*)",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/gonza/WebstormProjects/Finp/finm -type f \\\\\\(-name *sankey* -o -name *Sankey* \\\\\\))",
+      "Bash(find /c/Users/gonza/WebstormProjects/Finp/finm/src/app/api -type f -name *.ts)",
+      "Bash(find /c/Users/gonza/WebstormProjects/Finp/finm/src/lib/utils -type f -name *.ts)",
+      "Bash(wc -l src/app/api/sankey/route.ts src/components/shared/SankeyChart.tsx src/components/shared/AccountDialog.tsx src/app/\\\\\\(app\\\\\\)/dashboard/page.tsx src/components/shared/TransactionDialog.tsx src/app/\\\\\\(app\\\\\\)/transactions/page.tsx)",
+      "Bash(node -e \"const p=require\\(''./package.json''\\); console.log\\(''tailwind:'', p.dependencies?.tailwindcss || p.devDependencies?.tailwindcss, ''next:'', p.dependencies?.next\\)\")",
+      "Bash(taskkill /PID 34680 /F)",
+      "Bash(cmd /c \"taskkill /PID 34680 /F\")",
+      "Bash(cmd /c taskkill /PID 34680 /F)",
+      "Bash(powershell -Command \"Stop-Process -Id 34680 -Force\")",
+      "Bash(wc -l /c/Users/gonza/WebstormProjects/Finp/finm/src/app/\\\\\\(app\\\\\\)/transactions/page.tsx)"
+    ]
+  }
+}

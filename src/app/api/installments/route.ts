@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
         const transaction = await Transaction.create({
             userId: session.user.id,
-            type: 'expense',
+            type: 'credit_card_expense',
             amount: data.totalAmount,
             currency: data.currency,
             date: data.purchaseDate,

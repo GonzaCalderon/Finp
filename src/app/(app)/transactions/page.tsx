@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2, Upload } from 'lucide-react'
+import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2, Upload, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 
 import { useTransactions } from '@/hooks/useTransactions'
@@ -50,9 +50,10 @@ import type { ICategory, ITransaction, IAccount } from '@/types'
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     income: 'Ingreso',
     expense: 'Gasto',
+    credit_card_expense: 'Gasto con TC',
     transfer: 'Transferencia',
     credit_card_payment: 'Pago tarjeta',
-    debt_payment: 'Pago deuda',
+    debt_payment: 'Pago tarjeta',      // backwards compat
     adjustment: 'Ajuste',
 }
 
@@ -62,6 +63,7 @@ const TRANSACTION_TYPE_COLORS: Record<
 > = {
     income: 'default',
     expense: 'destructive',
+    credit_card_expense: 'outline',
     transfer: 'secondary',
     credit_card_payment: 'outline',
     debt_payment: 'outline',
@@ -224,6 +226,10 @@ function TypeFilterChip({
     const typeOptions = [
         { value: 'income', label: 'Ingreso' },
         { value: 'expense', label: 'Gasto' },
+        { value: 'credit_card_expense', label: 'Gasto con TC' },
+        { value: 'transfer', label: 'Transferencia' },
+        { value: 'credit_card_payment', label: 'Pago tarjeta' },
+        { value: 'adjustment', label: 'Ajuste' },
     ]
 
     return (
@@ -646,6 +652,7 @@ export default function TransactionsPage() {
 
     const {
         transactions,
+        summary,
         loading,
         refreshing,
         loadingMore,
@@ -764,6 +771,10 @@ export default function TransactionsPage() {
         () => [
             { value: 'income', label: 'Ingreso' },
             { value: 'expense', label: 'Gasto' },
+            { value: 'credit_card_expense', label: 'Gasto con TC' },
+            { value: 'transfer', label: 'Transferencia' },
+            { value: 'credit_card_payment', label: 'Pago tarjeta' },
+            { value: 'adjustment', label: 'Ajuste' },
         ],
         []
     )
@@ -780,13 +791,10 @@ export default function TransactionsPage() {
     const selectedAppliedCategoryType =
         categoryOptions.find((category) => category.value === appliedFilters.categoryId)?.type ?? ''
 
-    const totalIncome = transactions
-        .filter((transaction) => transaction.type === 'income')
-        .reduce((sum, transaction) => sum + transaction.amount, 0)
-
-    const totalExpense = transactions
-        .filter((transaction) => transaction.type === 'expense' && !transaction.installmentPlanId)
-        .reduce((sum, transaction) => sum + transaction.amount, 0)
+    // KPIs come from the API summary (full month, unfiltered by type/category/account)
+    const totalIncome = summary.income
+    const totalExpense = summary.expense
+    const totalCreditCardExpense = summary.creditCardExpense
 
     const fmt = (amount: number, currency: string) =>
         hidden
@@ -867,6 +875,21 @@ export default function TransactionsPage() {
                         <p className="text-base md:text-xl font-semibold tracking-tight text-destructive truncate">
                             {fmt(totalExpense, 'ARS')}
                         </p>
+                        <AnimatePresence>
+                            {totalCreditCardExpense > 0 && (
+                                <motion.p
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 4 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex items-center gap-1 text-xs mt-1 truncate"
+                                    style={{ color: '#6366F1' }}
+                                >
+                                    <CreditCard className="w-3 h-3 shrink-0" />
+                                    {fmt(totalCreditCardExpense, 'ARS')} con TC
+                                </motion.p>
+                            )}
+                        </AnimatePresence>
                     </div>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--sky)' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Balance</p>
@@ -1045,7 +1068,9 @@ export default function TransactionsPage() {
                                                                         ? '#10B981'
                                                                         : transaction.type === 'expense'
                                                                             ? 'var(--destructive)'
-                                                                            : 'var(--foreground)',
+                                                                            : transaction.type === 'credit_card_expense'
+                                                                                ? '#6366F1'
+                                                                                : 'var(--foreground)',
                                                             }}
                                                         >
                                                             {fmt(transaction.amount, transaction.currency)}
@@ -1125,10 +1150,10 @@ export default function TransactionsPage() {
                                 </span>
                                                             )}
 
-                                                            {transaction.installmentPlanId && (
-                                                                <span className="text-xs" style={{ color: 'var(--sky)' }}>
-                                  · en cuotas
-                                </span>
+                                                            {transaction.type === 'credit_card_expense' && transaction.installmentPlanId && (
+                                                                <span className="text-xs font-medium" style={{ color: '#6366F1' }}>
+                                                                    · cuotas
+                                                                </span>
                                                             )}
                                                         </div>
                                                     </div>
@@ -1143,7 +1168,9 @@ export default function TransactionsPage() {
                                                                     ? '#10B981'
                                                                     : transaction.type === 'expense'
                                                                         ? 'var(--destructive)'
-                                                                        : 'var(--foreground)',
+                                                                        : transaction.type === 'credit_card_expense'
+                                                                            ? '#6366F1'
+                                                                            : 'var(--foreground)',
                                                         }}
                                                     >
                                                         {fmt(transaction.amount, transaction.currency)}
