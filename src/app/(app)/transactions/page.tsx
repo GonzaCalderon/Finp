@@ -38,7 +38,6 @@ import {
 } from '@/components/ui/alert-dialog'
 
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
-import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
 
@@ -626,7 +625,6 @@ export default function TransactionsPage() {
     const [sort, setSort] = useState(DEFAULT_SORT)
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
-    const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false)
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
 
@@ -721,7 +719,7 @@ export default function TransactionsPage() {
         try {
             await createPlan(data as never)
             success('Compra en cuotas registrada correctamente')
-            setInstallmentDialogOpen(false)
+            setTransactionDialogOpen(false)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al registrar compra en cuotas')
         }
@@ -846,9 +844,6 @@ export default function TransactionsPage() {
                             <Upload className="w-3.5 h-3.5 mr-1.5" />
                             Importar
                         </Link>
-                    </Button>
-                    <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => setInstallmentDialogOpen(true)}>
-                        + Cuotas
                     </Button>
                     <Button size="sm" className="hidden sm:flex" onClick={handleNewTransaction} data-testid="btn-nueva-transaccion">
                         + Nueva
@@ -1219,16 +1214,9 @@ export default function TransactionsPage() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleTransactionSubmit}
+                onInstallmentSubmit={handleInstallmentSubmit}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
-            />
-
-            <InstallmentDialog
-                open={installmentDialogOpen}
-                onOpenChange={setInstallmentDialogOpen}
-                accounts={accounts}
-                categories={categories}
-                onSubmit={handleInstallmentSubmit}
             />
 
             <AlertDialog open={Boolean(deleteId)} onOpenChange={(open) => !open && setDeleteId(null)}>

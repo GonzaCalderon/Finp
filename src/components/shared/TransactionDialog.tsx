@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CalendarIcon, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
+import {
+    Banknote,
+    Building2,
+    CalendarIcon,
+    ChevronDown,
+    ChevronUp,
+    CreditCard,
+    Minus,
+    Plus,
+    Wand2,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,12 +39,17 @@ import {
     transactionSchema,
     type TransactionFormInput,
     type TransactionFormData,
+    type InstallmentFormData,
 } from '@/lib/validations'
 import type { ITransaction, IAccount, ICategory, ITransactionRule } from '@/types'
 import { Spinner } from '@/components/shared/Spinner'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { evaluateRules } from '@/lib/utils/rules'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type PaymentMethod = 'cash' | 'debit' | 'credit_card'
 
 interface TransactionDialogProps {
     open: boolean
@@ -42,9 +58,12 @@ interface TransactionDialogProps {
     accounts: IAccount[]
     categories: ICategory[]
     onSubmit: (data: TransactionFormData) => Promise<void>
+    onInstallmentSubmit?: (data: InstallmentFormData) => Promise<void>
     rules?: ITransactionRule[]
     defaultAccountId?: string
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
     income: 'Ingreso',
@@ -63,16 +82,67 @@ const SECONDARY_TYPE_LABELS: Partial<Record<TransactionFormInput['type'], string
     adjustment: 'Ajuste',
 }
 
+const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
+    { value: 'cash', label: 'Efectivo', icon: <Banknote className="w-3.5 h-3.5" /> },
+    { value: 'debit', label: 'Débito', icon: <Building2 className="w-3.5 h-3.5" /> },
+    { value: 'credit_card', label: 'Tarjeta', icon: <CreditCard className="w-3.5 h-3.5" /> },
+]
+
+// ─── Month/installment helpers ────────────────────────────────────────────────
+
+function getMonthOptions(): { value: string; label: string }[] {
+    const options: { value: string; label: string }[] = []
+    const now = new Date()
+    for (let i = 0; i < 24; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        const label = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+        options.push({ value, label })
+    }
+    return options
+}
+
+function getInstallmentPlanMonths(firstClosingMonth: string, count: number): Date[] {
+    if (!firstClosingMonth || count <= 0) return []
+    const [year, month] = firstClosingMonth.split('-').map(Number)
+    return Array.from({ length: count }, (_, i) => new Date(year, month - 1 + i, 1))
+}
+
+function formatPlanMonths(months: Date[]): string {
+    if (months.length === 0) return ''
+    const first = months[0]
+    const last = months[months.length - 1]
+    const firstYear = first.getFullYear()
+    const lastYear = last.getFullYear()
+
+    if (months.length <= 4) {
+        const names = months.map(d => d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''))
+        if (firstYear !== lastYear) {
+            return months.map(d =>
+                d.toLocaleDateString('es-AR', { month: 'short', year: 'numeric' }).replace('.', '')
+            ).join(' · ')
+        }
+        return `${names.join(' · ')} ${firstYear}`
+    }
+
+    const fmt = (d: Date) =>
+        d.toLocaleDateString('es-AR', { month: 'short', year: 'numeric' }).replace('.', '')
+    return `${fmt(first)} → ${fmt(last)}`
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function TransactionDialog({
-                                      open,
-                                      onOpenChange,
-                                      transaction,
-                                      accounts,
-                                      categories,
-                                      onSubmit,
-                                      rules = [],
-                                      defaultAccountId,
-                                  }: TransactionDialogProps) {
+    open,
+    onOpenChange,
+    transaction,
+    accounts,
+    categories,
+    onSubmit,
+    onInstallmentSubmit,
+    rules = [],
+    defaultAccountId,
+}: TransactionDialogProps) {
     const {
         handleSubmit,
         setValue,
@@ -96,110 +166,104 @@ export function TransactionDialog({
     })
 
     const [showMoreOptions, setShowMoreOptions] = useState(false)
-    // Tracks whether the user manually picked a category (overrides rule suggestion)
     const [categoryManuallySet, setCategoryManuallySet] = useState(false)
     const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
+
+    // Installment / payment method state (expense only)
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('debit')
+    const [installmentCount, setInstallmentCount] = useState(1)
+    const [firstClosingMonth, setFirstClosingMonth] = useState('')
+    const [firstMonthError, setFirstMonthError] = useState<string | null>(null)
 
     const scrollRef = useRef<HTMLDivElement>(null)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
+    const monthOptions = useMemo(() => getMonthOptions(), [])
+
+    // ─── Watched values ───────────────────────────────────────────────────────
+
     const watchedValues = watch()
-
-    const type: TransactionFormInput['type'] =
-        typeof watchedValues.type === 'string'
-            ? (watchedValues.type as TransactionFormInput['type'])
-            : 'expense'
-
-    const amount =
-        typeof watchedValues.amount === 'number' ? watchedValues.amount : 0
-
-    const date =
-        watchedValues.date instanceof Date ? watchedValues.date : undefined
-
-    const currency: TransactionFormInput['currency'] =
-        watchedValues.currency === 'USD' ? 'USD' : 'ARS'
-
-    const sourceAccountId =
-        typeof watchedValues.sourceAccountId === 'string'
-            ? watchedValues.sourceAccountId
-            : ''
-
-    const destinationAccountId =
-        typeof watchedValues.destinationAccountId === 'string'
-            ? watchedValues.destinationAccountId
-            : ''
-
-    const categoryId =
-        typeof watchedValues.categoryId === 'string' ? watchedValues.categoryId : ''
-
-    const description =
-        typeof watchedValues.description === 'string'
-            ? watchedValues.description
-            : ''
-
-    const merchant =
-        typeof watchedValues.merchant === 'string' ? watchedValues.merchant : ''
-
+    const type = ((watchedValues.type as string) || 'expense') as TransactionFormInput['type']
+    const amount = typeof watchedValues.amount === 'number' ? watchedValues.amount : 0
+    const date = watchedValues.date instanceof Date ? watchedValues.date : undefined
+    const currency: TransactionFormInput['currency'] = watchedValues.currency === 'USD' ? 'USD' : 'ARS'
+    const sourceAccountId = typeof watchedValues.sourceAccountId === 'string' ? watchedValues.sourceAccountId : ''
+    const destinationAccountId = typeof watchedValues.destinationAccountId === 'string' ? watchedValues.destinationAccountId : ''
+    const categoryId = typeof watchedValues.categoryId === 'string' ? watchedValues.categoryId : ''
+    const description = typeof watchedValues.description === 'string' ? watchedValues.description : ''
+    const merchant = typeof watchedValues.merchant === 'string' ? watchedValues.merchant : ''
     const notes = typeof watchedValues.notes === 'string' ? watchedValues.notes : ''
 
-    const filteredCategories = useMemo(
-        () =>
-            categories.filter((category) => {
-                if (type === 'income') return category.type === 'income'
-                if (type === 'expense') return category.type === 'expense'
-                return false
-            }),
-        [categories, type]
-    )
+    // ─── Derived flags ────────────────────────────────────────────────────────
 
-    const showSource = [
-        'expense',
-        'transfer',
-        'credit_card_payment',
-        'debt_payment',
-        'adjustment',
-    ].includes(type)
-
-    const showDestination = [
-        'income',
-        'transfer',
-        'credit_card_payment',
-        'debt_payment',
-    ].includes(type)
-
-    const showCategory = ['income', 'expense'].includes(type)
+    const isEditing = Boolean(transaction)
+    const isExpense = type === 'expense'
     const isQuickFlow = type === 'income' || type === 'expense'
 
+    // Payment method section only for NEW expenses
+    const showPaymentMethod = isExpense && !isEditing
+    const isCardExpense = isExpense && paymentMethod === 'credit_card'
+    // Installment mode: credit card expense with >1 cuota on a NEW transaction
+    const isInstallmentMode = isCardExpense && installmentCount > 1 && !isEditing && Boolean(onInstallmentSubmit)
+
+    const showSource = ['expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(type)
+    const showDestination = ['income', 'transfer', 'credit_card_payment', 'debt_payment'].includes(type)
+    const showCategory = ['income', 'expense'].includes(type)
+
+    // ─── Account lists ────────────────────────────────────────────────────────
+
+    // Accounts for each payment method (expense + new)
+    const expenseAccounts = useMemo(() => {
+        if (paymentMethod === 'cash') return accounts.filter(a => a.type === 'cash')
+        if (paymentMethod === 'credit_card') return accounts.filter(a => a.type === 'credit_card')
+        return accounts.filter(a => ['bank', 'wallet', 'savings'].includes(a.type))
+    }, [accounts, paymentMethod])
+
+    // Accounts for editing an expense / other types
     const suggestedAccounts = useMemo(() => {
-        if (type === 'income') {
-            // Destino ingreso: no puede ser tarjeta ni deuda
+        if (type === 'income') return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
+        if (type === 'expense') return accounts.filter(a => a.type !== 'debt')
+        if (type === 'credit_card_payment' || type === 'debt_payment')
             return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
-        }
-        if (type === 'expense') {
-            // Gasto: cualquier cuenta excepto deuda (credit_card OK para pago en 1 cuota)
-            return accounts.filter(a => a.type !== 'debt')
-        }
-        if (type === 'credit_card_payment' || type === 'debt_payment') {
-            // Origen del pago: no puede ser tarjeta ni deuda (se paga desde banco/efectivo/etc.)
-            return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
-        }
         return accounts
     }, [accounts, type])
 
     const destinationAccounts = useMemo(() => {
-        // credit_card_payment cubre tanto tarjetas como deudas (son el mismo flujo desde el usuario)
-        if (type === 'credit_card_payment') {
-            return accounts.filter(a => a.type === 'credit_card' || a.type === 'debt')
-        }
+        if (type === 'credit_card_payment') return accounts.filter(a => a.type === 'credit_card' || a.type === 'debt')
         if (type === 'debt_payment') return accounts.filter(a => a.type === 'debt')
         return accounts
     }, [accounts, type])
+
+    // ─── Installment plan preview ─────────────────────────────────────────────
+
+    const installmentAmount = isCardExpense && installmentCount > 0 && amount > 0
+        ? amount / installmentCount
+        : 0
+
+    const planMonths = useMemo(
+        () => getInstallmentPlanMonths(firstClosingMonth, installmentCount),
+        [firstClosingMonth, installmentCount]
+    )
+    const planMonthsLabel = useMemo(() => formatPlanMonths(planMonths), [planMonths])
+
+    const filteredCategories = useMemo(
+        () => categories.filter(c => {
+            if (type === 'income') return c.type === 'income'
+            if (type === 'expense') return c.type === 'expense'
+            return false
+        }),
+        [categories, type]
+    )
+
+    // ─── Effects ──────────────────────────────────────────────────────────────
 
     useEffect(() => {
         if (!open) return
 
         setCategoryManuallySet(false)
         setAppliedRuleName(null)
+        setFirstMonthError(null)
+        setFirstClosingMonth('')
 
         if (transaction) {
             reset({
@@ -210,22 +274,27 @@ export function TransactionDialog({
                 description: transaction.description,
                 categoryId:
                     (transaction.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
-                    transaction.categoryId?.toString() ??
-                    undefined,
+                    transaction.categoryId?.toString() ?? undefined,
                 sourceAccountId:
                     (transaction.sourceAccountId as { _id?: { toString(): string } })?._id?.toString() ??
-                    transaction.sourceAccountId?.toString() ??
-                    undefined,
+                    transaction.sourceAccountId?.toString() ?? undefined,
                 destinationAccountId:
-                    (transaction.destinationAccountId as {
-                        _id?: { toString(): string }
-                    })?._id?.toString() ??
-                    transaction.destinationAccountId?.toString() ??
-                    undefined,
+                    (transaction.destinationAccountId as { _id?: { toString(): string } })?._id?.toString() ??
+                    transaction.destinationAccountId?.toString() ?? undefined,
                 notes: transaction.notes ?? '',
                 merchant: transaction.merchant ?? '',
             })
             setShowMoreOptions(Boolean(transaction.notes || transaction.merchant))
+
+            // Auto-detect payment method from account type
+            const srcId =
+                (transaction.sourceAccountId as { _id?: { toString(): string } })?._id?.toString() ??
+                transaction.sourceAccountId?.toString()
+            const srcAccount = accounts.find(a => a._id.toString() === srcId)
+            if (srcAccount?.type === 'cash') setPaymentMethod('cash')
+            else if (srcAccount?.type === 'credit_card') setPaymentMethod('credit_card')
+            else setPaymentMethod('debit')
+            setInstallmentCount(1)
             return
         }
 
@@ -242,89 +311,146 @@ export function TransactionDialog({
             merchant: '',
         })
         setShowMoreOptions(false)
-    }, [open, transaction, reset, defaultAccountId])
+        setPaymentMethod('debit')
+        setInstallmentCount(1)
+    }, [open, transaction, reset, defaultAccountId, accounts])
 
+    // Clear category when type doesn't support it
     useEffect(() => {
-        if (!showCategory) {
-            setValue('categoryId', undefined, { shouldValidate: true })
-        }
+        if (!showCategory) setValue('categoryId', undefined, { shouldValidate: true })
     }, [showCategory, setValue])
 
+    // Clear accounts when type changes
     useEffect(() => {
-        if (!showSource) {
-            setValue('sourceAccountId', undefined, { shouldValidate: true })
-        }
-        if (!showDestination) {
-            setValue('destinationAccountId', undefined, { shouldValidate: true })
-        }
+        if (!showSource) setValue('sourceAccountId', undefined, { shouldValidate: true })
+        if (!showDestination) setValue('destinationAccountId', undefined, { shouldValidate: true })
     }, [showSource, showDestination, setValue])
 
-    // Rule suggestion: evaluate rules when description or merchant changes (only for new transactions)
+    // When paymentMethod changes, clear sourceAccountId if no longer compatible
     useEffect(() => {
-        if (transaction) return // don't apply rules when editing
-        if (!isQuickFlow) return // only for expense/income
-        if (categoryManuallySet) return // user overrode, respect that
+        if (!isExpense || isEditing) return
+        const compatible = expenseAccounts.some(a => a._id.toString() === sourceAccountId)
+        if (sourceAccountId && !compatible) {
+            setValue('sourceAccountId', undefined, { shouldValidate: true })
+        }
+    }, [paymentMethod, expenseAccounts, sourceAccountId, isExpense, isEditing, setValue])
 
-        const activeRules = rules.filter((r) => r.isActive)
+    // Rule suggestions for description/merchant
+    useEffect(() => {
+        if (transaction) return
+        if (!isQuickFlow) return
+        if (categoryManuallySet) return
+
+        const activeRules = rules.filter(r => r.isActive)
         if (activeRules.length === 0) return
 
-        const { matched, rule } = evaluateRules(activeRules, {
-            type,
-            description,
-            merchant,
-        })
-
+        const { matched, rule } = evaluateRules(activeRules, { type, description, merchant })
         if (matched && rule) {
             const ruleCategoryId =
                 (rule.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
                 rule.categoryId?.toString()
-            if (ruleCategoryId) {
-                setValue('categoryId', ruleCategoryId, { shouldValidate: true })
-            }
-            if (!merchant && rule.normalizeMerchant) {
+            if (ruleCategoryId) setValue('categoryId', ruleCategoryId, { shouldValidate: true })
+            if (!merchant && rule.normalizeMerchant)
                 setValue('merchant', rule.normalizeMerchant, { shouldValidate: true })
-            }
             setAppliedRuleName(rule.name)
         } else {
             setAppliedRuleName(null)
         }
     }, [description, merchant, type, rules, transaction, isQuickFlow, categoryManuallySet, setValue])
 
+    // ─── Handlers ─────────────────────────────────────────────────────────────
+
+    const handleDateChange = (selected: Date | undefined) => {
+        if (!selected) return
+        setValue('date', selected, { shouldValidate: true })
+        // Auto-suggest first closing month for credit card when user picks a date
+        if (isCardExpense && !firstClosingMonth) {
+            const next = new Date(selected.getFullYear(), selected.getMonth() + 1, 1)
+            const val = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
+            if (monthOptions.some(m => m.value === val)) setFirstClosingMonth(val)
+        }
+    }
+
+    const handlePaymentMethodChange = (pm: PaymentMethod) => {
+        setPaymentMethod(pm)
+        if (pm !== 'credit_card') {
+            setInstallmentCount(1)
+            setFirstClosingMonth('')
+            setFirstMonthError(null)
+        }
+    }
+
     const handleFormSubmit = async (data: TransactionFormData) => {
+        if (isInstallmentMode && onInstallmentSubmit) {
+            if (!firstClosingMonth) {
+                setFirstMonthError('El mes de primera cuota es requerido')
+                return
+            }
+            setFirstMonthError(null)
+            await onInstallmentSubmit({
+                description: data.description,
+                totalAmount: data.amount,
+                currency: data.currency,
+                installmentCount,
+                accountId: data.sourceAccountId!,
+                categoryId: data.categoryId,
+                purchaseDate: data.date,
+                firstClosingMonth,
+                merchant: data.merchant,
+                notes: data.notes,
+            })
+            return
+        }
         await onSubmit(data)
     }
 
+    const fmtCurrency = (n: number) =>
+        new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+        }).format(n)
+
+    // ─── Render ───────────────────────────────────────────────────────────────
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg p-0 overflow-hidden">
-                <DialogHeader className="px-5 pt-5 pb-0">
+            <DialogContent
+                className={cn(
+                    'p-0 overflow-hidden',
+                    // Mobile: fullscreen
+                    'max-sm:!top-0 max-sm:!left-0 max-sm:![transform:none] max-sm:!w-screen max-sm:!h-[100dvh] max-sm:!max-w-none max-sm:!rounded-none',
+                    // Desktop
+                    'sm:max-w-lg',
+                )}
+            >
+                <DialogHeader className="shrink-0 px-5 pt-5 pb-0">
                     <DialogTitle>
-                        {transaction ? 'Editar transacción' : 'Nueva transacción'}
+                        {transaction
+                            ? 'Editar transacción'
+                            : isInstallmentMode
+                                ? 'Gasto en cuotas'
+                                : 'Nueva transacción'}
                     </DialogTitle>
                 </DialogHeader>
 
                 <form
                     onSubmit={handleSubmit(handleFormSubmit)}
-                    className="flex max-h-[85vh] flex-col"
+                    className="flex flex-col overflow-hidden max-sm:h-[calc(100dvh-64px)] sm:max-h-[85vh]"
                 >
-                    <div ref={scrollRef} className="overflow-y-auto px-5 py-4 space-y-5">
-                        {/* Tipo */}
-                        <div className="space-y-2">
-                            <Label>Tipo</Label>
+                    <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
 
-                            {/* Tipos principales: gasto e ingreso como acceso rápido */}
+                        {/* ── Tipo ── */}
+                        <div className="space-y-2">
                             <div className="grid grid-cols-2 gap-2">
-                                {QUICK_TYPES.map((option) => {
+                                {QUICK_TYPES.map(option => {
                                     const selected = type === option
                                     return (
                                         <button
                                             key={option}
                                             type="button"
-                                            onClick={() =>
-                                                setValue('type', option, {
-                                                    shouldValidate: true,
-                                                })
-                                            }
+                                            onClick={() => setValue('type', option, { shouldValidate: true })}
                                             className="rounded-xl border px-4 py-3 text-sm font-medium transition-colors"
                                             style={{
                                                 background: selected ? 'var(--sky)' : 'var(--secondary)',
@@ -338,28 +464,19 @@ export function TransactionDialog({
                                 })}
                             </div>
 
-                            {/* Tipos secundarios: 3 botones compactos */}
                             <div className="grid grid-cols-3 gap-1.5">
-                                {SECONDARY_TYPES.map((option) => {
+                                {SECONDARY_TYPES.map(option => {
                                     const selected = type === option
                                     return (
                                         <button
                                             key={option}
                                             type="button"
-                                            onClick={() =>
-                                                setValue('type', option, { shouldValidate: true })
-                                            }
+                                            onClick={() => setValue('type', option, { shouldValidate: true })}
                                             className="rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors"
                                             style={{
-                                                background: selected
-                                                    ? 'rgba(99,102,241,0.12)'
-                                                    : 'var(--secondary)',
-                                                color: selected
-                                                    ? '#6366F1'
-                                                    : 'var(--muted-foreground)',
-                                                borderColor: selected
-                                                    ? 'rgba(99,102,241,0.5)'
-                                                    : 'var(--border)',
+                                                background: selected ? 'rgba(99,102,241,0.12)' : 'var(--secondary)',
+                                                color: selected ? '#6366F1' : 'var(--muted-foreground)',
+                                                borderColor: selected ? 'rgba(99,102,241,0.5)' : 'var(--border)',
                                             }}
                                         >
                                             {SECONDARY_TYPE_LABELS[option]}
@@ -368,12 +485,12 @@ export function TransactionDialog({
                                 })}
                             </div>
 
-                            {errors.type ? (
+                            {errors.type && (
                                 <p className="text-sm text-destructive">{errors.type.message}</p>
-                            ) : null}
+                            )}
                         </div>
 
-                        {/* Monto + Moneda en la misma fila */}
+                        {/* ── Monto + Moneda ── */}
                         <div className="grid grid-cols-3 gap-3 items-start">
                             <div className="col-span-2">
                                 <FormattedAmountInput
@@ -381,13 +498,9 @@ export function TransactionDialog({
                                     label="Monto"
                                     value={amount}
                                     currency={currency}
-                                    autoFocus
                                     error={errors.amount?.message}
-                                    onValueChangeAction={(nextAmount) =>
-                                        setValue('amount', nextAmount, {
-                                            shouldValidate: true,
-                                            shouldDirty: true,
-                                        })
+                                    onValueChangeAction={nextAmount =>
+                                        setValue('amount', nextAmount, { shouldValidate: true, shouldDirty: true })
                                     }
                                 />
                             </div>
@@ -395,72 +508,279 @@ export function TransactionDialog({
                                 <Label>Moneda</Label>
                                 <Select
                                     value={currency}
-                                    onValueChange={(value) =>
-                                        setValue(
-                                            'currency',
-                                            value as TransactionFormInput['currency'],
-                                            { shouldValidate: true }
-                                        )
+                                    onValueChange={v =>
+                                        setValue('currency', v as TransactionFormInput['currency'], { shouldValidate: true })
                                     }
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Moneda" />
+                                        <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="ARS">ARS</SelectItem>
                                         <SelectItem value="USD">USD</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                {errors.currency ? (
+                                {errors.currency && (
                                     <p className="text-sm text-destructive">{errors.currency.message}</p>
-                                ) : null}
+                                )}
                             </div>
                         </div>
 
-                        {/* Descripción — full width */}
+                        {/* ── Descripción ── */}
                         <div className="space-y-2">
                             <Label htmlFor="description">Descripción</Label>
                             <Input
                                 id="description"
                                 value={description}
-                                onChange={(e) =>
-                                    setValue('description', e.target.value, {
-                                        shouldValidate: true,
-                                        shouldDirty: true,
-                                    })
+                                onChange={e =>
+                                    setValue('description', e.target.value, { shouldValidate: true, shouldDirty: true })
                                 }
                                 placeholder="Ej: Compra en kiosco"
                             />
                             {errors.description ? (
                                 <p className="text-sm text-destructive">{errors.description.message}</p>
                             ) : isQuickFlow && !transaction && rules.length > 0 ? (
-                                <p
-                                    className="flex items-center gap-1.5 text-xs"
-                                    style={{ color: 'var(--muted-foreground)' }}
-                                >
+                                <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--muted-foreground)' }}>
                                     <Wand2 size={10} className="shrink-0" />
                                     La descripción puede disparar reglas automáticas
                                 </p>
                             ) : null}
                         </div>
 
-                        {/* Cuenta de origen — antes de categoría */}
-                        {showSource && (
+                        {/* ── Fecha — siempre visible ── */}
+                        <div className="space-y-2">
+                            <Label>Fecha</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start text-left">
+                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                        {date instanceof Date
+                                            ? date.toLocaleDateString('es-AR')
+                                            : 'Seleccioná fecha'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={date}
+                                        onSelect={handleDateChange}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            {errors.date && (
+                                <p className="text-sm text-destructive">{errors.date.message}</p>
+                            )}
+                        </div>
+
+                        {/* ── MEDIO DE PAGO (expense nuevo) ── */}
+                        {showPaymentMethod && (
+                            <div className="space-y-3">
+                                <Label>Medio de pago</Label>
+
+                                {/* chips */}
+                                <div className="grid grid-cols-3 gap-2">
+                                    {PAYMENT_METHODS.map(pm => {
+                                        const selected = paymentMethod === pm.value
+                                        return (
+                                            <button
+                                                key={pm.value}
+                                                type="button"
+                                                onClick={() => handlePaymentMethodChange(pm.value)}
+                                                className="flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-medium transition-colors"
+                                                style={{
+                                                    background: selected ? 'var(--sky)' : 'var(--secondary)',
+                                                    color: selected ? '#fff' : 'var(--muted-foreground)',
+                                                    borderColor: selected ? 'var(--sky)' : 'var(--border)',
+                                                }}
+                                            >
+                                                {pm.icon}
+                                                {pm.label}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
+                                {/* ── Tarjeta de crédito ── */}
+                                {isCardExpense ? (
+                                    <div
+                                        className="space-y-4 rounded-xl border p-4"
+                                        style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}
+                                    >
+                                        {/* Tarjeta selector */}
+                                        <div className="space-y-2">
+                                            <Label>Tarjeta</Label>
+                                            <Select
+                                                value={sourceAccountId}
+                                                onValueChange={v =>
+                                                    setValue('sourceAccountId', v || undefined, { shouldValidate: true })
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Seleccioná tarjeta" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {expenseAccounts.map(account => (
+                                                        <SelectItem
+                                                            key={account._id.toString()}
+                                                            value={account._id.toString()}
+                                                        >
+                                                            {account.name} · {account.currency}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {errors.sourceAccountId && (
+                                                <p className="text-sm text-destructive">
+                                                    {errors.sourceAccountId.message}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Cuotas stepper + Primera cuota */}
+                                        <div className="grid grid-cols-2 gap-3 items-start">
+                                            <div className="space-y-2">
+                                                <Label>Cuotas</Label>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setInstallmentCount(c => Math.max(1, c - 1))}
+                                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
+                                                        style={{ borderColor: 'var(--border)' }}
+                                                        aria-label="Reducir cuotas"
+                                                    >
+                                                        <Minus className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        value={installmentCount}
+                                                        onChange={e =>
+                                                            setInstallmentCount(Math.max(1, parseInt(e.target.value) || 1))
+                                                        }
+                                                        className="text-center"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setInstallmentCount(c => c + 1)}
+                                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
+                                                        style={{ borderColor: 'var(--border)' }}
+                                                        aria-label="Aumentar cuotas"
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {installmentCount > 1 && (
+                                                <div className="space-y-2">
+                                                    <Label>Primera cuota</Label>
+                                                    <Select
+                                                        value={firstClosingMonth}
+                                                        onValueChange={v => {
+                                                            setFirstClosingMonth(v)
+                                                            setFirstMonthError(null)
+                                                        }}
+                                                    >
+                                                        <SelectTrigger
+                                                            style={{
+                                                                borderColor: firstMonthError
+                                                                    ? 'var(--destructive)'
+                                                                    : undefined,
+                                                            }}
+                                                        >
+                                                            <SelectValue placeholder="Mes" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {monthOptions.map(m => (
+                                                                <SelectItem key={m.value} value={m.value}>
+                                                                    {m.label}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    {firstMonthError && (
+                                                        <p className="text-sm text-destructive">{firstMonthError}</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Plan de cuotas preview */}
+                                        {installmentCount > 1 && installmentAmount > 0 && (
+                                            <div
+                                                className="rounded-lg border px-3 py-2.5"
+                                                style={{
+                                                    borderColor: 'var(--border)',
+                                                    background: 'var(--background)',
+                                                }}
+                                            >
+                                                <p className="text-xs text-muted-foreground mb-0.5">Plan de cuotas</p>
+                                                <p className="text-sm font-semibold">
+                                                    {installmentCount} × {fmtCurrency(installmentAmount)}
+                                                </p>
+                                                {planMonthsLabel && (
+                                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                                        {planMonthsLabel}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    /* ── Efectivo / Débito: cuenta selector ── */
+                                    <div className="space-y-2">
+                                        <Label>Cuenta</Label>
+                                        <Select
+                                            value={sourceAccountId}
+                                            onValueChange={v =>
+                                                setValue('sourceAccountId', v || undefined, { shouldValidate: true })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue
+                                                    placeholder={
+                                                        paymentMethod === 'cash'
+                                                            ? 'Seleccioná cuenta de efectivo'
+                                                            : 'Seleccioná cuenta'
+                                                    }
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {expenseAccounts.map(account => (
+                                                    <SelectItem
+                                                        key={account._id.toString()}
+                                                        value={account._id.toString()}
+                                                    >
+                                                        {account.name} · {account.currency}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.sourceAccountId && (
+                                            <p className="text-sm text-destructive">
+                                                {errors.sourceAccountId.message}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ── Cuenta origen (editing expense / otros tipos) ── */}
+                        {(!isExpense || isEditing) && showSource && (
                             <div className="space-y-2">
                                 <Label>Cuenta de origen</Label>
                                 <Select
                                     value={sourceAccountId}
-                                    onValueChange={(value) =>
-                                        setValue('sourceAccountId', value || undefined, {
-                                            shouldValidate: true,
-                                        })
+                                    onValueChange={v =>
+                                        setValue('sourceAccountId', v || undefined, { shouldValidate: true })
                                     }
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Seleccioná cuenta de origen" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {suggestedAccounts.map((account) => (
+                                        {suggestedAccounts.map(account => (
                                             <SelectItem
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}
@@ -470,31 +790,27 @@ export function TransactionDialog({
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {errors.sourceAccountId ? (
-                                    <p className="text-sm text-destructive">
-                                        {errors.sourceAccountId.message}
-                                    </p>
-                                ) : null}
+                                {errors.sourceAccountId && (
+                                    <p className="text-sm text-destructive">{errors.sourceAccountId.message}</p>
+                                )}
                             </div>
                         )}
 
-                        {/* Cuenta destino (ingresos) — antes de categoría */}
+                        {/* ── Cuenta destino (income) ── */}
                         {showDestination && type === 'income' && (
                             <div className="space-y-2">
                                 <Label>Cuenta destino</Label>
                                 <Select
                                     value={destinationAccountId}
-                                    onValueChange={(value) =>
-                                        setValue('destinationAccountId', value || undefined, {
-                                            shouldValidate: true,
-                                        })
+                                    onValueChange={v =>
+                                        setValue('destinationAccountId', v || undefined, { shouldValidate: true })
                                     }
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Seleccioná cuenta destino" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {destinationAccounts.map((account) => (
+                                        {destinationAccounts.map(account => (
                                             <SelectItem
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}
@@ -504,15 +820,13 @@ export function TransactionDialog({
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {errors.destinationAccountId ? (
-                                    <p className="text-sm text-destructive">
-                                        {errors.destinationAccountId.message}
-                                    </p>
-                                ) : null}
+                                {errors.destinationAccountId && (
+                                    <p className="text-sm text-destructive">{errors.destinationAccountId.message}</p>
+                                )}
                             </div>
                         )}
 
-                        {/* Categoría */}
+                        {/* ── Categoría ── */}
                         {showCategory && (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
@@ -520,10 +834,7 @@ export function TransactionDialog({
                                     {appliedRuleName && !transaction && (
                                         <span
                                             className="inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5"
-                                            style={{
-                                                background: 'rgba(56,189,248,0.10)',
-                                                color: 'var(--sky)',
-                                            }}
+                                            style={{ background: 'rgba(56,189,248,0.10)', color: 'var(--sky)' }}
                                         >
                                             <Wand2 size={10} />
                                             {appliedRuleName}
@@ -533,7 +844,7 @@ export function TransactionDialog({
 
                                 {filteredCategories.length > 0 ? (
                                     <div className="flex flex-wrap gap-2">
-                                        {filteredCategories.map((category) => {
+                                        {filteredCategories.map(category => {
                                             const selected = categoryId === category._id.toString()
                                             return (
                                                 <button
@@ -551,8 +862,8 @@ export function TransactionDialog({
                                                         background: selected
                                                             ? category.color || 'var(--sky)'
                                                             : category.type === 'income'
-                                                                ? 'rgba(16, 185, 129, 0.10)'
-                                                                : 'rgba(239, 68, 68, 0.10)',
+                                                                ? 'rgba(16,185,129,0.10)'
+                                                                : 'rgba(239,68,68,0.10)',
                                                         color: selected
                                                             ? '#fff'
                                                             : category.type === 'income'
@@ -561,8 +872,8 @@ export function TransactionDialog({
                                                         borderColor: selected
                                                             ? category.color || 'var(--sky)'
                                                             : category.type === 'income'
-                                                                ? 'rgba(16, 185, 129, 0.22)'
-                                                                : 'rgba(239, 68, 68, 0.22)',
+                                                                ? 'rgba(16,185,129,0.22)'
+                                                                : 'rgba(239,68,68,0.22)',
                                                     }}
                                                 >
                                                     {category.name}
@@ -576,15 +887,13 @@ export function TransactionDialog({
                                     </p>
                                 )}
 
-                                {errors.categoryId ? (
-                                    <p className="text-sm text-destructive">
-                                        {errors.categoryId.message}
-                                    </p>
-                                ) : null}
+                                {errors.categoryId && (
+                                    <p className="text-sm text-destructive">{errors.categoryId.message}</p>
+                                )}
                             </div>
                         )}
 
-                        {/* Cuenta destino (transferencias y otros) */}
+                        {/* ── Cuenta destino (transfer / cc_payment / no income) ── */}
                         {showDestination && type !== 'income' && (
                             <div className="space-y-2">
                                 <Label>
@@ -594,21 +903,21 @@ export function TransactionDialog({
                                 </Label>
                                 <Select
                                     value={destinationAccountId}
-                                    onValueChange={(value) =>
-                                        setValue('destinationAccountId', value || undefined, {
-                                            shouldValidate: true,
-                                        })
+                                    onValueChange={v =>
+                                        setValue('destinationAccountId', v || undefined, { shouldValidate: true })
                                     }
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder={
-                                            ['credit_card_payment', 'debt_payment'].includes(type)
-                                                ? 'Seleccioná tarjeta o deuda'
-                                                : 'Seleccioná cuenta destino'
-                                        } />
+                                        <SelectValue
+                                            placeholder={
+                                                ['credit_card_payment', 'debt_payment'].includes(type)
+                                                    ? 'Seleccioná tarjeta o deuda'
+                                                    : 'Seleccioná cuenta destino'
+                                            }
+                                        />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {destinationAccounts.map((account) => (
+                                        {destinationAccounts.map(account => (
                                             <SelectItem
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}
@@ -618,28 +927,24 @@ export function TransactionDialog({
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {errors.destinationAccountId ? (
+                                {errors.destinationAccountId && (
                                     <p className="text-sm text-destructive">
                                         {errors.destinationAccountId.message}
                                     </p>
-                                ) : null}
+                                )}
                             </div>
                         )}
 
-                        {/* Más opciones (fecha, comercio, notas) */}
+                        {/* ── Más opciones (comercio + notas) ── */}
                         <div className="space-y-2">
                             <button
                                 type="button"
-                                onClick={() => setShowMoreOptions((prev) => !prev)}
+                                onClick={() => setShowMoreOptions(prev => !prev)}
                                 className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm"
                                 style={{ borderColor: 'var(--border)' }}
                             >
                                 <span>Más opciones</span>
-                                {showMoreOptions ? (
-                                    <ChevronUp size={16} />
-                                ) : (
-                                    <ChevronDown size={16} />
-                                )}
+                                {showMoreOptions ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                             </button>
 
                             {showMoreOptions && (
@@ -648,53 +953,20 @@ export function TransactionDialog({
                                     style={{ borderColor: 'var(--border)' }}
                                 >
                                     <div className="space-y-2">
-                                        <Label>Fecha</Label>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" className="w-full justify-start">
-                                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {date instanceof Date
-                                                        ? date.toLocaleDateString('es-AR')
-                                                        : 'Seleccioná fecha'}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={date}
-                                                    onSelect={(selectedDate) =>
-                                                        selectedDate &&
-                                                        setValue('date', selectedDate, {
-                                                            shouldValidate: true,
-                                                        })
-                                                    }
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-                                        {errors.date ? (
-                                            <p className="text-sm text-destructive">
-                                                {errors.date.message}
-                                            </p>
-                                        ) : null}
-                                    </div>
-
-                                    <div className="space-y-2">
                                         <Label htmlFor="merchant">Comercio (opcional)</Label>
                                         <Input
                                             id="merchant"
                                             value={merchant}
-                                            onChange={(e) =>
+                                            onChange={e =>
                                                 setValue('merchant', e.target.value, {
                                                     shouldValidate: true,
                                                     shouldDirty: true,
                                                 })
                                             }
                                         />
-                                        {errors.merchant ? (
-                                            <p className="text-sm text-destructive">
-                                                {errors.merchant.message}
-                                            </p>
-                                        ) : null}
+                                        {errors.merchant && (
+                                            <p className="text-sm text-destructive">{errors.merchant.message}</p>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">
@@ -702,26 +974,25 @@ export function TransactionDialog({
                                         <Input
                                             id="notes"
                                             value={notes}
-                                            onChange={(e) =>
+                                            onChange={e =>
                                                 setValue('notes', e.target.value, {
                                                     shouldValidate: true,
                                                     shouldDirty: true,
                                                 })
                                             }
                                         />
-                                        {errors.notes ? (
-                                            <p className="text-sm text-destructive">
-                                                {errors.notes.message}
-                                            </p>
-                                        ) : null}
+                                        {errors.notes && (
+                                            <p className="text-sm text-destructive">{errors.notes.message}</p>
+                                        )}
                                     </div>
                                 </div>
                             )}
                         </div>
                     </div>
 
+                    {/* ── Footer ── */}
                     <div
-                        className="border-t px-5 py-4 flex gap-2 sticky bottom-0 bg-background"
+                        className="shrink-0 border-t px-5 py-4 flex gap-2 bg-background"
                         style={{ borderColor: 'var(--border)' }}
                     >
                         <Button
@@ -732,7 +1003,7 @@ export function TransactionDialog({
                         >
                             Cancelar
                         </Button>
-                        <Button type="submit" className="flex-1">
+                        <Button type="submit" className="flex-1" disabled={isSubmitting}>
                             {isSubmitting ? (
                                 <>
                                     <Spinner className="mr-2" />
@@ -740,6 +1011,8 @@ export function TransactionDialog({
                                 </>
                             ) : transaction ? (
                                 'Guardar cambios'
+                            ) : isInstallmentMode ? (
+                                'Registrar en cuotas'
                             ) : (
                                 'Crear transacción'
                             )}
