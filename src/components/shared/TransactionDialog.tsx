@@ -430,7 +430,7 @@ export function TransactionDialog({
                 <DialogHeader className="shrink-0 px-5 pt-5 pb-0">
                     <DialogTitle>
                         {transaction
-                            ? 'Editar transacción'
+                            ? `Editar · ${TRANSACTION_TYPE_LABELS[transaction.type] ?? 'Transacción'}`
                             : isInstallmentMode
                                 ? 'Gasto en cuotas'
                                 : 'Nueva transacción'}
@@ -444,53 +444,79 @@ export function TransactionDialog({
                     <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
 
                         {/* ── Tipo ── */}
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-2 gap-2">
-                                {QUICK_TYPES.map(option => {
-                                    const selected = type === option
-                                    return (
-                                        <button
-                                            key={option}
-                                            type="button"
-                                            onClick={() => setValue('type', option, { shouldValidate: true })}
-                                            className="rounded-xl border px-4 py-3 text-sm font-medium transition-colors"
-                                            style={{
-                                                background: selected ? 'var(--sky)' : 'var(--secondary)',
-                                                color: selected ? '#fff' : 'var(--foreground)',
-                                                borderColor: selected ? 'var(--sky)' : 'var(--border)',
-                                            }}
-                                        >
-                                            {TRANSACTION_TYPE_LABELS[option]}
-                                        </button>
-                                    )
-                                })}
+                        {isEditing ? (
+                            // Read-only type badge when editing
+                            <div
+                                className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium"
+                                style={{
+                                    background: isExpense
+                                        ? 'rgba(239,68,68,0.10)'
+                                        : type === 'income'
+                                            ? 'rgba(16,185,129,0.10)'
+                                            : 'rgba(99,102,241,0.10)',
+                                    color: isExpense
+                                        ? '#DC2626'
+                                        : type === 'income'
+                                            ? '#059669'
+                                            : '#6366F1',
+                                    borderColor: isExpense
+                                        ? 'rgba(239,68,68,0.22)'
+                                        : type === 'income'
+                                            ? 'rgba(16,185,129,0.22)'
+                                            : 'rgba(99,102,241,0.22)',
+                                }}
+                            >
+                                {TRANSACTION_TYPE_LABELS[type] ?? type}
                             </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {QUICK_TYPES.map(option => {
+                                        const selected = type === option
+                                        return (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                onClick={() => setValue('type', option, { shouldValidate: true })}
+                                                className="rounded-xl border px-4 py-3 text-sm font-medium transition-colors"
+                                                style={{
+                                                    background: selected ? 'var(--sky)' : 'var(--secondary)',
+                                                    color: selected ? '#fff' : 'var(--foreground)',
+                                                    borderColor: selected ? 'var(--sky)' : 'var(--border)',
+                                                }}
+                                            >
+                                                {TRANSACTION_TYPE_LABELS[option]}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
 
-                            <div className="grid grid-cols-3 gap-1.5">
-                                {SECONDARY_TYPES.map(option => {
-                                    const selected = type === option
-                                    return (
-                                        <button
-                                            key={option}
-                                            type="button"
-                                            onClick={() => setValue('type', option, { shouldValidate: true })}
-                                            className="rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors"
-                                            style={{
-                                                background: selected ? 'rgba(99,102,241,0.12)' : 'var(--secondary)',
-                                                color: selected ? '#6366F1' : 'var(--muted-foreground)',
-                                                borderColor: selected ? 'rgba(99,102,241,0.5)' : 'var(--border)',
-                                            }}
-                                        >
-                                            {SECONDARY_TYPE_LABELS[option]}
-                                        </button>
-                                    )
-                                })}
+                                <div className="grid grid-cols-3 gap-1.5">
+                                    {SECONDARY_TYPES.map(option => {
+                                        const selected = type === option
+                                        return (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                onClick={() => setValue('type', option, { shouldValidate: true })}
+                                                className="rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors"
+                                                style={{
+                                                    background: selected ? 'rgba(99,102,241,0.12)' : 'var(--secondary)',
+                                                    color: selected ? '#6366F1' : 'var(--muted-foreground)',
+                                                    borderColor: selected ? 'rgba(99,102,241,0.5)' : 'var(--border)',
+                                                }}
+                                            >
+                                                {SECONDARY_TYPE_LABELS[option]}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
+                                {errors.type && (
+                                    <p className="text-sm text-destructive">{errors.type.message}</p>
+                                )}
                             </div>
-
-                            {errors.type && (
-                                <p className="text-sm text-destructive">{errors.type.message}</p>
-                            )}
-                        </div>
+                        )}
 
                         {/* ── Monto + Moneda ── */}
                         <div className="grid grid-cols-3 gap-3 items-start">
