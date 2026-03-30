@@ -14,7 +14,6 @@ import {
     Plus,
     Wand2,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,6 +44,7 @@ import type { ITransaction, IAccount, ICategory, ITransactionRule } from '@/type
 import { Spinner } from '@/components/shared/Spinner'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { evaluateRules } from '@/lib/utils/rules'
+import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -61,6 +61,7 @@ interface TransactionDialogProps {
     onInstallmentSubmit?: (data: InstallmentFormData) => Promise<void>
     rules?: ITransactionRule[]
     defaultAccountId?: string
+    monthStartDay?: number
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ const QUICK_TYPES: TransactionFormInput['type'][] = ['expense', 'income']
 const SECONDARY_TYPES: TransactionFormInput['type'][] = ['transfer', 'credit_card_payment', 'adjustment']
 const SECONDARY_TYPE_LABELS: Partial<Record<TransactionFormInput['type'], string>> = {
     transfer: 'Transferencia',
-    credit_card_payment: 'Pago tarjeta',
+    credit_card_payment: 'Pago de tarjeta',
     adjustment: 'Ajuste',
 }
 
@@ -144,6 +145,7 @@ export function TransactionDialog({
     onInstallmentSubmit,
     rules = [],
     defaultAccountId,
+    monthStartDay = 1,
 }: TransactionDialogProps) {
     const {
         handleSubmit,
@@ -179,6 +181,12 @@ export function TransactionDialog({
     const [installmentCount, setInstallmentCount] = useState(1)
     const [firstClosingMonth, setFirstClosingMonth] = useState('')
     const [firstMonthError, setFirstMonthError] = useState<string | null>(null)
+    const [paymentSummary, setPaymentSummary] = useState<{
+        due: number
+        paid: number
+        pending: number
+        currency: string
+    } | null>(null)
 
     const scrollRef = useRef<HTMLDivElement>(null)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
@@ -188,7 +196,7 @@ export function TransactionDialog({
     // ─── Watched values ───────────────────────────────────────────────────────
 
     const watchedValues = watch()
-    const type = ((watchedValues.type as string) || 'expense') as TransactionFormInput['type']
+    const type = (normalizeLegacyTransactionType((watchedValues.type as string) || 'expense') ?? 'expense') as TransactionFormInput['type']
     const amount = typeof watchedValues.amount === 'number' ? watchedValues.amount : 0
     const date = watchedValues.date instanceof Date ? watchedValues.date : undefined
     const currency: TransactionFormInput['currency'] = watchedValues.currency === 'USD' ? 'USD' : 'ARS'
@@ -211,9 +219,18 @@ export function TransactionDialog({
     // Installment mode: credit card expense with >1 cuota on a NEW transaction
     const isInstallmentMode = isCardExpense && installmentCount > 1 && !isEditing && Boolean(onInstallmentSubmit)
 
-    const showSource = ['expense', 'credit_card_expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(type)
-    const showDestination = ['income', 'transfer', 'credit_card_payment', 'debt_payment'].includes(type)
+    const showSource = ['expense', 'credit_card_expense', 'transfer', 'credit_card_payment', 'adjustment'].includes(type)
+    const showDestination = ['income', 'transfer', 'credit_card_payment'].includes(type)
     const showCategory = ['income', 'expense', 'credit_card_expense'].includes(type)
+    const paymentMonth = date
+        ? (() => {
+            const effective = new Date(date)
+            if (monthStartDay !== 1 && effective.getDate() < monthStartDay) {
+                effective.setMonth(effective.getMonth() - 1)
+            }
+            return `${effective.getFullYear()}-${String(effective.getMonth() + 1).padStart(2, '0')}`
+        })()
+        : ''
 
     // ─── Account lists ────────────────────────────────────────────────────────
 
@@ -229,14 +246,13 @@ export function TransactionDialog({
         if (type === 'income') return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         if (type === 'expense') return accounts.filter(a => a.type !== 'debt')
         if (type === 'credit_card_expense') return accounts.filter(a => a.type === 'credit_card')
-        if (type === 'credit_card_payment' || type === 'debt_payment')
+        if (type === 'credit_card_payment')
             return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         return accounts
     }, [accounts, type])
 
     const destinationAccounts = useMemo(() => {
         if (type === 'credit_card_payment') return accounts.filter(a => a.type === 'credit_card' || a.type === 'debt')
-        if (type === 'debt_payment') return accounts.filter(a => a.type === 'debt')
         return accounts
     }, [accounts, type])
 
@@ -274,7 +290,7 @@ export function TransactionDialog({
         if (transaction) {
             setAdjustmentSign(transaction.type === 'adjustment' && transaction.amount < 0 ? '-' : '+')
             reset({
-                type: transaction.type,
+                type: (normalizeLegacyTransactionType(transaction.type) ?? transaction.type) as TransactionFormInput['type'],
                 amount: Math.abs(transaction.amount),
                 currency: transaction.currency,
                 date: new Date(transaction.date),
@@ -334,6 +350,34 @@ export function TransactionDialog({
     useEffect(() => {
         if (!showCategory) setValue('categoryId', undefined, { shouldValidate: true })
     }, [showCategory, setValue])
+
+    useEffect(() => {
+        if (type !== 'credit_card_payment' || !destinationAccountId || !paymentMonth) {
+            setPaymentSummary(null)
+            return
+        }
+
+        let cancelled = false
+
+        const fetchPaymentSummary = async () => {
+            try {
+                const res = await fetch(`/api/credit-cards/payment-summary?cardId=${destinationAccountId}&month=${paymentMonth}`)
+                const data = await res.json()
+                if (!res.ok) return
+                if (!cancelled) {
+                    setPaymentSummary(data.summary ?? null)
+                }
+            } catch {
+                if (!cancelled) setPaymentSummary(null)
+            }
+        }
+
+        fetchPaymentSummary()
+
+        return () => {
+            cancelled = true
+        }
+    }, [destinationAccountId, paymentMonth, type])
 
     // Clear accounts when type changes
     useEffect(() => {
@@ -429,10 +473,10 @@ export function TransactionDialog({
         await onSubmit(finalData)
     }
 
-    const fmtCurrency = (n: number) =>
+    const fmtCurrency = (n: number, forcedCurrency?: TransactionFormInput['currency']) =>
         new Intl.NumberFormat('es-AR', {
             style: 'currency',
-            currency,
+            currency: forcedCurrency ?? currency,
             minimumFractionDigits: 0,
             maximumFractionDigits: 2,
         }).format(n)
@@ -446,9 +490,9 @@ export function TransactionDialog({
                 className="p-0 overflow-hidden sm:max-w-lg"
             >
                 <DialogHeader className="shrink-0 px-5 pt-5 pb-0">
-                    <DialogTitle>
-                        {transaction
-                            ? `Editar · ${TRANSACTION_TYPE_LABELS[transaction.type] ?? 'Transacción'}`
+                        <DialogTitle>
+                            {transaction
+                            ? `Editar · ${TRANSACTION_TYPE_LABELS[(normalizeLegacyTransactionType(transaction.type) ?? transaction.type) as TransactionFormInput['type']] ?? 'Transacción'}`
                             : isInstallmentMode
                                 ? 'Gasto en cuotas'
                                 : 'Nueva transacción'}
@@ -971,8 +1015,8 @@ export function TransactionDialog({
                         {showDestination && type !== 'income' && (
                             <div className="space-y-2">
                                 <Label>
-                                    {['credit_card_payment', 'debt_payment'].includes(type)
-                                        ? 'Tarjeta o cuenta a pagar'
+                                    {type === 'credit_card_payment'
+                                        ? 'Tarjeta a pagar'
                                         : 'Cuenta destino'}
                                 </Label>
                                 <Select
@@ -984,8 +1028,8 @@ export function TransactionDialog({
                                     <SelectTrigger>
                                         <SelectValue
                                             placeholder={
-                                                ['credit_card_payment', 'debt_payment'].includes(type)
-                                                    ? 'Seleccioná tarjeta o deuda'
+                                                type === 'credit_card_payment'
+                                                    ? 'Seleccioná tarjeta'
                                                     : 'Seleccioná cuenta destino'
                                             }
                                         />
@@ -1005,6 +1049,42 @@ export function TransactionDialog({
                                     <p className="text-sm text-destructive">
                                         {errors.destinationAccountId.message}
                                     </p>
+                                )}
+
+                                {type === 'credit_card_payment' && paymentSummary && destinationAccountId && (
+                                    <div
+                                        className="rounded-xl border p-3 space-y-2"
+                                        style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}
+                                    >
+                                            <div className="flex items-center justify-between gap-3 text-xs">
+                                                <span className="text-muted-foreground">Corresponde pagar este mes</span>
+                                            <span className="font-medium">{fmtCurrency(paymentSummary.due, paymentSummary.currency as TransactionFormInput['currency'])}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 text-xs">
+                                            <span className="text-muted-foreground">Ya pagado</span>
+                                            <span className="font-medium">{fmtCurrency(paymentSummary.paid, paymentSummary.currency as TransactionFormInput['currency'])}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 text-xs">
+                                            <span className="text-muted-foreground">Pendiente</span>
+                                            <span className="font-medium">{fmtCurrency(paymentSummary.pending, paymentSummary.currency as TransactionFormInput['currency'])}</span>
+                                        </div>
+                                        {paymentSummary.pending > 0 && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-xs"
+                                                onClick={() =>
+                                                    setValue('amount', paymentSummary.pending, {
+                                                        shouldValidate: true,
+                                                        shouldDirty: true,
+                                                    })
+                                                }
+                                            >
+                                                Usar pendiente
+                                            </Button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         )}

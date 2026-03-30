@@ -26,7 +26,7 @@ const TYPE_OPTIONS = [
     { value: 'expense', label: 'Gasto' },
     { value: 'income', label: 'Ingreso' },
     { value: 'transfer', label: 'Transferencia' },
-    { value: 'credit_card_payment', label: 'Pago tarjeta' },
+    { value: 'credit_card_payment', label: 'Pago de tarjeta' },
 ]
 
 const CURRENCY_OPTIONS = [
@@ -37,13 +37,13 @@ const CURRENCY_OPTIONS = [
 /** Devuelve las cuentas compatibles según tipo de transacción y si tiene cuotas.
  *  - cuotas > 1         → solo credit_card (compra financiada en cuotas)
  *  - cuotas == 1 + expense → todas (1 pago con tarjeta es gasto válido)
- *  - credit_card_payment / debt_payment → excluye credit_card y debt como origen
+ *  - credit_card_payment → excluye credit_card y debt como origen
  *  - resto              → todas
  */
 function getCompatibleAccounts(accounts: IAccount[], type: string | undefined, installmentCount: number | undefined) {
     const count = installmentCount ?? 0
     if (count > 1) return accounts.filter(a => a.type === 'credit_card')
-    if (type === 'credit_card_payment' || type === 'debt_payment')
+    if (type === 'credit_card_payment')
         return accounts.filter(a => !['credit_card', 'debt'].includes(a.type))
     return accounts
 }
@@ -51,7 +51,7 @@ function getCompatibleAccounts(accounts: IAccount[], type: string | undefined, i
 /** Label del campo cuenta según contexto */
 function accountFieldLabel(type: string | undefined, installmentCount: number | undefined) {
     if ((installmentCount ?? 0) > 1) return 'Tarjeta de crédito'
-    if (type === 'credit_card_payment' || type === 'debt_payment') return 'Cuenta origen'
+    if (type === 'credit_card_payment') return 'Cuenta origen'
     return 'Cuenta'
 }
 
@@ -277,7 +277,7 @@ export function ImportRowEditDialog({
                             </div>
 
                             {/* Categoría — no aplica para pagos de tarjeta */}
-                            {data.type !== 'credit_card_payment' && data.type !== 'debt_payment' && (
+                            {data.type !== 'credit_card_payment' && (
                                 <div className="space-y-2">
                                     <Label>Categoría <span className="text-muted-foreground text-xs">(opcional)</span></Label>
                                     <Select

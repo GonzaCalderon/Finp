@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction } from '@/lib/models'
+import { Transaction, InstallmentPlan, User } from '@/lib/models'
+import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
+import { getCurrentFinancialPeriod, parseFinancialPeriod, shiftFinancialPeriod } from '@/lib/utils/period'
 
 export async function GET(request: Request) {
     try {
@@ -16,37 +18,54 @@ export async function GET(request: Request) {
         await connectDB()
 
         const now = new Date()
-        const result = []
+        const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
+        const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+        const currentPeriod = getCurrentFinancialPeriod(now, monthStartDay)
+        const periods = Array.from({ length: months }, (_, index) =>
+            shiftFinancialPeriod(currentPeriod, -(months - 1 - index))
+        )
 
-        for (let i = months - 1; i >= 0; i--) {
-            const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-            const start = new Date(date.getFullYear(), date.getMonth(), 1)
-            const end = new Date(date.getFullYear(), date.getMonth() + 1, 1)
-            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        const firstRange = parseFinancialPeriod(periods[0], monthStartDay)
+        const lastRange = parseFinancialPeriod(periods[periods.length - 1], monthStartDay)
 
-            const transactions = await Transaction.find({
+        const [transactions, plans] = await Promise.all([
+            Transaction.find({
                 userId: session.user.id,
-                date: { $gte: start, $lt: end },
-                type: { $in: ['income', 'expense'] },
-                installmentPlanId: { $exists: false },
+                date: { $gte: firstRange.start, $lt: lastRange.end },
+            })
+                .populate('sourceAccountId', 'name type currency color')
+                .populate('destinationAccountId', 'name type currency color'),
+            InstallmentPlan.find({ userId: session.user.id })
+                .populate('accountId', 'name type currency color')
+                .populate('categoryId', 'name color type'),
+        ])
+
+        const result = periods.map((period) => {
+            const { start, end } = parseFinancialPeriod(period, monthStartDay)
+            const monthTransactions = transactions.filter((transaction) => transaction.date >= start && transaction.date < end)
+            const cardSummary = buildMonthlyCardPaymentSummary({
+                month: period,
+                monthStartDay,
+                plans,
+                transactions: monthTransactions,
             })
 
-            const income = transactions
+            const income = monthTransactions
                 .filter((t) => t.type === 'income')
                 .reduce((sum, t) => sum + t.amount, 0)
 
-            const expense = transactions
-                .filter((t) => t.type === 'expense')
-                .reduce((sum, t) => sum + t.amount, 0)
+            const expense = monthTransactions
+                .filter((t) => t.type === 'expense' && !t.installmentPlanId)
+                .reduce((sum, t) => sum + t.amount, 0) + cardSummary.reduce((sum, item) => sum + item.due, 0)
 
-            result.push({
-                month: monthKey,
-                label: date.toLocaleDateString('es-AR', { month: 'short' }),
+            return {
+                month: period,
+                label: start.toLocaleDateString('es-AR', { month: 'short' }),
                 income,
                 expense,
                 balance: income - expense,
-            })
-        }
+            }
+        })
 
         return NextResponse.json({ cashflow: result })
     } catch (error) {

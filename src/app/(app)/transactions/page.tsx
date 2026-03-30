@@ -52,8 +52,8 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     expense: 'Gasto',
     credit_card_expense: 'Gasto con TC',
     transfer: 'Transferencia',
-    credit_card_payment: 'Pago tarjeta',
-    debt_payment: 'Pago tarjeta',      // backwards compat
+    credit_card_payment: 'Pago de tarjeta',
+    debt_payment: 'Pago de tarjeta',      // backwards compat
     adjustment: 'Ajuste',
 }
 
@@ -228,7 +228,7 @@ function TypeFilterChip({
         { value: 'expense', label: 'Gasto' },
         { value: 'credit_card_expense', label: 'Gasto con TC' },
         { value: 'transfer', label: 'Transferencia' },
-        { value: 'credit_card_payment', label: 'Pago tarjeta' },
+        { value: 'credit_card_payment', label: 'Pago de tarjeta' },
         { value: 'adjustment', label: 'Ajuste' },
     ]
 
@@ -774,7 +774,7 @@ export default function TransactionsPage() {
             { value: 'expense', label: 'Gasto' },
             { value: 'credit_card_expense', label: 'Gasto con TC' },
             { value: 'transfer', label: 'Transferencia' },
-            { value: 'credit_card_payment', label: 'Pago tarjeta' },
+        { value: 'credit_card_payment', label: 'Pago de tarjeta' },
             { value: 'adjustment', label: 'Ajuste' },
         ],
         []
@@ -1245,6 +1245,7 @@ export default function TransactionsPage() {
                 onInstallmentSubmit={handleInstallmentSubmit}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
+                monthStartDay={preferences.monthStartDay}
             />
 
             <AlertDialog open={Boolean(deleteId)} onOpenChange={(open) => !open && setDeleteId(null)}>

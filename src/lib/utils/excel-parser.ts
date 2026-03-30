@@ -99,8 +99,8 @@ const TYPE_MAP: Record<string, string> = {
     pago_tarjeta: 'credit_card_payment',
     'tarjeta de crédito pago': 'credit_card_payment',
     credit_card_payment: 'credit_card_payment',
-    'pago deuda': 'debt_payment',
-    debt_payment: 'debt_payment',
+    'pago deuda': 'credit_card_payment',
+    debt_payment: 'credit_card_payment',
 }
 
 function normalizeHeader(raw: string): string {
@@ -288,7 +288,7 @@ export function parseImportFile(buffer: Buffer): ParseResult {
 
             if (!parsedData.type) {
                 errors.push('El tipo es requerido. Valores válidos: gasto, ingreso, transferencia, pago de tarjeta.')
-            } else if (!['income', 'expense', 'transfer', 'credit_card_payment', 'debt_payment'].includes(parsedData.type)) {
+            } else if (!['income', 'expense', 'transfer', 'credit_card_payment'].includes(parsedData.type)) {
                 errors.push(`Tipo desconocido: "${rawData['tipo']}".`)
             }
 

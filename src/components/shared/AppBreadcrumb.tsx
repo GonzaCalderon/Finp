@@ -21,6 +21,7 @@ const ROUTE_LABELS: Record<string, string> = {
     settings: 'Configuración',
     import: 'Importar',
     history: 'Historial',
+    'credit-card': 'Gastos con TC',
 }
 
 function segmentLabel(segment: string): string {

@@ -4,6 +4,7 @@ import { connectDB } from '@/lib/db'
 import { Transaction, Account, InstallmentPlan } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
 import { calculateAccountBalance } from '@/lib/utils/balance'
+import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 
 export async function GET(
     request: Request,
@@ -68,7 +69,10 @@ export async function PATCH(
 
         await connectDB()
 
-        const data = parsed.data
+        const data = {
+            ...parsed.data,
+            type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
+        }
 
         // Validar saldo si la cuenta destino del débito no permite saldo negativo
         if (data.sourceAccountId) {

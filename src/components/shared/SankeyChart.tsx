@@ -1038,7 +1038,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
     )
 }
 
-export function SankeyChart() {
+export function SankeyChart({ month }: { month?: string }) {
     const [months, setMonths] = useState(1)
     const [data, setData] = useState<SankeyApiData | null>(null)
     const [loading, setLoading] = useState(true)
@@ -1048,7 +1048,8 @@ export function SankeyChart() {
             try {
                 setLoading(true)
 
-                const response = await fetch(`/api/sankey?months=${months}`)
+                const query = month ? `month=${month}` : `months=${months}`
+                const response = await fetch(`/api/sankey?${query}`)
                 const json = await response.json()
 
                 if (!response.ok) {
@@ -1065,7 +1066,7 @@ export function SankeyChart() {
         }
 
         void fetchData()
-    }, [months])
+    }, [month, months])
 
     return (
         <div
@@ -1082,33 +1083,35 @@ export function SankeyChart() {
                         Flujo de dinero
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                        Últimos meses, incluido el actual
+                        {month ? 'Mes seleccionado' : 'Últimos meses, incluido el actual'}
                     </p>
                 </div>
 
-                <div
-                    className="flex w-fit shrink-0 overflow-hidden rounded-lg"
-                    style={{ border: '1px solid var(--border)' }}
-                >
-                    {MONTH_OPTIONS.map((option) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setMonths(option.value)}
-                            className="px-3 py-1.5 text-xs font-medium transition-colors"
-                            style={{
-                                background: months === option.value ? 'var(--sky)' : 'transparent',
-                                color: months === option.value ? '#FFFFFF' : 'var(--muted-foreground)',
-                                borderRight:
-                                    option.value !== MONTH_OPTIONS[MONTH_OPTIONS.length - 1].value
-                                        ? '1px solid var(--border)'
-                                        : 'none',
-                            }}
-                        >
-                            {option.label}
-                        </button>
-                    ))}
-                </div>
+                {!month && (
+                    <div
+                        className="flex w-fit shrink-0 overflow-hidden rounded-lg"
+                        style={{ border: '1px solid var(--border)' }}
+                    >
+                        {MONTH_OPTIONS.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setMonths(option.value)}
+                                className="px-3 py-1.5 text-xs font-medium transition-colors"
+                                style={{
+                                    background: months === option.value ? 'var(--sky)' : 'transparent',
+                                    color: months === option.value ? '#FFFFFF' : 'var(--muted-foreground)',
+                                    borderRight:
+                                        option.value !== MONTH_OPTIONS[MONTH_OPTIONS.length - 1].value
+                                            ? '1px solid var(--border)'
+                                            : 'none',
+                                }}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <AnimatePresence mode="wait">
@@ -1133,7 +1136,7 @@ export function SankeyChart() {
                     </motion.div>
                 ) : (
                     <motion.div
-                        key={`sankey-${months}`}
+                        key={`sankey-${month ?? months}`}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}

@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -52,16 +51,14 @@ const TYPE_LABELS: Record<string, string> = {
     income: 'Ingreso',
     expense: 'Gasto',
     transfer: 'Transferencia',
-    credit_card_payment: 'Pago tarjeta',
-    debt_payment: 'Pago deuda',
+    credit_card_payment: 'Pago de tarjeta',
 }
 
 const TYPE_OPTIONS = [
     { value: 'expense', label: 'Gasto' },
     { value: 'income', label: 'Ingreso' },
     { value: 'transfer', label: 'Transferencia' },
-    { value: 'credit_card_payment', label: 'Pago tarjeta' },
-    { value: 'debt_payment', label: 'Pago deuda' },
+    { value: 'credit_card_payment', label: 'Pago de tarjeta' },
 ]
 
 function StatusBadge({ status }: { status: string }) {
@@ -95,7 +92,7 @@ function InstallmentBadge({ current, total }: { current?: number; total?: number
  *  Reglas:
  *  - cuotas > 1         → solo credit_card (compra financiada)
  *  - cuotas == 1 o sin cuotas + expense → todas (1 pago con tarjeta es válido)
- *  - credit_card_payment / debt_payment → excluye credit_card y debt como origen
+ *  - credit_card_payment → excluye credit_card y debt como origen
  *  - resto              → todas
  */
 function getCompatibleAccounts(accounts: IAccount[], type: string | undefined, installmentCount: number | undefined) {
@@ -103,7 +100,7 @@ function getCompatibleAccounts(accounts: IAccount[], type: string | undefined, i
     // Compra en múltiples cuotas financiadas → obligatorio tarjeta
     if (count > 1) return accounts.filter(a => a.type === 'credit_card')
     // Pago de tarjeta / deuda → la cuenta origen no puede ser tarjeta ni deuda
-    if (type === 'credit_card_payment' || type === 'debt_payment')
+    if (type === 'credit_card_payment')
         return accounts.filter(a => !['credit_card', 'debt'].includes(a.type))
     // Gasto en 1 pago (incluyendo con tarjeta), ingreso, transferencia → todas
     return accounts
@@ -111,7 +108,7 @@ function getCompatibleAccounts(accounts: IAccount[], type: string | undefined, i
 
 function accountFieldLabel(type: string | undefined, installmentCount: number | undefined) {
     if ((installmentCount ?? 0) > 1) return 'Tarjeta'
-    if (type === 'credit_card_payment' || type === 'debt_payment') return 'Cuenta origen'
+    if (type === 'credit_card_payment') return 'Cuenta origen'
     return 'Cuenta'
 }
 
@@ -461,7 +458,7 @@ function ReviewTableRow({
 
             {/* Category */}
             <td className="px-2 py-1.5">
-                {activeType === 'credit_card_payment' || activeType === 'debt_payment' ? (
+                {activeType === 'credit_card_payment' ? (
                     <span className="text-xs text-muted-foreground">—</span>
                 ) : editing ? (
                     <Select

@@ -623,6 +623,7 @@ function MobileBottomBar() {
                 onInstallmentSubmit={handleCreateInstallment}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
+                monthStartDay={preferences.monthStartDay}
             />
         </>
     )

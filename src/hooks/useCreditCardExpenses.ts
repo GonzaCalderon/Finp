@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { IInstallmentPlan, ITransaction } from '@/types'
+import {
+    getInstallmentStatusForMonth,
+    getRemainingDebtForMonth,
+    getSingleCreditCardExpenseStatusForMonth,
+} from '@/lib/utils/credit-card'
 
 export type InstallmentPlanWithTransaction = IInstallmentPlan & {
     parentTransaction?: ITransaction | null
@@ -9,31 +14,8 @@ export type InstallmentStatus =
     | { state: 'not_started'; label: 'Aún no inicia' }
     | { state: 'active'; label: string; current: number; total: number }
     | { state: 'finished'; label: 'Finalizado' }
-
-/** Calcula el estado de cuota de un plan para un mes dado (formato 'YYYY-MM'). */
-export function getInstallmentStatus(plan: IInstallmentPlan, selectedMonth: string): InstallmentStatus {
-    const [sy, sm] = plan.firstClosingMonth.split('-').map(Number)
-    const [cy, cm] = selectedMonth.split('-').map(Number)
-    const diff = (cy - sy) * 12 + (cm - sm)
-
-    if (diff < 0) return { state: 'not_started', label: 'Aún no inicia' }
-    if (diff >= plan.installmentCount) return { state: 'finished', label: 'Finalizado' }
-    return {
-        state: 'active',
-        label: `Cuota ${diff + 1}/${plan.installmentCount}`,
-        current: diff + 1,
-        total: plan.installmentCount,
-    }
-}
-
-/** Calcula la deuda pendiente de un plan para un mes dado. */
-export function getRemainingDebt(plan: IInstallmentPlan, selectedMonth: string): number {
-    const status = getInstallmentStatus(plan, selectedMonth)
-    if (status.state === 'finished') return 0
-    if (status.state === 'not_started') return plan.totalAmount
-    const paidInstallments = status.current - 1
-    return plan.installmentAmount * (plan.installmentCount - paidInstallments)
-}
+export const getInstallmentStatus = getInstallmentStatusForMonth
+export const getRemainingDebt = getRemainingDebtForMonth
 
 export interface CreditCardExpenseItem {
     kind: 'plan'
@@ -47,16 +29,16 @@ export interface SingleCCExpenseItem {
 
 export type CCExpenseItem = CreditCardExpenseItem | SingleCCExpenseItem
 
-function isFinished(item: CCExpenseItem, selectedMonth: string): boolean {
+function isFinished(item: CCExpenseItem, selectedMonth: string, monthStartDay: number): boolean {
     if (item.kind === 'plan') {
         const status = getInstallmentStatus(item.plan, selectedMonth)
         return status.state === 'finished'
     }
-    // Single expense: never "finished" in the same sense — it's just a purchase
-    return false
+    const status = getSingleCreditCardExpenseStatusForMonth(item.transaction, selectedMonth, monthStartDay)
+    return status.state === 'finished'
 }
 
-export function useCreditCardExpenses(selectedMonth: string) {
+export function useCreditCardExpenses(selectedMonth: string, monthStartDay = 1) {
     const [plans, setPlans] = useState<InstallmentPlanWithTransaction[]>([])
     const [singleExpenses, setSingleExpenses] = useState<ITransaction[]>([])
     const [loading, setLoading] = useState(true)
@@ -123,6 +105,6 @@ export function useCreditCardExpenses(selectedMonth: string) {
         fetchAll,
         deletePlan,
         deleteTransaction,
-        isFinished: (item: CCExpenseItem) => isFinished(item, selectedMonth),
+        isFinished: (item: CCExpenseItem) => isFinished(item, selectedMonth, monthStartDay),
     }
 }

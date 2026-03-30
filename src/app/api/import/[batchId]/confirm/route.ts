@@ -4,6 +4,7 @@ import { connectDB } from '@/lib/db'
 import { ImportBatch, ImportRow, Transaction } from '@/lib/models'
 import { IMPORT_ROW_STATUS, IMPORT_SOURCE_TYPES } from '@/lib/constants'
 import type { ImportParsedData } from '@/types'
+import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 
 // POST /api/import/[batchId]/confirm — confirmar importación y crear transacciones
 export async function POST(
@@ -32,9 +33,10 @@ export async function POST(
 
     for (const row of rows) {
         const data: ImportParsedData = (row.reviewedData ?? row.parsedData) as ImportParsedData
+        const normalizedType = normalizeLegacyTransactionType(data.type)
 
         // Validación mínima para crear la transacción
-        if (!data.date || !data.type || !data.description || !data.amount || !data.currency) {
+        if (!data.date || !normalizedType || !data.description || !data.amount || !data.currency) {
             errors.push(`Fila ${row.rowNumber}: faltan campos obligatorios.`)
             continue
         }
@@ -48,7 +50,7 @@ export async function POST(
         try {
             const txDoc: Record<string, unknown> = {
                 userId: session.user.id,
-                type: data.type,
+                type: normalizedType,
                 amount: data.amount,
                 currency: data.currency,
                 date: data.date,
@@ -64,12 +66,12 @@ export async function POST(
             if (data.installmentCount) txDoc.tags = [`cuota ${data.installmentNumber ?? 1}/${data.installmentCount}`]
 
             // Asignar cuentas según tipo
-            if (['expense', 'credit_card_payment', 'debt_payment'].includes(data.type ?? '')) {
+            if (['expense', 'credit_card_payment'].includes(normalizedType)) {
                 if (data.sourceAccountId) txDoc.sourceAccountId = data.sourceAccountId
-            } else if (data.type === 'income') {
+            } else if (normalizedType === 'income') {
                 if (data.destinationAccountId) txDoc.destinationAccountId = data.destinationAccountId
                 else if (data.sourceAccountId) txDoc.destinationAccountId = data.sourceAccountId
-            } else if (data.type === 'transfer') {
+            } else if (normalizedType === 'transfer') {
                 if (data.sourceAccountId) txDoc.sourceAccountId = data.sourceAccountId
                 if (data.destinationAccountId) txDoc.destinationAccountId = data.destinationAccountId
             }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, Account, User, TransactionRule } from '@/lib/models'
@@ -6,6 +7,7 @@ import { transactionSchema } from '@/lib/validations'
 import { calculateAccountBalance } from '@/lib/utils/balance'
 import { parseFinancialPeriod } from '@/lib/utils/period'
 import { evaluateRules } from '@/lib/utils/rules'
+import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 
 const PAGE_LIMIT = 30
 
@@ -40,7 +42,10 @@ export async function GET(request: Request) {
         }
 
         // ── Summary: computed from full month, no user-applied filters ────────
-        const summaryFilter = { ...baseFilter }
+        const summaryFilter = {
+            ...baseFilter,
+            userId: new Types.ObjectId(session.user.id),
+        }
         const [incomeAgg, expenseAgg, ccExpenseAgg] = await Promise.all([
             Transaction.aggregate([
                 { $match: { ...summaryFilter, type: 'income' } },
@@ -65,7 +70,12 @@ export async function GET(request: Request) {
         // ── List filter: base + user-applied filters ───────────────────────────
         const filter: Record<string, unknown> = { ...baseFilter }
 
-        if (type) filter.type = type
+        if (type) {
+            const normalizedType = normalizeLegacyTransactionType(type)
+            filter.type = normalizedType === 'credit_card_payment'
+                ? { $in: [...CREDIT_CARD_PAYMENT_TYPES] }
+                : normalizedType
+        }
         if (categoryId) filter.categoryId = categoryId
         if (accountId) {
             filter.$or = [{ sourceAccountId: accountId }, { destinationAccountId: accountId }]
@@ -126,7 +136,10 @@ export async function POST(request: Request) {
 
         await connectDB()
 
-        const data = parsed.data
+        const data = {
+            ...parsed.data,
+            type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
+        }
 
         // Validar saldo si la cuenta no permite saldo negativo
         if (data.sourceAccountId) {

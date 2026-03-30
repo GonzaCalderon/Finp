@@ -20,12 +20,14 @@ import {
     getRemainingDebt,
     type CCExpenseItem,
 } from '@/hooks/useCreditCardExpenses'
+import { getSingleCreditCardExpenseStatusForMonth } from '@/lib/utils/credit-card'
 
 interface CreditCardExpenseSheetProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     item: CCExpenseItem | null
     selectedMonth: string
+    monthStartDay?: number
     hidden?: boolean
     onEdit?: () => void
     onDelete?: () => void
@@ -51,11 +53,20 @@ function formatMonth(value: string) {
     })
 }
 
+function formatMonthCompact(value: string) {
+    const [year, month] = value.split('-').map(Number)
+    return new Date(year, month - 1, 1).toLocaleDateString('es-AR', {
+        month: 'short',
+        year: '2-digit',
+    }).replace('.', '')
+}
+
 export function CreditCardExpenseSheet({
     open,
     onOpenChange,
     item,
     selectedMonth,
+    monthStartDay = 1,
     hidden = false,
     onEdit,
     onDelete,
@@ -77,12 +88,27 @@ export function CreditCardExpenseSheet({
 
     const status = isPlan && plan
         ? getInstallmentStatus(plan, selectedMonth)
-        : { state: 'active' as const, label: '1/1 cuota' }
+        : transaction
+            ? getSingleCreditCardExpenseStatusForMonth(transaction, selectedMonth, monthStartDay)
+            : { state: 'active' as const, label: 'Cuota 1/1', current: 1, total: 1 }
+    const statusLabel =
+        status.state === 'not_started'
+            ? isPlan && plan
+                ? `Primera cuota en ${formatMonthCompact(plan.firstClosingMonth)}`
+                : `Impacta en ${new Date(transaction?.date ?? new Date()).toLocaleDateString('es-AR', {
+                    month: 'short',
+                    year: '2-digit',
+                }).replace('.', '')}`
+            : status.label
 
     const installmentCount = isPlan ? (plan?.installmentCount ?? 1) : 1
     const totalAmount = isPlan ? (plan?.totalAmount ?? 0) : (transaction?.amount ?? 0)
     const installmentAmount = isPlan ? (plan?.installmentAmount ?? totalAmount) : totalAmount
-    const remainingDebt = isPlan && plan ? getRemainingDebt(plan, selectedMonth) : 0
+    const remainingDebt = isPlan && plan
+        ? getRemainingDebt(plan, selectedMonth)
+        : status.state === 'finished'
+            ? 0
+            : totalAmount
     const currency = isPlan ? (plan?.currency ?? 'ARS') : (transaction?.currency ?? 'ARS')
     const purchaseDate = isPlan ? plan?.purchaseDate : transaction?.date
 
@@ -115,7 +141,7 @@ export function CreditCardExpenseSheet({
                                 {transaction?.description ?? plan?.description ?? 'Detalle del gasto'}
                             </SheetTitle>
                             <SheetDescription>
-                                Estado en {formatMonth(selectedMonth)}: {status.label}
+                                Estado en {formatMonth(selectedMonth)}: {statusLabel}
                             </SheetDescription>
                         </div>
                     </SheetHeader>
@@ -135,7 +161,7 @@ export function CreditCardExpenseSheet({
                                         color: statusTone.color,
                                     }}
                                 >
-                                    {status.label}
+                                    {statusLabel}
                                 </div>
                             </div>
 
@@ -231,7 +257,7 @@ export function CreditCardExpenseSheet({
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <span className="text-muted-foreground">Cuota actual</span>
-                                        <span className="font-medium">{status.label}</span>
+                                        <span className="font-medium">{statusLabel}</span>
                                     </div>
                                 </div>
                             ) : (
@@ -265,8 +291,8 @@ export function CreditCardExpenseSheet({
                                 Editar
                             </Button>
                             <Button
-                                variant="destructive"
-                                className="flex-1"
+                                variant="ghost"
+                                className="flex-1 text-destructive hover:text-destructive"
                                 onClick={onDelete}
                             >
                                 <Trash2 className="h-4 w-4" />
