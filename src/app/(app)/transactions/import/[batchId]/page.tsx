@@ -6,18 +6,24 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
     AlertTriangle,
     ArrowLeft,
+    ArrowLeftRight,
+    Banknote,
     CheckCircle2,
     ChevronDown,
     ChevronUp,
     Copy,
     CreditCard,
     EyeOff,
-    Pencil,
+    Save,
+    SlidersHorizontal,
+    TrendingDown,
+    TrendingUp,
     XCircle,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/shared/Spinner'
-import { ImportRowEditDialog } from '@/components/shared/ImportRowEditDialog'
 import { useImportBatchDetail } from '@/hooks/useImportBatch'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
@@ -25,9 +31,40 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { cn } from '@/lib/utils'
 import type { IAccount, ICategory, IImportRow, ImportParsedData } from '@/types'
-import { IMPORT_TRANSACTION_TYPE_LABELS } from '@/lib/utils/import-transactions'
+import {
+    getCompatibleDestinationAccounts,
+    getCompatibleSourceAccounts,
+    getImportCategoryKind,
+    IMPORT_TRANSACTION_TYPE_LABELS,
+    IMPORT_TRANSACTION_TYPE_OPTIONS,
+    normalizeImportTransactionType,
+    typeRequiresDestinationAccount,
+    typeSupportsCategory,
+} from '@/lib/utils/import-transactions'
+
+// ── Tipos ────────────────────────────────────────────────────────────────────────
 
 type StatusFilter = 'all' | 'invalid' | 'incomplete' | 'possible_duplicate' | 'ignored' | 'ok'
+
+// ── Constantes ───────────────────────────────────────────────────────────────────
+
+const TYPE_ORDER = [
+    'income',
+    'expense',
+    'credit_card_expense',
+    'transfer',
+    'adjustment',
+    'credit_card_payment',
+]
+
+const TYPE_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+    income: { label: 'Ingresos', color: '#16a34a', icon: TrendingUp },
+    expense: { label: 'Gastos', color: '#dc2626', icon: TrendingDown },
+    credit_card_expense: { label: 'Gastos con TC', color: '#0284c7', icon: CreditCard },
+    transfer: { label: 'Transferencias', color: '#7c3aed', icon: ArrowLeftRight },
+    adjustment: { label: 'Ajustes', color: '#d97706', icon: SlidersHorizontal },
+    credit_card_payment: { label: 'Pago de tarjeta', color: '#ea580c', icon: Banknote },
+}
 
 const STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
     ok: { label: 'Lista', color: '#16a34a', icon: CheckCircle2 },
@@ -38,9 +75,73 @@ const STATUS_META: Record<string, { label: string; color: string; icon: React.El
     imported: { label: 'Importada', color: '#0284c7', icon: CheckCircle2 },
 }
 
+type ColDef = { key: string; header: string; width?: string }
+
+const COLUMNS_BY_TYPE: Record<string, ColDef[]> = {
+    income: [
+        { key: 'date', header: 'Fecha', width: 'w-24' },
+        { key: 'description', header: 'Descripción', width: 'min-w-48' },
+        { key: 'amount', header: 'Monto', width: 'w-28' },
+        { key: 'currency', header: 'Mon.', width: 'w-16' },
+        { key: 'destinationAccount', header: 'Cuenta destino', width: 'min-w-44' },
+        { key: 'categoryId', header: 'Categoría', width: 'min-w-40' },
+    ],
+    expense: [
+        { key: 'date', header: 'Fecha', width: 'w-24' },
+        { key: 'description', header: 'Descripción', width: 'min-w-48' },
+        { key: 'amount', header: 'Monto', width: 'w-28' },
+        { key: 'currency', header: 'Mon.', width: 'w-16' },
+        { key: 'sourceAccount', header: 'Cuenta origen', width: 'min-w-44' },
+        { key: 'categoryId', header: 'Categoría', width: 'min-w-40' },
+    ],
+    credit_card_expense: [
+        { key: 'date', header: 'Fecha', width: 'w-24' },
+        { key: 'description', header: 'Descripción', width: 'min-w-44' },
+        { key: 'amount', header: 'Monto', width: 'w-28' },
+        { key: 'currency', header: 'Mon.', width: 'w-16' },
+        { key: 'sourceAccount', header: 'Tarjeta', width: 'min-w-40' },
+        { key: 'categoryId', header: 'Categoría', width: 'min-w-36' },
+        { key: 'installmentCount', header: 'Cuotas', width: 'w-16' },
+        { key: 'firstClosingMonth', header: '1ª cuota', width: 'min-w-32' },
+    ],
+    transfer: [
+        { key: 'date', header: 'Fecha', width: 'w-24' },
+        { key: 'description', header: 'Descripción', width: 'min-w-44' },
+        { key: 'amount', header: 'Monto', width: 'w-28' },
+        { key: 'currency', header: 'Mon.', width: 'w-16' },
+        { key: 'sourceAccount', header: 'Cta. origen', width: 'min-w-40' },
+        { key: 'destinationAccount', header: 'Cta. destino', width: 'min-w-40' },
+    ],
+    adjustment: [
+        { key: 'date', header: 'Fecha', width: 'w-24' },
+        { key: 'description', header: 'Descripción', width: 'min-w-52' },
+        { key: 'amount', header: 'Monto', width: 'w-28' },
+        { key: 'currency', header: 'Mon.', width: 'w-16' },
+        { key: 'sourceAccount', header: 'Cuenta', width: 'min-w-44' },
+    ],
+    credit_card_payment: [
+        { key: 'date', header: 'Fecha', width: 'w-24' },
+        { key: 'description', header: 'Descripción', width: 'min-w-44' },
+        { key: 'amount', header: 'Monto', width: 'w-28' },
+        { key: 'currency', header: 'Mon.', width: 'w-16' },
+        { key: 'sourceAccount', header: 'Cta. origen', width: 'min-w-40' },
+        { key: 'destinationAccount', header: 'Tarjeta destino', width: 'min-w-40' },
+    ],
+}
+
+const CURRENCY_OPTIONS = [
+    { value: 'ARS', label: 'ARS' },
+    { value: 'USD', label: 'USD' },
+]
+
+// ── Helpers ──────────────────────────────────────────────────────────────────────
+
+function getEffectiveData(row: IImportRow, dirty?: Partial<ImportParsedData>): ImportParsedData {
+    return { ...(row.parsedData ?? {}), ...(row.reviewedData ?? {}), ...(dirty ?? {}) } as ImportParsedData
+}
+
 function formatAmount(amount: number | undefined, currency: string | undefined) {
     if (amount === undefined || amount === null) return '—'
-
     return new Intl.NumberFormat('es-AR', {
         style: 'currency',
         currency: currency ?? 'ARS',
@@ -48,157 +149,535 @@ function formatAmount(amount: number | undefined, currency: string | undefined) 
     }).format(amount)
 }
 
-function getRowData(row: IImportRow): ImportParsedData {
-    return { ...(row.parsedData ?? {}), ...(row.reviewedData ?? {}) }
+function getDisplayValue(key: string, data: ImportParsedData, accounts: IAccount[], categories: ICategory[]): string {
+    switch (key) {
+        case 'date':
+            return data.date ? new Date(data.date).toLocaleDateString('es-AR') : '—'
+        case 'description':
+            return data.description ?? '—'
+        case 'amount':
+            return formatAmount(data.amount, data.currency)
+        case 'currency':
+            return data.currency ?? '—'
+        case 'sourceAccount':
+            return data.accountName ?? accounts.find((a) => String(a._id) === data.sourceAccountId)?.name ?? '—'
+        case 'destinationAccount':
+            return data.destinationAccountName ?? accounts.find((a) => String(a._id) === data.destinationAccountId)?.name ?? '—'
+        case 'categoryId':
+            return data.categoryName ?? categories.find((c) => String(c._id) === data.categoryId)?.name ?? '—'
+        case 'installmentCount':
+            return data.installmentCount ? String(data.installmentCount) : '—'
+        case 'firstClosingMonth':
+            return data.firstClosingMonth ?? '—'
+        default:
+            return '—'
+    }
 }
 
-function getAccountName(accounts: IAccount[], accountId?: string, fallback?: string) {
-    return (
-        (accountId ? accounts.find((account) => String(account._id) === accountId)?.name : undefined) ??
-        fallback ??
-        '—'
-    )
-}
+function applyTypeChange(currentData: ImportParsedData, newType: string | undefined): Partial<ImportParsedData> {
+    const updates: Partial<ImportParsedData> = { type: newType }
 
-function getCategoryName(categories: ICategory[], categoryId?: string, fallback?: string) {
-    return (
-        (categoryId ? categories.find((category) => String(category._id) === categoryId)?.name : undefined) ??
-        fallback ??
-        'Sin categoría'
-    )
-}
-
-function getAccountSummary(data: ImportParsedData, accounts: IAccount[]) {
-    const sourceName = getAccountName(accounts, data.sourceAccountId, data.accountName)
-    const destinationName = getAccountName(
-        accounts,
-        data.destinationAccountId,
-        data.destinationAccountName
-    )
-
-    if (data.type === 'income') return destinationName
-    if (data.type === 'transfer' || data.type === 'credit_card_payment') {
-        return `${sourceName} → ${destinationName}`
+    if (!typeSupportsCategory(newType)) {
+        updates.categoryId = undefined
+        updates.categoryName = undefined
+    }
+    if (!typeRequiresDestinationAccount(newType)) {
+        updates.destinationAccountId = undefined
+        updates.destinationAccountName = undefined
+    }
+    if (newType !== 'credit_card_expense') {
+        updates.installmentCount = undefined
+        updates.installmentNumber = undefined
+        updates.firstClosingMonth = undefined
+    } else if (!currentData.installmentCount) {
+        updates.installmentCount = 1
+    }
+    // Al pasar de credit_card_expense a expense, limpiar campos de TC
+    if (newType === 'expense' && currentData.type === 'credit_card_expense') {
+        updates.cardName = undefined
     }
 
-    return sourceName
+    return updates
 }
+
+// ── Componentes pequeños ─────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
     const meta = STATUS_META[status] ?? { label: status, color: '#6b7280', icon: AlertTriangle }
     const Icon = meta.icon
-
     return (
-        <span
-            className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-md whitespace-nowrap"
-            style={{ background: `${meta.color}18`, color: meta.color }}
+        <Badge
+            variant={status === 'invalid' ? 'destructive' : 'outline'}
+            className="gap-1 rounded-md px-1.5 py-0 text-[11px] font-medium whitespace-nowrap"
+            style={{ background: `${meta.color}18`, color: meta.color, borderColor: `${meta.color}22` }}
         >
             <Icon className="w-3 h-3 flex-shrink-0" />
             {meta.label}
-        </span>
+        </Badge>
     )
 }
 
-function InstallmentBadge({ current, total }: { current?: number; total?: number }) {
-    if (!total || total < 2) return null
-
+function DirtyIndicator() {
     return (
         <span
-            className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-md"
-            style={{ background: 'rgba(2,132,199,0.12)', color: '#0284c7' }}
-        >
-            <CreditCard className="w-3 h-3 flex-shrink-0" />
-            {current ?? 1}/{total}
-        </span>
+            className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{ background: '#0284c7' }}
+            title="Cambios pendientes de aplicar"
+        />
     )
 }
 
-function RowCard({
-    row,
-    accounts,
-    categories,
-    onEdit,
-    onToggleIgnore,
-}: {
-    row: IImportRow
+// ── Select nativo compacto ───────────────────────────────────────────────────────
+
+function NativeSelect({
+                          value,
+                          onChange,
+                          options,
+                          placeholder,
+                          disabled,
+                          hasError,
+                          className,
+                      }: {
+    value?: string
+    onChange: (value: string | undefined) => void
+    options: { value: string; label: string }[]
+    placeholder?: string
+    disabled?: boolean
+    hasError?: boolean
+    className?: string
+}) {
+    return (
+        <select
+            value={value ?? ''}
+            onChange={(e) => onChange(e.target.value || undefined)}
+            disabled={disabled}
+            className={cn(
+                'w-full h-7 text-xs rounded border px-1.5 py-0',
+                'bg-background cursor-pointer',
+                'focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring',
+                hasError ? 'border-destructive' : 'border-border',
+                disabled && 'opacity-50 cursor-not-allowed',
+                className
+            )}
+        >
+            {placeholder !== undefined && <option value="">{placeholder}</option>}
+            {options.map((o) => (
+                <option key={o.value} value={o.value}>
+                    {o.label}
+                </option>
+            ))}
+        </select>
+    )
+}
+
+// ── FieldCell: renderiza el control inline para cada campo ───────────────────────
+
+function FieldCell({
+                       columnKey,
+                       effectiveData,
+                       rowType,
+                       accounts,
+                       categories,
+                       onChange,
+                       disabled,
+                       hasError,
+                   }: {
+    columnKey: string
+    effectiveData: ImportParsedData
+    rowType: string
     accounts: IAccount[]
     categories: ICategory[]
-    onEdit: (row: IImportRow) => void
-    onToggleIgnore: (row: IImportRow) => void
+    onChange: (updates: Partial<ImportParsedData>) => void
+    disabled?: boolean
+    hasError?: (field: string) => boolean
 }) {
-    const [expanded, setExpanded] = useState(false)
-    const data = getRowData(row)
-    const dateLabel = data.date ? new Date(data.date).toLocaleDateString('es-AR') : '—'
-    const amount = formatAmount(data.amount, data.currency)
-    const typeLabel = data.type ? IMPORT_TRANSACTION_TYPE_LABELS[data.type] ?? data.type : 'Sin tipo'
-    const accountSummary = getAccountSummary(data, accounts)
-    const categoryLabel = getCategoryName(categories, data.categoryId, data.categoryName)
+    const normalizedType = normalizeImportTransactionType(rowType)
+    const inputClass = cn(
+        'w-full h-7 text-xs rounded border px-1.5 bg-background',
+        'focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring border-border',
+        disabled && 'opacity-50 cursor-not-allowed'
+    )
+
+    switch (columnKey) {
+        case 'date':
+            return (
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {effectiveData.date ? new Date(effectiveData.date).toLocaleDateString('es-AR') : '—'}
+                </span>
+            )
+
+        case 'description':
+            return (
+                <Input
+                    className={inputClass}
+                    value={effectiveData.description ?? ''}
+                    onChange={(e) => onChange({ description: e.target.value })}
+                    disabled={disabled}
+                    placeholder="Descripción"
+                />
+            )
+
+        case 'amount':
+            return (
+                <Input
+                    type="number"
+                    step="0.01"
+                    className={cn(inputClass, 'text-right')}
+                    value={effectiveData.amount ?? ''}
+                    onChange={(e) =>
+                        onChange({ amount: e.target.value === '' ? undefined : Number(e.target.value) })
+                    }
+                    disabled={disabled}
+                    placeholder="0"
+                />
+            )
+
+        case 'currency':
+            return (
+                <NativeSelect
+                    value={effectiveData.currency}
+                    onChange={(v) => onChange({ currency: v })}
+                    options={CURRENCY_OPTIONS}
+                    placeholder="—"
+                    disabled={disabled}
+                />
+            )
+
+        case 'sourceAccount': {
+            const compatible = getCompatibleSourceAccounts(accounts, normalizedType)
+            return (
+                <NativeSelect
+                    value={effectiveData.sourceAccountId}
+                    onChange={(v) => {
+                        const account = accounts.find((a) => String(a._id) === v)
+                        onChange({
+                            sourceAccountId: v,
+                            accountName: account?.name,
+                            ...(account?.type === 'credit_card' ? { cardName: account.name } : {}),
+                        })
+                    }}
+                    options={compatible.map((a) => ({ value: String(a._id), label: `${a.name} · ${a.currency}` }))}
+                    placeholder="Sin cuenta"
+                    disabled={disabled}
+                    hasError={hasError?.('sourceAccount')}
+                />
+            )
+        }
+
+        case 'destinationAccount': {
+            const compatible = getCompatibleDestinationAccounts(accounts, normalizedType)
+            return (
+                <NativeSelect
+                    value={effectiveData.destinationAccountId}
+                    onChange={(v) => {
+                        const account = accounts.find((a) => String(a._id) === v)
+                        onChange({
+                            destinationAccountId: v,
+                            destinationAccountName: account?.name,
+                            ...(normalizedType === 'credit_card_payment' && account?.type === 'credit_card'
+                                ? { cardName: account.name }
+                                : {}),
+                        })
+                    }}
+                    options={compatible.map((a) => ({ value: String(a._id), label: `${a.name} · ${a.currency}` }))}
+                    placeholder="Sin cuenta"
+                    disabled={disabled}
+                    hasError={hasError?.('destinationAccount')}
+                />
+            )
+        }
+
+        case 'categoryId': {
+            const kind = getImportCategoryKind(normalizedType)
+            const relevant = kind ? categories.filter((c) => c.type === kind) : categories
+            return (
+                <NativeSelect
+                    value={effectiveData.categoryId}
+                    onChange={(v) => {
+                        const cat = categories.find((c) => String(c._id) === v)
+                        onChange({ categoryId: v, categoryName: cat?.name })
+                    }}
+                    options={relevant.map((c) => ({ value: String(c._id), label: c.name }))}
+                    placeholder="Sin categoría"
+                    disabled={disabled}
+                    hasError={hasError?.('categoryId')}
+                />
+            )
+        }
+
+        case 'installmentCount':
+            return (
+                <Input
+                    type="number"
+                    min={1}
+                    className={inputClass}
+                    value={effectiveData.installmentCount ?? ''}
+                    onChange={(e) =>
+                        onChange({ installmentCount: e.target.value === '' ? undefined : Number(e.target.value) })
+                    }
+                    disabled={disabled}
+                    placeholder="1"
+                />
+            )
+
+        case 'firstClosingMonth':
+            return (
+                <Input
+                    type="month"
+                    className={cn(
+                        inputClass,
+                        hasError?.('firstClosingMonth') && 'border-destructive'
+                    )}
+                    value={effectiveData.firstClosingMonth ?? ''}
+                    onChange={(e) => onChange({ firstClosingMonth: e.target.value || undefined })}
+                    disabled={disabled}
+                />
+            )
+
+        default:
+            return null
+    }
+}
+
+// ── Fila inline (desktop) ────────────────────────────────────────────────────────
+
+function InlineTableRow({
+                            row,
+                            groupType,
+                            columns,
+                            dirty,
+                            accounts,
+                            categories,
+                            onFieldChange,
+                            onToggleIgnore,
+                            disabled,
+                            isFocused,
+                        }: {
+    row: IImportRow
+    groupType: string
+    columns: ColDef[]
+    dirty?: Partial<ImportParsedData>
+    accounts: IAccount[]
+    categories: ICategory[]
+    onFieldChange: (rowId: string, updates: Partial<ImportParsedData>) => void
+    onToggleIgnore: (row: IImportRow) => void
+    disabled?: boolean
+    isFocused?: boolean
+}) {
+    const effectiveData = getEffectiveData(row, dirty)
+    const isDirty = !!dirty && Object.keys(dirty).length > 0
+    const rowId = String(row._id)
+    const isReadOnly = row.status === 'imported' || row.ignored
+
+    const handleChange = useCallback(
+        (updates: Partial<ImportParsedData>) => onFieldChange(rowId, updates),
+        [rowId, onFieldChange]
+    )
+
+    const handleTypeChange = useCallback(
+        (newType: string | undefined) => {
+            if (!newType) return
+            onFieldChange(rowId, applyTypeChange(effectiveData, newType))
+        },
+        [rowId, effectiveData, onFieldChange]
+    )
+
+    // Detectar campos con error para resaltarlos
+    const errorFields = useMemo(() => {
+        const fields = new Set<string>()
+        for (const msg of row.errors) {
+            if (msg.toLowerCase().includes('categoría')) fields.add('categoryId')
+            if (msg.toLowerCase().includes('cuenta origen') || msg.toLowerCase().includes('tarjeta "') || msg.toLowerCase().includes('tarjeta es req')) fields.add('sourceAccount')
+            if (msg.toLowerCase().includes('cuenta destino') || msg.toLowerCase().includes('tarjeta destino')) fields.add('destinationAccount')
+            if (msg.toLowerCase().includes('primera cuota')) fields.add('firstClosingMonth')
+            if (msg.toLowerCase().includes('cuotas son requeridas')) fields.add('installmentCount')
+        }
+        return fields
+    }, [row.errors])
 
     return (
-        <motion.div
-            layout
+        <tr
+            id={`row-${rowId}`}
             className={cn(
-                'rounded-xl border overflow-hidden transition-opacity',
+                'border-b align-middle transition-colors',
+                isDirty && 'bg-blue-50/30 dark:bg-blue-950/10',
+                isFocused && 'bg-amber-50/40 dark:bg-amber-950/15',
                 row.ignored && 'opacity-45'
             )}
             style={{ borderColor: 'var(--border)' }}
         >
-            <div className="flex items-start gap-3 p-3 cursor-pointer" onClick={() => setExpanded((value) => !value)}>
+            {/* # */}
+            <td className="px-2 py-1.5 text-xs text-muted-foreground w-10">
+                <div className="flex items-center gap-1.5">
+                    <span>{row.rowNumber}</span>
+                    {isDirty && <DirtyIndicator />}
+                </div>
+            </td>
+
+            {/* Estado */}
+            <td className="px-2 py-1.5 min-w-24 align-top">
+                <div className="space-y-1 pt-0.5">
+                    <StatusBadge status={row.status} />
+                    {row.errors.length > 0 && !row.ignored && (
+                        <p className="text-xs leading-tight" style={{ color: 'var(--destructive)' }}>
+                            {row.errors[0]}
+                        </p>
+                    )}
+                </div>
+            </td>
+
+            {/* Tipo */}
+            <td className="px-2 py-1.5 min-w-36">
+                <NativeSelect
+                    value={effectiveData.type}
+                    onChange={handleTypeChange}
+                    options={IMPORT_TRANSACTION_TYPE_OPTIONS}
+                    placeholder="Sin tipo"
+                    disabled={disabled || isReadOnly}
+                />
+            </td>
+
+            {/* Columnas específicas del tipo */}
+            {columns.map((col) => (
+                <td key={col.key} className={cn('px-2 py-1.5', col.width)}>
+                    {isReadOnly ? (
+                        <span className="text-xs text-muted-foreground">
+                            {getDisplayValue(col.key, effectiveData, accounts, categories)}
+                        </span>
+                    ) : (
+                        <FieldCell
+                            columnKey={col.key}
+                            effectiveData={effectiveData}
+                            rowType={effectiveData.type ?? groupType}
+                            accounts={accounts}
+                            categories={categories}
+                            onChange={handleChange}
+                            disabled={disabled}
+                            hasError={(field) => errorFields.has(field)}
+                        />
+                    )}
+                </td>
+            ))}
+
+            {/* Ignorar */}
+            <td className="px-2 py-1.5 w-10">
+                {row.status !== 'imported' && (
+                    <Button
+                        type="button"
+                        variant={row.ignored ? 'secondary' : 'ghost'}
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onToggleIgnore(row)}
+                        title={row.ignored ? 'Dejar de ignorar' : 'Ignorar fila'}
+                    >
+                        <EyeOff
+                            className={cn(
+                                'w-3.5 h-3.5',
+                                row.ignored ? 'text-foreground' : 'text-muted-foreground'
+                            )}
+                        />
+                    </Button>
+                )}
+            </td>
+        </tr>
+    )
+}
+
+// ── Tarjeta mobile ───────────────────────────────────────────────────────────────
+
+function MobileCardRow({
+                           row,
+                           groupType,
+                           dirty,
+                           accounts,
+                           categories,
+                           onFieldChange,
+                           onToggleIgnore,
+                           disabled,
+                       }: {
+    row: IImportRow
+    groupType: string
+    dirty?: Partial<ImportParsedData>
+    accounts: IAccount[]
+    categories: ICategory[]
+    onFieldChange: (rowId: string, updates: Partial<ImportParsedData>) => void
+    onToggleIgnore: (row: IImportRow) => void
+    disabled?: boolean
+}) {
+    const [expanded, setExpanded] = useState(false)
+    const effectiveData = getEffectiveData(row, dirty)
+    const isDirty = !!dirty && Object.keys(dirty).length > 0
+    const rowId = String(row._id)
+    const columns = COLUMNS_BY_TYPE[groupType] ?? []
+    const isReadOnly = row.status === 'imported'
+
+    const typeLabel = effectiveData.type
+        ? IMPORT_TRANSACTION_TYPE_LABELS[effectiveData.type] ?? effectiveData.type
+        : 'Sin tipo'
+    const dateLabel = effectiveData.date
+        ? new Date(effectiveData.date).toLocaleDateString('es-AR')
+        : '—'
+    const amountLabel = formatAmount(effectiveData.amount, effectiveData.currency)
+
+    const handleTypeChange = (newType: string | undefined) => {
+        if (!newType) return
+        onFieldChange(rowId, applyTypeChange(effectiveData, newType))
+    }
+
+    return (
+        <div
+            id={`row-${rowId}`}
+            className={cn(
+                'rounded-xl border overflow-hidden',
+                isDirty && 'border-blue-300/60 dark:border-blue-700/40',
+                row.ignored && 'opacity-45'
+            )}
+            style={{ borderColor: isDirty ? undefined : 'var(--border)' }}
+        >
+            {/* Header */}
+            <div
+                className="flex items-start gap-3 p-3 cursor-pointer select-none"
+                onClick={() => setExpanded((v) => !v)}
+            >
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-xs text-muted-foreground">#{row.rowNumber}</span>
                         <StatusBadge status={row.status} />
-                        <InstallmentBadge current={data.installmentNumber} total={data.installmentCount} />
+                        {isDirty && <DirtyIndicator />}
                     </div>
-
-                    <p className={cn('text-sm font-medium truncate', row.ignored && 'line-through text-muted-foreground')}>
-                        {data.description ?? '—'}
+                    <p
+                        className={cn(
+                            'text-sm font-medium truncate',
+                            row.ignored && 'line-through text-muted-foreground'
+                        )}
+                    >
+                        {effectiveData.description || <span className="italic text-muted-foreground">Sin descripción</span>}
                     </p>
-
                     <div className="flex items-center gap-2 mt-1 flex-wrap text-xs text-muted-foreground">
-                        <span className="text-sm font-semibold text-foreground">{amount}</span>
+                        <span className="text-sm font-semibold text-foreground">{amountLabel}</span>
                         <span>{dateLabel}</span>
                         <span>{typeLabel}</span>
                     </div>
-
-                    <div className="mt-2 space-y-1">
-                        <p className="text-xs text-muted-foreground truncate">{accountSummary}</p>
-                        <p className="text-xs text-muted-foreground truncate">{categoryLabel}</p>
-                    </div>
-
                     {row.errors.length > 0 && !row.ignored && (
-                        <p className="text-xs mt-2 font-medium" style={{ color: 'var(--destructive)' }}>
+                        <p className="text-xs mt-1.5 font-medium" style={{ color: 'var(--destructive)' }}>
                             ⚠ {row.errors[0]}
                         </p>
                     )}
                 </div>
-
                 <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
                     {row.status !== 'imported' && (
-                        <>
-                            <Button
-                                variant={row.ignored ? 'secondary' : 'ghost'}
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                onClick={(event) => {
-                                    event.stopPropagation()
-                                    onToggleIgnore(row)
-                                }}
-                            >
-                                <EyeOff className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                onClick={(event) => {
-                                    event.stopPropagation()
-                                    onEdit(row)
-                                }}
-                            >
-                                <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                        </>
+                        <Button
+                            type="button"
+                            variant={row.ignored ? 'secondary' : 'ghost'}
+                            size="icon"
+                            className="h-7 w-7 rounded-lg"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onToggleIgnore(row)
+                            }}
+                        >
+                            <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                        </Button>
                     )}
                     {expanded ? (
                         <ChevronUp className="w-4 h-4 text-muted-foreground" />
@@ -208,6 +687,7 @@ function RowCard({
                 </div>
             </div>
 
+            {/* Formulario expandido */}
             <AnimatePresence>
                 {expanded && (
                     <motion.div
@@ -217,155 +697,193 @@ function RowCard({
                         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                         className="overflow-hidden"
                     >
-                        <div className="px-3 pb-3 space-y-2 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                            {row.errors.slice(1).map((error, index) => (
-                                <p key={index} className="text-xs font-medium" style={{ color: 'var(--destructive)' }}>
-                                    ⚠ {error}
-                                </p>
-                            ))}
-
-                            {row.warnings.map((warning, index) => (
-                                <p key={index} className="text-xs text-muted-foreground">
-                                    • {warning}
-                                </p>
-                            ))}
-
-                            {(data.installmentCount ?? 1) > 1 && (
-                                <p className="text-xs text-muted-foreground">
-                                    Plan: {data.installmentNumber ?? 1}/{data.installmentCount}
-                                    {data.firstClosingMonth ? ` · Primera cuota ${data.firstClosingMonth}` : ''}
-                                </p>
+                        <div
+                            className="px-3 pb-4 space-y-3 border-t pt-3"
+                            style={{ borderColor: 'var(--border)' }}
+                        >
+                            {/* Errores */}
+                            {row.errors.length > 0 && !row.ignored && (
+                                <div
+                                    className="rounded-lg p-2.5 space-y-1 text-xs"
+                                    style={{ background: 'rgba(220,38,38,0.08)', color: 'var(--destructive)' }}
+                                >
+                                    {row.errors.map((err, i) => (
+                                        <p key={i}>⚠ {err}</p>
+                                    ))}
+                                </div>
                             )}
 
-                            {data.notes && (
-                                <p className="text-xs text-muted-foreground">Notas: {data.notes}</p>
+                            {/* Tipo */}
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
+                                <NativeSelect
+                                    value={effectiveData.type}
+                                    onChange={handleTypeChange}
+                                    options={IMPORT_TRANSACTION_TYPE_OPTIONS}
+                                    placeholder="Sin tipo"
+                                    disabled={disabled || isReadOnly}
+                                />
+                            </div>
+
+                            {/* Fecha (solo lectura) */}
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Fecha</label>
+                                <p className="text-sm">{dateLabel}</p>
+                            </div>
+
+                            {/* Columnas del tipo (sin fecha) */}
+                            {columns
+                                .filter((col) => col.key !== 'date')
+                                .map((col) => (
+                                    <div key={col.key} className="space-y-1">
+                                        <label className="text-xs font-medium text-muted-foreground">
+                                            {col.header}
+                                        </label>
+                                        {isReadOnly ? (
+                                            <p className="text-sm">
+                                                {getDisplayValue(col.key, effectiveData, accounts, categories)}
+                                            </p>
+                                        ) : (
+                                            <FieldCell
+                                                columnKey={col.key}
+                                                effectiveData={effectiveData}
+                                                rowType={effectiveData.type ?? groupType}
+                                                accounts={accounts}
+                                                categories={categories}
+                                                onChange={(updates) => onFieldChange(rowId, updates)}
+                                                disabled={disabled}
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+
+                            {/* Warnings */}
+                            {row.warnings.length > 0 && (
+                                <div className="space-y-1">
+                                    {row.warnings.map((w, i) => (
+                                        <p key={i} className="text-xs text-muted-foreground">
+                                            • {w}
+                                        </p>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </div>
     )
 }
 
-function ReviewTable({
-    rows,
-    accounts,
-    categories,
-    onEdit,
-    onToggleIgnore,
-}: {
+// ── Sección por tipo ─────────────────────────────────────────────────────────────
+
+function TypeGroupSection({
+                              type,
+                              rows,
+                              dirtyRows,
+                              accounts,
+                              categories,
+                              onFieldChange,
+                              onToggleIgnore,
+                              disabled,
+                              focusRowId,
+                          }: {
+    type: string
     rows: IImportRow[]
+    dirtyRows: Record<string, Partial<ImportParsedData>>
     accounts: IAccount[]
     categories: ICategory[]
-    onEdit: (row: IImportRow) => void
+    onFieldChange: (rowId: string, updates: Partial<ImportParsedData>) => void
     onToggleIgnore: (row: IImportRow) => void
+    disabled?: boolean
+    focusRowId: string | null
 }) {
-    return (
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr style={{ background: 'var(--secondary)', borderBottom: '1px solid var(--border)' }}>
-                            <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground w-8">#</th>
-                            <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground w-28">Estado</th>
-                            <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground min-w-64">Movimiento</th>
-                            <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground min-w-52">Cuenta</th>
-                            <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground min-w-44">Categoría</th>
-                            <th className="text-right px-3 py-2.5 text-xs font-medium text-muted-foreground w-28">Monto</th>
-                            <th className="w-24" />
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((row) => {
-                            const data = getRowData(row)
-                            const dateLabel = data.date ? new Date(data.date).toLocaleDateString('es-AR') : '—'
-                            const typeLabel = data.type
-                                ? IMPORT_TRANSACTION_TYPE_LABELS[data.type] ?? data.type
-                                : 'Sin tipo'
-                            const accountSummary = getAccountSummary(data, accounts)
-                            const categoryLabel = getCategoryName(categories, data.categoryId, data.categoryName)
+    const meta = TYPE_META[type]
+    const columns = COLUMNS_BY_TYPE[type] ?? []
+    const Icon = meta?.icon ?? AlertTriangle
 
-                            return (
-                                <tr
-                                    key={String(row._id)}
-                                    className={cn('border-b align-top', row.ignored && 'opacity-45')}
-                                    style={{ borderColor: 'var(--border)' }}
+    return (
+        <div className="mb-8">
+            {/* Encabezado del grupo */}
+            <div className="flex items-center gap-2 mb-3 px-1">
+                <Icon className="w-4 h-4 flex-shrink-0" style={{ color: meta?.color }} />
+                <h2 className="text-sm font-semibold">{meta?.label ?? type}</h2>
+                <span className="text-xs text-muted-foreground">({rows.length})</span>
+            </div>
+
+            {/* Vista desktop: tabla por tipo */}
+            <div
+                className="hidden md:block rounded-xl border overflow-hidden"
+                style={{ borderColor: 'var(--border)' }}
+            >
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                        <tr
+                            style={{
+                                background: 'var(--secondary)',
+                                borderBottom: '1px solid var(--border)',
+                            }}
+                        >
+                            <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground w-10">#</th>
+                            <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground min-w-24">Estado</th>
+                            <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground min-w-36">Tipo</th>
+                            {columns.map((col) => (
+                                <th
+                                    key={col.key}
+                                    className={cn(
+                                        'text-left px-2 py-2 text-xs font-medium text-muted-foreground',
+                                        col.width
+                                    )}
                                 >
-                                    <td className="px-3 py-3 text-xs text-muted-foreground">{row.rowNumber}</td>
-                                    <td className="px-3 py-3">
-                                        <StatusBadge status={row.status} />
-                                    </td>
-                                    <td className="px-3 py-3">
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <p className="text-sm font-medium">{data.description ?? '—'}</p>
-                                                <InstallmentBadge
-                                                    current={data.installmentNumber}
-                                                    total={data.installmentCount}
-                                                />
-                                            </div>
-                                            <p className="text-xs text-muted-foreground">
-                                                {typeLabel} · {dateLabel}
-                                            </p>
-                                            {row.errors.length > 0 && (
-                                                <p className="text-xs font-medium" style={{ color: 'var(--destructive)' }}>
-                                                    ⚠ {row.errors[0]}
-                                                </p>
-                                            )}
-                                            {row.errors.length === 0 && row.warnings[0] && (
-                                                <p className="text-xs text-muted-foreground">{row.warnings[0]}</p>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-3 text-xs text-muted-foreground">
-                                        <div className="space-y-1">
-                                            <p>{accountSummary}</p>
-                                            {(data.installmentCount ?? 1) > 1 && (
-                                                <p>
-                                                    {data.installmentNumber ?? 1}/{data.installmentCount}
-                                                    {data.firstClosingMonth ? ` · ${data.firstClosingMonth}` : ''}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-3 text-xs text-muted-foreground">{categoryLabel}</td>
-                                    <td className="px-3 py-3 text-right text-sm font-medium">
-                                        {formatAmount(data.amount, data.currency)}
-                                    </td>
-                                    <td className="px-3 py-3">
-                                        <div className="flex items-center justify-end gap-1">
-                                            {row.status !== 'imported' && (
-                                                <>
-                                                    <Button
-                                                        variant={row.ignored ? 'secondary' : 'ghost'}
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0"
-                                                        onClick={() => onToggleIgnore(row)}
-                                                    >
-                                                        <EyeOff className="w-3.5 h-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0"
-                                                        onClick={() => onEdit(row)}
-                                                    >
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </Button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                                    {col.header}
+                                </th>
+                            ))}
+                            <th className="w-10" />
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {rows.map((row) => (
+                            <InlineTableRow
+                                key={String(row._id)}
+                                row={row}
+                                groupType={type}
+                                columns={columns}
+                                dirty={dirtyRows[String(row._id)]}
+                                accounts={accounts}
+                                categories={categories}
+                                onFieldChange={onFieldChange}
+                                onToggleIgnore={onToggleIgnore}
+                                disabled={disabled}
+                                isFocused={focusRowId === String(row._id)}
+                            />
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Vista mobile: tarjetas */}
+            <div className="md:hidden space-y-2">
+                {rows.map((row) => (
+                    <MobileCardRow
+                        key={String(row._id)}
+                        row={row}
+                        groupType={type}
+                        dirty={dirtyRows[String(row._id)]}
+                        accounts={accounts}
+                        categories={categories}
+                        onFieldChange={onFieldChange}
+                        onToggleIgnore={onToggleIgnore}
+                        disabled={disabled}
+                    />
+                ))}
             </div>
         </div>
     )
 }
+
+// ── Página principal ─────────────────────────────────────────────────────────────
 
 export default function ImportReviewPage() {
     usePageTitle('Revisión de importación')
@@ -380,12 +898,31 @@ export default function ImportReviewPage() {
     const { success, error: toastError } = useToast()
 
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-    const [editingRow, setEditingRow] = useState<IImportRow | null>(null)
+    const [dirtyRows, setDirtyRows] = useState<Record<string, Partial<ImportParsedData>>>({})
     const [confirming, setConfirming] = useState(false)
+    const [applying, setApplying] = useState(false)
+    const [focusRowId, setFocusRowId] = useState<string | null>(null)
 
     useEffect(() => {
         fetchDetail()
     }, [fetchDetail])
+
+    const isDirty = Object.keys(dirtyRows).length > 0
+    const isDisabled = applying || confirming
+
+    // Scroll al foco tras cambio de tipo
+    useEffect(() => {
+        if (!focusRowId) return
+        const timer = setTimeout(() => {
+            const el = document.getElementById(`row-${focusRowId}`)
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 80)
+        const clearTimer = setTimeout(() => setFocusRowId(null), 2200)
+        return () => {
+            clearTimeout(timer)
+            clearTimeout(clearTimer)
+        }
+    }, [focusRowId])
 
     const filteredRows = useMemo(() => {
         if (!detail) return []
@@ -393,45 +930,110 @@ export default function ImportReviewPage() {
         return detail.rows.filter((row) => row.status === statusFilter)
     }, [detail, statusFilter])
 
-    const handleUpdateRow = useCallback(
-        async (rowId: string, updates: { reviewedData?: Partial<ImportParsedData>; ignored?: boolean }) => {
-            try {
-                await updateRow(rowId, updates)
-            } catch (error) {
-                toastError(error instanceof Error ? error.message : 'Error al actualizar')
-                throw error
-            }
-        },
-        [toastError, updateRow]
-    )
+    // Agrupar por tipo efectivo (incluyendo cambios locales pendientes)
+    const groupedRows = useMemo(() => {
+        const groups: Record<string, IImportRow[]> = {}
+
+        for (const row of filteredRows) {
+            const dirtyType = dirtyRows[String(row._id)]?.type
+            const rawType = dirtyType ?? (row.reviewedData as ImportParsedData | undefined)?.type ?? (row.parsedData as ImportParsedData | undefined)?.type
+            const effectiveType = normalizeImportTransactionType(rawType as string | undefined) ?? 'unknown'
+
+            if (!groups[effectiveType]) groups[effectiveType] = []
+            groups[effectiveType].push(row)
+        }
+
+        const ordered = TYPE_ORDER
+            .filter((t) => groups[t]?.length > 0)
+            .map((t) => ({ type: t, rows: groups[t] }))
+
+        if (groups['unknown']?.length) {
+            ordered.push({ type: 'unknown', rows: groups['unknown'] })
+        }
+
+        return ordered
+    }, [filteredRows, dirtyRows])
+
+    // Contadores para el bottom bar
+    const { blockingCount, pendingCount, importableCount } = useMemo(() => {
+        if (!detail) return { blockingCount: 0, pendingCount: 0, importableCount: 0 }
+        const rows = detail.rows
+        return {
+            blockingCount: rows.filter((r) => r.status === 'invalid' && !r.ignored).length,
+            pendingCount: rows.filter((r) => r.status === 'incomplete' && !r.ignored).length,
+            importableCount: rows.filter(
+                (r) => !r.ignored && ['ok', 'possible_duplicate'].includes(r.status) && r.status !== 'imported'
+            ).length,
+        }
+    }, [detail])
+
+    const handleFieldChange = useCallback((rowId: string, updates: Partial<ImportParsedData>) => {
+        setDirtyRows((prev) => ({
+            ...prev,
+            [rowId]: { ...(prev[rowId] ?? {}), ...updates },
+        }))
+        if ('type' in updates) {
+            setFocusRowId(rowId)
+        }
+    }, [])
 
     const handleToggleIgnore = useCallback(
         async (row: IImportRow) => {
-            await handleUpdateRow(String(row._id), { ignored: !row.ignored })
+            try {
+                await updateRow(String(row._id), { ignored: !row.ignored })
+            } catch (err) {
+                toastError(err instanceof Error ? err.message : 'Error al actualizar')
+            }
         },
-        [handleUpdateRow]
+        [updateRow, toastError]
     )
 
-    const handleSaveEdit = useCallback(
-        async (rowId: string, updates: { reviewedData?: Partial<ImportParsedData>; ignored?: boolean }) => {
-            await handleUpdateRow(rowId, updates)
-            success('Fila actualizada')
-        },
-        [handleUpdateRow, success]
-    )
+    const handleApplyChanges = useCallback(async () => {
+        if (!detail || !isDirty) return
+        setApplying(true)
 
-    const handleConfirm = async () => {
+        try {
+            const entries = Object.entries(dirtyRows)
+            await Promise.all(
+                entries.map(([rowId, dirty]) => {
+                    const row = detail.rows.find((r) => String(r._id) === rowId)
+                    if (!row) return Promise.resolve()
+                    // Enviar la data efectiva completa (no solo el diff)
+                    const fullData = getEffectiveData(row, dirty)
+                    return updateRow(rowId, { reviewedData: fullData })
+                })
+            )
+            setDirtyRows({})
+            success('Cambios aplicados.')
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al aplicar cambios')
+        } finally {
+            setApplying(false)
+        }
+    }, [detail, dirtyRows, isDirty, updateRow, success, toastError])
+
+    const handleConfirm = useCallback(async () => {
         setConfirming(true)
         try {
             const result = await confirmImport()
             success(`${result.imported} transacciones importadas correctamente.`)
             router.push('/transactions')
-        } catch (error) {
-            toastError(error instanceof Error ? error.message : 'Error al confirmar importación')
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al confirmar importación')
         } finally {
             setConfirming(false)
         }
+    }, [confirmImport, router, success, toastError])
+
+    const handleMainAction = () => {
+        if (isDirty) {
+            handleApplyChanges()
+        } else {
+            handleConfirm()
+        }
     }
+
+    // ── Render ────────────────────────────────────────────────────────────────
 
     if (loading) {
         return (
@@ -445,39 +1047,43 @@ export default function ImportReviewPage() {
         return (
             <div className="px-4 md:px-6 pt-6">
                 <p className="text-sm text-destructive">{error ?? 'Importación no encontrada'}</p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={() => router.push('/transactions/import')}>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => router.push('/transactions/import')}
+                >
                     Volver
                 </Button>
             </div>
         )
     }
 
-    const { batch, rows } = detail
+    const { batch } = detail
     const summary = batch.summary
     const isConfirmed = batch.status === 'confirmed'
 
-    const importableCount = rows.filter(
-        (row) =>
-            !row.ignored &&
-            [ 'ok', 'possible_duplicate' ].includes(row.status) &&
-            row.status !== 'imported'
-    ).length
-    const blockingCount = rows.filter((row) => row.status === 'invalid' && !row.ignored).length
-    const pendingCount = rows.filter((row) => row.status === 'incomplete' && !row.ignored).length
-
-    const filterChips = ([
-        { value: 'all' as StatusFilter, label: 'Todas', count: summary.total, color: '#0284c7' },
-        { value: 'ok' as StatusFilter, label: 'Listas', count: summary.valid, color: '#16a34a' },
-        { value: 'incomplete' as StatusFilter, label: 'Pendientes', count: summary.incomplete, color: '#d97706' },
-        { value: 'invalid' as StatusFilter, label: 'Con error', count: summary.invalid, color: '#dc2626' },
-        { value: 'possible_duplicate' as StatusFilter, label: 'Revisar', count: summary.possibleDuplicate, color: '#7c3aed' },
-        { value: 'ignored' as StatusFilter, label: 'Ignoradas', count: summary.ignored, color: '#6b7280' },
-    ]).filter((item) => item.value === 'all' || item.count > 0)
+    const filterChips = (
+        [
+            { value: 'all' as StatusFilter, label: 'Todas', count: summary.total, color: '#0284c7' },
+            { value: 'ok' as StatusFilter, label: 'Listas', count: summary.valid, color: '#16a34a' },
+            { value: 'incomplete' as StatusFilter, label: 'Pendientes', count: summary.incomplete, color: '#d97706' },
+            { value: 'invalid' as StatusFilter, label: 'Con error', count: summary.invalid, color: '#dc2626' },
+            { value: 'possible_duplicate' as StatusFilter, label: 'Revisar', count: summary.possibleDuplicate, color: '#7c3aed' },
+            { value: 'ignored' as StatusFilter, label: 'Ignoradas', count: summary.ignored, color: '#6b7280' },
+        ] as const
+    ).filter((item) => item.value === 'all' || item.count > 0)
 
     return (
         <div className="flex flex-col min-h-full">
+            {/* Header */}
             <div className="flex items-center gap-3 px-4 md:px-6 py-3 flex-shrink-0">
-                <Button variant="ghost" size="sm" onClick={() => router.push('/transactions/import')} className="gap-1.5">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push('/transactions/import')}
+                    className="gap-1.5"
+                >
                     <ArrowLeft className="w-4 h-4" />
                     Importar
                 </Button>
@@ -489,16 +1095,18 @@ export default function ImportReviewPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             >
+                {/* Título */}
                 <div className="mb-4">
                     <h1 className="text-xl font-semibold">Revisión de importación</h1>
                     <p className="text-sm text-muted-foreground mt-0.5 truncate">{batch.fileName}</p>
                 </div>
 
+                {/* Banners de estado */}
                 {blockingCount > 0 && !isConfirmed && (
                     <div
                         className="rounded-xl p-3 mb-4 flex items-start gap-2 text-sm"
                         style={{
-                            background: 'rgba(220, 38, 38, 0.08)',
+                            background: 'rgba(220,38,38,0.08)',
                             color: '#dc2626',
                             border: '1px solid rgba(220,38,38,0.2)',
                         }}
@@ -521,7 +1129,7 @@ export default function ImportReviewPage() {
                     <div
                         className="rounded-xl p-3 mb-4 flex items-start gap-2 text-sm"
                         style={{
-                            background: 'rgba(217, 119, 6, 0.10)',
+                            background: 'rgba(217,119,6,0.10)',
                             color: '#b45309',
                             border: '1px solid rgba(217,119,6,0.18)',
                         }}
@@ -534,7 +1142,30 @@ export default function ImportReviewPage() {
                                     : `${pendingCount} filas todavía necesitan revisión`}
                             </p>
                             <p className="text-xs opacity-80">
-                                Completá cuenta, categoría o datos del plan antes de importar.
+                                Completá los campos obligatorios antes de importar.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {isDirty && !isConfirmed && (
+                    <div
+                        className="rounded-xl p-3 mb-4 flex items-start gap-2 text-sm"
+                        style={{
+                            background: 'rgba(2,132,199,0.08)',
+                            color: '#0284c7',
+                            border: '1px solid rgba(2,132,199,0.18)',
+                        }}
+                    >
+                        <Save className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                            <p className="font-medium">
+                                {Object.keys(dirtyRows).length === 1
+                                    ? '1 fila con cambios pendientes de aplicar'
+                                    : `${Object.keys(dirtyRows).length} filas con cambios pendientes de aplicar`}
+                            </p>
+                            <p className="text-xs opacity-80">
+                                Usá <strong>Aplicar cambios</strong> para guardar y validar los cambios antes de confirmar.
                             </p>
                         </div>
                     </div>
@@ -543,22 +1174,25 @@ export default function ImportReviewPage() {
                 {isConfirmed && (
                     <div
                         className="rounded-xl p-3 mb-4 flex items-start gap-2 text-sm"
-                        style={{ background: 'rgba(22, 163, 74, 0.08)', color: '#16a34a' }}
+                        style={{ background: 'rgba(22,163,74,0.08)', color: '#16a34a' }}
                     >
                         <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
                         <span>Importación confirmada. Se crearon {summary.imported} transacciones.</span>
                     </div>
                 )}
 
-                <div className="flex gap-2 flex-wrap mb-4">
+                {/* Filtros por estado */}
+                <div className="flex gap-2 flex-wrap mb-6">
                     {filterChips.map((filter) => {
                         const active = statusFilter === filter.value
                         return (
-                            <button
+                            <Button
                                 key={filter.value}
                                 type="button"
                                 onClick={() => setStatusFilter(filter.value)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                variant={active ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-8 rounded-lg px-3 text-xs font-medium transition-colors"
                                 style={{
                                     background: active ? filter.color : 'var(--secondary)',
                                     color: active ? '#fff' : filter.color,
@@ -567,45 +1201,35 @@ export default function ImportReviewPage() {
                             >
                                 {filter.label}
                                 <span className="ml-1.5 opacity-80">{filter.count}</span>
-                            </button>
+                            </Button>
                         )
                     })}
                 </div>
 
-                {filteredRows.length === 0 ? (
+                {/* Filas agrupadas por tipo */}
+                {groupedRows.length === 0 ? (
                     <div className="text-center py-12 text-sm text-muted-foreground">
                         No hay filas con este estado.
                     </div>
                 ) : (
-                    <>
-                        <div className="hidden md:block">
-                            <ReviewTable
-                                rows={filteredRows}
-                                accounts={accounts}
-                                categories={categories}
-                                onEdit={setEditingRow}
-                                onToggleIgnore={handleToggleIgnore}
-                            />
-                        </div>
-
-                        <div className="md:hidden space-y-2">
-                            <AnimatePresence mode="popLayout">
-                                {filteredRows.map((row) => (
-                                    <RowCard
-                                        key={String(row._id)}
-                                        row={row}
-                                        accounts={accounts}
-                                        categories={categories}
-                                        onEdit={setEditingRow}
-                                        onToggleIgnore={handleToggleIgnore}
-                                    />
-                                ))}
-                            </AnimatePresence>
-                        </div>
-                    </>
+                    groupedRows.map(({ type, rows: groupRows }) => (
+                        <TypeGroupSection
+                            key={type}
+                            type={type}
+                            rows={groupRows}
+                            dirtyRows={dirtyRows}
+                            accounts={accounts}
+                            categories={categories}
+                            onFieldChange={handleFieldChange}
+                            onToggleIgnore={handleToggleIgnore}
+                            disabled={isDisabled}
+                            focusRowId={focusRowId}
+                        />
+                    ))
                 )}
             </motion.div>
 
+            {/* Bottom bar */}
             {!isConfirmed && (
                 <div
                     className="sticky bottom-0 left-0 right-0 border-t px-4 md:px-6 py-3 flex-shrink-0"
@@ -616,13 +1240,24 @@ export default function ImportReviewPage() {
                     }}
                 >
                     <div className="flex items-center justify-between gap-4 max-w-7xl mx-auto">
+                        {/* Stats */}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                            <span>
-                                <span className="font-medium" style={{ color: '#16a34a' }}>
-                                    {importableCount}
-                                </span>{' '}
-                                para importar
-                            </span>
+                            {isDirty && (
+                                <span>
+                                    <span className="font-medium" style={{ color: '#0284c7' }}>
+                                        {Object.keys(dirtyRows).length}
+                                    </span>{' '}
+                                    con cambios
+                                </span>
+                            )}
+                            {importableCount > 0 && (
+                                <span>
+                                    <span className="font-medium" style={{ color: '#16a34a' }}>
+                                        {importableCount}
+                                    </span>{' '}
+                                    para importar
+                                </span>
+                            )}
                             {pendingCount > 0 && (
                                 <span>
                                     <span className="font-medium" style={{ color: '#d97706' }}>
@@ -641,20 +1276,39 @@ export default function ImportReviewPage() {
                             )}
                         </div>
 
+                        {/* Acciones */}
                         <div className="flex items-center gap-2 flex-shrink-0">
-                            <Button variant="outline" size="sm" onClick={() => router.push('/transactions/import')}>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.push('/transactions/import')}
+                                disabled={isDisabled}
+                            >
                                 Cancelar
                             </Button>
                             <Button
                                 size="sm"
-                                onClick={handleConfirm}
-                                disabled={confirming || blockingCount > 0 || pendingCount > 0 || importableCount === 0}
-                                className="gap-2"
+                                onClick={handleMainAction}
+                                disabled={
+                                    isDisabled ||
+                                    (!isDirty && (blockingCount > 0 || pendingCount > 0 || importableCount === 0))
+                                }
+                                className="gap-2 min-w-32"
                             >
-                                {confirming ? (
+                                {applying ? (
+                                    <>
+                                        <Spinner className="w-3.5 h-3.5" />
+                                        Aplicando...
+                                    </>
+                                ) : confirming ? (
                                     <>
                                         <Spinner className="w-3.5 h-3.5" />
                                         Importando...
+                                    </>
+                                ) : isDirty ? (
+                                    <>
+                                        <Save className="w-3.5 h-3.5" />
+                                        Aplicar cambios
                                     </>
                                 ) : (
                                     `Confirmar ${importableCount}`
@@ -664,17 +1318,7 @@ export default function ImportReviewPage() {
                     </div>
                 </div>
             )}
-
-            <ImportRowEditDialog
-                row={editingRow}
-                open={!!editingRow}
-                onOpenChange={(open) => {
-                    if (!open) setEditingRow(null)
-                }}
-                accounts={accounts}
-                categories={categories}
-                onSave={handleSaveEdit}
-            />
         </div>
     )
 }
+ 

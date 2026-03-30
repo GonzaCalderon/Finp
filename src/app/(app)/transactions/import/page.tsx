@@ -86,7 +86,7 @@ export default function ImportPage() {
                 <div className="mb-6">
                     <h1 className="text-xl font-semibold">Importar transacciones</h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Subí una planilla Excel con el formato oficial de Finp para importar transacciones en lote.
+                        Subí la nueva plantilla oficial de Finp con cuentas, cuenta destino, cuotas y mes de primer pago según corresponda.
                     </p>
                 </div>
 
@@ -105,7 +105,7 @@ export default function ImportPage() {
                         <div>
                             <p className="text-sm font-medium">Plantilla oficial Finp</p>
                             <p className="text-xs text-muted-foreground">
-                                Descargala, completala y luego subila acá
+                                Descargala con el esquema actualizado y luego subila acá
                             </p>
                         </div>
                     </div>
@@ -180,9 +180,9 @@ export default function ImportPage() {
                         Cómo funciona
                     </p>
                     {[
-                        'Descargá la plantilla oficial y completá tus movimientos.',
+                        'Descargá la plantilla oficial y completá fecha, tipo, cuenta y los campos específicos de cada movimiento.',
                         'Subí el archivo: Finp lo procesa y detecta errores automáticamente.',
-                        'Revisá las filas, corregí lo que haga falta y asigná categorías.',
+                        'Revisá las filas por tipo, editá inline lo necesario y aplicá los cambios.',
                         'Confirmá para crear todas las transacciones en tu cuenta.',
                     ].map((step, i) => (
                         <div key={i} className="flex items-start gap-3">

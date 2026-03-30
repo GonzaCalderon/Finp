@@ -68,8 +68,10 @@ export async function POST(
         try {
             let tx
 
-            if (normalizedType === 'credit_card_expense' && (data.installmentCount ?? 1) > 1) {
-                const installmentAmount = (data.amount as number) / (data.installmentCount as number)
+            // Gasto con TC: siempre crear InstallmentPlan (incluso 1 cuota)
+            if (normalizedType === 'credit_card_expense') {
+                const installmentCount = data.installmentCount ?? 1
+                const installmentAmount = (data.amount as number) / installmentCount
 
                 const plan = await InstallmentPlan.create({
                     userId: session.user.id,
@@ -78,7 +80,7 @@ export async function POST(
                     description: data.description,
                     currency: data.currency,
                     totalAmount: data.amount,
-                    installmentCount: data.installmentCount,
+                    installmentCount,
                     installmentAmount,
                     purchaseDate: data.date,
                     firstClosingMonth: data.firstClosingMonth,
@@ -121,18 +123,21 @@ export async function POST(
                 }
                 if (data.notes) txDoc.notes = data.notes
 
-                if (['expense', 'credit_card_expense', 'credit_card_payment', 'transfer', 'adjustment'].includes(normalizedType)) {
+                if (['expense', 'credit_card_payment', 'transfer', 'adjustment'].includes(normalizedType)) {
                     txDoc.sourceAccountId = data.sourceAccountId
                 }
 
-                if (['income', 'credit_card_payment', 'transfer'].includes(normalizedType)) {
+                if (normalizedType === 'income') {
+                    txDoc.destinationAccountId = data.sourceAccountId
+                }
+
+                if (['credit_card_payment', 'transfer'].includes(normalizedType)) {
                     txDoc.destinationAccountId = data.destinationAccountId
                 }
 
                 tx = await Transaction.create(txDoc)
             }
 
-            // Actualizar fila con transacción creada
             await ImportRow.updateOne(
                 { _id: row._id },
                 {
@@ -151,7 +156,6 @@ export async function POST(
         }
     }
 
-    // Actualizar batch
     batch.status = 'confirmed'
     batch.confirmedAt = now
     batch.summary.imported = imported

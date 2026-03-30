@@ -37,7 +37,22 @@
       "Bash(cmd /c \"taskkill /PID 34680 /F\")",
       "Bash(cmd /c taskkill /PID 34680 /F)",
       "Bash(powershell -Command \"Stop-Process -Id 34680 -Force\")",
-      "Bash(wc -l /c/Users/gonza/WebstormProjects/Finp/finm/src/app/\\\\\\(app\\\\\\)/transactions/page.tsx)"
+      "Bash(wc -l /c/Users/gonza/WebstormProjects/Finp/finm/src/app/\\\\\\(app\\\\\\)/transactions/page.tsx)",
+      "Bash(findstr :3000)",
+      "Bash(python3 -c \":*)",
+      "Read(//c/Users/gonza/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/51a9822c-fda6-4079-bbaa-ae6dd62ce76a/1e968679-dff3-4144-b0d2-4816b5be9076/skills/xlsx/**)",
+      "Bash(where python:*)",
+      "Bash(where python3:*)",
+      "Bash(where py:*)",
+      "Read(//usr/**)",
+      "Read(//usr/local/**)",
+      "Bash(py --version)",
+      "Bash(py -c \"print\\(''ok''\\)\")",
+      "Bash(py -c \"import pandas; print\\(''pandas ok''\\)\")",
+      "Bash(py -c \"import openpyxl; print\\(''openpyxl ok''\\)\")",
+      "Bash(py -c \"import openpyxl; print\\(''ok''\\)\")",
+      "Bash(py -m pip install openpyxl)",
+      "Bash(py -c \":*)"
     ]
   }
 }

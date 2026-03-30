@@ -4,7 +4,6 @@ import {
     IMPORT_TRANSACTION_TYPE_LABELS,
     normalizeImportMonth,
     normalizeImportTransactionType,
-    typeSupportsCategory,
 } from '@/lib/utils/import-transactions'
 
 // Mapa de encabezados tolerantes (sin tildes, variantes) → clave normalizada
@@ -52,28 +51,29 @@ const HEADER_ALIASES: Record<string, string> = {
     'cuenta destino': 'cuenta destino',
     destino: 'cuenta destino',
     destination_account: 'cuenta destino',
+    'cuenta de destino': 'cuenta destino',
 
-    // medio de pago
+    // compatibilidad vieja: medio de pago
     'medio de pago': 'medio de pago',
     medio_de_pago: 'medio de pago',
     medio: 'medio de pago',
     'payment method': 'medio de pago',
     pago: 'medio de pago',
 
-    // tarjeta
+    // compatibilidad vieja: tarjeta
     tarjeta: 'tarjeta',
     card: 'tarjeta',
     'tarjeta de credito': 'tarjeta',
     'tarjeta de crédito': 'tarjeta',
 
-    // cuotas totales
-    'cuotas totales': 'cuotas totales',
-    cuotas_totales: 'cuotas totales',
-    'total cuotas': 'cuotas totales',
-    cuotas: 'cuotas totales',
-    installments: 'cuotas totales',
+    // cuotas
+    cuotas: 'cuotas',
+    installments: 'cuotas',
+    'cuotas totales': 'cuotas',
+    cuotas_totales: 'cuotas',
+    'total cuotas': 'cuotas',
 
-    // cuota actual
+    // compatibilidad vieja: cuota actual
     'cuota actual': 'cuota actual',
     cuota_actual: 'cuota actual',
     'numero de cuota': 'cuota actual',
@@ -81,16 +81,19 @@ const HEADER_ALIASES: Record<string, string> = {
     cuota: 'cuota actual',
     installment: 'cuota actual',
 
-    // mes de primera cuota
-    'mes primera cuota': 'mes primera cuota',
-    'mes de primera cuota': 'mes primera cuota',
-    'primera cuota': 'mes primera cuota',
-    'mes primera imputacion': 'mes primera cuota',
-    'mes primera imputación': 'mes primera cuota',
-    'mes de primera imputacion': 'mes primera cuota',
-    'mes de primera imputación': 'mes primera cuota',
-    first_closing_month: 'mes primera cuota',
-    'first closing month': 'mes primera cuota',
+    // mes de primer pago
+    'mes de primer pago': 'mes de primer pago',
+    'mes primer pago': 'mes de primer pago',
+    'primer pago': 'mes de primer pago',
+    'mes primera cuota': 'mes de primer pago',
+    'mes de primera cuota': 'mes de primer pago',
+    'primera cuota': 'mes de primer pago',
+    'mes primera imputacion': 'mes de primer pago',
+    'mes primera imputación': 'mes de primer pago',
+    'mes de primera imputacion': 'mes de primer pago',
+    'mes de primera imputación': 'mes de primer pago',
+    first_closing_month: 'mes de primer pago',
+    'first closing month': 'mes de primer pago',
 
     // observaciones
     observaciones: 'observaciones',
@@ -99,7 +102,7 @@ const HEADER_ALIASES: Record<string, string> = {
     comentarios: 'observaciones',
     comentario: 'observaciones',
 
-    // ignorar
+    // compatibilidad vieja: ignorar
     ignorar: 'ignorar',
     ignore: 'ignorar',
     omitir: 'ignorar',
@@ -226,7 +229,8 @@ export function parseImportFile(buffer: Buffer): ParseResult {
     }
 
     const ws = wb.Sheets[sheetName]
-    const rawRows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, {
+    const rawRows = XLSX.utils.sheet_to_json<(string | number | Date)[]>(ws, {
+        header: 1,
         defval: '',
         raw: true,
     })
@@ -235,44 +239,50 @@ export function parseImportFile(buffer: Buffer): ParseResult {
         return { rows: [], missingHeaders: [], unknownHeaders: [], totalRows: 0 }
     }
 
-    // Mapear encabezados
-    const firstRow = rawRows[0]
+    const headerRowIndex =
+        rawRows.findIndex((row) => row.some((cell) => REQUIRED_HEADERS.includes(normalizeHeader(String(cell ?? ''))))) >= 0
+            ? rawRows.findIndex((row) => row.some((cell) => REQUIRED_HEADERS.includes(normalizeHeader(String(cell ?? '')))))
+            : 0
+
+    const headerRow = rawRows[headerRowIndex] ?? []
     const headerMap: Record<string, string> = {} // originalKey → normalizedKey
     const unknownHeaders: string[] = []
 
-    for (const key of Object.keys(firstRow)) {
-        const normalized = normalizeHeader(key)
-        headerMap[key] = normalized
+    headerRow.forEach((cell, index) => {
+        const original = String(cell ?? '').trim()
+        const normalized = normalizeHeader(original)
+        headerMap[String(index)] = normalized
         if (!Object.values(HEADER_ALIASES).includes(normalized) && !REQUIRED_HEADERS.includes(normalized)) {
-            unknownHeaders.push(key)
+            if (original) unknownHeaders.push(original)
         }
-    }
+    })
 
     const foundHeaders = new Set(Object.values(headerMap))
     const missingHeaders = REQUIRED_HEADERS.filter((h) => !foundHeaders.has(h))
 
     const rows: ParsedRow[] = []
 
-    rawRows.forEach((rawRow, index) => {
-        const rowNumber = index + 2 // +2 porque la fila 1 son headers
+    rawRows.slice(headerRowIndex + 1).forEach((rawRow, index) => {
+        const rowNumber = headerRowIndex + index + 2
 
         // Normalizar rawData
         const rawData: Record<string, string> = {}
-        for (const [key, val] of Object.entries(rawRow)) {
-            const normalized = headerMap[key] ?? key
+        rawRow.forEach((val, cellIndex) => {
+            const normalized = headerMap[String(cellIndex)] ?? String(cellIndex)
             rawData[normalized] = val !== undefined && val !== null ? String(val) : ''
-        }
+        })
 
         // Ignorar fila vacía
         const allEmpty = Object.values(rawData).every((v) => !v.trim())
         if (allEmpty) return
 
-        // Parsear campos
-        const ignored = parseBoolean(rawData['ignorar'])
+        // Saltear filas de agrupación/ayuda si quedaron debajo del encabezado
+        if (!rawData['tipo'] && !rawData['monto'] && !rawData['cuenta']) return
 
+        // Parsear campos
         const parsedData: ImportParsedData = {
-            ignored,
-            date: parseDateCell(rawRow[Object.keys(rawRow).find((k) => normalizeHeader(k) === 'fecha') ?? '']),
+            ignored: false,
+            date: parseDateCell(rawData['fecha']),
             type: normalizeImportTransactionType(rawData['tipo']),
             description: rawData['descripción']?.trim() || undefined,
             amount: parseAmount(rawData['monto']),
@@ -282,9 +292,9 @@ export function parseImportFile(buffer: Buffer): ParseResult {
             destinationAccountName: rawData['cuenta destino']?.trim() || undefined,
             paymentMethod: rawData['medio de pago']?.trim() || undefined,
             cardName: rawData['tarjeta']?.trim() || undefined,
-            installmentCount: parseNumber(rawData['cuotas totales']),
+            installmentCount: parseNumber(rawData['cuotas']),
             installmentNumber: parseNumber(rawData['cuota actual']),
-            firstClosingMonth: normalizeImportMonth(rawData['mes primera cuota']),
+            firstClosingMonth: normalizeImportMonth(rawData['mes de primer pago']),
             notes: rawData['observaciones']?.trim() || undefined,
         }
 
@@ -292,7 +302,7 @@ export function parseImportFile(buffer: Buffer): ParseResult {
         const errors: string[] = []
         const warnings: string[] = []
 
-        if (!ignored) {
+        if (!parseBoolean(rawData['ignorar'])) {
             if (!parsedData.date) {
                 errors.push('La fecha es inválida o está vacía. Usá el formato DD/MM/AAAA.')
             }
@@ -303,12 +313,12 @@ export function parseImportFile(buffer: Buffer): ParseResult {
                 errors.push(`Tipo desconocido: "${rawData['tipo']}".`)
             }
 
-            if (!parsedData.description) {
+            if (!parsedData.description && !['transfer', 'credit_card_payment'].includes(parsedData.type ?? '')) {
                 errors.push('La descripción es requerida.')
             }
 
             if (parsedData.amount === undefined) {
-                errors.push('El monto debe ser un número positivo válido.')
+                errors.push('El monto debe ser un número válido distinto de cero.')
             }
 
             if (!parsedData.currency) {
@@ -317,26 +327,13 @@ export function parseImportFile(buffer: Buffer): ParseResult {
                 errors.push(`Moneda desconocida: "${parsedData.currency}". Usá ARS o USD.`)
             }
 
-            // Advertencias
-            if (!parsedData.categoryName && typeSupportsCategory(parsedData.type)) {
-                warnings.push('Sin categoría. Podrás asignarla en la revisión.')
-            }
-
-            if (!parsedData.accountName && !['income', 'transfer', 'credit_card_payment'].includes(parsedData.type ?? '')) {
-                warnings.push('Sin cuenta. Podrás asignarla en la revisión.')
-            }
-
-            if (!parsedData.destinationAccountName && ['income', 'transfer', 'credit_card_payment'].includes(parsedData.type ?? '')) {
-                warnings.push('Sin cuenta destino. Podrás asignarla en la revisión.')
-            }
-
             // Cuotas coherencia
             if (parsedData.installmentCount || parsedData.installmentNumber) {
                 if (parsedData.installmentCount && !parsedData.installmentNumber) {
-                    warnings.push('Se indicó cuotas totales pero falta cuota actual.')
+                    parsedData.installmentNumber = 1
                 }
                 if (parsedData.installmentNumber && !parsedData.installmentCount) {
-                    warnings.push('Se indicó cuota actual pero falta cuotas totales.')
+                    warnings.push('Se indicó cuota actual pero falta cuotas.')
                 }
                 if (
                     parsedData.installmentCount &&
@@ -344,19 +341,15 @@ export function parseImportFile(buffer: Buffer): ParseResult {
                     parsedData.installmentNumber > parsedData.installmentCount
                 ) {
                     errors.push(
-                        `Cuota actual (${parsedData.installmentNumber}) no puede ser mayor que cuotas totales (${parsedData.installmentCount}).`
+                        `Cuota actual (${parsedData.installmentNumber}) no puede ser mayor que cuotas (${parsedData.installmentCount}).`
                     )
                 }
-            }
-
-            if ((parsedData.installmentCount ?? 1) > 1 && !parsedData.firstClosingMonth) {
-                warnings.push('Sin mes de primera cuota. Podrás completarlo en la revisión.')
             }
         }
 
         const hasErrors = errors.length > 0
         const hasWarnings = warnings.length > 0 && !hasErrors
-        const status = ignored ? 'ok' : hasErrors ? 'invalid' : hasWarnings ? 'incomplete' : 'ok'
+        const status = hasErrors ? 'invalid' : hasWarnings ? 'incomplete' : 'ok'
 
         rows.push({
             rowNumber,

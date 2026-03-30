@@ -10,13 +10,9 @@ export const TEMPLATE_HEADERS = [
     'cuenta',
     'cuenta destino',
     'categoría',
-    'medio de pago',
-    'tarjeta',
-    'cuotas totales',
-    'cuota actual',
-    'mes primera cuota',
+    'cuotas',
+    'mes de primer pago',
     'observaciones',
-    'ignorar',
 ] as const
 
 export type TemplateHeader = typeof TEMPLATE_HEADERS[number]
@@ -37,13 +33,9 @@ const EXAMPLE_ROWS = [
         cuenta: 'Cuenta corriente',
         'cuenta destino': '',
         categoría: 'Supermercado',
-        'medio de pago': '',
-        tarjeta: '',
-        'cuotas totales': '',
-        'cuota actual': '',
-        'mes primera cuota': '',
+        cuotas: '',
+        'mes de primer pago': '',
         observaciones: '',
-        ignorar: '',
     },
     {
         fecha: '14/03/2026',
@@ -54,13 +46,9 @@ const EXAMPLE_ROWS = [
         cuenta: 'Visa Santander',
         'cuenta destino': '',
         categoría: 'Tecnología y herramientas',
-        'medio de pago': 'tarjeta de crédito',
-        tarjeta: 'Visa Santander',
-        'cuotas totales': 12,
-        'cuota actual': 1,
-        'mes primera cuota': '2026-04',
+        cuotas: 12,
+        'mes de primer pago': '2026-04',
         observaciones: 'Comprada en Garbarino',
-        ignorar: '',
     },
     {
         fecha: '10/03/2026',
@@ -69,32 +57,24 @@ const EXAMPLE_ROWS = [
         monto: 350000,
         moneda: 'ARS',
         cuenta: 'Cuenta corriente',
-        'cuenta destino': 'Cuenta corriente',
+        'cuenta destino': '',
         categoría: 'Sueldo',
-        'medio de pago': '',
-        tarjeta: '',
-        'cuotas totales': '',
-        'cuota actual': '',
-        'mes primera cuota': '',
+        cuotas: '',
+        'mes de primer pago': '',
         observaciones: '',
-        ignorar: '',
     },
     {
         fecha: '28/03/2026',
         tipo: 'pago de tarjeta',
-        descripción: 'Pago resumen Visa Santander',
+        descripción: '',
         monto: 120000,
         moneda: 'ARS',
         cuenta: 'Cuenta corriente',
         'cuenta destino': 'Visa Santander',
         categoría: '',
-        'medio de pago': 'transferencia',
-        tarjeta: 'Visa Santander',
-        'cuotas totales': '',
-        'cuota actual': '',
-        'mes primera cuota': '',
+        cuotas: '',
+        'mes de primer pago': '',
         observaciones: '',
-        ignorar: '',
     },
     {
         fecha: '31/03/2026',
@@ -105,13 +85,9 @@ const EXAMPLE_ROWS = [
         cuenta: 'Mercado Pago',
         'cuenta destino': '',
         categoría: '',
-        'medio de pago': '',
-        tarjeta: '',
-        'cuotas totales': '',
-        'cuota actual': '',
-        'mes primera cuota': '',
+        cuotas: '',
+        'mes de primer pago': '',
         observaciones: 'Corrección manual',
-        ignorar: '',
     },
 ]
 
@@ -122,35 +98,31 @@ const INSTRUCTIONS = [
     ['INSTRUCCIONES'],
     [''],
     ['1. Completá la hoja "Transacciones" con tus movimientos.'],
-    ['2. No modifiques los encabezados de la primera fila.'],
+    ['2. No modifiques las dos primeras filas de encabezado.'],
     ['3. Podés agregar todas las filas que necesites.'],
-    ['4. Los campos marcados con * son obligatorios.'],
+    ['4. Cada tipo usa solo las columnas que le corresponden.'],
     ['5. Consultá la hoja "Listas" para ver tus cuentas y categorías disponibles.'],
     [''],
     ['CAMPOS OBLIGATORIOS'],
     ['fecha *       — Formato: DD/MM/AAAA (ej: 15/03/2026)'],
-    ['tipo *        — Valores válidos: gasto, ingreso, transferencia, pago de tarjeta'],
-    ['descripción * — Texto libre, máx. 200 caracteres'],
+    ['tipo *        — Valores válidos: ingreso, gasto, gasto con TC, transferencia, ajuste, pago de tarjeta'],
+    ['descripción   — Requerida salvo en transferencia y pago de tarjeta'],
     ['monto *       — Número distinto de cero (ej: 12500, 12500.50 o -1500 para ajustes).'],
     ['moneda *      — ARS o USD'],
     [''],
     ['CAMPOS OPCIONALES'],
-    ['cuenta            — Nombre exacto de tu cuenta en Finp (ver hoja "Listas")'],
-    ['cuenta destino    — Obligatoria para ingreso, transferencia y pago de tarjeta'],
-    ['categoría         — Obligatoria para ingreso, gasto y gasto con TC'],
-    ['medio de pago     — efectivo, débito, tarjeta de crédito, transferencia'],
-    ['tarjeta           — Nombre de la tarjeta de crédito'],
-    ['cuotas totales    — Número entero. Usar para gasto con TC en cuotas.'],
-    ['cuota actual      — Número de cuota (ej: 1). Debe ser menor o igual a cuotas totales.'],
-    ['mes primera cuota — Formato YYYY-MM (ej: 2026-04). Obligatorio si el gasto con TC tiene más de 1 cuota.'],
+    ['cuenta            — Cuenta principal del movimiento. En gasto con TC representa la tarjeta.'],
+    ['cuenta destino    — Solo para transferencia y pago de tarjeta.'],
+    ['categoría         — Solo para ingreso, gasto y gasto con TC.'],
+    ['cuotas            — Solo para gasto con TC. Usá 1 si es una sola cuota.'],
+    ['mes de primer pago — Formato YYYY-MM (ej: 2026-04). Obligatorio para gasto con TC.'],
     ['observaciones     — Notas adicionales'],
-    ['ignorar           — Escribí SI o TRUE para ignorar esa fila en la importación'],
     [''],
     ['NOTAS IMPORTANTES'],
     ['- Usá los nombres exactos de tus cuentas y categorías tal como aparecen en la hoja "Listas".'],
-    ['- Si una cuenta o tarjeta no existe en Finp, la fila quedará pendiente hasta que asignes una válida.'],
-    ['- Pago de tarjeta, transferencia y ajuste no requieren categoría.'],
-    ['- Gasto con TC usa una tarjeta de crédito como cuenta origen.'],
+    ['- Si una cuenta no existe en Finp, la fila quedará marcada como no resuelta para revisión.'],
+    ['- En pago de tarjeta, cuenta = cuenta que paga y cuenta destino = tarjeta.'],
+    ['- En gasto con TC, cuenta = tarjeta y cuotas/mes de primer pago son obligatorios.'],
     ['- Finp detecta posibles duplicados antes de confirmar la importación.'],
 ]
 
@@ -163,9 +135,12 @@ export function generateImportTemplate(options?: TemplateOptions): Buffer {
     XLSX.utils.book_append_sheet(wb, wsInstructions, 'Instrucciones')
 
     // Hoja de transacciones
-    const wsData = XLSX.utils.json_to_sheet(EXAMPLE_ROWS, {
-        header: TEMPLATE_HEADERS as unknown as string[],
-    })
+    const transactionRows = [
+        ['Campos comunes', '', '', '', '', '', 'Según el tipo', '', '', '', 'Opcional'],
+        [...TEMPLATE_HEADERS],
+        ...EXAMPLE_ROWS.map((row) => TEMPLATE_HEADERS.map((header) => row[header] ?? '')),
+    ]
+    const wsData = XLSX.utils.aoa_to_sheet(transactionRows)
     wsData['!cols'] = [
         { wch: 14 }, // fecha
         { wch: 18 }, // tipo
@@ -175,13 +150,13 @@ export function generateImportTemplate(options?: TemplateOptions): Buffer {
         { wch: 22 }, // cuenta
         { wch: 22 }, // cuenta destino
         { wch: 25 }, // categoría
-        { wch: 20 }, // medio de pago
-        { wch: 20 }, // tarjeta
-        { wch: 14 }, // cuotas totales
-        { wch: 12 }, // cuota actual
-        { wch: 16 }, // mes primera cuota
+        { wch: 10 }, // cuotas
+        { wch: 18 }, // mes de primer pago
         { wch: 30 }, // observaciones
-        { wch: 8 },  // ignorar
+    ]
+    wsData['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+        { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } },
     ]
     XLSX.utils.book_append_sheet(wb, wsData, 'Transacciones')
 
@@ -189,18 +164,18 @@ export function generateImportTemplate(options?: TemplateOptions): Buffer {
     const lists: (string | number)[][] = [
         ['TIPOS DE TRANSACCIÓN VÁLIDOS'],
         ['Valor en plantilla', 'Descripción'],
-        ['gasto', 'Egreso de dinero de una cuenta'],
         ['ingreso', 'Ingreso de dinero a una cuenta'],
+        ['gasto', 'Egreso de dinero de una cuenta'],
         ['gasto con tc', 'Consumo con tarjeta de crédito (1 cuota o más)'],
         ['transferencia', 'Movimiento entre dos cuentas propias'],
-        ['pago de tarjeta', 'Pago de saldo de tarjeta de crédito'],
         ['ajuste', 'Corrección manual de saldo o movimiento'],
+        ['pago de tarjeta', 'Pago de saldo de tarjeta de crédito'],
         [],
-        ['MEDIOS DE PAGO VÁLIDOS'],
-        ['efectivo'],
-        ['débito'],
-        ['tarjeta de crédito'],
-        ['transferencia'],
+        ['COLUMNAS CLAVE'],
+        ['cuenta', 'Cuenta principal del movimiento'],
+        ['cuenta destino', 'Solo transferencia y pago de tarjeta'],
+        ['cuotas', 'Solo gasto con TC'],
+        ['mes de primer pago', 'Solo gasto con TC'],
     ]
 
     if (options?.accounts && options.accounts.length > 0) {
