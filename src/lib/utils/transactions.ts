@@ -16,13 +16,19 @@ export type Filters = {
     accountId: string
 }
 
+/** Normaliza tipos de transacción al dominio de categorías. */
+export function getCategoryTypeForTransactionType(type: string): string {
+    if (type === 'credit_card_expense') return 'expense'
+    return type
+}
+
 /**
  * Determina si una categoría es compatible con el tipo de transacción seleccionado.
  * Si no hay tipo seleccionado, todas las categorías son compatibles.
  */
 export function isCategoryCompatible(categoryType: string, selectedType: string): boolean {
     if (!selectedType) return true
-    return categoryType === selectedType
+    return categoryType === getCategoryTypeForTransactionType(selectedType)
 }
 
 /** Determina si un tipo de transacción es un consumo con tarjeta de crédito. */

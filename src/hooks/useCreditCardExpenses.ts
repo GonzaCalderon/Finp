@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { IInstallmentPlan, ITransaction } from '@/types'
 
+export type InstallmentPlanWithTransaction = IInstallmentPlan & {
+    parentTransaction?: ITransaction | null
+}
+
 export type InstallmentStatus =
     | { state: 'not_started'; label: 'Aún no inicia' }
     | { state: 'active'; label: string; current: number; total: number }
@@ -33,7 +37,7 @@ export function getRemainingDebt(plan: IInstallmentPlan, selectedMonth: string):
 
 export interface CreditCardExpenseItem {
     kind: 'plan'
-    plan: IInstallmentPlan
+    plan: InstallmentPlanWithTransaction
 }
 
 export interface SingleCCExpenseItem {
@@ -53,7 +57,7 @@ function isFinished(item: CCExpenseItem, selectedMonth: string): boolean {
 }
 
 export function useCreditCardExpenses(selectedMonth: string) {
-    const [plans, setPlans] = useState<IInstallmentPlan[]>([])
+    const [plans, setPlans] = useState<InstallmentPlanWithTransaction[]>([])
     const [singleExpenses, setSingleExpenses] = useState<ITransaction[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -104,7 +108,11 @@ export function useCreditCardExpenses(selectedMonth: string) {
     const allItems: CCExpenseItem[] = [
         ...plans.map((plan): CreditCardExpenseItem => ({ kind: 'plan', plan })),
         ...singleExpenses.map((tx): SingleCCExpenseItem => ({ kind: 'single', transaction: tx })),
-    ]
+    ].sort((a, b) => {
+        const aDate = a.kind === 'plan' ? new Date(a.plan.purchaseDate).getTime() : new Date(a.transaction.date).getTime()
+        const bDate = b.kind === 'plan' ? new Date(b.plan.purchaseDate).getTime() : new Date(b.transaction.date).getTime()
+        return bDate - aDate
+    })
 
     return {
         allItems,

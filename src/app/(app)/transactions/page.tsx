@@ -42,7 +42,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
 
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import { isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
+import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -280,7 +280,8 @@ function TypeFilterChip({
 
                         {typeOptions.map((option) => {
                             const isSuggestedConflict =
-                                activeCategoryType && activeCategoryType !== option.value
+                                activeCategoryType &&
+                                activeCategoryType !== getCategoryTypeForTransactionType(option.value)
 
                             return (
                                 <button
@@ -1152,7 +1153,7 @@ export default function TransactionsPage() {
 
                                                             {transaction.type === 'credit_card_expense' && transaction.installmentPlanId && (
                                                                 <span className="text-xs font-medium" style={{ color: '#6366F1' }}>
-                                                                    · cuotas
+                                                                    · {((transaction.installmentPlanId as { installmentCount?: number } | null)?.installmentCount ?? 'N')} cuotas
                                                                 </span>
                                                             )}
                                                         </div>

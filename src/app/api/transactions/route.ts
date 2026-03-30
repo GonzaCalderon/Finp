@@ -93,6 +93,7 @@ export async function GET(request: Request) {
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency color')
             .populate('destinationAccountId', 'name type currency color')
+            .populate('installmentPlanId', 'installmentCount')
 
         return NextResponse.json({
             transactions,

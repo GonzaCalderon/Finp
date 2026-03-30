@@ -228,6 +228,7 @@ export function TransactionDialog({
     const suggestedAccounts = useMemo(() => {
         if (type === 'income') return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         if (type === 'expense') return accounts.filter(a => a.type !== 'debt')
+        if (type === 'credit_card_expense') return accounts.filter(a => a.type === 'credit_card')
         if (type === 'credit_card_payment' || type === 'debt_payment')
             return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         return accounts
@@ -254,7 +255,7 @@ export function TransactionDialog({
     const filteredCategories = useMemo(
         () => categories.filter(c => {
             if (type === 'income') return c.type === 'income'
-            if (type === 'expense') return c.type === 'expense'
+            if (type === 'expense' || type === 'credit_card_expense') return c.type === 'expense'
             return false
         }),
         [categories, type]
