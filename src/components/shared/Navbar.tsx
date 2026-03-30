@@ -16,7 +16,6 @@ import {
     MoreHorizontal,
     Eye,
     EyeOff,
-    ShoppingBag,
     Upload,
     X,
     Settings,
@@ -25,7 +24,6 @@ import {
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
-import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
@@ -33,10 +31,21 @@ import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { usePreferences } from '@/hooks/usePreferences'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
+import { useInstallments } from '@/hooks/useInstallments'
 
-const NAV_ITEMS = [
+type SubNavItem = { href: string; label: string; icon: React.ElementType }
+type NavItemDef = { href: string; label: string; icon: React.ElementType; subItems?: SubNavItem[] }
+
+const NAV_ITEMS: NavItemDef[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight },
+    {
+        href: '/transactions',
+        label: 'Transacciones',
+        icon: ArrowLeftRight,
+        subItems: [
+            { href: '/transactions/import', label: 'Importar', icon: Upload },
+        ],
+    },
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
@@ -78,24 +87,49 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                 </div>
             </div>
 
-            <nav className="flex-1 px-2 py-3 space-y-1">
-                {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            <nav className="flex-1 px-2 py-3 space-y-0.5">
+                {NAV_ITEMS.map(({ href, label, icon: Icon, subItems }) => {
                     const isActive = pathname === href
+                    const isSectionActive = pathname === href || pathname.startsWith(href + '/')
 
                     return (
-                        <Link
-                            key={href}
-                            href={href}
-                            onClick={onClose}
-                            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors"
-                            style={{
-                                color: isActive ? '#fff' : 'var(--sidebar-foreground)',
-                                background: isActive ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
-                            }}
-                        >
-                            <Icon size={16} />
-                            {label}
-                        </Link>
+                        <div key={href}>
+                            <Link
+                                href={href}
+                                onClick={onClose}
+                                className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors"
+                                style={{
+                                    color: isActive ? '#fff' : 'var(--sidebar-foreground)',
+                                    background: isActive ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
+                                }}
+                            >
+                                <Icon size={16} />
+                                {label}
+                            </Link>
+
+                            {subItems && (isSectionActive || true) && (
+                                <div className="ml-3 mt-0.5 mb-0.5 space-y-0.5 border-l pl-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                                    {subItems.map((sub) => {
+                                        const subActive = pathname === sub.href || pathname.startsWith(sub.href + '/')
+                                        return (
+                                            <Link
+                                                key={sub.href}
+                                                href={sub.href}
+                                                onClick={onClose}
+                                                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors"
+                                                style={{
+                                                    color: subActive ? '#fff' : 'rgba(255,255,255,0.45)',
+                                                    background: subActive ? 'rgba(56,189,248,0.14)' : 'transparent',
+                                                }}
+                                            >
+                                                <sub.icon size={13} />
+                                                {sub.label}
+                                            </Link>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     )
                 })}
             </nav>
@@ -131,7 +165,6 @@ function MobileBottomBar() {
     const [moreOpen, setMoreOpen] = useState(false)
     const [actionSheetOpen, setActionSheetOpen] = useState(false)
     const [txDialogOpen, setTxDialogOpen] = useState(false)
-    const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false)
 
     const { hidden, toggleHidden } = useHideAmounts()
     const { accounts } = useAccounts()
@@ -139,6 +172,7 @@ function MobileBottomBar() {
     const { rules } = useTransactionRules()
     const { preferences } = usePreferences()
     const { success, error: toastError } = useToast()
+    const { createPlan } = useInstallments()
 
     useEffect(() => {
         if (moreOpen || actionSheetOpen) {
@@ -175,23 +209,11 @@ function MobileBottomBar() {
 
     const handleCreateInstallment = async (data: InstallmentFormData) => {
         try {
-            const res = await fetch('/api/installments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            })
-
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
-
+            await createPlan(data)
             success('Compra en cuotas registrada correctamente')
-            setInstallmentDialogOpen(false)
+            setTxDialogOpen(false)
         } catch (err) {
-            toastError(
-                err instanceof Error
-                    ? err.message
-                    : 'Error al registrar compra en cuotas'
-            )
+            toastError(err instanceof Error ? err.message : 'Error al registrar compra en cuotas')
         }
     }
 
@@ -384,32 +406,6 @@ function MobileBottomBar() {
                                         </div>
                                     </button>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            closeActionSheet()
-                                            setInstallmentDialogOpen(true)
-                                        }}
-                                        className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left"
-                                        style={{ borderColor: 'var(--border)' }}
-                                    >
-                                        <div
-                                            className="flex h-10 w-10 items-center justify-center rounded-xl"
-                                            style={{
-                                                background: 'rgba(245, 158, 11, 0.14)',
-                                                color: 'var(--amber-dark)',
-                                            }}
-                                        >
-                                            <ShoppingBag size={18} />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium">Compra en cuotas</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Registrar tarjeta y plan
-                                            </p>
-                                        </div>
-                                    </button>
-
                                     <Link
                                         href="/transactions/import"
                                         onClick={closeActionSheet}
@@ -498,16 +494,9 @@ function MobileBottomBar() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleCreateTransaction}
+                onInstallmentSubmit={handleCreateInstallment}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
-            />
-
-            <InstallmentDialog
-                open={installmentDialogOpen}
-                onOpenChange={setInstallmentDialogOpen}
-                accounts={accounts}
-                categories={categories}
-                onSubmit={handleCreateInstallment}
             />
         </>
     )

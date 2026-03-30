@@ -311,8 +311,15 @@ export function TransactionDialog({
             merchant: '',
         })
         setShowMoreOptions(false)
-        setPaymentMethod('debit')
         setInstallmentCount(1)
+
+        // Auto-detectar medio de pago según el tipo de cuenta por defecto
+        const defaultAccount = defaultAccountId
+            ? accounts.find(a => a._id.toString() === defaultAccountId)
+            : undefined
+        if (defaultAccount?.type === 'cash') setPaymentMethod('cash')
+        else if (defaultAccount?.type === 'credit_card') setPaymentMethod('credit_card')
+        else setPaymentMethod('debit')
     }, [open, transaction, reset, defaultAccountId, accounts])
 
     // Clear category when type doesn't support it
