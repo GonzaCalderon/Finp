@@ -671,8 +671,7 @@ export function TransactionDialog({
                                                 </div>
                                             </div>
 
-                                            {installmentCount > 1 && (
-                                                <div className="space-y-2">
+                                                    <div className="space-y-2">
                                                     <Label>Primera cuota</Label>
                                                     <Select
                                                         value={firstClosingMonth}
@@ -702,11 +701,10 @@ export function TransactionDialog({
                                                         <p className="text-sm text-destructive">{firstMonthError}</p>
                                                     )}
                                                 </div>
-                                            )}
                                         </div>
 
                                         {/* Plan de cuotas preview */}
-                                        {installmentCount > 1 && installmentAmount > 0 && (
+                                        {installmentAmount > 0 && (
                                             <div
                                                 className="rounded-lg border px-3 py-2.5"
                                                 style={{
