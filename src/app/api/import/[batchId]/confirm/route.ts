@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { ImportBatch, ImportRow, Transaction } from '@/lib/models'
+import { Account, Category, ImportBatch, ImportRow, InstallmentPlan, Transaction } from '@/lib/models'
 import { IMPORT_ROW_STATUS, IMPORT_SOURCE_TYPES } from '@/lib/constants'
-import type { ImportParsedData } from '@/types'
-import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
+import type { IAccount, ICategory, ImportParsedData } from '@/types'
+import { evaluateImportRow, typeSupportsCategory } from '@/lib/utils/import-transactions'
 
 // POST /api/import/[batchId]/confirm — confirmar importación y crear transacciones
 export async function POST(
@@ -23,65 +23,125 @@ export async function POST(
         return NextResponse.json({ error: 'Esta importación ya fue procesada' }, { status: 400 })
     }
 
-    // Filas importables: ok y possible_duplicate (no ignored, no invalid)
-    const importableStatuses = [IMPORT_ROW_STATUS.OK, IMPORT_ROW_STATUS.POSSIBLE_DUPLICATE, IMPORT_ROW_STATUS.INCOMPLETE]
-    const rows = await ImportRow.find({ batchId, status: { $in: importableStatuses }, ignored: false }).lean()
+    const importableStatuses = [IMPORT_ROW_STATUS.OK, IMPORT_ROW_STATUS.POSSIBLE_DUPLICATE]
+    const [rows, pendingCount, invalidCount, accounts, categories] = await Promise.all([
+        ImportRow.find({ batchId, status: { $in: importableStatuses }, ignored: false }).lean(),
+        ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.INCOMPLETE, ignored: false }),
+        ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.INVALID, ignored: false }),
+        Account.find({ userId: session.user.id, isActive: true }).lean(),
+        Category.find({ userId: session.user.id, isArchived: false }).lean(),
+    ])
+
+    if (invalidCount > 0 || pendingCount > 0) {
+        return NextResponse.json(
+            { error: 'Todavía hay filas pendientes o con error. Revisalas antes de confirmar la importación.' },
+            { status: 400 }
+        )
+    }
+
+    if (rows.length === 0) {
+        return NextResponse.json(
+            { error: 'No hay filas listas para importar en este batch.' },
+            { status: 400 }
+        )
+    }
 
     const now = new Date()
     let imported = 0
     const errors: string[] = []
 
     for (const row of rows) {
-        const data: ImportParsedData = (row.reviewedData ?? row.parsedData) as ImportParsedData
-        const normalizedType = normalizeLegacyTransactionType(data.type)
+        const sourceData: ImportParsedData = (row.reviewedData ?? row.parsedData) as ImportParsedData
+        const evaluation = evaluateImportRow({
+            data: sourceData,
+            accounts: accounts as unknown as IAccount[],
+            categories: categories as unknown as ICategory[],
+        })
+        const data = evaluation.data
+        const normalizedType = evaluation.normalizedType
 
-        // Validación mínima para crear la transacción
-        if (!data.date || !normalizedType || !data.description || !data.amount || !data.currency) {
+        if (evaluation.status !== IMPORT_ROW_STATUS.OK || !normalizedType) {
             errors.push(`Fila ${row.rowNumber}: faltan campos obligatorios.`)
             continue
         }
 
-        // Si se especificó una cuenta pero no fue resuelta, bloquear
-        if (data.accountName && !data.sourceAccountId) {
-            errors.push(`Fila ${row.rowNumber}: la cuenta "${data.accountName}" no fue asignada. Asigná una cuenta válida antes de confirmar.`)
-            continue
-        }
-
         try {
-            const txDoc: Record<string, unknown> = {
-                userId: session.user.id,
-                type: normalizedType,
-                amount: data.amount,
-                currency: data.currency,
-                date: data.date,
-                description: data.description,
-                createdFrom: 'web',
-                importBatchId: batch._id,
-                importedAt: now,
-                importSourceType: IMPORT_SOURCE_TYPES.XLSX_TEMPLATE,
+            let tx
+
+            if (normalizedType === 'credit_card_expense' && (data.installmentCount ?? 1) > 1) {
+                const installmentAmount = (data.amount as number) / (data.installmentCount as number)
+
+                const plan = await InstallmentPlan.create({
+                    userId: session.user.id,
+                    accountId: data.sourceAccountId,
+                    categoryId: typeSupportsCategory(normalizedType) ? data.categoryId : undefined,
+                    description: data.description,
+                    currency: data.currency,
+                    totalAmount: data.amount,
+                    installmentCount: data.installmentCount,
+                    installmentAmount,
+                    purchaseDate: data.date,
+                    firstClosingMonth: data.firstClosingMonth,
+                })
+
+                tx = await Transaction.create({
+                    userId: session.user.id,
+                    type: normalizedType,
+                    amount: data.amount,
+                    currency: data.currency,
+                    date: data.date,
+                    description: data.description,
+                    categoryId: typeSupportsCategory(normalizedType) ? data.categoryId : undefined,
+                    sourceAccountId: data.sourceAccountId,
+                    notes: data.notes,
+                    installmentPlanId: plan._id,
+                    status: 'confirmed',
+                    createdFrom: 'web',
+                    importBatchId: batch._id,
+                    importedAt: now,
+                    importSourceType: IMPORT_SOURCE_TYPES.XLSX_TEMPLATE,
+                })
+            } else {
+                const txDoc: Record<string, unknown> = {
+                    userId: session.user.id,
+                    type: normalizedType,
+                    amount: data.amount,
+                    currency: data.currency,
+                    date: data.date,
+                    description: data.description,
+                    createdFrom: 'web',
+                    status: 'confirmed',
+                    importBatchId: batch._id,
+                    importedAt: now,
+                    importSourceType: IMPORT_SOURCE_TYPES.XLSX_TEMPLATE,
+                }
+
+                if (typeSupportsCategory(normalizedType) && data.categoryId) {
+                    txDoc.categoryId = data.categoryId
+                }
+                if (data.notes) txDoc.notes = data.notes
+
+                if (['expense', 'credit_card_expense', 'credit_card_payment', 'transfer', 'adjustment'].includes(normalizedType)) {
+                    txDoc.sourceAccountId = data.sourceAccountId
+                }
+
+                if (['income', 'credit_card_payment', 'transfer'].includes(normalizedType)) {
+                    txDoc.destinationAccountId = data.destinationAccountId
+                }
+
+                tx = await Transaction.create(txDoc)
             }
-
-            if (data.categoryId) txDoc.categoryId = data.categoryId
-            if (data.notes) txDoc.notes = data.notes
-            if (data.installmentCount) txDoc.tags = [`cuota ${data.installmentNumber ?? 1}/${data.installmentCount}`]
-
-            // Asignar cuentas según tipo
-            if (['expense', 'credit_card_payment'].includes(normalizedType)) {
-                if (data.sourceAccountId) txDoc.sourceAccountId = data.sourceAccountId
-            } else if (normalizedType === 'income') {
-                if (data.destinationAccountId) txDoc.destinationAccountId = data.destinationAccountId
-                else if (data.sourceAccountId) txDoc.destinationAccountId = data.sourceAccountId
-            } else if (normalizedType === 'transfer') {
-                if (data.sourceAccountId) txDoc.sourceAccountId = data.sourceAccountId
-                if (data.destinationAccountId) txDoc.destinationAccountId = data.destinationAccountId
-            }
-
-            const tx = await Transaction.create(txDoc)
 
             // Actualizar fila con transacción creada
             await ImportRow.updateOne(
                 { _id: row._id },
-                { status: IMPORT_ROW_STATUS.IMPORTED, createdTransactionId: tx._id }
+                {
+                    status: IMPORT_ROW_STATUS.IMPORTED,
+                    createdTransactionId: tx._id,
+                    reviewedData: data,
+                    errors: [],
+                    warnings: [],
+                }
             )
 
             imported++

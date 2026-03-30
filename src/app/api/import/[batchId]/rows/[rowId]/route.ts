@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { ImportBatch, ImportRow } from '@/lib/models'
+import { Account, Category, ImportBatch, ImportRow, Transaction } from '@/lib/models'
 import { IMPORT_ROW_STATUS } from '@/lib/constants'
+import type { IAccount, ICategory, ImportParsedData } from '@/types'
+import { evaluateImportRow } from '@/lib/utils/import-transactions'
 
 // PATCH /api/import/[batchId]/rows/[rowId] — editar fila de revisión
 export async function PATCH(
@@ -34,12 +36,53 @@ export async function PATCH(
         row.ignored = Boolean(body.ignored)
     }
 
-    // Always recalculate status when data or ignored changes
+    const [accounts, categories, recentTransactions] = await Promise.all([
+        Account.find({ userId: session.user.id, isActive: true }).lean(),
+        Category.find({ userId: session.user.id, isArchived: false }).lean(),
+        Transaction.find({
+            userId: session.user.id,
+            date: {
+                $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+            },
+        })
+            .select('date amount description')
+            .lean(),
+    ])
+
+    const effectiveData = {
+        ...(row.parsedData?.toObject?.() ?? row.parsedData ?? {}),
+        ...(row.reviewedData?.toObject?.() ?? row.reviewedData ?? {}),
+        ignored: row.ignored,
+    } as ImportParsedData
+
+    const evaluation = evaluateImportRow({
+        data: effectiveData,
+        accounts: accounts as unknown as IAccount[],
+        categories: categories as unknown as ICategory[],
+    })
+
+    row.reviewedData = evaluation.data
+    row.errors = evaluation.errors
+    row.warnings = evaluation.warnings
+
     if (row.ignored) {
         row.status = IMPORT_ROW_STATUS.IGNORED
+        row.possibleDuplicateId = undefined
     } else {
-        const effectiveData = row.reviewedData ?? row.parsedData
-        row.status = recalculateStatus(effectiveData, row.errors)
+        const possibleDuplicateId = detectDuplicate(
+            evaluation.data,
+            recentTransactions as unknown as Array<{
+                date: Date
+                amount: number
+                description: string
+                _id: unknown
+            }>
+        )
+        row.possibleDuplicateId = possibleDuplicateId
+        row.status =
+            possibleDuplicateId && evaluation.status === IMPORT_ROW_STATUS.OK
+                ? IMPORT_ROW_STATUS.POSSIBLE_DUPLICATE
+                : evaluation.status
     }
 
     await row.save()
@@ -60,16 +103,22 @@ export async function PATCH(
     return NextResponse.json({ row, summary: batch.summary })
 }
 
-function recalculateStatus(data: Record<string, unknown>, errors: string[]): string {
-    if (errors.length > 0) return IMPORT_ROW_STATUS.INVALID
+function detectDuplicate(
+    parsedData: ImportParsedData,
+    recentTransactions: Array<{ date: Date; amount: number; description: string; _id: unknown }>
+): string | undefined {
+    if (!parsedData.date || !parsedData.amount) return undefined
 
-    const missingRequired =
-        !data.date || !data.type || !data.description || !data.amount || !data.currency
-    if (missingRequired) return IMPORT_ROW_STATUS.INCOMPLETE
+    const rowDate = new Date(parsedData.date).toISOString().slice(0, 10)
+    const match = recentTransactions.find((transaction) => {
+        const txDate = new Date(transaction.date).toISOString().slice(0, 10)
+        if (txDate !== rowDate) return false
+        if (Math.abs(transaction.amount - (parsedData.amount ?? 0)) > 0.01) return false
 
-    // Cuenta especificada pero no resuelta: es un error bloqueante —
-    // la transacción no puede imputarse a una cuenta inexistente en Finp
-    if (data.accountName && !data.sourceAccountId) return IMPORT_ROW_STATUS.INVALID
+        const desc1 = transaction.description.toLowerCase().trim()
+        const desc2 = (parsedData.description ?? '').toLowerCase().trim()
+        return desc1 === desc2 || desc1.includes(desc2) || desc2.includes(desc1)
+    })
 
-    return IMPORT_ROW_STATUS.OK
+    return match ? String(match._id) : undefined
 }

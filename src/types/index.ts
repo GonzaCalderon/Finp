@@ -111,10 +111,12 @@ export interface ImportParsedData {
     sourceAccountId?: string
     destinationAccountId?: string
     accountName?: string
+    destinationAccountName?: string
     paymentMethod?: string
     cardName?: string
     installmentCount?: number
     installmentNumber?: number
+    firstClosingMonth?: string
     notes?: string
     ignored?: boolean
 }

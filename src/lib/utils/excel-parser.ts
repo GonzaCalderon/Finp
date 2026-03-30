@@ -1,5 +1,11 @@
 import * as XLSX from 'xlsx'
 import type { ImportParsedData } from '@/types'
+import {
+    IMPORT_TRANSACTION_TYPE_LABELS,
+    normalizeImportMonth,
+    normalizeImportTransactionType,
+    typeSupportsCategory,
+} from '@/lib/utils/import-transactions'
 
 // Mapa de encabezados tolerantes (sin tildes, variantes) → clave normalizada
 const HEADER_ALIASES: Record<string, string> = {
@@ -32,12 +38,20 @@ const HEADER_ALIASES: Record<string, string> = {
     // cuenta
     cuenta: 'cuenta',
     account: 'cuenta',
+    'cuenta origen': 'cuenta',
+    origen: 'cuenta',
+    source_account: 'cuenta',
 
     // categoría
     categoria: 'categoría',
     categoría: 'categoría',
     category: 'categoría',
     rubro: 'categoría',
+
+    // cuenta destino
+    'cuenta destino': 'cuenta destino',
+    destino: 'cuenta destino',
+    destination_account: 'cuenta destino',
 
     // medio de pago
     'medio de pago': 'medio de pago',
@@ -67,6 +81,17 @@ const HEADER_ALIASES: Record<string, string> = {
     cuota: 'cuota actual',
     installment: 'cuota actual',
 
+    // mes de primera cuota
+    'mes primera cuota': 'mes primera cuota',
+    'mes de primera cuota': 'mes primera cuota',
+    'primera cuota': 'mes primera cuota',
+    'mes primera imputacion': 'mes primera cuota',
+    'mes primera imputación': 'mes primera cuota',
+    'mes de primera imputacion': 'mes primera cuota',
+    'mes de primera imputación': 'mes primera cuota',
+    first_closing_month: 'mes primera cuota',
+    'first closing month': 'mes primera cuota',
+
     // observaciones
     observaciones: 'observaciones',
     notas: 'observaciones',
@@ -79,28 +104,6 @@ const HEADER_ALIASES: Record<string, string> = {
     ignore: 'ignorar',
     omitir: 'ignorar',
     skip: 'ignorar',
-}
-
-// Mapa de tipos de transacción en español → internos
-const TYPE_MAP: Record<string, string> = {
-    gasto: 'expense',
-    gastos: 'expense',
-    egreso: 'expense',
-    egresos: 'expense',
-    expense: 'expense',
-    ingreso: 'income',
-    ingresos: 'income',
-    income: 'income',
-    transferencia: 'transfer',
-    transferencias: 'transfer',
-    transfer: 'transfer',
-    'pago de tarjeta': 'credit_card_payment',
-    'pago tarjeta': 'credit_card_payment',
-    pago_tarjeta: 'credit_card_payment',
-    'tarjeta de crédito pago': 'credit_card_payment',
-    credit_card_payment: 'credit_card_payment',
-    'pago deuda': 'credit_card_payment',
-    debt_payment: 'credit_card_payment',
 }
 
 function normalizeHeader(raw: string): string {
@@ -153,18 +156,27 @@ function parseDateCell(value: unknown): Date | undefined {
 
 function parseAmount(value: unknown): number | undefined {
     if (value === undefined || value === null || value === '') return undefined
-    if (typeof value === 'number') return value > 0 ? value : undefined
+    if (typeof value === 'number') return value !== 0 ? value : undefined
 
     if (typeof value === 'string') {
-        // Normalizar: quitar espacios, $ y separadores de miles
-        const normalized = value
-            .trim()
-            .replace(/\$/g, '')
-            .replace(/\s/g, '')
-            .replace(/\./g, '') // quitar separador de miles (formato ARS)
-            .replace(',', '.') // coma → punto decimal
+        let normalized = value.trim().replace(/\$/g, '').replace(/\s/g, '')
+
+        if (normalized.includes(',') && normalized.includes('.')) {
+            if (normalized.lastIndexOf(',') > normalized.lastIndexOf('.')) {
+                normalized = normalized.replace(/\./g, '').replace(',', '.')
+            } else {
+                normalized = normalized.replace(/,/g, '')
+            }
+        } else if ((normalized.match(/\./g) ?? []).length > 1) {
+            normalized = normalized.replace(/\./g, '')
+        } else if ((normalized.match(/,/g) ?? []).length > 1) {
+            normalized = normalized.replace(/,/g, '')
+        } else {
+            normalized = normalized.replace(',', '.')
+        }
+
         const num = parseFloat(normalized)
-        return isNaN(num) || num <= 0 ? undefined : num
+        return isNaN(num) || num === 0 ? undefined : num
     }
 
     return undefined
@@ -261,19 +273,18 @@ export function parseImportFile(buffer: Buffer): ParseResult {
         const parsedData: ImportParsedData = {
             ignored,
             date: parseDateCell(rawRow[Object.keys(rawRow).find((k) => normalizeHeader(k) === 'fecha') ?? '']),
-            type: (() => {
-                const raw = rawData['tipo']?.trim().toLowerCase()
-                return raw ? (TYPE_MAP[raw] ?? raw) : undefined
-            })(),
+            type: normalizeImportTransactionType(rawData['tipo']),
             description: rawData['descripción']?.trim() || undefined,
             amount: parseAmount(rawData['monto']),
             currency: rawData['moneda']?.trim().toUpperCase() || undefined,
             categoryName: rawData['categoría']?.trim() || undefined,
             accountName: rawData['cuenta']?.trim() || undefined,
+            destinationAccountName: rawData['cuenta destino']?.trim() || undefined,
             paymentMethod: rawData['medio de pago']?.trim() || undefined,
             cardName: rawData['tarjeta']?.trim() || undefined,
             installmentCount: parseNumber(rawData['cuotas totales']),
             installmentNumber: parseNumber(rawData['cuota actual']),
+            firstClosingMonth: normalizeImportMonth(rawData['mes primera cuota']),
             notes: rawData['observaciones']?.trim() || undefined,
         }
 
@@ -287,8 +298,8 @@ export function parseImportFile(buffer: Buffer): ParseResult {
             }
 
             if (!parsedData.type) {
-                errors.push('El tipo es requerido. Valores válidos: gasto, ingreso, transferencia, pago de tarjeta.')
-            } else if (!['income', 'expense', 'transfer', 'credit_card_payment'].includes(parsedData.type)) {
+                errors.push('El tipo es requerido. Valores válidos: gasto, ingreso, gasto con TC, transferencia, pago de tarjeta, ajuste.')
+            } else if (!Object.keys(IMPORT_TRANSACTION_TYPE_LABELS).includes(parsedData.type)) {
                 errors.push(`Tipo desconocido: "${rawData['tipo']}".`)
             }
 
@@ -307,12 +318,16 @@ export function parseImportFile(buffer: Buffer): ParseResult {
             }
 
             // Advertencias
-            if (!parsedData.categoryName) {
+            if (!parsedData.categoryName && typeSupportsCategory(parsedData.type)) {
                 warnings.push('Sin categoría. Podrás asignarla en la revisión.')
             }
 
-            if (!parsedData.accountName && parsedData.type !== 'transfer') {
+            if (!parsedData.accountName && !['income', 'transfer', 'credit_card_payment'].includes(parsedData.type ?? '')) {
                 warnings.push('Sin cuenta. Podrás asignarla en la revisión.')
+            }
+
+            if (!parsedData.destinationAccountName && ['income', 'transfer', 'credit_card_payment'].includes(parsedData.type ?? '')) {
+                warnings.push('Sin cuenta destino. Podrás asignarla en la revisión.')
             }
 
             // Cuotas coherencia
@@ -332,6 +347,10 @@ export function parseImportFile(buffer: Buffer): ParseResult {
                         `Cuota actual (${parsedData.installmentNumber}) no puede ser mayor que cuotas totales (${parsedData.installmentCount}).`
                     )
                 }
+            }
+
+            if ((parsedData.installmentCount ?? 1) > 1 && !parsedData.firstClosingMonth) {
+                warnings.push('Sin mes de primera cuota. Podrás completarlo en la revisión.')
             }
         }
 

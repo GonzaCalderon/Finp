@@ -4,7 +4,8 @@ import { connectDB } from '@/lib/db'
 import { ImportBatch, ImportRow, Transaction, Category, Account } from '@/lib/models'
 import { parseImportFile } from '@/lib/utils/excel-parser'
 import { IMPORT_ROW_STATUS } from '@/lib/constants'
-import type { ImportParsedData } from '@/types'
+import type { IAccount, ICategory, ImportParsedData } from '@/types'
+import { evaluateImportRow } from '@/lib/utils/import-transactions'
 
 // GET /api/import — lista de batches del usuario
 export async function GET() {
@@ -77,18 +78,11 @@ export async function POST(request: Request) {
 
     await connectDB()
 
-    // Resolver nombres de categorías y cuentas
+    // Resolver referencias y validar con la lógica vigente de Finp
     const [categories, accounts] = await Promise.all([
         Category.find({ userId: session.user.id, isArchived: false }).lean(),
         Account.find({ userId: session.user.id, isActive: true }).lean(),
     ])
-
-    const categoryByName = new Map(
-        categories.map((c) => [c.name.toLowerCase().trim(), String(c._id)])
-    )
-    const accountByName = new Map(
-        accounts.map((a) => [a.name.toLowerCase().trim(), String(a._id)])
-    )
 
     // Detectar posibles duplicados (misma fecha + monto + descripción similar)
     const recentTransactions = await Transaction.find({
@@ -118,37 +112,24 @@ export async function POST(request: Request) {
     let valid = 0, invalid = 0, incomplete = 0, possibleDuplicate = 0, ignored = 0
 
     const rowDocs = parseResult.rows.map((row) => {
-        const data = row.parsedData
-
-        // Resolver IDs
-        if (data.categoryName) {
-            const catId = categoryByName.get(data.categoryName.toLowerCase().trim())
-            if (catId) data.categoryId = catId
-            else row.warnings.push(`Categoría "${data.categoryName}" no encontrada en Finp.`)
-        }
-
-        if (data.accountName) {
-            const accId = accountByName.get(data.accountName.toLowerCase().trim())
-            if (accId) {
-                data.sourceAccountId = accId
-            } else {
-                // Cuenta especificada pero inexistente → error bloqueante
-                row.errors.push(`Cuenta "${data.accountName}" no existe en Finp. Asigná una cuenta válida para importar esta fila.`)
-                row.status = IMPORT_ROW_STATUS.INVALID
-            }
-        }
+        const evaluation = evaluateImportRow({
+            data: row.parsedData,
+            accounts: accounts as unknown as IAccount[],
+            categories: categories as unknown as ICategory[],
+        })
+        const data = evaluation.data
 
         let possibleDuplicateId: string | undefined
-        let rowStatus: string = row.status
+        let rowStatus: string = evaluation.status
 
         if (!data.ignored) {
             possibleDuplicateId = detectDuplicate(data)
-            if (possibleDuplicateId && rowStatus !== 'invalid') {
+            if (possibleDuplicateId && rowStatus === IMPORT_ROW_STATUS.OK) {
                 rowStatus = 'possible_duplicate'
                 possibleDuplicate++
-            } else if (rowStatus === 'invalid') {
+            } else if (rowStatus === IMPORT_ROW_STATUS.INVALID) {
                 invalid++
-            } else if (rowStatus === 'incomplete') {
+            } else if (rowStatus === IMPORT_ROW_STATUS.INCOMPLETE) {
                 incomplete++
             } else {
                 valid++
@@ -158,13 +139,16 @@ export async function POST(request: Request) {
             ignored++
         }
 
+        const warnings = Array.from(new Set([...row.warnings, ...evaluation.warnings]))
+        const errors = Array.from(new Set([...row.errors, ...evaluation.errors]))
+
         return {
             rowNumber: row.rowNumber,
             rawData: row.rawData,
             parsedData: data,
             status: rowStatus,
-            warnings: row.warnings,
-            errors: row.errors,
+            warnings,
+            errors,
             possibleDuplicateId,
             ignored: !!data.ignored,
         }
