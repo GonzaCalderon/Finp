@@ -15,7 +15,7 @@ export async function GET() {
         Category.find({ userId: session.user.id, isArchived: false }).select('name type').sort({ sortOrder: 1 }).lean(),
     ])
 
-    const buffer = generateImportTemplate({
+    const buffer = await generateImportTemplate({
         accounts: accounts.map((a) => ({ name: a.name, currency: a.currency })),
         categories: categories.map((c) => ({ name: c.name, type: c.type })),
     })

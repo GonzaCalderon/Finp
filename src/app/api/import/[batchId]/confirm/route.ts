@@ -4,7 +4,12 @@ import { connectDB } from '@/lib/db'
 import { Account, Category, ImportBatch, ImportRow, InstallmentPlan, Transaction } from '@/lib/models'
 import { IMPORT_ROW_STATUS, IMPORT_SOURCE_TYPES } from '@/lib/constants'
 import type { IAccount, ICategory, ImportParsedData } from '@/types'
-import { evaluateImportRow, typeSupportsCategory } from '@/lib/utils/import-transactions'
+import {
+    evaluateImportRow,
+    getImportFallbackDescription,
+    mergeImportRawDataFallbacks,
+    typeSupportsCategory,
+} from '@/lib/utils/import-transactions'
 
 // POST /api/import/[batchId]/confirm — confirmar importación y crear transacciones
 export async function POST(
@@ -49,9 +54,17 @@ export async function POST(
     const now = new Date()
     let imported = 0
     const errors: string[] = []
+    const preparedRows: Array<{
+        row: (typeof rows)[number]
+        data: ImportParsedData
+        normalizedType: string
+    }> = []
 
     for (const row of rows) {
-        const sourceData: ImportParsedData = (row.reviewedData ?? row.parsedData) as ImportParsedData
+        const sourceData = mergeImportRawDataFallbacks(
+            ((row.reviewedData ?? row.parsedData) as ImportParsedData) ?? {},
+            (row.rawData as Record<string, string | undefined> | undefined) ?? undefined
+        )
         const evaluation = evaluateImportRow({
             data: sourceData,
             accounts: accounts as unknown as IAccount[],
@@ -61,11 +74,58 @@ export async function POST(
         const normalizedType = evaluation.normalizedType
 
         if (evaluation.status !== IMPORT_ROW_STATUS.OK || !normalizedType) {
-            errors.push(`Fila ${row.rowNumber}: faltan campos obligatorios.`)
+            const rowErrors =
+                evaluation.errors.length > 0
+                    ? evaluation.errors
+                    : ['Faltan campos obligatorios para importar la fila.']
+
+            await ImportRow.updateOne(
+                { _id: row._id },
+                {
+                    status: IMPORT_ROW_STATUS.INVALID,
+                    reviewedData: data,
+                    errors: rowErrors,
+                    warnings: evaluation.warnings,
+                }
+            )
+
+            errors.push(`Fila ${row.rowNumber}: ${rowErrors[0]}`)
             continue
         }
 
+        preparedRows.push({ row, data, normalizedType })
+    }
+
+    if (errors.length > 0) {
+        const [total, valid, invalid, incomplete, possibleDuplicate, ignored, importedCount] = await Promise.all([
+            ImportRow.countDocuments({ batchId }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.OK }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.INVALID }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.INCOMPLETE }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.POSSIBLE_DUPLICATE }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.IGNORED }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.IMPORTED }),
+        ])
+
+        batch.summary = { total, valid, invalid, incomplete, possibleDuplicate, ignored, imported: importedCount }
+        await batch.save()
+
+        return NextResponse.json(
+            {
+                error: 'Hay filas con errores de validación. Revisalas antes de confirmar la importación.',
+                errors,
+            },
+            { status: 400 }
+        )
+    }
+
+    for (const { row, data, normalizedType } of preparedRows) {
         try {
+            const description = data.description?.trim() || getImportFallbackDescription(normalizedType)
+            if (!description) {
+                throw new Error('La descripción es obligatoria para crear la transacción.')
+            }
+
             let tx
 
             // Gasto con TC: siempre crear InstallmentPlan (incluso 1 cuota)
@@ -77,7 +137,7 @@ export async function POST(
                     userId: session.user.id,
                     accountId: data.sourceAccountId,
                     categoryId: typeSupportsCategory(normalizedType) ? data.categoryId : undefined,
-                    description: data.description,
+                    description,
                     currency: data.currency,
                     totalAmount: data.amount,
                     installmentCount,
@@ -92,7 +152,7 @@ export async function POST(
                     amount: data.amount,
                     currency: data.currency,
                     date: data.date,
-                    description: data.description,
+                    description,
                     categoryId: typeSupportsCategory(normalizedType) ? data.categoryId : undefined,
                     sourceAccountId: data.sourceAccountId,
                     notes: data.notes,
@@ -110,7 +170,7 @@ export async function POST(
                     amount: data.amount,
                     currency: data.currency,
                     date: data.date,
-                    description: data.description,
+                    description,
                     createdFrom: 'web',
                     status: 'confirmed',
                     importBatchId: batch._id,
@@ -143,7 +203,7 @@ export async function POST(
                 {
                     status: IMPORT_ROW_STATUS.IMPORTED,
                     createdTransactionId: tx._id,
-                    reviewedData: data,
+                    reviewedData: { ...data, description },
                     errors: [],
                     warnings: [],
                 }
@@ -151,9 +211,42 @@ export async function POST(
 
             imported++
         } catch (err) {
-            errors.push(`Fila ${row.rowNumber}: error al crear transacción.`)
+            const message = err instanceof Error ? err.message : 'Error al crear la transacción.'
+            errors.push(`Fila ${row.rowNumber}: ${message}`)
+            await ImportRow.updateOne(
+                { _id: row._id },
+                {
+                    status: IMPORT_ROW_STATUS.INVALID,
+                    reviewedData: data,
+                    errors: [message],
+                }
+            )
             console.error(`Import row ${row.rowNumber} error:`, err)
         }
+    }
+
+    if (errors.length > 0) {
+        const [total, valid, invalid, incomplete, possibleDuplicate, ignored, importedCount] = await Promise.all([
+            ImportRow.countDocuments({ batchId }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.OK }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.INVALID }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.INCOMPLETE }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.POSSIBLE_DUPLICATE }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.IGNORED }),
+            ImportRow.countDocuments({ batchId, status: IMPORT_ROW_STATUS.IMPORTED }),
+        ])
+
+        batch.summary = { total, valid, invalid, incomplete, possibleDuplicate, ignored, imported: importedCount }
+        await batch.save()
+
+        return NextResponse.json(
+            {
+                error: 'No se pudo completar la importación. Revisá las filas marcadas con error.',
+                imported,
+                errors,
+            },
+            { status: 400 }
+        )
     }
 
     batch.status = 'confirmed'

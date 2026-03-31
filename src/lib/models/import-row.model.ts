@@ -45,7 +45,7 @@ const ImportRowSchema = new Schema<IImportRow>(
         createdTransactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
         ignored: { type: Boolean, default: false },
     },
-    { timestamps: false }
+    { timestamps: false, suppressReservedKeysWarning: true }
 )
 
 ImportRowSchema.index({ batchId: 1, rowNumber: 1 })

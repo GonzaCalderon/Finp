@@ -8,6 +8,7 @@ import {
     ArrowLeft,
     ArrowLeftRight,
     Banknote,
+    CalendarDays,
     CheckCircle2,
     ChevronDown,
     ChevronUp,
@@ -22,7 +23,13 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
 import { Spinner } from '@/components/shared/Spinner'
 import { useImportBatchDetail } from '@/hooks/useImportBatch'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -34,7 +41,9 @@ import type { IAccount, ICategory, IImportRow, ImportParsedData } from '@/types'
 import {
     getCompatibleDestinationAccounts,
     getCompatibleSourceAccounts,
+    getDefaultFirstClosingMonth,
     getImportCategoryKind,
+    mergeImportRawDataFallbacks,
     IMPORT_TRANSACTION_TYPE_LABELS,
     IMPORT_TRANSACTION_TYPE_OPTIONS,
     normalizeImportTransactionType,
@@ -68,7 +77,7 @@ const TYPE_META: Record<string, { label: string; color: string; icon: React.Elem
 
 const STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
     ok: { label: 'Lista', color: '#16a34a', icon: CheckCircle2 },
-    incomplete: { label: 'Pendiente', color: '#d97706', icon: AlertTriangle },
+    incomplete: { label: 'Error', color: '#dc2626', icon: XCircle },
     invalid: { label: 'Error', color: '#dc2626', icon: XCircle },
     possible_duplicate: { label: 'Revisar', color: '#7c3aed', icon: Copy },
     ignored: { label: 'Ignorada', color: '#6b7280', icon: EyeOff },
@@ -83,7 +92,7 @@ const COLUMNS_BY_TYPE: Record<string, ColDef[]> = {
         { key: 'description', header: 'Descripción', width: 'min-w-48' },
         { key: 'amount', header: 'Monto', width: 'w-28' },
         { key: 'currency', header: 'Mon.', width: 'w-16' },
-        { key: 'destinationAccount', header: 'Cuenta destino', width: 'min-w-44' },
+        { key: 'sourceAccount', header: 'Cuenta', width: 'min-w-44' },
         { key: 'categoryId', header: 'Categoría', width: 'min-w-40' },
     ],
     expense: [
@@ -137,7 +146,14 @@ const CURRENCY_OPTIONS = [
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
 function getEffectiveData(row: IImportRow, dirty?: Partial<ImportParsedData>): ImportParsedData {
-    return { ...(row.parsedData ?? {}), ...(row.reviewedData ?? {}), ...(dirty ?? {}) } as ImportParsedData
+    return {
+        ...mergeImportRawDataFallbacks(
+            (row.parsedData ?? {}) as ImportParsedData,
+            (row.rawData as Record<string, string | undefined> | undefined) ?? undefined
+        ),
+        ...(row.reviewedData ?? {}),
+        ...(dirty ?? {}),
+    } as ImportParsedData
 }
 
 function formatAmount(amount: number | undefined, currency: string | undefined) {
@@ -149,10 +165,51 @@ function formatAmount(amount: number | undefined, currency: string | undefined) 
     }).format(amount)
 }
 
+function parseDateValue(value?: Date | string) {
+    if (!value) return undefined
+    const parsed = value instanceof Date ? value : new Date(value)
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed
+}
+
+function formatDateValue(value?: Date | string) {
+    const parsed = parseDateValue(value)
+    return parsed
+        ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsed)
+        : '—'
+}
+
+function parseMonthValue(value?: string | Date) {
+    if (!value) return undefined
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return { year: value.getFullYear(), month: value.getMonth() + 1 }
+    }
+
+    const raw = String(value)
+    const direct = raw.match(/^(\d{4})-(\d{1,2})$/)
+    if (direct) {
+        return { year: Number(direct[1]), month: Number(direct[2]) }
+    }
+
+    const parsed = new Date(raw)
+    if (!Number.isNaN(parsed.getTime())) {
+        return { year: parsed.getFullYear(), month: parsed.getMonth() + 1 }
+    }
+
+    return undefined
+}
+
+function formatMonthValue(value?: string | Date) {
+    const parsed = parseMonthValue(value)
+    if (!parsed) return '—'
+    return new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(
+        new Date(parsed.year, parsed.month - 1, 1)
+    )
+}
+
 function getDisplayValue(key: string, data: ImportParsedData, accounts: IAccount[], categories: ICategory[]): string {
     switch (key) {
         case 'date':
-            return data.date ? new Date(data.date).toLocaleDateString('es-AR') : '—'
+            return formatDateValue(data.date)
         case 'description':
             return data.description ?? '—'
         case 'amount':
@@ -168,7 +225,7 @@ function getDisplayValue(key: string, data: ImportParsedData, accounts: IAccount
         case 'installmentCount':
             return data.installmentCount ? String(data.installmentCount) : '—'
         case 'firstClosingMonth':
-            return data.firstClosingMonth ?? '—'
+            return formatMonthValue(data.firstClosingMonth)
         default:
             return '—'
     }
@@ -191,6 +248,7 @@ function applyTypeChange(currentData: ImportParsedData, newType: string | undefi
         updates.firstClosingMonth = undefined
     } else if (!currentData.installmentCount) {
         updates.installmentCount = 1
+        updates.firstClosingMonth = currentData.firstClosingMonth ?? getDefaultFirstClosingMonth(currentData.date)
     }
     // Al pasar de credit_card_expense a expense, limpiar campos de TC
     if (newType === 'expense' && currentData.type === 'credit_card_expense') {
@@ -217,6 +275,15 @@ function StatusBadge({ status }: { status: string }) {
     )
 }
 
+function getRowFeedback(row: IImportRow): string | undefined {
+    if (!row.ignored && row.errors.length > 0) return row.errors[0]
+    if (!row.ignored && row.warnings.length > 0) return row.warnings[0]
+    if (row.status === 'possible_duplicate') {
+        return 'Posible duplicado: revisá si esta fila ya fue importada antes.'
+    }
+    return undefined
+}
+
 function DirtyIndicator() {
     return (
         <span
@@ -224,6 +291,153 @@ function DirtyIndicator() {
             style={{ background: '#0284c7' }}
             title="Cambios pendientes de aplicar"
         />
+    )
+}
+
+function DatePickerInput({
+    value,
+    onChange,
+    disabled,
+    hasError,
+}: {
+    value?: Date | string
+    onChange: (value?: Date) => void
+    disabled?: boolean
+    hasError?: boolean
+}) {
+    const [open, setOpen] = useState(false)
+    const parsed = parseDateValue(value)
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={disabled}
+                    className={cn(
+                        'h-7 w-full justify-start px-2 text-left text-xs font-normal',
+                        !parsed && 'text-muted-foreground',
+                        hasError && 'border-destructive'
+                    )}
+                >
+                    <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                    {parsed ? formatDateValue(parsed) : 'Seleccionar fecha'}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                    mode="single"
+                    selected={parsed}
+                    onSelect={(date) => {
+                        onChange(date ?? undefined)
+                        if (date) setOpen(false)
+                    }}
+                    captionLayout="dropdown"
+                    startMonth={new Date(2020, 0)}
+                    endMonth={new Date(2035, 11)}
+                />
+            </PopoverContent>
+        </Popover>
+    )
+}
+
+function MonthPickerInput({
+    value,
+    onChange,
+    disabled,
+    hasError,
+}: {
+    value?: string | Date
+    onChange: (value?: string) => void
+    disabled?: boolean
+    hasError?: boolean
+}) {
+    const [open, setOpen] = useState(false)
+    const parsed = parseMonthValue(value)
+    const currentYear = new Date().getFullYear()
+    const [selectedYear, setSelectedYear] = useState(parsed?.year ?? currentYear)
+    const displayedYear = open ? selectedYear : parsed?.year ?? currentYear
+
+    const yearOptions = Array.from({ length: 9 }, (_, index) => currentYear - 2 + index)
+    const monthOptions = Array.from({ length: 12 }, (_, index) => {
+        const month = index + 1
+        return {
+            value: month,
+            label: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(new Date(2026, index, 1)),
+        }
+    })
+
+    return (
+        <Popover
+            open={open}
+            onOpenChange={(nextOpen) => {
+                setOpen(nextOpen)
+                if (nextOpen) {
+                    setSelectedYear(parsed?.year ?? currentYear)
+                }
+            }}
+        >
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={disabled}
+                    className={cn(
+                        'h-7 w-full justify-start px-2 text-left text-xs font-normal',
+                        !parsed && 'text-muted-foreground',
+                        hasError && 'border-destructive'
+                    )}
+                >
+                    <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                    {parsed ? formatMonthValue(value) : 'Seleccionar mes'}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+                <div className="mb-3 flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Primer pago</span>
+                    <NativeSelect
+                        value={String(displayedYear)}
+                        onChange={(nextYear) => setSelectedYear(Number(nextYear ?? currentYear))}
+                        options={yearOptions.map((year) => ({ value: String(year), label: String(year) }))}
+                        className="w-24"
+                    />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                    {monthOptions.map((month) => {
+                        const isSelected = parsed?.year === displayedYear && parsed.month === month.value
+
+                        return (
+                            <Button
+                                key={month.value}
+                                type="button"
+                                variant={isSelected ? 'default' : 'outline'}
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                    onChange(`${displayedYear}-${String(month.value).padStart(2, '0')}`)
+                                    setOpen(false)
+                                }}
+                            >
+                                {month.label}
+                            </Button>
+                        )
+                    })}
+                </div>
+                <div className="mt-3 flex justify-end">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            onChange(undefined)
+                            setOpen(false)
+                        }}
+                    >
+                        Limpiar
+                    </Button>
+                </div>
+            </PopoverContent>
+        </Popover>
     )
 }
 
@@ -301,9 +515,12 @@ function FieldCell({
     switch (columnKey) {
         case 'date':
             return (
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {effectiveData.date ? new Date(effectiveData.date).toLocaleDateString('es-AR') : '—'}
-                </span>
+                <DatePickerInput
+                    value={effectiveData.date}
+                    onChange={(value) => onChange({ date: value })}
+                    disabled={disabled}
+                    hasError={hasError?.('date')}
+                />
             )
 
         case 'description':
@@ -422,15 +639,11 @@ function FieldCell({
 
         case 'firstClosingMonth':
             return (
-                <Input
-                    type="month"
-                    className={cn(
-                        inputClass,
-                        hasError?.('firstClosingMonth') && 'border-destructive'
-                    )}
+                <MonthPickerInput
                     value={effectiveData.firstClosingMonth ?? ''}
-                    onChange={(e) => onChange({ firstClosingMonth: e.target.value || undefined })}
+                    onChange={(value) => onChange({ firstClosingMonth: value })}
                     disabled={disabled}
+                    hasError={hasError?.('firstClosingMonth')}
                 />
             )
 
@@ -468,6 +681,7 @@ function InlineTableRow({
     const isDirty = !!dirty && Object.keys(dirty).length > 0
     const rowId = String(row._id)
     const isReadOnly = row.status === 'imported' || row.ignored
+    const feedbackMessage = getRowFeedback(row)
 
     const handleChange = useCallback(
         (updates: Partial<ImportParsedData>) => onFieldChange(rowId, updates),
@@ -486,11 +700,20 @@ function InlineTableRow({
     const errorFields = useMemo(() => {
         const fields = new Set<string>()
         for (const msg of row.errors) {
-            if (msg.toLowerCase().includes('categoría')) fields.add('categoryId')
-            if (msg.toLowerCase().includes('cuenta origen') || msg.toLowerCase().includes('tarjeta "') || msg.toLowerCase().includes('tarjeta es req')) fields.add('sourceAccount')
-            if (msg.toLowerCase().includes('cuenta destino') || msg.toLowerCase().includes('tarjeta destino')) fields.add('destinationAccount')
-            if (msg.toLowerCase().includes('primera cuota')) fields.add('firstClosingMonth')
-            if (msg.toLowerCase().includes('cuotas son requeridas')) fields.add('installmentCount')
+            const normalized = msg.toLowerCase()
+            if (normalized.includes('fecha')) fields.add('date')
+            if (normalized.includes('categoría')) fields.add('categoryId')
+            if (
+                normalized.includes('cuenta origen') ||
+                normalized.includes('tarjeta "') ||
+                normalized.includes('tarjeta es req') ||
+                normalized.includes('la cuenta es obligatoria')
+            ) {
+                fields.add('sourceAccount')
+            }
+            if (normalized.includes('cuenta destino') || normalized.includes('tarjeta destino')) fields.add('destinationAccount')
+            if (normalized.includes('primera cuota') || normalized.includes('mes de primer pago')) fields.add('firstClosingMonth')
+            if (normalized.includes('cuotas son requeridas') || normalized.includes('cuotas son obligatorias')) fields.add('installmentCount')
         }
         return fields
     }, [row.errors])
@@ -518,9 +741,12 @@ function InlineTableRow({
             <td className="px-2 py-1.5 min-w-24 align-top">
                 <div className="space-y-1 pt-0.5">
                     <StatusBadge status={row.status} />
-                    {row.errors.length > 0 && !row.ignored && (
-                        <p className="text-xs leading-tight" style={{ color: 'var(--destructive)' }}>
-                            {row.errors[0]}
+                    {feedbackMessage && !row.ignored && (
+                        <p
+                            className="text-xs leading-tight"
+                            style={{ color: row.errors.length > 0 ? 'var(--destructive)' : 'var(--muted-foreground)' }}
+                        >
+                            {feedbackMessage}
                         </p>
                     )}
                 </div>
@@ -610,13 +836,12 @@ function MobileCardRow({
     const rowId = String(row._id)
     const columns = COLUMNS_BY_TYPE[groupType] ?? []
     const isReadOnly = row.status === 'imported'
+    const feedbackMessage = getRowFeedback(row)
 
     const typeLabel = effectiveData.type
         ? IMPORT_TRANSACTION_TYPE_LABELS[effectiveData.type] ?? effectiveData.type
         : 'Sin tipo'
-    const dateLabel = effectiveData.date
-        ? new Date(effectiveData.date).toLocaleDateString('es-AR')
-        : '—'
+    const dateLabel = formatDateValue(effectiveData.date)
     const amountLabel = formatAmount(effectiveData.amount, effectiveData.currency)
 
     const handleTypeChange = (newType: string | undefined) => {
@@ -658,9 +883,13 @@ function MobileCardRow({
                         <span>{dateLabel}</span>
                         <span>{typeLabel}</span>
                     </div>
-                    {row.errors.length > 0 && !row.ignored && (
-                        <p className="text-xs mt-1.5 font-medium" style={{ color: 'var(--destructive)' }}>
-                            ⚠ {row.errors[0]}
+                    {feedbackMessage && !row.ignored && (
+                        <p
+                            className="text-xs mt-1.5 font-medium"
+                            style={{ color: row.errors.length > 0 ? 'var(--destructive)' : 'var(--muted-foreground)' }}
+                        >
+                            {row.errors.length > 0 ? '⚠ ' : ''}
+                            {feedbackMessage}
                         </p>
                     )}
                 </div>
@@ -927,6 +1156,9 @@ export default function ImportReviewPage() {
     const filteredRows = useMemo(() => {
         if (!detail) return []
         if (statusFilter === 'all') return detail.rows
+        if (statusFilter === 'invalid') {
+            return detail.rows.filter((row) => row.status === 'invalid' || row.status === 'incomplete')
+        }
         return detail.rows.filter((row) => row.status === statusFilter)
     }, [detail, statusFilter])
 
@@ -959,8 +1191,8 @@ export default function ImportReviewPage() {
         if (!detail) return { blockingCount: 0, pendingCount: 0, importableCount: 0 }
         const rows = detail.rows
         return {
-            blockingCount: rows.filter((r) => r.status === 'invalid' && !r.ignored).length,
-            pendingCount: rows.filter((r) => r.status === 'incomplete' && !r.ignored).length,
+            blockingCount: rows.filter((r) => (r.status === 'invalid' || r.status === 'incomplete') && !r.ignored).length,
+            pendingCount: 0,
             importableCount: rows.filter(
                 (r) => !r.ignored && ['ok', 'possible_duplicate'].includes(r.status) && r.status !== 'imported'
             ).length,
@@ -1067,8 +1299,7 @@ export default function ImportReviewPage() {
         [
             { value: 'all' as StatusFilter, label: 'Todas', count: summary.total, color: '#0284c7' },
             { value: 'ok' as StatusFilter, label: 'Listas', count: summary.valid, color: '#16a34a' },
-            { value: 'incomplete' as StatusFilter, label: 'Pendientes', count: summary.incomplete, color: '#d97706' },
-            { value: 'invalid' as StatusFilter, label: 'Con error', count: summary.invalid, color: '#dc2626' },
+            { value: 'invalid' as StatusFilter, label: 'Con error', count: summary.invalid + summary.incomplete, color: '#dc2626' },
             { value: 'possible_duplicate' as StatusFilter, label: 'Revisar', count: summary.possibleDuplicate, color: '#7c3aed' },
             { value: 'ignored' as StatusFilter, label: 'Ignoradas', count: summary.ignored, color: '#6b7280' },
         ] as const

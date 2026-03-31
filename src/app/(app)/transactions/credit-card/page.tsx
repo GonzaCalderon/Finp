@@ -22,6 +22,7 @@ import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { CreditCardExpenseSheet } from '@/components/shared/CreditCardExpenseSheet'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
+import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import {
     AlertDialog,
@@ -128,13 +129,12 @@ function getRefId(value: unknown): string {
     if (typeof value === 'string') return value
     if (typeof value !== 'object') return ''
     const candidate = value as { _id?: unknown; toString?: () => string }
-    if (
-        candidate._id &&
-        typeof candidate._id === 'object' &&
-        'toString' in candidate._id &&
-        typeof candidate._id.toString === 'function'
-    ) {
-        return candidate._id.toString()
+    if (typeof candidate._id === 'string') {
+        return candidate._id
+    }
+    if (candidate._id && typeof candidate._id === 'object' && 'toString' in candidate._id) {
+        const ref = candidate._id as { toString(): string }
+        return ref.toString()
     }
     return typeof candidate.toString === 'function' ? candidate.toString() : ''
 }
@@ -615,15 +615,6 @@ export default function CreditCardExpensesPage() {
         return Array.from(summaries.values()).sort((a, b) => b.remainingDebt - a.remainingDebt)
     }, [preferences.monthStartDay, selectedMonth, summaryItems])
 
-    const fmt = (amount: number, currency = 'ARS') =>
-        hidden
-            ? '••••'
-            : new Intl.NumberFormat('es-AR', {
-                style: 'currency',
-                currency,
-                maximumFractionDigits: 0,
-            }).format(amount)
-
     const handleEditItem = (item: CCExpenseItem | null) => {
         if (!item) return
         if (item.kind === 'plan') {
@@ -756,10 +747,18 @@ export default function CreditCardExpensesPage() {
                                         }
                                         className="min-w-[220px] rounded-xl px-4 py-3 text-left transition-colors md:min-w-0"
                                         style={{
-                                            background: 'var(--card)',
-                                            border: `0.5px solid ${selected ? 'var(--sky)' : 'var(--border)'}`,
+                                            background: card.color
+                                                ? `linear-gradient(180deg, ${card.color}14 0%, var(--card) 32%)`
+                                                : 'var(--card)',
+                                            border: `0.5px solid ${selected ? (card.color ?? 'var(--sky)') : 'var(--border)'}`,
+                                            boxShadow: selected && card.color ? `0 0 0 1px ${card.color}22 inset` : undefined,
                                         }}
                                     >
+                                        <div
+                                            className="mb-3 h-1.5 w-16 rounded-full"
+                                            style={{ background: card.color ?? 'var(--sky)' }}
+                                        />
+
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2">
@@ -776,7 +775,14 @@ export default function CreditCardExpensesPage() {
                                                 </p>
                                             </div>
                                             {selected && (
-                                                <Badge variant="outline" className="border-sky-200 text-sky-600">
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-sky-600"
+                                                    style={{
+                                                        borderColor: card.color ? `${card.color}55` : undefined,
+                                                        color: card.color ?? undefined,
+                                                    }}
+                                                >
                                                     Filtrada
                                                 </Badge>
                                             )}
@@ -785,12 +791,18 @@ export default function CreditCardExpensesPage() {
                                         <div className="mt-3 grid grid-cols-2 gap-3">
                                             <div>
                                                 <p className="text-[11px] text-muted-foreground">Deuda restante</p>
-                                                <p className="mt-1 text-sm font-semibold">{fmt(card.remainingDebt, card.currency)}</p>
+                                                <p className="mt-1 text-sm font-semibold">
+                                                    <ResponsiveAmount amount={card.remainingDebt} currency={card.currency} hidden={hidden} />
+                                                </p>
                                             </div>
                                             <div>
                                                 <p className="text-[11px] text-muted-foreground">Resumen mensual</p>
-                                                <p className="mt-1 text-sm font-semibold">{fmt(card.monthlyDue, card.currency)}</p>
-                                                <p className="text-[11px] text-muted-foreground">impacta este mes</p>
+                                                <p className="mt-1 text-sm font-semibold">
+                                                    <ResponsiveAmount amount={card.monthlyDue} currency={card.currency} hidden={hidden} />
+                                                </p>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    {card.monthlyDue > 0 ? 'impacta este mes' : 'sin impacto este mes'}
+                                                </p>
                                             </div>
                                         </div>
                                     </button>
@@ -799,6 +811,14 @@ export default function CreditCardExpensesPage() {
                         </div>
                     )}
                 </section>
+
+                <div className="flex items-center gap-3 px-1">
+                    <div className="h-px flex-1 bg-border/70" />
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                        Vista mensual
+                    </p>
+                    <div className="h-px flex-1 bg-border/70" />
+                </div>
 
                 <section
                     className="rounded-xl px-4 py-3 space-y-3"
@@ -987,7 +1007,7 @@ export default function CreditCardExpensesPage() {
 
                                                 <div className="shrink-0 text-right">
                                                     <p className="text-sm font-semibold tabular-nums">
-                                                        {fmt(totalAmount, currency)}
+                                                        <ResponsiveAmount amount={totalAmount} currency={currency} hidden={hidden} />
                                                     </p>
                                                     <p className="text-[11px] text-muted-foreground">total</p>
                                                 </div>
@@ -1034,8 +1054,12 @@ export default function CreditCardExpensesPage() {
                                                         {categoryName}
                                                     </span>
                                                 )}
-                                                <span>Cuota {fmt(quotaAmount, currency)}</span>
-                                                <span>Pendiente {fmt(remainingDebt, currency)}</span>
+                                                <span>
+                                                    Cuota <ResponsiveAmount amount={quotaAmount} currency={currency} hidden={hidden} />
+                                                </span>
+                                                <span>
+                                                    Pendiente <ResponsiveAmount amount={remainingDebt} currency={currency} hidden={hidden} />
+                                                </span>
                                             </div>
                                         </button>
 

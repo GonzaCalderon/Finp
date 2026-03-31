@@ -40,6 +40,7 @@ import {
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
+import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
@@ -797,15 +798,6 @@ export default function TransactionsPage() {
     const totalExpense = summary.expense
     const totalCreditCardExpense = summary.creditCardExpense
 
-    const fmt = (amount: number, currency: string) =>
-        hidden
-            ? '••••'
-            : new Intl.NumberFormat('es-AR', {
-                style: 'currency',
-                currency,
-                maximumFractionDigits: 0,
-            }).format(amount)
-
     if (loading) {
         return (
             <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
@@ -868,13 +860,13 @@ export default function TransactionsPage() {
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid #10B981' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Ingresos</p>
                         <p className="text-base md:text-xl font-semibold tracking-tight text-green-500 truncate">
-                            {fmt(totalIncome, 'ARS')}
+                            <ResponsiveAmount amount={totalIncome} currency="ARS" hidden={hidden} color="#10B981" />
                         </p>
                     </div>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--destructive)' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Gastos</p>
                         <p className="text-base md:text-xl font-semibold tracking-tight text-destructive truncate">
-                            {fmt(totalExpense, 'ARS')}
+                            <ResponsiveAmount amount={totalExpense} currency="ARS" hidden={hidden} color="var(--destructive)" />
                         </p>
                         <AnimatePresence>
                             {totalCreditCardExpense > 0 && (
@@ -887,7 +879,8 @@ export default function TransactionsPage() {
                                     style={{ color: '#6366F1' }}
                                 >
                                     <CreditCard className="w-3 h-3 shrink-0" />
-                                    {fmt(totalCreditCardExpense, 'ARS')} con TC
+                                    <ResponsiveAmount amount={totalCreditCardExpense} currency="ARS" hidden={hidden} />
+                                    <span>con TC</span>
                                 </motion.p>
                             )}
                         </AnimatePresence>
@@ -901,7 +894,12 @@ export default function TransactionsPage() {
                                     totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)',
                             }}
                         >
-                            {fmt(totalIncome - totalExpense, 'ARS')}
+                            <ResponsiveAmount
+                                amount={totalIncome - totalExpense}
+                                currency="ARS"
+                                hidden={hidden}
+                                color={totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                            />
                         </p>
                     </div>
                 </div>
@@ -1074,7 +1072,20 @@ export default function TransactionsPage() {
                                                                                 : 'var(--foreground)',
                                                             }}
                                                         >
-                                                            {fmt(transaction.amount, transaction.currency)}
+                                                            <ResponsiveAmount
+                                                                amount={transaction.amount}
+                                                                currency={transaction.currency}
+                                                                hidden={hidden}
+                                                                color={
+                                                                    transaction.type === 'income'
+                                                                        ? '#10B981'
+                                                                        : transaction.type === 'expense'
+                                                                            ? 'var(--destructive)'
+                                                                            : transaction.type === 'credit_card_expense'
+                                                                                ? '#6366F1'
+                                                                                : 'var(--foreground)'
+                                                                }
+                                                            />
                                                         </p>
                                                         <Button
                                                             variant="ghost"
@@ -1174,7 +1185,20 @@ export default function TransactionsPage() {
                                                                             : 'var(--foreground)',
                                                         }}
                                                     >
-                                                        {fmt(transaction.amount, transaction.currency)}
+                                                        <ResponsiveAmount
+                                                            amount={transaction.amount}
+                                                            currency={transaction.currency}
+                                                            hidden={hidden}
+                                                            color={
+                                                                transaction.type === 'income'
+                                                                    ? '#10B981'
+                                                                    : transaction.type === 'expense'
+                                                                        ? 'var(--destructive)'
+                                                                        : transaction.type === 'credit_card_expense'
+                                                                            ? '#6366F1'
+                                                                            : 'var(--foreground)'
+                                                            }
+                                                        />
                                                     </p>
                                                     <div className="flex gap-1">
                                                         <Button

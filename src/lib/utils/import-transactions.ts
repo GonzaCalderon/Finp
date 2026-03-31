@@ -13,6 +13,12 @@ type ImportEvaluationParams = {
     categories: ICategory[]
 }
 
+type RawImportRowData =
+    | Record<string, string | undefined>
+    | Map<string, string | undefined>
+    | null
+    | undefined
+
 type ImportRequirement = {
     descriptionRequired: boolean
     categoryRequired: boolean
@@ -81,6 +87,25 @@ function normalizeFreeText(value?: string | null): string {
         .trim()
         .toLowerCase()
         .replace(/\s+/g, ' ')
+}
+
+function getRawField(rawData: RawImportRowData, key: string): string | undefined {
+    if (!rawData) return undefined
+
+    const value =
+        rawData instanceof Map
+            ? rawData.get(key)
+            : rawData[key]
+
+    if (value === undefined || value === null) return undefined
+    const normalized = String(value).trim()
+    return normalized || undefined
+}
+
+function parseImportInteger(value?: string | null): number | undefined {
+    if (!value) return undefined
+    const parsed = Number.parseInt(value, 10)
+    return Number.isNaN(parsed) ? undefined : parsed
 }
 
 function getRequirement(type?: string | null): ImportRequirement {
@@ -217,8 +242,15 @@ export function shouldShowFirstClosingMonth(data: ImportParsedData): boolean {
     return normalizeImportTransactionType(data.type) === 'credit_card_expense'
 }
 
-export function normalizeImportMonth(value?: string | null): string | undefined {
-    const raw = (value ?? '').trim()
+export function normalizeImportMonth(value?: string | Date | null): string | undefined {
+    if (!value) return undefined
+
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) return undefined
+        return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
+    }
+
+    const raw = String(value).trim()
     if (!raw) return undefined
 
     const direct = raw.match(/^(\d{4})-(\d{1,2})$/)
@@ -234,7 +266,34 @@ export function normalizeImportMonth(value?: string | null): string | undefined 
         return `${year}-${month.padStart(2, '0')}`
     }
 
+    const parsed = new Date(raw)
+    if (!Number.isNaN(parsed.getTime())) {
+        return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`
+    }
+
     return undefined
+}
+
+export function mergeImportRawDataFallbacks(
+    data: ImportParsedData,
+    rawData?: RawImportRowData
+): ImportParsedData {
+    const next: ImportParsedData = { ...data }
+
+    if (!next.type) next.type = getRawField(rawData, 'tipo')
+    if (!next.description) next.description = getRawField(rawData, 'descripción')
+    if (!next.currency) next.currency = getRawField(rawData, 'moneda')?.toUpperCase()
+    if (!next.categoryName) next.categoryName = getRawField(rawData, 'categoría')
+    if (!next.accountName) next.accountName = getRawField(rawData, 'cuenta')
+    if (!next.destinationAccountName) next.destinationAccountName = getRawField(rawData, 'cuenta destino')
+    if (!next.notes) next.notes = getRawField(rawData, 'observaciones')
+    if (!next.installmentCount) next.installmentCount = parseImportInteger(getRawField(rawData, 'cuotas'))
+    if (!next.installmentNumber) next.installmentNumber = parseImportInteger(getRawField(rawData, 'cuota actual'))
+    if (!next.firstClosingMonth) {
+        next.firstClosingMonth = normalizeImportMonth(getRawField(rawData, 'mes de primer pago'))
+    }
+
+    return next
 }
 
 export function getDefaultFirstClosingMonth(date?: Date | string | null): string | undefined {
@@ -347,6 +406,15 @@ export function applyImportTypeTransition(
     }
 
     return next
+}
+
+export function getImportFallbackDescription(type?: string | null): string | undefined {
+    const normalizedType = normalizeImportTransactionType(type)
+
+    if (normalizedType === 'transfer') return 'Transferencia'
+    if (normalizedType === 'credit_card_payment') return 'Pago de tarjeta'
+
+    return undefined
 }
 
 export function evaluateImportRow({
@@ -497,9 +565,7 @@ export function evaluateImportRow({
     }
 
     const status = errors.length > 0
-        ? errors.some((error) => error.includes('no encontrada') || error.includes('no es'))
-            ? IMPORT_ROW_STATUS.INVALID
-            : IMPORT_ROW_STATUS.INCOMPLETE
+        ? IMPORT_ROW_STATUS.INVALID
         : IMPORT_ROW_STATUS.OK
 
     return {

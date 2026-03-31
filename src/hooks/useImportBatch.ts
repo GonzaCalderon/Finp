@@ -96,9 +96,8 @@ export function useImportBatchDetail(batchId: string) {
     const confirmImport = useCallback(async () => {
         const res = await fetch(`/api/import/${batchId}/confirm`, { method: 'POST' })
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error ?? 'Error al confirmar importación')
-        // Refrescar detalle
         await fetchDetail()
+        if (!res.ok) throw new Error(data.error ?? 'Error al confirmar importación')
         return data
     }, [batchId, fetchDetail])
 

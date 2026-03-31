@@ -5,7 +5,7 @@ import { ImportBatch, ImportRow, Transaction, Category, Account } from '@/lib/mo
 import { parseImportFile } from '@/lib/utils/excel-parser'
 import { IMPORT_ROW_STATUS } from '@/lib/constants'
 import type { IAccount, ICategory, ImportParsedData } from '@/types'
-import { evaluateImportRow } from '@/lib/utils/import-transactions'
+import { evaluateImportRow, mergeImportRawDataFallbacks } from '@/lib/utils/import-transactions'
 
 // GET /api/import — lista de batches del usuario
 export async function GET() {
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
 
     const rowDocs = parseResult.rows.map((row) => {
         const evaluation = evaluateImportRow({
-            data: row.parsedData,
+            data: mergeImportRawDataFallbacks(row.parsedData, row.rawData),
             accounts: accounts as unknown as IAccount[],
             categories: categories as unknown as ICategory[],
         })
@@ -121,11 +121,14 @@ export async function POST(request: Request) {
 
         let possibleDuplicateId: string | undefined
         let rowStatus: string = evaluation.status
+        const warnings = Array.from(new Set([...row.warnings, ...evaluation.warnings]))
+        const errors = Array.from(new Set([...row.errors, ...evaluation.errors]))
 
         if (!data.ignored) {
             possibleDuplicateId = detectDuplicate(data)
             if (possibleDuplicateId && rowStatus === IMPORT_ROW_STATUS.OK) {
                 rowStatus = 'possible_duplicate'
+                warnings.push('Posible duplicado: ya existe una transacción similar con la misma fecha y monto.')
                 possibleDuplicate++
             } else if (rowStatus === IMPORT_ROW_STATUS.INVALID) {
                 invalid++
@@ -138,9 +141,6 @@ export async function POST(request: Request) {
             rowStatus = IMPORT_ROW_STATUS.IGNORED
             ignored++
         }
-
-        const warnings = Array.from(new Set([...row.warnings, ...evaluation.warnings]))
-        const errors = Array.from(new Set([...row.errors, ...evaluation.errors]))
 
         return {
             rowNumber: row.rowNumber,

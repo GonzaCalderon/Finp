@@ -197,6 +197,23 @@ function parseNumber(value: unknown): number | undefined {
     return isNaN(n) ? undefined : n
 }
 
+function parseMonthCell(value: unknown): string | undefined {
+    if (value === undefined || value === null || value === '') return undefined
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return normalizeImportMonth(value)
+    }
+
+    if (typeof value === 'number') {
+        const date = XLSX.SSF.parse_date_code(value)
+        if (date) {
+            return normalizeImportMonth(new Date(date.y, date.m - 1, date.d))
+        }
+    }
+
+    return normalizeImportMonth(String(value))
+}
+
 export interface ParsedRow {
     rowNumber: number
     rawData: Record<string, string>
@@ -272,6 +289,11 @@ export function parseImportFile(buffer: Buffer): ParseResult {
             rawData[normalized] = val !== undefined && val !== null ? String(val) : ''
         })
 
+        const getCellValue = (header: string) => {
+            const cellIndex = Object.entries(headerMap).find(([, normalized]) => normalized === header)?.[0]
+            return cellIndex !== undefined ? rawRow[Number(cellIndex)] : undefined
+        }
+
         // Ignorar fila vacía
         const allEmpty = Object.values(rawData).every((v) => !v.trim())
         if (allEmpty) return
@@ -294,7 +316,7 @@ export function parseImportFile(buffer: Buffer): ParseResult {
             cardName: rawData['tarjeta']?.trim() || undefined,
             installmentCount: parseNumber(rawData['cuotas']),
             installmentNumber: parseNumber(rawData['cuota actual']),
-            firstClosingMonth: normalizeImportMonth(rawData['mes de primer pago']),
+            firstClosingMonth: parseMonthCell(getCellValue('mes de primer pago')),
             notes: rawData['observaciones']?.trim() || undefined,
         }
 

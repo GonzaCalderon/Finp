@@ -4,7 +4,7 @@ import { connectDB } from '@/lib/db'
 import { Account, Category, ImportBatch, ImportRow, Transaction } from '@/lib/models'
 import { IMPORT_ROW_STATUS } from '@/lib/constants'
 import type { IAccount, ICategory, ImportParsedData } from '@/types'
-import { evaluateImportRow } from '@/lib/utils/import-transactions'
+import { evaluateImportRow, mergeImportRawDataFallbacks } from '@/lib/utils/import-transactions'
 
 // PATCH /api/import/[batchId]/rows/[rowId] — editar fila de revisión
 export async function PATCH(
@@ -50,7 +50,10 @@ export async function PATCH(
     ])
 
     const effectiveData = {
-        ...(row.parsedData?.toObject?.() ?? row.parsedData ?? {}),
+        ...mergeImportRawDataFallbacks(
+            (row.parsedData?.toObject?.() ?? row.parsedData ?? {}) as ImportParsedData,
+            row.rawData?.toObject?.() ?? row.rawData
+        ),
         ...(row.reviewedData?.toObject?.() ?? row.reviewedData ?? {}),
         ignored: row.ignored,
     } as ImportParsedData
@@ -79,6 +82,14 @@ export async function PATCH(
             }>
         )
         row.possibleDuplicateId = possibleDuplicateId
+        row.warnings = possibleDuplicateId
+            ? Array.from(
+                new Set([
+                    ...evaluation.warnings,
+                    'Posible duplicado: ya existe una transacción similar con la misma fecha y monto.',
+                ])
+            )
+            : evaluation.warnings
         row.status =
             possibleDuplicateId && evaluation.status === IMPORT_ROW_STATUS.OK
                 ? IMPORT_ROW_STATUS.POSSIBLE_DUPLICATE

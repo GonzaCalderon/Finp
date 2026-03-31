@@ -34,4 +34,16 @@ TransactionSchema.index({ userId: 1, sourceAccountId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, destinationAccountId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, categoryId: 1, date: -1 })
 
-export const Transaction = mongoose.models.Transaction || mongoose.model<ITransaction>('Transaction', TransactionSchema)
+const existingTransactionModel = mongoose.models.Transaction as mongoose.Model<ITransaction> | undefined
+const currentTypeEnum = existingTransactionModel?.schema.path('type')?.options?.enum as string[] | undefined
+const needsSchemaRefresh =
+    !!existingTransactionModel &&
+    (!currentTypeEnum || !currentTypeEnum.includes(TRANSACTION_TYPES.CREDIT_CARD_EXPENSE))
+
+if (needsSchemaRefresh) {
+    delete mongoose.models.Transaction
+}
+
+export const Transaction =
+    (needsSchemaRefresh ? undefined : (mongoose.models.Transaction as mongoose.Model<ITransaction> | undefined)) ||
+    mongoose.model<ITransaction>('Transaction', TransactionSchema)
