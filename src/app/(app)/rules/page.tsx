@@ -404,7 +404,7 @@ export default function RulesPage() {
                     <div className="space-y-6">
                         {/* Active rules */}
                         {activeRules.length > 0 && (
-                            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-3">
+                            <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-3">
                                 {activeRules.map((rule) => (
                                     <RuleCard
                                         key={rule._id.toString()}

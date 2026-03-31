@@ -19,6 +19,16 @@ const ROUTE_LABELS: Record<string, string> = {
     projection: 'Proyección',
     rules: 'Reglas',
     settings: 'Configuración',
+    import: 'Importar',
+    history: 'Historial',
+    'credit-card': 'Gastos con TC',
+}
+
+function segmentLabel(segment: string): string {
+    if (ROUTE_LABELS[segment]) return ROUTE_LABELS[segment]
+    // MongoDB ObjectId — 24-char hex string
+    if (/^[0-9a-f]{24}$/i.test(segment)) return 'Revisión'
+    return segment
 }
 
 export function AppBreadcrumb() {
@@ -41,7 +51,7 @@ export function AppBreadcrumb() {
 
                 {segments.map((segment, index) => {
                     const href = '/' + segments.slice(0, index + 1).join('/')
-                    const label = ROUTE_LABELS[segment] ?? segment
+                    const label = segmentLabel(segment)
                     const isLast = index === segments.length - 1
 
                     return (

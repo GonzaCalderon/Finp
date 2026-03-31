@@ -48,6 +48,20 @@ export function useInstallments() {
         return data.plan
     }
 
+    const updatePlan = async (id: string, body: InstallmentFormData) => {
+        const res = await fetch(`/api/installments/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })
+
+        const data: CreatePlanResponse & { error?: string } = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Error al actualizar plan de cuotas')
+
+        await fetchPlans()
+        return data.plan
+    }
+
     const deletePlan = async (id: string) => {
         const res = await fetch(`/api/installments/${id}`, {
             method: 'DELETE',
@@ -70,6 +84,7 @@ export function useInstallments() {
         error,
         fetchPlans,
         createPlan,
+        updatePlan,
         deletePlan,
     }
 }

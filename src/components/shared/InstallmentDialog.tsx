@@ -31,7 +31,11 @@ import {
   type InstallmentFormInput,
   type InstallmentFormData,
 } from '@/lib/validations'
-import type { IAccount, ICategory } from '@/types'
+import type { IAccount, ICategory, IInstallmentPlan, ITransaction } from '@/types'
+
+type EditableInstallmentPlan = IInstallmentPlan & {
+  parentTransaction?: ITransaction | null
+}
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 
 interface InstallmentDialogProps {
@@ -40,6 +44,7 @@ interface InstallmentDialogProps {
   accounts: IAccount[]
   categories: ICategory[]
   onSubmit: (data: InstallmentFormData) => Promise<void>
+  plan?: EditableInstallmentPlan | null
 }
 
 const INSTALLMENT_OPTIONS = [2, 3, 6, 9, 12, 18, 24]
@@ -101,6 +106,7 @@ export function InstallmentDialog({
   accounts,
   categories,
   onSubmit,
+  plan = null,
 }: InstallmentDialogProps) {
   const monthOptions = useMemo(() => getMonthOptions(), [])
   const creditCards = accounts.filter((account) => account.type === 'credit_card')
@@ -178,20 +184,41 @@ export function InstallmentDialog({
   useEffect(() => {
     if (!open) return
 
-    reset({
-      description: '',
-      totalAmount: 0,
-      currency: 'ARS',
-      installmentCount: 3,
-      accountId: '',
-      categoryId: undefined,
-      purchaseDate: new Date(),
-      firstClosingMonth: '',
-      merchant: '',
-      notes: '',
-    })
+    if (plan) {
+      reset({
+        description: plan.description,
+        totalAmount: plan.totalAmount,
+        currency: plan.currency,
+        installmentCount: plan.installmentCount,
+        accountId:
+          (plan.accountId as { _id?: { toString(): string } })?._id?.toString() ??
+          plan.accountId?.toString() ??
+          '',
+        categoryId:
+          (plan.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
+          plan.categoryId?.toString() ??
+          undefined,
+        purchaseDate: new Date(plan.purchaseDate),
+        firstClosingMonth: plan.firstClosingMonth,
+        merchant: plan.merchant ?? '',
+        notes: plan.parentTransaction?.notes ?? '',
+      })
+    } else {
+      reset({
+        description: '',
+        totalAmount: 0,
+        currency: 'ARS',
+        installmentCount: 3,
+        accountId: '',
+        categoryId: undefined,
+        purchaseDate: new Date(),
+        firstClosingMonth: '',
+        merchant: '',
+        notes: '',
+      })
+    }
     setShowMoreOptions(false)
-  }, [open, reset])
+  }, [open, reset, plan])
 
   const handleFormSubmit = async (data: InstallmentFormData) => {
     await onSubmit(data)
@@ -215,7 +242,7 @@ export function InstallmentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg p-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-0">
-          <DialogTitle>Registrar compra en cuotas</DialogTitle>
+          <DialogTitle>{plan ? 'Editar gasto en cuotas' : 'Registrar compra en cuotas'}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="flex max-h-[85vh] flex-col">
@@ -518,7 +545,7 @@ export function InstallmentDialog({
                   Guardando...
                 </>
               ) : (
-                'Registrar compra'
+                plan ? 'Guardar cambios' : 'Registrar compra'
               )}
             </Button>
           </div>

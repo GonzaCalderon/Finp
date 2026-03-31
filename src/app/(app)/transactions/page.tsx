@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2, Upload, CreditCard } from 'lucide-react'
+import Link from 'next/link'
 
 import { useTransactions } from '@/hooks/useTransactions'
 import { useInstallments } from '@/hooks/useInstallments'
@@ -37,12 +38,12 @@ import {
 } from '@/components/ui/alert-dialog'
 
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
-import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
+import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import { isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
+import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -50,9 +51,10 @@ import type { ICategory, ITransaction, IAccount } from '@/types'
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     income: 'Ingreso',
     expense: 'Gasto',
+    credit_card_expense: 'Gasto con TC',
     transfer: 'Transferencia',
-    credit_card_payment: 'Pago tarjeta',
-    debt_payment: 'Pago deuda',
+    credit_card_payment: 'Pago de tarjeta',
+    debt_payment: 'Pago de tarjeta',      // backwards compat
     adjustment: 'Ajuste',
 }
 
@@ -62,6 +64,7 @@ const TRANSACTION_TYPE_COLORS: Record<
 > = {
     income: 'default',
     expense: 'destructive',
+    credit_card_expense: 'outline',
     transfer: 'secondary',
     credit_card_payment: 'outline',
     debt_payment: 'outline',
@@ -85,6 +88,7 @@ const getCurrentMonth = () => {
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => {
     const date = new Date()
+    date.setDate(1) // evita overflow (ej. 31 mar - 1 mes → 31 feb → 3 mar duplicado)
     date.setMonth(date.getMonth() - i)
 
     const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -223,6 +227,10 @@ function TypeFilterChip({
     const typeOptions = [
         { value: 'income', label: 'Ingreso' },
         { value: 'expense', label: 'Gasto' },
+        { value: 'credit_card_expense', label: 'Gasto con TC' },
+        { value: 'transfer', label: 'Transferencia' },
+        { value: 'credit_card_payment', label: 'Pago de tarjeta' },
+        { value: 'adjustment', label: 'Ajuste' },
     ]
 
     return (
@@ -273,7 +281,8 @@ function TypeFilterChip({
 
                         {typeOptions.map((option) => {
                             const isSuggestedConflict =
-                                activeCategoryType && activeCategoryType !== option.value
+                                activeCategoryType &&
+                                activeCategoryType !== getCategoryTypeForTransactionType(option.value)
 
                             return (
                                 <button
@@ -624,7 +633,6 @@ export default function TransactionsPage() {
     const [sort, setSort] = useState(DEFAULT_SORT)
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
-    const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false)
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
 
@@ -646,6 +654,7 @@ export default function TransactionsPage() {
 
     const {
         transactions,
+        summary,
         loading,
         refreshing,
         loadingMore,
@@ -719,7 +728,7 @@ export default function TransactionsPage() {
         try {
             await createPlan(data as never)
             success('Compra en cuotas registrada correctamente')
-            setInstallmentDialogOpen(false)
+            setTransactionDialogOpen(false)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al registrar compra en cuotas')
         }
@@ -764,6 +773,10 @@ export default function TransactionsPage() {
         () => [
             { value: 'income', label: 'Ingreso' },
             { value: 'expense', label: 'Gasto' },
+            { value: 'credit_card_expense', label: 'Gasto con TC' },
+            { value: 'transfer', label: 'Transferencia' },
+        { value: 'credit_card_payment', label: 'Pago de tarjeta' },
+            { value: 'adjustment', label: 'Ajuste' },
         ],
         []
     )
@@ -780,22 +793,10 @@ export default function TransactionsPage() {
     const selectedAppliedCategoryType =
         categoryOptions.find((category) => category.value === appliedFilters.categoryId)?.type ?? ''
 
-    const totalIncome = transactions
-        .filter((transaction) => transaction.type === 'income')
-        .reduce((sum, transaction) => sum + transaction.amount, 0)
-
-    const totalExpense = transactions
-        .filter((transaction) => transaction.type === 'expense' && !transaction.installmentPlanId)
-        .reduce((sum, transaction) => sum + transaction.amount, 0)
-
-    const fmt = (amount: number, currency: string) =>
-        hidden
-            ? '••••'
-            : new Intl.NumberFormat('es-AR', {
-                style: 'currency',
-                currency,
-                maximumFractionDigits: 0,
-            }).format(amount)
+    // KPIs come from the API summary (full month, unfiltered by type/category/account)
+    const totalIncome = summary.income
+    const totalExpense = summary.expense
+    const totalCreditCardExpense = summary.creditCardExpense
 
     if (loading) {
         return (
@@ -839,8 +840,11 @@ export default function TransactionsPage() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => setInstallmentDialogOpen(true)}>
-                        + Cuotas
+                    <Button variant="outline" size="sm" className="hidden sm:flex" asChild>
+                        <Link href="/transactions/import">
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            Importar
+                        </Link>
                     </Button>
                     <Button size="sm" className="hidden sm:flex" onClick={handleNewTransaction} data-testid="btn-nueva-transaccion">
                         + Nueva
@@ -856,14 +860,30 @@ export default function TransactionsPage() {
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid #10B981' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Ingresos</p>
                         <p className="text-base md:text-xl font-semibold tracking-tight text-green-500 truncate">
-                            {fmt(totalIncome, 'ARS')}
+                            <ResponsiveAmount amount={totalIncome} currency="ARS" hidden={hidden} color="#10B981" />
                         </p>
                     </div>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--destructive)' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Gastos</p>
                         <p className="text-base md:text-xl font-semibold tracking-tight text-destructive truncate">
-                            {fmt(totalExpense, 'ARS')}
+                            <ResponsiveAmount amount={totalExpense} currency="ARS" hidden={hidden} color="var(--destructive)" />
                         </p>
+                        <AnimatePresence>
+                            {totalCreditCardExpense > 0 && (
+                                <motion.p
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 4 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex items-center gap-1 text-xs mt-1 truncate"
+                                    style={{ color: '#6366F1' }}
+                                >
+                                    <CreditCard className="w-3 h-3 shrink-0" />
+                                    <ResponsiveAmount amount={totalCreditCardExpense} currency="ARS" hidden={hidden} />
+                                    <span>con TC</span>
+                                </motion.p>
+                            )}
+                        </AnimatePresence>
                     </div>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--sky)' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Balance</p>
@@ -874,7 +894,12 @@ export default function TransactionsPage() {
                                     totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)',
                             }}
                         >
-                            {fmt(totalIncome - totalExpense, 'ARS')}
+                            <ResponsiveAmount
+                                amount={totalIncome - totalExpense}
+                                currency="ARS"
+                                hidden={hidden}
+                                color={totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                            />
                         </p>
                     </div>
                 </div>
@@ -925,7 +950,7 @@ export default function TransactionsPage() {
                 )}
             </div>
 
-            <div className="flex md:hidden items-center gap-2">
+            <div className="flex md:hidden items-center gap-2 w-full">
                 <button
                     type="button"
                     onClick={openFilterSheet}
@@ -961,6 +986,19 @@ export default function TransactionsPage() {
                         <X size={12} /> Limpiar
                     </button>
                 )}
+
+                <Link
+                    href="/transactions/import"
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
+                    style={{
+                        background: 'var(--secondary)',
+                        color: 'var(--muted-foreground)',
+                        border: '0.5px solid var(--border)',
+                    }}
+                >
+                    <Upload size={13} />
+                    Importar
+                </Link>
             </div>
 
             {total > 0 && (
@@ -1029,10 +1067,25 @@ export default function TransactionsPage() {
                                                                         ? '#10B981'
                                                                         : transaction.type === 'expense'
                                                                             ? 'var(--destructive)'
-                                                                            : 'var(--foreground)',
+                                                                            : transaction.type === 'credit_card_expense'
+                                                                                ? '#6366F1'
+                                                                                : 'var(--foreground)',
                                                             }}
                                                         >
-                                                            {fmt(transaction.amount, transaction.currency)}
+                                                            <ResponsiveAmount
+                                                                amount={transaction.amount}
+                                                                currency={transaction.currency}
+                                                                hidden={hidden}
+                                                                color={
+                                                                    transaction.type === 'income'
+                                                                        ? '#10B981'
+                                                                        : transaction.type === 'expense'
+                                                                            ? 'var(--destructive)'
+                                                                            : transaction.type === 'credit_card_expense'
+                                                                                ? '#6366F1'
+                                                                                : 'var(--foreground)'
+                                                                }
+                                                            />
                                                         </p>
                                                         <Button
                                                             variant="ghost"
@@ -1109,10 +1162,10 @@ export default function TransactionsPage() {
                                 </span>
                                                             )}
 
-                                                            {transaction.installmentPlanId && (
-                                                                <span className="text-xs" style={{ color: 'var(--sky)' }}>
-                                  · en cuotas
-                                </span>
+                                                            {transaction.type === 'credit_card_expense' && transaction.installmentPlanId && (
+                                                                <span className="text-xs font-medium" style={{ color: '#6366F1' }}>
+                                                                    · {((transaction.installmentPlanId as { installmentCount?: number } | null)?.installmentCount ?? 'N')} cuotas
+                                                                </span>
                                                             )}
                                                         </div>
                                                     </div>
@@ -1127,10 +1180,25 @@ export default function TransactionsPage() {
                                                                     ? '#10B981'
                                                                     : transaction.type === 'expense'
                                                                         ? 'var(--destructive)'
-                                                                        : 'var(--foreground)',
+                                                                        : transaction.type === 'credit_card_expense'
+                                                                            ? '#6366F1'
+                                                                            : 'var(--foreground)',
                                                         }}
                                                     >
-                                                        {fmt(transaction.amount, transaction.currency)}
+                                                        <ResponsiveAmount
+                                                            amount={transaction.amount}
+                                                            currency={transaction.currency}
+                                                            hidden={hidden}
+                                                            color={
+                                                                transaction.type === 'income'
+                                                                    ? '#10B981'
+                                                                    : transaction.type === 'expense'
+                                                                        ? 'var(--destructive)'
+                                                                        : transaction.type === 'credit_card_expense'
+                                                                            ? '#6366F1'
+                                                                            : 'var(--foreground)'
+                                                            }
+                                                        />
                                                     </p>
                                                     <div className="flex gap-1">
                                                         <Button
@@ -1198,16 +1266,10 @@ export default function TransactionsPage() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleTransactionSubmit}
+                onInstallmentSubmit={handleInstallmentSubmit}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
-            />
-
-            <InstallmentDialog
-                open={installmentDialogOpen}
-                onOpenChange={setInstallmentDialogOpen}
-                accounts={accounts}
-                categories={categories}
-                onSubmit={handleInstallmentSubmit}
+                monthStartDay={preferences.monthStartDay}
             />
 
             <AlertDialog open={Boolean(deleteId)} onOpenChange={(open) => !open && setDeleteId(null)}>

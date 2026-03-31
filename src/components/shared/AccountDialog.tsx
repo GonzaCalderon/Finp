@@ -134,12 +134,28 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                         <Input id="institution" placeholder="Ej: Galicia, Mercado Pago" {...register('institution')} />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="initialBalance">Saldo inicial</Label>
-                        <Input id="initialBalance" type="number" placeholder="0"
-                               {...register('initialBalance', { valueAsNumber: true })} />
-                        {errors.initialBalance && <p className="text-xs text-destructive">{errors.initialBalance.message}</p>}
-                    </div>
+                    {!account ? (
+                        <div className="space-y-2">
+                            <Label htmlFor="initialBalance">Saldo inicial</Label>
+                            <Input
+                                id="initialBalance"
+                                type="number"
+                                placeholder="0"
+                                {...register('initialBalance', { valueAsNumber: true })}
+                            />
+                            {errors.initialBalance && (
+                                <p className="text-xs text-destructive">{errors.initialBalance.message}</p>
+                            )}
+                        </div>
+                    ) : (
+                        <div
+                            className="rounded-lg px-3 py-2.5 text-xs text-muted-foreground"
+                            style={{ background: 'var(--secondary)', border: '0.5px solid var(--border)' }}
+                        >
+                            El saldo inicial no se puede modificar una vez creada la cuenta.
+                            Para corregir diferencias, registrá un <strong>ajuste</strong> desde Transacciones.
+                        </div>
+                    )}
 
                     <ColorPicker
                         label="Color de la cuenta"

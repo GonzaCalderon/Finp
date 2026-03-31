@@ -62,3 +62,9 @@ export function parseFinancialPeriod(
     const [year, month] = period.split('-').map(Number)
     return getFinancialMonthRange(year, month, monthStartDay)
 }
+
+export function shiftFinancialPeriod(period: string, offsetMonths: number): string {
+    const [year, month] = period.split('-').map(Number)
+    const shifted = new Date(year, month - 1 + offsetMonths, 1)
+    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`
+}

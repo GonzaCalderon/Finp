@@ -66,15 +66,6 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
     savings: 'Ahorro',
 }
 
-const TRANSACTION_TYPE_LABELS: Record<string, string> = {
-    income: 'Ingreso',
-    expense: 'Gasto',
-    transfer: 'Transferencia',
-    credit_card_payment: 'Pago tarjeta',
-    debt_payment: 'Pago deuda',
-    adjustment: 'Ajuste',
-}
-
 export function AccountDetailSheet({ open, onOpenChange, accountId }: AccountDetailSheetProps) {
     const [detail, setDetail] = useState<AccountDetail | null>(null)
     const [loading, setLoading] = useState(false)

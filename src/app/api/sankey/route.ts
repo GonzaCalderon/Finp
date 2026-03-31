@@ -1,7 +1,37 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Category } from '@/lib/models'
+import { Transaction, InstallmentPlan, User } from '@/lib/models'
+import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
+import { getCurrentFinancialPeriod, parseFinancialPeriod } from '@/lib/utils/period'
+
+type PopulatedCategoryRef = {
+    _id: { toString: () => string }
+    name: string
+    color?: string
+}
+
+function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
+    if (!value || typeof value !== 'object' || typeof (value as { name?: unknown }).name !== 'string') {
+        return null
+    }
+
+    const candidate = value as {
+        _id?: { toString?: () => string }
+        name: string
+        color?: unknown
+    }
+
+    if (!candidate._id || typeof candidate._id.toString !== 'function') {
+        return null
+    }
+
+    return {
+        _id: candidate._id as { toString: () => string },
+        name: candidate.name,
+        color: typeof candidate.color === 'string' ? candidate.color : undefined,
+    }
+}
 
 export async function GET(request: Request) {
     try {
@@ -11,27 +41,37 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url)
-        const months = parseInt(searchParams.get('months') ?? '1')
+        const monthParam = searchParams.get('month')
 
         await connectDB()
 
         const now = new Date()
-        const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1)
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
+        const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+        const month = monthParam ?? getCurrentFinancialPeriod(now, monthStartDay)
+        const { start, end } = parseFinancialPeriod(month, monthStartDay)
 
-        const transactions = await Transaction.find({
-            userId: session.user.id,
-            date: { $gte: start, $lt: end },
-            type: { $in: ['income', 'expense'] },
-            installmentPlanId: { $exists: false },
-        }).populate('categoryId', 'name color')
+        // ── Fetch data in parallel ─────────────────────────────────────────────
+        const [transactions, installmentPlans] = await Promise.all([
+            Transaction.find({
+                userId: session.user.id,
+                date: { $gte: start, $lt: end },
+            })
+                .populate('categoryId', 'name color')
+                .populate('sourceAccountId', 'name type color currency')
+                .populate('destinationAccountId', 'name type color currency'),
 
-        // Agrupar ingresos por categoría
+            InstallmentPlan.find({ userId: session.user.id })
+                .populate('accountId', 'name type color currency')
+                .populate('categoryId', 'name color'),
+        ])
+
+        // ── Process regular transactions ───────────────────────────────────────
         const incomeMap: Record<string, { name: string; amount: number; color: string }> = {}
         const expenseMap: Record<string, { name: string; amount: number; color: string }> = {}
 
         transactions.forEach((t) => {
-            const cat = t.categoryId as { _id: { toString: () => string }; name: string; color?: string } | null
+            const cat = getPopulatedCategoryRef(t.categoryId)
             const key = cat?._id?.toString() ?? 'sin-categoria'
             const name = cat?.name ?? 'Sin categoría'
             const color = cat?.color ?? '#9CA3AF'
@@ -39,11 +79,39 @@ export async function GET(request: Request) {
             if (t.type === 'income') {
                 if (!incomeMap[key]) incomeMap[key] = { name, amount: 0, color }
                 incomeMap[key].amount += t.amount
-            } else {
+            } else if (t.type === 'expense' && !t.installmentPlanId) {
                 if (!expenseMap[key]) expenseMap[key] = { name, amount: 0, color }
                 expenseMap[key].amount += t.amount
             }
         })
+
+        const creditCards = buildMonthlyCardPaymentSummary({
+            month,
+            monthStartDay,
+            plans: installmentPlans,
+            transactions,
+        }).map((card) => {
+            card.items.forEach((item) => {
+                const key = item.categoryName ?? 'sin-categoria'
+                if (!expenseMap[key]) {
+                    expenseMap[key] = {
+                        name: item.categoryName ?? 'Sin categoría',
+                        amount: 0,
+                        color: item.categoryColor ?? '#9CA3AF',
+                    }
+                }
+                expenseMap[key].amount += item.amount
+            })
+
+            return {
+                id: card.cardId,
+                name: card.cardName ?? 'Tarjeta',
+                color: card.cardColor ?? '#6366F1',
+                totalExpenses: card.due,
+                totalPaid: card.paid,
+                netOwed: card.pending,
+            }
+        }).filter((cc) => cc.totalExpenses > 0)
 
         const income = Object.values(incomeMap).sort((a, b) => b.amount - a.amount)
         const expenses = Object.values(expenseMap).sort((a, b) => b.amount - a.amount)
@@ -58,6 +126,7 @@ export async function GET(request: Request) {
             totalIncome,
             totalExpense,
             balance,
+            creditCards,
         })
     } catch (error) {
         console.error('Error en sankey:', error)

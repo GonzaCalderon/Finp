@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,7 @@ const getCurrentMonth = () => {
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => {
     const date = new Date()
+    date.setDate(1) // evita overflow (ej. 31 ene - 1 mes = 31 dic → se va a ene)
     date.setMonth(date.getMonth() - i)
     const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
     const label = date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
@@ -65,7 +66,7 @@ interface DashboardData {
         expense: number | null
         balance: number | null
     }
-    expenseByCategory: { name: string; color?: string; total: number }[]
+    expenseByCategory: { key: string; name: string; color?: string; total: number }[]
     accounts: {
         _id: string
         name: string
@@ -172,6 +173,7 @@ export default function DashboardPage() {
     const [applyDialogOpen, setApplyDialogOpen] = useState(false)
     const [selectedCommitment, setSelectedCommitment] = useState<CommitmentItem | null>(null)
     const [appliedId, setAppliedId] = useState<string | null>(null)
+    const hasLoadedOnce = useRef(false)
 
     const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
@@ -179,7 +181,7 @@ export default function DashboardPage() {
 
     usePageTitle('Dashboard')
 
-    const fetchDashboard = async (isRefresh = false) => {
+    const fetchDashboard = useCallback(async (isRefresh = false) => {
         try {
             if (isRefresh) setRefreshing(true)
             else setLoading(true)
@@ -193,11 +195,12 @@ export default function DashboardPage() {
             setLoading(false)
             setRefreshing(false)
         }
-    }
+    }, [month])
 
     useEffect(() => {
-        fetchDashboard(data !== null)
-    }, [month])
+        fetchDashboard(hasLoadedOnce.current)
+        hasLoadedOnce.current = true
+    }, [fetchDashboard])
 
     const handleApplyCommitment = (commitment: CommitmentItem) => {
         setSelectedCommitment(commitment)
@@ -412,7 +415,7 @@ export default function DashboardPage() {
                     </motion.div>
 
                     {/* Sankey */}
-                    <SankeyChart />
+                    <SankeyChart month={month} />
 
                     {/* Grid principal */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -491,7 +494,7 @@ export default function DashboardPage() {
 
                                         return (
                                             <div
-                                                key={cat.name}
+                                                key={cat.key}
                                                 className="py-2 border-b last:border-0"
                                                 style={{ borderColor: 'var(--border)' }}
                                             >

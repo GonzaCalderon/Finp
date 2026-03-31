@@ -39,9 +39,11 @@ function DialogContent({
                            className,
                            children,
                            showCloseButton = true,
+                           variant = 'default',
                            ...props
                        }: React.ComponentProps<typeof DialogPrimitive.Content> & {
     showCloseButton?: boolean
+    variant?: 'default' | 'fullscreen-mobile'
 }) {
     return (
         <DialogPortal>
@@ -50,7 +52,18 @@ function DialogContent({
                 data-slot="dialog-content"
                 onInteractOutside={(e) => e.preventDefault()}
                 className={cn(
-                    "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-background p-4 text-sm ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200",
+                    variant === 'fullscreen-mobile'
+                        ? [
+                            // Mobile: true fullscreen (base styles, no translate/center)
+                            "fixed inset-0 z-50 flex flex-col w-full h-[100dvh] bg-background text-sm outline-none",
+                            "ring-1 ring-foreground/10",
+                            // Desktop: centered modal
+                            "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:w-full sm:rounded-xl",
+                            // Animations
+                            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-200",
+                            "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95",
+                          ]
+                        : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-background p-4 text-sm ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200",
                     className
                 )}
                 {...props}

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, Account, User, TransactionRule } from '@/lib/models'
@@ -6,6 +7,7 @@ import { transactionSchema } from '@/lib/validations'
 import { calculateAccountBalance } from '@/lib/utils/balance'
 import { parseFinancialPeriod } from '@/lib/utils/period'
 import { evaluateRules } from '@/lib/utils/rules'
+import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 
 const PAGE_LIMIT = 30
 
@@ -19,13 +21,15 @@ export async function GET(request: Request) {
         const type = searchParams.get('type')
         const categoryId = searchParams.get('categoryId')
         const accountId = searchParams.get('accountId')
+        const noInstallmentPlan = searchParams.get('noInstallmentPlan') === 'true'
         const sort = searchParams.get('sort') ?? 'date_desc'
         const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
         const limit = parseInt(searchParams.get('limit') ?? String(PAGE_LIMIT), 10)
 
         await connectDB()
 
-        const filter: Record<string, unknown> = { userId: session.user.id }
+        // ── Base filter (shared by list and summary) ──────────────────────────
+        const baseFilter: Record<string, unknown> = { userId: session.user.id }
 
         if (month) {
             const [year, m] = month.split('-').map(Number)
@@ -33,14 +37,51 @@ export async function GET(request: Request) {
                 const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
                 const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
                 const { start, end } = parseFinancialPeriod(month, monthStartDay)
-                filter.date = { $gte: start, $lt: end }
+                baseFilter.date = { $gte: start, $lt: end }
             }
         }
 
-        if (type) filter.type = type
+        // ── Summary: computed from full month, no user-applied filters ────────
+        const summaryFilter = {
+            ...baseFilter,
+            userId: new Types.ObjectId(session.user.id),
+        }
+        const [incomeAgg, expenseAgg, ccExpenseAgg] = await Promise.all([
+            Transaction.aggregate([
+                { $match: { ...summaryFilter, type: 'income' } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+            Transaction.aggregate([
+                { $match: { ...summaryFilter, type: 'expense' } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+            Transaction.aggregate([
+                { $match: { ...summaryFilter, type: 'credit_card_expense' } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+        ])
+
+        const summary = {
+            income: incomeAgg[0]?.total ?? 0,
+            expense: expenseAgg[0]?.total ?? 0,
+            creditCardExpense: ccExpenseAgg[0]?.total ?? 0,
+        }
+
+        // ── List filter: base + user-applied filters ───────────────────────────
+        const filter: Record<string, unknown> = { ...baseFilter }
+
+        if (type) {
+            const normalizedType = normalizeLegacyTransactionType(type)
+            filter.type = normalizedType === 'credit_card_payment'
+                ? { $in: [...CREDIT_CARD_PAYMENT_TYPES] }
+                : normalizedType
+        }
         if (categoryId) filter.categoryId = categoryId
         if (accountId) {
             filter.$or = [{ sourceAccountId: accountId }, { destinationAccountId: accountId }]
+        }
+        if (noInstallmentPlan) {
+            filter.installmentPlanId = { $exists: false }
         }
 
         const sortMap: Record<string, Record<string, 1 | -1>> = {
@@ -62,6 +103,7 @@ export async function GET(request: Request) {
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency color')
             .populate('destinationAccountId', 'name type currency color')
+            .populate('installmentPlanId', 'installmentCount')
 
         return NextResponse.json({
             transactions,
@@ -69,6 +111,7 @@ export async function GET(request: Request) {
             page,
             limit,
             hasMore: skip + transactions.length < total,
+            summary,
         })
     } catch (error) {
         console.error('Error al obtener transacciones:', error)
@@ -93,7 +136,10 @@ export async function POST(request: Request) {
 
         await connectDB()
 
-        const data = parsed.data
+        const data = {
+            ...parsed.data,
+            type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
+        }
 
         // Validar saldo si la cuenta no permite saldo negativo
         if (data.sourceAccountId) {
@@ -124,20 +170,21 @@ export async function POST(request: Request) {
             }
         }
 
-        // Evaluate categorization rules (only for expense/income)
+        // Evaluate categorization rules (for expense, income, and credit_card_expense)
         let resolvedCategoryId = data.categoryId
         let resolvedMerchant = data.merchant
         let appliedRuleId: string | undefined
         let appliedRuleNameSnapshot: string | undefined
 
-        if (data.type === 'expense' || data.type === 'income') {
+        if (data.type === 'expense' || data.type === 'income' || data.type === 'credit_card_expense') {
+            const ruleType = data.type === 'credit_card_expense' ? 'expense' : data.type
             const rules = await TransactionRule.find({
                 userId: session.user.id,
                 isActive: true,
             }).sort({ priority: -1 })
 
             const { matched, rule } = evaluateRules(rules, {
-                type: data.type,
+                type: ruleType,
                 description: data.description,
                 merchant: data.merchant,
             })
@@ -145,7 +192,6 @@ export async function POST(request: Request) {
             if (matched && rule) {
                 appliedRuleId = rule._id.toString()
                 appliedRuleNameSnapshot = rule.name
-                // Apply rule actions only when user hasn't provided those values
                 if (!resolvedCategoryId && rule.categoryId) {
                     resolvedCategoryId = rule.categoryId.toString()
                 }

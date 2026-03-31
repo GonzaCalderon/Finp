@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account } from '@/lib/models'
+import { Transaction, Account, InstallmentPlan } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
 import { calculateAccountBalance } from '@/lib/utils/balance'
+import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 
 export async function GET(
     request: Request,
@@ -27,6 +28,7 @@ export async function GET(
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency')
             .populate('destinationAccountId', 'name type currency')
+            .populate('installmentPlanId', 'installmentCount')
 
         if (!transaction) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
@@ -67,7 +69,10 @@ export async function PATCH(
 
         await connectDB()
 
-        const data = parsed.data
+        const data = {
+            ...parsed.data,
+            type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
+        }
 
         // Validar saldo si la cuenta destino del débito no permite saldo negativo
         if (data.sourceAccountId) {
@@ -105,6 +110,11 @@ export async function PATCH(
             }
         }
 
+        const existingTransaction = await Transaction.findOne({
+            _id: id,
+            userId: session.user.id,
+        })
+
         const transaction = await Transaction.findOneAndUpdate(
             {
                 _id: id,
@@ -131,9 +141,39 @@ export async function PATCH(
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency')
             .populate('destinationAccountId', 'name type currency')
+            .populate('installmentPlanId', 'installmentCount')
 
         if (!transaction) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
+        }
+
+        if (existingTransaction?.installmentPlanId) {
+            const currentPlan = await InstallmentPlan.findOne({
+                _id: existingTransaction.installmentPlanId,
+                userId: session.user.id,
+            })
+
+            if (currentPlan) {
+                const installmentAmount = data.amount / currentPlan.installmentCount
+                await InstallmentPlan.updateOne(
+                    {
+                        _id: currentPlan._id,
+                        userId: session.user.id,
+                    },
+                    {
+                        $set: {
+                            accountId: data.sourceAccountId,
+                            categoryId: data.categoryId,
+                            description: data.description,
+                            merchant: data.merchant,
+                            currency: data.currency,
+                            totalAmount: data.amount,
+                            installmentAmount,
+                            purchaseDate: data.date,
+                        },
+                    }
+                )
+            }
         }
 
         return NextResponse.json({ transaction })

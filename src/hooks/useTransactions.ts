@@ -7,12 +7,26 @@ interface TransactionFilters {
     type?: string
     categoryId?: string
     accountId?: string
+    noInstallmentPlan?: boolean
     sort?: string
     limit?: number
 }
 
+export interface TransactionSummary {
+    income: number
+    expense: number
+    creditCardExpense: number
+}
+
+const DEFAULT_SUMMARY: TransactionSummary = {
+    income: 0,
+    expense: 0,
+    creditCardExpense: 0,
+}
+
 export function useTransactions(filters: TransactionFilters = {}) {
     const [transactions, setTransactions] = useState<ITransaction[]>([])
+    const [summary, setSummary] = useState<TransactionSummary>(DEFAULT_SUMMARY)
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [loadingMore, setLoadingMore] = useState(false)
@@ -29,6 +43,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
         if (f.type) params.set('type', f.type)
         if (f.categoryId) params.set('categoryId', f.categoryId)
         if (f.accountId) params.set('accountId', f.accountId)
+        if (f.noInstallmentPlan) params.set('noInstallmentPlan', 'true')
         if (f.sort) params.set('sort', f.sort)
         params.set('page', String(p))
         params.set('limit', String(PAGE_LIMIT))
@@ -51,6 +66,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
             setHasMore(data.hasMore)
             setTotal(data.total)
             setPage(1)
+            if (data.summary) setSummary(data.summary)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar transacciones')
         } finally {
@@ -58,7 +74,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
             setRefreshing(false)
             isFirstLoad.current = false
         }
-    }, [filters.month, filters.type, filters.categoryId, filters.accountId, filters.sort])
+    }, [filters.month, filters.type, filters.categoryId, filters.accountId, filters.sort, filters.noInstallmentPlan])
 
     const loadMore = async () => {
         if (!hasMore || loadingMore) return
@@ -113,10 +129,11 @@ export function useTransactions(filters: TransactionFilters = {}) {
     useEffect(() => {
         isFirstLoad.current = true
         fetchTransactions()
-    }, [filters.month, filters.type, filters.categoryId, filters.accountId, filters.sort])
+    }, [filters.month, filters.type, filters.categoryId, filters.accountId, filters.sort, filters.noInstallmentPlan])
 
     return {
         transactions,
+        summary,
         loading,
         refreshing,
         loadingMore,
