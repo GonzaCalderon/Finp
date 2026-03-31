@@ -106,15 +106,33 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactN
 
 // ─── Month/installment helpers ────────────────────────────────────────────────
 
-function getMonthOptions(): { value: string; label: string }[] {
+function formatMonthValue(date: Date): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function getMonthOptions(anchorDate?: Date, selectedValue?: string): { value: string; label: string }[] {
     const options: { value: string; label: string }[] = []
-    const now = new Date()
-    for (let i = 0; i < 24; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
-        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const baseDate = anchorDate ?? new Date()
+    const start = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
+
+    for (let i = 0; i < 3; i++) {
+        const d = new Date(start.getFullYear(), start.getMonth() + i, 1)
+        const value = formatMonthValue(d)
         const label = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
         options.push({ value, label })
     }
+
+    if (selectedValue && !options.some((option) => option.value === selectedValue)) {
+        const [year, month] = selectedValue.split('-').map(Number)
+        if (!Number.isNaN(year) && !Number.isNaN(month)) {
+            const selectedDate = new Date(year, month - 1, 1)
+            options.unshift({
+                value: selectedValue,
+                label: selectedDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }),
+            })
+        }
+    }
+
     return options
 }
 
@@ -195,6 +213,7 @@ export function TransactionDialog({
     const [installmentCount, setInstallmentCount] = useState(1)
     const [firstClosingMonth, setFirstClosingMonth] = useState('')
     const [firstMonthError, setFirstMonthError] = useState<string | null>(null)
+    const [installmentQuoteAmount, setInstallmentQuoteAmount] = useState(0)
     const [paymentSummary, setPaymentSummary] = useState<{
         due: number
         paid: number
@@ -212,8 +231,6 @@ export function TransactionDialog({
     const scrollRef = useRef<HTMLDivElement>(null)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
-    const monthOptions = useMemo(() => getMonthOptions(), [])
-
     // ─── Watched values ───────────────────────────────────────────────────────
 
     const watchedValues = watch()
@@ -228,6 +245,8 @@ export function TransactionDialog({
     const merchant = typeof watchedValues.merchant === 'string' ? watchedValues.merchant : ''
     const notes = typeof watchedValues.notes === 'string' ? watchedValues.notes : ''
 
+    const monthOptions = useMemo(() => getMonthOptions(date, firstClosingMonth), [date, firstClosingMonth])
+
     // ─── Derived flags ────────────────────────────────────────────────────────
 
     const isEditing = Boolean(transaction)
@@ -238,8 +257,9 @@ export function TransactionDialog({
     // Payment method section for all expenses (new and editing)
     const showPaymentMethod = isExpense
     const isCardExpense = isExpense && paymentMethod === 'credit_card'
-    // Installment mode: credit card expense with >1 cuota on a NEW transaction
-    const isInstallmentMode = isCardExpense && installmentCount > 1 && !isEditing && Boolean(onInstallmentSubmit)
+    // New credit card expenses should always preserve first closing month,
+    // even when they are a single installment.
+    const usesCardExpensePlanFlow = isCardExpense && !isEditing && Boolean(onInstallmentSubmit)
 
     const showSource = ['expense', 'credit_card_expense', 'transfer', 'exchange', 'credit_card_payment', 'adjustment'].includes(type)
     const showDestination = ['income', 'transfer', 'exchange', 'credit_card_payment'].includes(type)
@@ -358,6 +378,7 @@ export function TransactionDialog({
         setAppliedRuleName(null)
         setFirstMonthError(null)
         setFirstClosingMonth('')
+        setInstallmentQuoteAmount(0)
         setAdditionalCardPaymentEnabled(false)
         setSecondaryCardPaymentAmount(0)
         setExchangeDestinationAmount(0)
@@ -426,6 +447,7 @@ export function TransactionDialog({
         })
         setShowMoreOptions(false)
         setInstallmentCount(1)
+        setInstallmentQuoteAmount(0)
         setAdjustmentSign('+')
 
         // Auto-detectar medio de pago según el tipo de cuenta por defecto
@@ -613,7 +635,7 @@ export function TransactionDialog({
         // Auto-suggest first closing month for credit card when user picks a date
         if (isCardExpense && !firstClosingMonth) {
             const next = new Date(selected.getFullYear(), selected.getMonth() + 1, 1)
-            const val = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
+            const val = formatMonthValue(next)
             if (monthOptions.some(m => m.value === val)) setFirstClosingMonth(val)
         }
     }
@@ -624,11 +646,12 @@ export function TransactionDialog({
             setInstallmentCount(1)
             setFirstClosingMonth('')
             setFirstMonthError(null)
+            setInstallmentQuoteAmount(0)
         }
     }
 
     const handleFormSubmit = async (data: TransactionFormData) => {
-        if (isInstallmentMode && onInstallmentSubmit) {
+        if (usesCardExpensePlanFlow && onInstallmentSubmit) {
             if (!firstClosingMonth) {
                 setFirstMonthError('El mes de primera cuota es requerido')
                 return
@@ -706,6 +729,14 @@ export function TransactionDialog({
             maximumFractionDigits: 2,
         }).format(n)
 
+    const handleApplyInstallmentQuoteAmount = () => {
+        if (installmentCount <= 1 || installmentQuoteAmount <= 0) return
+        setValue('amount', Number((installmentQuoteAmount * installmentCount).toFixed(2)), {
+            shouldValidate: true,
+            shouldDirty: true,
+        })
+    }
+
     // ─── Render ───────────────────────────────────────────────────────────────
 
     return (
@@ -718,8 +749,10 @@ export function TransactionDialog({
                         <DialogTitle>
                             {transaction
                             ? `Editar · ${TRANSACTION_TYPE_LABELS[(normalizeLegacyTransactionType(transaction.type) ?? transaction.type) as TransactionFormInput['type']] ?? 'Transacción'}`
-                            : isInstallmentMode
-                                ? 'Gasto en cuotas'
+                            : usesCardExpensePlanFlow
+                                ? installmentCount > 1
+                                    ? 'Gasto en cuotas'
+                                    : 'Gasto con tarjeta'
                                 : 'Nueva transacción'}
                     </DialogTitle>
                 </DialogHeader>
@@ -1178,41 +1211,42 @@ export function TransactionDialog({
                                         </div>
 
                                         {/* Cuotas stepper + Primera cuota */}
-                                        {!isEditing && <div className="grid grid-cols-2 gap-3 items-start">
-                                            <div className="space-y-2">
-                                                <Label>Cuotas</Label>
-                                                <div className="flex items-center gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setInstallmentCount(c => Math.max(1, c - 1))}
-                                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
-                                                        style={{ borderColor: 'var(--border)' }}
-                                                        aria-label="Reducir cuotas"
-                                                    >
-                                                        <Minus className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <Input
-                                                        type="number"
-                                                        min={1}
-                                                        value={installmentCount}
-                                                        onChange={e =>
-                                                            setInstallmentCount(Math.max(1, parseInt(e.target.value) || 1))
-                                                        }
-                                                        className="text-center"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setInstallmentCount(c => c + 1)}
-                                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
-                                                        style={{ borderColor: 'var(--border)' }}
-                                                        aria-label="Aumentar cuotas"
-                                                    >
-                                                        <Plus className="w-3.5 h-3.5" />
-                                                    </button>
+                                        {!isEditing && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                                                <div className="space-y-2">
+                                                    <Label>Cuotas</Label>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setInstallmentCount(c => Math.max(1, c - 1))}
+                                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
+                                                            style={{ borderColor: 'var(--border)' }}
+                                                            aria-label="Reducir cuotas"
+                                                        >
+                                                            <Minus className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <Input
+                                                            type="number"
+                                                            min={1}
+                                                            value={installmentCount}
+                                                            onChange={e =>
+                                                                setInstallmentCount(Math.max(1, parseInt(e.target.value) || 1))
+                                                            }
+                                                            className="text-center"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setInstallmentCount(c => c + 1)}
+                                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
+                                                            style={{ borderColor: 'var(--border)' }}
+                                                            aria-label="Aumentar cuotas"
+                                                        >
+                                                            <Plus className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                                    <div className="space-y-2">
+                                                <div className="space-y-2">
                                                     <Label>Primera cuota</Label>
                                                     <Select
                                                         value={firstClosingMonth}
@@ -1242,7 +1276,31 @@ export function TransactionDialog({
                                                         <p className="text-sm text-destructive">{firstMonthError}</p>
                                                     )}
                                                 </div>
-                                        </div>}
+                                            </div>
+                                        )}
+
+                                        {!isEditing && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end">
+                                                <FormattedAmountInput
+                                                    id="installmentQuoteAmount"
+                                                    label="Valor de cuota"
+                                                    value={installmentQuoteAmount}
+                                                    currency={currency}
+                                                    placeholder="Ej. valor del resumen"
+                                                    onValueChangeAction={setInstallmentQuoteAmount}
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    className="gap-2"
+                                                    onClick={handleApplyInstallmentQuoteAmount}
+                                                    disabled={installmentQuoteAmount <= 0}
+                                                >
+                                                    <Wand2 className="w-4 h-4" />
+                                                    {installmentCount > 1 ? 'Calcular total' : 'Usar como monto'}
+                                                </Button>
+                                            </div>
+                                        )}
 
                                         {/* Plan de cuotas preview */}
                                         {!isEditing && installmentAmount > 0 && (
@@ -1687,8 +1745,8 @@ export function TransactionDialog({
                                 </>
                             ) : transaction ? (
                                 'Guardar cambios'
-                            ) : isInstallmentMode ? (
-                                'Registrar en cuotas'
+                            ) : usesCardExpensePlanFlow ? (
+                                installmentCount > 1 ? 'Registrar en cuotas' : 'Registrar gasto con TC'
                             ) : (
                                 'Crear transacción'
                             )}

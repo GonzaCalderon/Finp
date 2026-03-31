@@ -886,9 +886,6 @@ export default function TransactionsPage() {
                             Importar
                         </Link>
                     </Button>
-                    <Button size="sm" className="hidden sm:flex" onClick={handleNewTransaction} data-testid="btn-nueva-transaccion">
-                        + Nueva
-                    </Button>
                 </div>
             </div>
 

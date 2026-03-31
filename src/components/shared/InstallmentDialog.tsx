@@ -47,20 +47,36 @@ interface InstallmentDialogProps {
   plan?: EditableInstallmentPlan | null
 }
 
-const INSTALLMENT_OPTIONS = [2, 3, 6, 9, 12, 18, 24]
+const INSTALLMENT_OPTIONS = [1, 2, 3, 6, 9, 12, 18, 24]
 
-function getMonthOptions() {
+function formatMonthValue(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function getMonthOptions(anchorDate?: Date, selectedValue?: string) {
   const options: { value: string; label: string }[] = []
-  const now = new Date()
+  const baseDate = anchorDate ?? new Date()
+  const start = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
 
-  for (let i = 0; i < 24; i++) {
-    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  for (let i = 0; i < 3; i++) {
+    const date = new Date(start.getFullYear(), start.getMonth() + i, 1)
+    const value = formatMonthValue(date)
     const label = date.toLocaleDateString('es-AR', {
       month: 'long',
       year: 'numeric',
     })
     options.push({ value, label })
+  }
+
+  if (selectedValue && !options.some((option) => option.value === selectedValue)) {
+    const [year, month] = selectedValue.split('-').map(Number)
+    if (!Number.isNaN(year) && !Number.isNaN(month)) {
+      const selectedDate = new Date(year, month - 1, 1)
+      options.unshift({
+        value: selectedValue,
+        label: selectedDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }),
+      })
+    }
   }
 
   return options
@@ -108,7 +124,6 @@ export function InstallmentDialog({
   onSubmit,
   plan = null,
 }: InstallmentDialogProps) {
-  const monthOptions = useMemo(() => getMonthOptions(), [])
   const creditCards = accounts.filter((account) => account.type === 'credit_card')
   const expenseCategories = categories.filter((category) => category.type === 'expense')
   const [showMoreOptions, setShowMoreOptions] = useState(false)
@@ -160,6 +175,11 @@ export function InstallmentDialog({
 
   const firstClosingMonth =
     typeof watchedValues.firstClosingMonth === 'string' ? watchedValues.firstClosingMonth : ''
+
+  const monthOptions = useMemo(
+    () => getMonthOptions(purchaseDate, firstClosingMonth),
+    [purchaseDate, firstClosingMonth]
+  )
 
   const description =
     typeof watchedValues.description === 'string' ? watchedValues.description : ''
@@ -231,7 +251,7 @@ export function InstallmentDialog({
     // Auto-sugerir mes de primera cuota si no fue elegido aún
     if (!firstClosingMonth) {
       const next = new Date(date.getFullYear(), date.getMonth() + 1, 1)
-      const value = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
+      const value = formatMonthValue(next)
       if (monthOptions.some((m) => m.value === value)) {
         setValue('firstClosingMonth', value, { shouldValidate: true })
       }
