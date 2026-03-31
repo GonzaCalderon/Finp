@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Transaction, InstallmentPlan } from '@/lib/models'
-import { calculateAccountBalance } from '@/lib/utils/balance'
+import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
+import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
 
 export async function GET(
     request: Request,
@@ -23,10 +24,22 @@ export async function GET(
         }
 
         // Calcular saldo actual usando la función compartida (fuente única de verdad)
-        const balance = await calculateAccountBalance(
+        const supportedCurrencies = normalizeSupportedCurrencies(
+            account.supportedCurrencies,
+            account.currency,
+            account.type
+        )
+        const primaryCurrency = getPrimaryCurrency({
+            type: account.type,
+            currency: account.currency,
+            supportedCurrencies,
+        })
+        const balancesByCurrency = await calculateAccountBalancesByCurrency(
             account._id,
             account.userId,
-            account.initialBalance ?? 0
+            {
+                initialBalances: getInitialBalancesByCurrency(account),
+            }
         )
 
         // Últimas 10 transacciones de esta cuenta
@@ -45,8 +58,6 @@ export async function GET(
         let activeInstallments: object[] = []
         if (account.type === 'credit_card') {
             const now = new Date()
-            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
             const plans = await InstallmentPlan.find({
                 userId: session.user.id,
                 accountId: account._id,
@@ -89,7 +100,11 @@ export async function GET(
         return NextResponse.json({
             account: {
                 ...account.toObject(),
-                balance,
+                currency: primaryCurrency,
+                supportedCurrencies,
+                initialBalances: getInitialBalancesByCurrency(account),
+                balancesByCurrency,
+                balance: balancesByCurrency[primaryCurrency],
             },
             recentTransactions,
             activeInstallments,

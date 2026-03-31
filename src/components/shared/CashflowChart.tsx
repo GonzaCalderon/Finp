@@ -16,9 +16,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 interface CashflowData {
     month: string
     label: string
-    income: number
-    expense: number
-    balance: number
+    income: { ars: number; usd: number }
+    expense: { ars: number; usd: number }
+    balance: { ars: number; usd: number }
 }
 
 const MONTH_OPTIONS = [
@@ -28,18 +28,19 @@ const MONTH_OPTIONS = [
     { value: 12, label: '12M' },
 ]
 
-const fmt = (amount: number) =>
+const fmt = (amount: number, currency: 'ARS' | 'USD') =>
     new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: 'ARS',
+        currency,
         maximumFractionDigits: 0,
         notation: 'compact',
     }).format(amount)
 
-const CustomTooltip = ({ active, payload, label }: {
+const CustomTooltip = ({ active, payload, label, currency }: {
     active?: boolean
     payload?: { value: number; name: string; color: string }[]
     label?: string
+    currency: 'ARS' | 'USD'
 }) => {
     if (!active || !payload?.length) return null
 
@@ -62,7 +63,7 @@ const CustomTooltip = ({ active, payload, label }: {
                     <span className="font-medium tabular-nums">
             {new Intl.NumberFormat('es-AR', {
                 style: 'currency',
-                currency: 'ARS',
+                currency,
                 maximumFractionDigits: 0,
             }).format(entry.value)}
           </span>
@@ -86,7 +87,7 @@ const CustomTooltip = ({ active, payload, label }: {
                         >
               {new Intl.NumberFormat('es-AR', {
                   style: 'currency',
-                  currency: 'ARS',
+                  currency,
                   maximumFractionDigits: 0,
               }).format(payload[0].value - payload[1].value)}
             </span>
@@ -100,6 +101,7 @@ const CustomTooltip = ({ active, payload, label }: {
 export function CashflowChart() {
     const [months, setMonths] = useState(6)
     const [data, setData] = useState<CashflowData[]>([])
+    const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS')
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -123,27 +125,46 @@ export function CashflowChart() {
         >
             {/* Header */}
             <div className="flex items-center justify-between mb-5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Cashflow
-                </p>
-                <div
-                    className="flex rounded-md overflow-hidden"
-                    style={{ border: '0.5px solid var(--border)' }}
-                >
-                    {MONTH_OPTIONS.map((opt) => (
-                        <button
-                            key={opt.value}
-                            onClick={() => setMonths(opt.value)}
-                            className="px-3 py-1 text-xs transition-colors"
-                            style={{
-                                background: months === opt.value ? 'var(--sky)' : 'transparent',
-                                color: months === opt.value ? '#FFFFFF' : 'var(--muted-foreground)',
-                                borderRight: opt.value !== 12 ? '0.5px solid var(--border)' : 'none',
-                            }}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cashflow</p>
+                <div className="flex items-center gap-2">
+                    <div
+                        className="flex rounded-md overflow-hidden"
+                        style={{ border: '0.5px solid var(--border)' }}
+                    >
+                        {(['ARS', 'USD'] as const).map((option) => (
+                            <button
+                                key={option}
+                                onClick={() => setCurrency(option)}
+                                className="px-3 py-1 text-xs transition-colors"
+                                style={{
+                                    background: currency === option ? 'var(--sky)' : 'transparent',
+                                    color: currency === option ? '#FFFFFF' : 'var(--muted-foreground)',
+                                    borderRight: option === 'ARS' ? '0.5px solid var(--border)' : 'none',
+                                }}
+                            >
+                                {option}
+                            </button>
+                        ))}
+                    </div>
+                    <div
+                        className="flex rounded-md overflow-hidden"
+                        style={{ border: '0.5px solid var(--border)' }}
+                    >
+                        {MONTH_OPTIONS.map((opt) => (
+                            <button
+                                key={opt.value}
+                                onClick={() => setMonths(opt.value)}
+                                className="px-3 py-1 text-xs transition-colors"
+                                style={{
+                                    background: months === opt.value ? 'var(--sky)' : 'transparent',
+                                    color: months === opt.value ? '#FFFFFF' : 'var(--muted-foreground)',
+                                    borderRight: opt.value !== 12 ? '0.5px solid var(--border)' : 'none',
+                                }}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -154,7 +175,11 @@ export function CashflowChart() {
                 <div className="[&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none [&_*:focus]:outline-none">
                 <ResponsiveContainer width="100%" height={200}>
                     <BarChart
-                        data={data}
+                        data={data.map((item) => ({
+                            ...item,
+                            incomeValue: currency === 'ARS' ? item.income.ars : item.income.usd,
+                            expenseValue: currency === 'ARS' ? item.expense.ars : item.expense.usd,
+                        }))}
                         barGap={4}
                         barCategoryGap="30%"
                         margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
@@ -174,11 +199,11 @@ export function CashflowChart() {
                             axisLine={false}
                             tickLine={false}
                             tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                            tickFormatter={fmt}
+                            tickFormatter={(value) => fmt(value, currency)}
                             width={60}
                         />
                         <Tooltip
-                            content={<CustomTooltip />}
+                            content={<CustomTooltip currency={currency} />}
                             cursor={{ fill: 'var(--muted)', opacity: 0.3 }}
                         />
                         <Legend
@@ -188,12 +213,12 @@ export function CashflowChart() {
                             formatter={(value) => value === 'income' ? 'Ingresos' : 'Gastos'}
                         />
                         <Bar
-                            dataKey="income"
+                            dataKey="incomeValue"
                             fill="var(--sky)"
                             radius={[3, 3, 0, 0]}
                         />
                         <Bar
-                            dataKey="expense"
+                            dataKey="expenseValue"
                             fill="#EF4444"
                             radius={[3, 3, 0, 0]}
                             opacity={0.8}

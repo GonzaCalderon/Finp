@@ -50,6 +50,7 @@ import {
     typeRequiresDestinationAccount,
     typeSupportsCategory,
 } from '@/lib/utils/import-transactions'
+import { getAccountCurrencyLabel } from '@/lib/utils/accounts'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ const TYPE_ORDER = [
     'income',
     'expense',
     'credit_card_expense',
+    'exchange',
     'transfer',
     'adjustment',
     'credit_card_payment',
@@ -70,6 +72,7 @@ const TYPE_META: Record<string, { label: string; color: string; icon: React.Elem
     income: { label: 'Ingresos', color: '#16a34a', icon: TrendingUp },
     expense: { label: 'Gastos', color: '#dc2626', icon: TrendingDown },
     credit_card_expense: { label: 'Gastos con TC', color: '#0284c7', icon: CreditCard },
+    exchange: { label: 'Cambios', color: '#0f766e', icon: ArrowLeftRight },
     transfer: { label: 'Transferencias', color: '#7c3aed', icon: ArrowLeftRight },
     adjustment: { label: 'Ajustes', color: '#d97706', icon: SlidersHorizontal },
     credit_card_payment: { label: 'Pago de tarjeta', color: '#ea580c', icon: Banknote },
@@ -112,6 +115,17 @@ const COLUMNS_BY_TYPE: Record<string, ColDef[]> = {
         { key: 'categoryId', header: 'Categoría', width: 'min-w-36' },
         { key: 'installmentCount', header: 'Cuotas', width: 'w-16' },
         { key: 'firstClosingMonth', header: '1ª cuota', width: 'min-w-32' },
+    ],
+    exchange: [
+        { key: 'date', header: 'Fecha', width: 'w-24' },
+        { key: 'description', header: 'Descripción', width: 'min-w-40' },
+        { key: 'amount', header: 'Monto origen', width: 'w-28' },
+        { key: 'currency', header: 'Mon. origen', width: 'w-18' },
+        { key: 'sourceAccount', header: 'Cta. origen', width: 'min-w-40' },
+        { key: 'destinationAccount', header: 'Cta. destino', width: 'min-w-40' },
+        { key: 'destinationAmount', header: 'Monto destino', width: 'w-28' },
+        { key: 'destinationCurrency', header: 'Mon. destino', width: 'w-18' },
+        { key: 'exchangeRate', header: 'Cotización', width: 'w-24' },
     ],
     transfer: [
         { key: 'date', header: 'Fecha', width: 'w-24' },
@@ -214,6 +228,12 @@ function getDisplayValue(key: string, data: ImportParsedData, accounts: IAccount
             return data.description ?? '—'
         case 'amount':
             return formatAmount(data.amount, data.currency)
+        case 'destinationAmount':
+            return formatAmount(data.destinationAmount, data.destinationCurrency)
+        case 'destinationCurrency':
+            return data.destinationCurrency ?? '—'
+        case 'exchangeRate':
+            return data.exchangeRate ? data.exchangeRate.toLocaleString('es-AR', { maximumFractionDigits: 4 }) : '—'
         case 'currency':
             return data.currency ?? '—'
         case 'sourceAccount':
@@ -241,6 +261,14 @@ function applyTypeChange(currentData: ImportParsedData, newType: string | undefi
     if (!typeRequiresDestinationAccount(newType)) {
         updates.destinationAccountId = undefined
         updates.destinationAccountName = undefined
+    }
+    if (newType !== 'exchange') {
+        updates.destinationAmount = undefined
+        updates.destinationCurrency = undefined
+        updates.exchangeRate = undefined
+    } else {
+        updates.destinationCurrency = currentData.destinationCurrency
+            ?? (currentData.currency === 'USD' ? 'ARS' : 'USD')
     }
     if (newType !== 'credit_card_expense') {
         updates.installmentCount = undefined
@@ -549,6 +577,23 @@ function FieldCell({
                 />
             )
 
+        case 'destinationAmount':
+            return (
+                <Input
+                    type="number"
+                    step="0.01"
+                    className={cn(inputClass, 'text-right')}
+                    value={effectiveData.destinationAmount ?? ''}
+                    onChange={(e) =>
+                        onChange({
+                            destinationAmount: e.target.value === '' ? undefined : Number(e.target.value),
+                        })
+                    }
+                    disabled={disabled}
+                    placeholder="0"
+                />
+            )
+
         case 'currency':
             return (
                 <NativeSelect
@@ -559,6 +604,20 @@ function FieldCell({
                     disabled={disabled}
                 />
             )
+
+        case 'destinationCurrency': {
+            const filteredOptions = CURRENCY_OPTIONS.filter((option) => option.value !== effectiveData.currency)
+            return (
+                <NativeSelect
+                    value={effectiveData.destinationCurrency}
+                    onChange={(v) => onChange({ destinationCurrency: v })}
+                    options={filteredOptions.length > 0 ? filteredOptions : CURRENCY_OPTIONS}
+                    placeholder="—"
+                    disabled={disabled}
+                    hasError={hasError?.('destinationCurrency')}
+                />
+            )
+        }
 
         case 'sourceAccount': {
             const compatible = getCompatibleSourceAccounts(accounts, normalizedType)
@@ -573,7 +632,7 @@ function FieldCell({
                             ...(account?.type === 'credit_card' ? { cardName: account.name } : {}),
                         })
                     }}
-                    options={compatible.map((a) => ({ value: String(a._id), label: `${a.name} · ${a.currency}` }))}
+                    options={compatible.map((a) => ({ value: String(a._id), label: `${a.name} · ${getAccountCurrencyLabel(a)}` }))}
                     placeholder="Sin cuenta"
                     disabled={disabled}
                     hasError={hasError?.('sourceAccount')}
@@ -596,7 +655,7 @@ function FieldCell({
                                 : {}),
                         })
                     }}
-                    options={compatible.map((a) => ({ value: String(a._id), label: `${a.name} · ${a.currency}` }))}
+                    options={compatible.map((a) => ({ value: String(a._id), label: `${a.name} · ${getAccountCurrencyLabel(a)}` }))}
                     placeholder="Sin cuenta"
                     disabled={disabled}
                     hasError={hasError?.('destinationAccount')}
@@ -644,6 +703,22 @@ function FieldCell({
                     onChange={(value) => onChange({ firstClosingMonth: value })}
                     disabled={disabled}
                     hasError={hasError?.('firstClosingMonth')}
+                />
+            )
+
+        case 'exchangeRate':
+            return (
+                <Input
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    className={cn(inputClass, 'text-right')}
+                    value={effectiveData.exchangeRate ?? ''}
+                    onChange={(e) =>
+                        onChange({ exchangeRate: e.target.value === '' ? undefined : Number(e.target.value) })
+                    }
+                    disabled={disabled}
+                    placeholder="0"
                 />
             )
 
@@ -714,6 +789,9 @@ function InlineTableRow({
             if (normalized.includes('cuenta destino') || normalized.includes('tarjeta destino')) fields.add('destinationAccount')
             if (normalized.includes('primera cuota') || normalized.includes('mes de primer pago')) fields.add('firstClosingMonth')
             if (normalized.includes('cuotas son requeridas') || normalized.includes('cuotas son obligatorias')) fields.add('installmentCount')
+            if (normalized.includes('monto destino')) fields.add('destinationAmount')
+            if (normalized.includes('moneda destino')) fields.add('destinationCurrency')
+            if (normalized.includes('cotización manual') || normalized.includes('cotizacion manual')) fields.add('exchangeRate')
         }
         return fields
     }, [row.errors])

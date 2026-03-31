@@ -20,6 +20,8 @@ export interface UserPreferences {
     defaultView: 'dashboard' | 'transactions' | 'accounts' | 'projection'
     monthStartDay: number // 1-28
     defaultAccountId?: string // ObjectId as string
+    consolidatedCurrency?: Currency
+    referenceArsPerUsdRate?: number
 }
 
 export interface IUser {
@@ -40,12 +42,16 @@ export interface IAccount {
     name: string
     type: AccountType
     currency: Currency
+    supportedCurrencies?: Currency[]
     institution?: string
     description?: string
     color?: string
     isActive: boolean
     includeInNetWorth: boolean
     initialBalance?: number
+    initialBalances?: Partial<Record<Currency, number>>
+    balancesByCurrency?: Partial<Record<Currency, number>>
+    balance?: number
     creditCardConfig?: {
         closingDay: number
         dueDay: number
@@ -85,6 +91,10 @@ export interface ITransaction {
     categoryId?: Types.ObjectId
     sourceAccountId?: Types.ObjectId
     destinationAccountId?: Types.ObjectId
+    destinationAmount?: number
+    destinationCurrency?: Currency
+    exchangeRate?: number
+    paymentGroupId?: string
     notes?: string
     tags?: string[]
     merchant?: string
@@ -106,6 +116,9 @@ export interface ImportParsedData {
     description?: string
     amount?: number
     currency?: string
+    destinationAmount?: number
+    destinationCurrency?: string
+    exchangeRate?: number
     categoryId?: string
     categoryName?: string
     sourceAccountId?: string

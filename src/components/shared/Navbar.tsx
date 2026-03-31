@@ -267,6 +267,26 @@ function MobileBottomBar() {
         }
     }
 
+    const handleCreateTransactionBatch = async (items: TransactionFormData[]) => {
+        try {
+            for (const item of items) {
+                const res = await fetch('/api/transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item),
+                })
+
+                const json = await res.json()
+                if (!res.ok) throw new Error(json.error)
+            }
+
+            success(items.length === 2 ? 'Pago dual registrado correctamente' : 'Transacciones creadas correctamente')
+            setTxDialogOpen(false)
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al crear transacciones')
+        }
+    }
+
     const handleCreateInstallment = async (data: InstallmentFormData) => {
         try {
             await createPlan(data)
@@ -620,6 +640,7 @@ function MobileBottomBar() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleCreateTransaction}
+                onBatchSubmit={handleCreateTransactionBatch}
                 onInstallmentSubmit={handleCreateInstallment}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}

@@ -4,12 +4,34 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, Account, User, TransactionRule } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
-import { calculateAccountBalance } from '@/lib/utils/balance'
+import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { parseFinancialPeriod } from '@/lib/utils/period'
 import { evaluateRules } from '@/lib/utils/rules'
 import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
+import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
+import { normalizeManualExchange } from '@/lib/utils/exchange'
+import type { Currency } from '@/lib/constants'
 
 const PAGE_LIMIT = 30
+
+type CurrencySummary = {
+    ars: number
+    usd: number
+}
+
+function emptyCurrencySummary(): CurrencySummary {
+    return { ars: 0, usd: 0 }
+}
+
+function toCurrencySummary(
+    rows: Array<{ _id: Currency; total: number }>
+): CurrencySummary {
+    return rows.reduce<CurrencySummary>((acc, row) => {
+        if (row._id === 'USD') acc.usd = row.total
+        else acc.ars = row.total
+        return acc
+    }, emptyCurrencySummary())
+}
 
 export async function GET(request: Request) {
     try {
@@ -21,6 +43,7 @@ export async function GET(request: Request) {
         const type = searchParams.get('type')
         const categoryId = searchParams.get('categoryId')
         const accountId = searchParams.get('accountId')
+        const currency = searchParams.get('currency')
         const noInstallmentPlan = searchParams.get('noInstallmentPlan') === 'true'
         const sort = searchParams.get('sort') ?? 'date_desc'
         const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
@@ -49,22 +72,22 @@ export async function GET(request: Request) {
         const [incomeAgg, expenseAgg, ccExpenseAgg] = await Promise.all([
             Transaction.aggregate([
                 { $match: { ...summaryFilter, type: 'income' } },
-                { $group: { _id: null, total: { $sum: '$amount' } } },
+                { $group: { _id: '$currency', total: { $sum: '$amount' } } },
             ]),
             Transaction.aggregate([
                 { $match: { ...summaryFilter, type: 'expense' } },
-                { $group: { _id: null, total: { $sum: '$amount' } } },
+                { $group: { _id: '$currency', total: { $sum: '$amount' } } },
             ]),
             Transaction.aggregate([
                 { $match: { ...summaryFilter, type: 'credit_card_expense' } },
-                { $group: { _id: null, total: { $sum: '$amount' } } },
+                { $group: { _id: '$currency', total: { $sum: '$amount' } } },
             ]),
         ])
 
         const summary = {
-            income: incomeAgg[0]?.total ?? 0,
-            expense: expenseAgg[0]?.total ?? 0,
-            creditCardExpense: ccExpenseAgg[0]?.total ?? 0,
+            income: toCurrencySummary(incomeAgg),
+            expense: toCurrencySummary(expenseAgg),
+            creditCardExpense: toCurrencySummary(ccExpenseAgg),
         }
 
         // ── List filter: base + user-applied filters ───────────────────────────
@@ -77,6 +100,7 @@ export async function GET(request: Request) {
                 : normalizedType
         }
         if (categoryId) filter.categoryId = categoryId
+        if (currency && ['ARS', 'USD'].includes(currency)) filter.currency = currency
         if (accountId) {
             filter.$or = [{ sourceAccountId: accountId }, { destinationAccountId: accountId }]
         }
@@ -101,8 +125,8 @@ export async function GET(request: Request) {
             .skip(skip)
             .limit(limit)
             .populate('categoryId', 'name color type')
-            .populate('sourceAccountId', 'name type currency color')
-            .populate('destinationAccountId', 'name type currency color')
+            .populate('sourceAccountId', 'name type currency supportedCurrencies color')
+            .populate('destinationAccountId', 'name type currency supportedCurrencies color')
             .populate('installmentPlanId', 'installmentCount')
 
         return NextResponse.json({
@@ -141,32 +165,104 @@ export async function POST(request: Request) {
             type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
         }
 
-        // Validar saldo si la cuenta no permite saldo negativo
-        if (data.sourceAccountId) {
-            const sourceAccount = await Account.findOne({
-                _id: data.sourceAccountId,
+        const accountIds = [data.sourceAccountId, data.destinationAccountId].filter(Boolean)
+        const relatedAccounts = accountIds.length > 0
+            ? await Account.find({
+                _id: { $in: accountIds },
                 userId: session.user.id,
             })
+            : []
+        const accountMap = new Map(relatedAccounts.map((account) => [account._id.toString(), account]))
+        const sourceAccount = data.sourceAccountId ? accountMap.get(data.sourceAccountId) : null
+        const destinationAccount = data.destinationAccountId ? accountMap.get(data.destinationAccountId) : null
 
-            if (sourceAccount?.allowNegativeBalance === false) {
-                const balance = await calculateAccountBalance(
+        if (data.sourceAccountId && !sourceAccount) {
+            return NextResponse.json({ error: 'La cuenta origen no existe o no pertenece al usuario.' }, { status: 400 })
+        }
+
+        if (data.destinationAccountId && !destinationAccount) {
+            return NextResponse.json({ error: 'La cuenta destino no existe o no pertenece al usuario.' }, { status: 400 })
+        }
+
+        if (data.type === 'transfer' && sourceAccount && destinationAccount) {
+            const commonCurrencies = getCommonSupportedCurrencies([sourceAccount, destinationAccount])
+            if (commonCurrencies.length === 0) {
+                return NextResponse.json(
+                    {
+                        error: 'La transferencia entre cuentas de distinta moneda debe registrarse como un cambio manual.',
+                    },
+                    { status: 400 }
+                )
+            }
+        }
+
+        if (sourceAccount && !supportsCurrency(sourceAccount, data.currency)) {
+            return NextResponse.json(
+                { error: `La cuenta "${sourceAccount.name}" no opera en ${data.currency}.` },
+                { status: 400 }
+            )
+        }
+
+        if (
+            data.type === 'exchange' &&
+            destinationAccount &&
+            data.destinationCurrency &&
+            !supportsCurrency(destinationAccount, data.destinationCurrency)
+        ) {
+            return NextResponse.json(
+                { error: `La cuenta "${destinationAccount.name}" no opera en ${data.destinationCurrency}.` },
+                { status: 400 }
+            )
+        }
+
+        if (data.type !== 'exchange' && destinationAccount && !supportsCurrency(destinationAccount, data.currency)) {
+            return NextResponse.json(
+                { error: `La cuenta "${destinationAccount.name}" no opera en ${data.currency}.` },
+                { status: 400 }
+            )
+        }
+
+        // Validar saldo si la cuenta no permite saldo negativo
+        if (sourceAccount) {
+            if (sourceAccount.allowNegativeBalance === false) {
+                const balances = await calculateAccountBalancesByCurrency(
                     sourceAccount._id,
                     sourceAccount.userId,
-                    sourceAccount.initialBalance ?? 0
+                    {
+                        initialBalances: getInitialBalancesByCurrency(sourceAccount),
+                    }
                 )
+                const balance = balances[data.currency]
 
                 if (balance - data.amount < 0) {
                     return NextResponse.json(
                         {
                             error: `Saldo insuficiente en "${sourceAccount.name}". Disponible: ${new Intl.NumberFormat('es-AR', {
                                 style: 'currency',
-                                currency: sourceAccount.currency,
+                                currency: data.currency,
                                 maximumFractionDigits: 0,
                             }).format(balance)}`,
                         },
                         { status: 400 }
                     )
                 }
+            }
+        }
+
+        if (data.type === 'exchange') {
+            try {
+                normalizeManualExchange({
+                    sourceCurrency: data.currency,
+                    sourceAmount: data.amount,
+                    destinationCurrency: data.destinationCurrency!,
+                    destinationAmount: data.destinationAmount!,
+                    exchangeRate: data.exchangeRate!,
+                })
+            } catch (error) {
+                return NextResponse.json(
+                    { error: error instanceof Error ? error.message : 'Datos de cambio manual inválidos.' },
+                    { status: 400 }
+                )
             }
         }
 
@@ -211,6 +307,10 @@ export async function POST(request: Request) {
             categoryId: resolvedCategoryId,
             sourceAccountId: data.sourceAccountId,
             destinationAccountId: data.destinationAccountId,
+            destinationAmount: data.type === 'exchange' ? data.destinationAmount : undefined,
+            destinationCurrency: data.type === 'exchange' ? data.destinationCurrency : undefined,
+            exchangeRate: data.type === 'exchange' ? data.exchangeRate : undefined,
+            paymentGroupId: data.paymentGroupId,
             notes: data.notes,
             merchant: resolvedMerchant,
             status: 'confirmed',
@@ -221,8 +321,8 @@ export async function POST(request: Request) {
 
         const populated = await Transaction.findById(transaction._id)
             .populate('categoryId', 'name color type')
-            .populate('sourceAccountId', 'name type currency color')
-            .populate('destinationAccountId', 'name type currency color')
+            .populate('sourceAccountId', 'name type currency supportedCurrencies color')
+            .populate('destinationAccountId', 'name type currency supportedCurrencies color')
 
         return NextResponse.json({ transaction: populated }, { status: 201 })
     } catch (error) {

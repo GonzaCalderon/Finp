@@ -53,6 +53,15 @@ const HEADER_ALIASES: Record<string, string> = {
     destination_account: 'cuenta destino',
     'cuenta de destino': 'cuenta destino',
 
+    // exchange
+    'monto destino': 'monto destino',
+    destination_amount: 'monto destino',
+    'moneda destino': 'moneda destino',
+    destination_currency: 'moneda destino',
+    'cotizacion manual': 'cotización manual',
+    'cotización manual': 'cotización manual',
+    exchange_rate: 'cotización manual',
+
     // compatibilidad vieja: medio de pago
     'medio de pago': 'medio de pago',
     medio_de_pago: 'medio de pago',
@@ -309,6 +318,9 @@ export function parseImportFile(buffer: Buffer): ParseResult {
             description: rawData['descripción']?.trim() || undefined,
             amount: parseAmount(rawData['monto']),
             currency: rawData['moneda']?.trim().toUpperCase() || undefined,
+            destinationAmount: parseAmount(rawData['monto destino']),
+            destinationCurrency: rawData['moneda destino']?.trim().toUpperCase() || undefined,
+            exchangeRate: parseAmount(rawData['cotización manual']),
             categoryName: rawData['categoría']?.trim() || undefined,
             accountName: rawData['cuenta']?.trim() || undefined,
             destinationAccountName: rawData['cuenta destino']?.trim() || undefined,
@@ -330,7 +342,7 @@ export function parseImportFile(buffer: Buffer): ParseResult {
             }
 
             if (!parsedData.type) {
-                errors.push('El tipo es requerido. Valores válidos: gasto, ingreso, gasto con TC, transferencia, pago de tarjeta, ajuste.')
+                errors.push('El tipo es requerido. Valores válidos: gasto, ingreso, gasto con TC, cambio, transferencia, pago de tarjeta, ajuste.')
             } else if (!Object.keys(IMPORT_TRANSACTION_TYPE_LABELS).includes(parsedData.type)) {
                 errors.push(`Tipo desconocido: "${rawData['tipo']}".`)
             }

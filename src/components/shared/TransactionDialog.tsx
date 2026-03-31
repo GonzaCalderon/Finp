@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
+    ArrowLeftRight,
     Banknote,
     Building2,
     CalendarIcon,
@@ -47,6 +48,14 @@ import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { evaluateRules } from '@/lib/utils/rules'
 import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
+import {
+    getAccountCurrencyLabel,
+    getCommonSupportedCurrencies,
+    getPrimaryCurrency,
+    getSupportedCurrencies,
+    supportsCurrency,
+} from '@/lib/utils/accounts'
+import { getArsPerUsdRate } from '@/lib/utils/exchange'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -59,6 +68,7 @@ interface TransactionDialogProps {
     accounts: IAccount[]
     categories: ICategory[]
     onSubmit: (data: TransactionFormData) => Promise<void>
+    onBatchSubmit?: (items: TransactionFormData[]) => Promise<void>
     onInstallmentSubmit?: (data: InstallmentFormData) => Promise<void>
     rules?: ITransactionRule[]
     defaultAccountId?: string
@@ -72,6 +82,7 @@ const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
     expense: 'Gasto',
     credit_card_expense: 'Gasto con TC',
     transfer: 'Transferencia',
+    exchange: 'Cambio',
     credit_card_payment: 'Pago de tarjeta',
     debt_payment: 'Pago de tarjeta',   // backwards compat
     adjustment: 'Ajuste',
@@ -79,9 +90,10 @@ const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
 
 const QUICK_TYPES: TransactionFormInput['type'][] = ['expense', 'income']
 // debt_payment removed from selector — unified into credit_card_payment
-const SECONDARY_TYPES: TransactionFormInput['type'][] = ['transfer', 'credit_card_payment', 'adjustment']
+const SECONDARY_TYPES: TransactionFormInput['type'][] = ['transfer', 'exchange', 'credit_card_payment', 'adjustment']
 const SECONDARY_TYPE_LABELS: Partial<Record<TransactionFormInput['type'], string>> = {
     transfer: 'Transferencia',
+    exchange: 'Cambio',
     credit_card_payment: 'Pago de tarjeta',
     adjustment: 'Ajuste',
 }
@@ -143,6 +155,7 @@ export function TransactionDialog({
     accounts,
     categories,
     onSubmit,
+    onBatchSubmit,
     onInstallmentSubmit,
     rules = [],
     defaultAccountId,
@@ -187,7 +200,14 @@ export function TransactionDialog({
         paid: number
         pending: number
         currency: string
+        byCurrency?: Record<'ARS' | 'USD', { due: number; paid: number; pending: number; currency: string }>
     } | null>(null)
+    const [additionalCardPaymentEnabled, setAdditionalCardPaymentEnabled] = useState(false)
+    const [secondaryCardPaymentAmount, setSecondaryCardPaymentAmount] = useState(0)
+    const [exchangeDestinationAmount, setExchangeDestinationAmount] = useState(0)
+    const [exchangeDestinationCurrency, setExchangeDestinationCurrency] = useState<TransactionFormInput['currency']>('USD')
+    const [exchangeRate, setExchangeRate] = useState(0)
+    const [exchangeRecalcMode, setExchangeRecalcMode] = useState<'destinationAmount' | 'exchangeRate'>('destinationAmount')
 
     const scrollRef = useRef<HTMLDivElement>(null)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
@@ -212,6 +232,7 @@ export function TransactionDialog({
 
     const isEditing = Boolean(transaction)
     const isExpense = type === 'expense' || type === 'credit_card_expense'
+    const isExchange = type === 'exchange'
     const isQuickFlow = type === 'income' || type === 'expense' || type === 'credit_card_expense'
 
     // Payment method section for all expenses (new and editing)
@@ -220,8 +241,8 @@ export function TransactionDialog({
     // Installment mode: credit card expense with >1 cuota on a NEW transaction
     const isInstallmentMode = isCardExpense && installmentCount > 1 && !isEditing && Boolean(onInstallmentSubmit)
 
-    const showSource = ['expense', 'credit_card_expense', 'transfer', 'credit_card_payment', 'adjustment'].includes(type)
-    const showDestination = ['income', 'transfer', 'credit_card_payment'].includes(type)
+    const showSource = ['expense', 'credit_card_expense', 'transfer', 'exchange', 'credit_card_payment', 'adjustment'].includes(type)
+    const showDestination = ['income', 'transfer', 'exchange', 'credit_card_payment'].includes(type)
     const showCategory = ['income', 'expense', 'credit_card_expense'].includes(type)
     const paymentMonth = date
         ? (() => {
@@ -247,6 +268,7 @@ export function TransactionDialog({
         if (type === 'income') return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         if (type === 'expense') return accounts.filter(a => a.type !== 'debt')
         if (type === 'credit_card_expense') return accounts.filter(a => a.type === 'credit_card')
+        if (type === 'exchange') return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         if (type === 'credit_card_payment')
             return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         return accounts
@@ -254,6 +276,7 @@ export function TransactionDialog({
 
     const destinationAccounts = useMemo(() => {
         if (type === 'credit_card_payment') return accounts.filter(a => a.type === 'credit_card' || a.type === 'debt')
+        if (type === 'exchange') return accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')
         return accounts
     }, [accounts, type])
 
@@ -278,6 +301,54 @@ export function TransactionDialog({
         [categories, type]
     )
 
+    const selectedSourceAccount = useMemo(
+        () => accounts.find((account) => account._id.toString() === sourceAccountId),
+        [accounts, sourceAccountId]
+    )
+
+    const selectedDestinationAccount = useMemo(
+        () => accounts.find((account) => account._id.toString() === destinationAccountId),
+        [accounts, destinationAccountId]
+    )
+
+    const allowedCurrencies = useMemo(() => {
+        if (type === 'income') return getCommonSupportedCurrencies([selectedDestinationAccount])
+        if (type === 'exchange') return getSupportedCurrencies(selectedSourceAccount)
+        if (type === 'transfer' || type === 'credit_card_payment') {
+            return getCommonSupportedCurrencies([selectedSourceAccount, selectedDestinationAccount])
+        }
+        if (showSource) return getCommonSupportedCurrencies([selectedSourceAccount])
+        return ['ARS', 'USD'] as const
+    }, [selectedDestinationAccount, selectedSourceAccount, showSource, type])
+
+    const allowedExchangeDestinationCurrencies = useMemo(() => {
+        return (['ARS', 'USD'] as const).filter((candidate) => {
+            if (candidate === currency) return false
+            if (!selectedDestinationAccount) return true
+            return supportsCurrency(selectedDestinationAccount, candidate)
+        })
+    }, [currency, selectedDestinationAccount])
+
+    const hasCrossCurrencyTransferConflict =
+        type === 'transfer' &&
+        !!selectedSourceAccount &&
+        !!selectedDestinationAccount &&
+        allowedCurrencies.length === 0
+
+    const secondaryCardPaymentCurrency = useMemo(() => {
+        if (type !== 'credit_card_payment') return undefined
+        return (['ARS', 'USD'] as const).find((candidate) => candidate !== currency && allowedCurrencies.includes(candidate))
+    }, [allowedCurrencies, currency, type])
+
+    const secondaryCardPaymentSummary = secondaryCardPaymentCurrency
+        ? paymentSummary?.byCurrency?.[secondaryCardPaymentCurrency] ?? null
+        : null
+
+    const canUseDualCardPayment =
+        !isEditing &&
+        type === 'credit_card_payment' &&
+        Boolean(secondaryCardPaymentCurrency)
+
     // ─── Effects ──────────────────────────────────────────────────────────────
 
     useEffect(() => {
@@ -287,6 +358,12 @@ export function TransactionDialog({
         setAppliedRuleName(null)
         setFirstMonthError(null)
         setFirstClosingMonth('')
+        setAdditionalCardPaymentEnabled(false)
+        setSecondaryCardPaymentAmount(0)
+        setExchangeDestinationAmount(0)
+        setExchangeDestinationCurrency('USD')
+        setExchangeRate(0)
+        setExchangeRecalcMode('destinationAmount')
 
         if (transaction) {
             setAdjustmentSign(transaction.type === 'adjustment' && transaction.amount > 0 ? '-' : '+')
@@ -305,9 +382,17 @@ export function TransactionDialog({
                 destinationAccountId:
                     (transaction.destinationAccountId as { _id?: { toString(): string } })?._id?.toString() ??
                     transaction.destinationAccountId?.toString() ?? undefined,
+                destinationAmount: transaction.destinationAmount,
+                destinationCurrency: transaction.destinationCurrency,
+                exchangeRate: transaction.exchangeRate,
                 notes: transaction.notes ?? '',
                 merchant: transaction.merchant ?? '',
             })
+            setExchangeDestinationAmount(transaction.destinationAmount ?? 0)
+            setExchangeDestinationCurrency(transaction.destinationCurrency ?? (transaction.currency === 'ARS' ? 'USD' : 'ARS'))
+            setExchangeRate(transaction.exchangeRate ?? 0)
+            setAdditionalCardPaymentEnabled(false)
+            setSecondaryCardPaymentAmount(0)
             setShowMoreOptions(Boolean(transaction.notes || transaction.merchant))
 
             // Auto-detect payment method from account type
@@ -325,12 +410,17 @@ export function TransactionDialog({
         reset({
             type: 'expense',
             amount: 0,
-            currency: 'ARS',
+            currency: defaultAccountId
+                ? getPrimaryCurrency(accounts.find((account) => account._id.toString() === defaultAccountId))
+                : 'ARS',
             date: new Date(),
             description: '',
             categoryId: undefined,
             sourceAccountId: defaultAccountId,
             destinationAccountId: undefined,
+            destinationAmount: undefined,
+            destinationCurrency: undefined,
+            exchangeRate: undefined,
             notes: '',
             merchant: '',
         })
@@ -362,7 +452,7 @@ export function TransactionDialog({
 
         const fetchPaymentSummary = async () => {
             try {
-                const res = await fetch(`/api/credit-cards/payment-summary?cardId=${destinationAccountId}&month=${paymentMonth}`)
+                const res = await fetch(`/api/credit-cards/payment-summary?cardId=${destinationAccountId}&month=${paymentMonth}&currency=${currency}`)
                 const data = await res.json()
                 if (!res.ok) return
                 if (!cancelled) {
@@ -378,13 +468,18 @@ export function TransactionDialog({
         return () => {
             cancelled = true
         }
-    }, [destinationAccountId, paymentMonth, type])
+    }, [currency, destinationAccountId, paymentMonth, type])
 
     // Clear accounts when type changes
     useEffect(() => {
         if (!showSource) setValue('sourceAccountId', undefined, { shouldValidate: true })
         if (!showDestination) setValue('destinationAccountId', undefined, { shouldValidate: true })
-    }, [showSource, showDestination, setValue])
+        if (type !== 'exchange') {
+            setValue('destinationAmount', undefined, { shouldValidate: true })
+            setValue('destinationCurrency', undefined, { shouldValidate: true })
+            setValue('exchangeRate', undefined, { shouldValidate: true })
+        }
+    }, [showSource, showDestination, setValue, type])
 
     // When paymentMethod changes, clear sourceAccountId if no longer compatible
     useEffect(() => {
@@ -394,6 +489,98 @@ export function TransactionDialog({
             setValue('sourceAccountId', undefined, { shouldValidate: true })
         }
     }, [paymentMethod, expenseAccounts, sourceAccountId, isExpense, setValue])
+
+    useEffect(() => {
+        if (allowedCurrencies.length > 0 && !allowedCurrencies.includes(currency)) {
+            setValue('currency', allowedCurrencies[0], { shouldValidate: true })
+        }
+    }, [allowedCurrencies, currency, setValue])
+
+    useEffect(() => {
+        if (allowedCurrencies.length === 1 && currency !== allowedCurrencies[0]) {
+            setValue('currency', allowedCurrencies[0], { shouldValidate: true })
+        }
+    }, [allowedCurrencies, currency, setValue])
+
+    useEffect(() => {
+        if (!isExchange) return
+
+        setValue('destinationCurrency', exchangeDestinationCurrency, { shouldValidate: true })
+        setValue('destinationAmount', exchangeDestinationAmount || undefined, { shouldValidate: true })
+        setValue('exchangeRate', exchangeRate || undefined, { shouldValidate: true })
+
+        if (!description.trim()) {
+            setValue('description', 'Cambio manual', { shouldValidate: true })
+        }
+    }, [
+        description,
+        exchangeDestinationAmount,
+        exchangeDestinationCurrency,
+        exchangeRate,
+        isExchange,
+        setValue,
+    ])
+
+    useEffect(() => {
+        if (!isExchange) return
+
+        const nextDestinationCurrency =
+            allowedExchangeDestinationCurrencies.includes(exchangeDestinationCurrency)
+                ? exchangeDestinationCurrency
+                : allowedExchangeDestinationCurrencies[0]
+
+        if (nextDestinationCurrency && nextDestinationCurrency !== exchangeDestinationCurrency) {
+            setExchangeDestinationCurrency(nextDestinationCurrency)
+            setValue('destinationCurrency', nextDestinationCurrency, { shouldValidate: true, shouldDirty: true })
+        }
+    }, [
+        allowedExchangeDestinationCurrencies,
+        exchangeDestinationCurrency,
+        isExchange,
+        setValue,
+    ])
+
+    useEffect(() => {
+        if (!isExchange || exchangeDestinationCurrency === currency || amount <= 0) return
+
+        if (exchangeRecalcMode === 'destinationAmount' && exchangeRate > 0) {
+            const nextDestinationAmount = currency === 'ARS' ? amount / exchangeRate : amount * exchangeRate
+            if (Math.abs(nextDestinationAmount - exchangeDestinationAmount) > 0.0001) {
+                setExchangeDestinationAmount(nextDestinationAmount)
+                setValue('destinationAmount', nextDestinationAmount, { shouldValidate: true, shouldDirty: true })
+            }
+            return
+        }
+
+        if (exchangeRecalcMode === 'exchangeRate' && exchangeDestinationAmount > 0) {
+            const nextRate = getArsPerUsdRate({
+                sourceCurrency: currency,
+                sourceAmount: amount,
+                destinationCurrency: exchangeDestinationCurrency,
+                destinationAmount: exchangeDestinationAmount,
+            })
+            if (Math.abs(nextRate - exchangeRate) > 0.0001) {
+                setExchangeRate(nextRate)
+                setValue('exchangeRate', nextRate, { shouldValidate: true, shouldDirty: true })
+            }
+        }
+    }, [
+        amount,
+        currency,
+        exchangeDestinationAmount,
+        exchangeDestinationCurrency,
+        exchangeRate,
+        exchangeRecalcMode,
+        isExchange,
+        setValue,
+    ])
+
+    useEffect(() => {
+        if (!canUseDualCardPayment) {
+            setAdditionalCardPaymentEnabled(false)
+            setSecondaryCardPaymentAmount(0)
+        }
+    }, [canUseDualCardPayment])
 
     // Rule suggestions for description/merchant
     useEffect(() => {
@@ -461,6 +648,40 @@ export function TransactionDialog({
             })
             return
         }
+
+        if (data.type === 'exchange') {
+            const finalExchangeData = {
+                ...data,
+                destinationAmount: exchangeDestinationAmount,
+                destinationCurrency: exchangeDestinationCurrency,
+                exchangeRate,
+                description: data.description || 'Cambio manual',
+            }
+
+            await onSubmit(finalExchangeData)
+            return
+        }
+
+        if (
+            data.type === 'credit_card_payment' &&
+            additionalCardPaymentEnabled &&
+            secondaryCardPaymentCurrency &&
+            secondaryCardPaymentAmount > 0 &&
+            onBatchSubmit
+        ) {
+            const paymentGroupId = crypto.randomUUID()
+            await onBatchSubmit([
+                { ...data, paymentGroupId },
+                {
+                    ...data,
+                    amount: secondaryCardPaymentAmount,
+                    currency: secondaryCardPaymentCurrency,
+                    paymentGroupId,
+                },
+            ])
+            return
+        }
+
         // Map expense + credit card payment method → credit_card_expense type
         let finalData = data.type === 'expense' && paymentMethod === 'credit_card'
             ? { ...data, type: 'credit_card_expense' as TransactionFormInput['type'] }
@@ -557,7 +778,7 @@ export function TransactionDialog({
                                     })}
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-1.5">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                                     {SECONDARY_TYPES.map(option => {
                                         const selected = type === option
                                         return (
@@ -589,7 +810,7 @@ export function TransactionDialog({
                             <div className={type === 'adjustment' ? '' : 'col-span-2'}>
                                 <FormattedAmountInput
                                     id="amount"
-                                    label="Monto"
+                                    label={isExchange ? 'Monto origen' : 'Monto'}
                                     value={type === 'adjustment' && adjustmentSign === '-' ? -amount : amount}
                                     currency={currency}
                                     error={errors.amount?.message}
@@ -654,26 +875,197 @@ export function TransactionDialog({
                                 </div>
                             )}
                             <div className={type === 'adjustment' ? 'max-w-[180px] space-y-2' : 'space-y-2'}>
-                                <Label>Moneda</Label>
+                                <Label>{isExchange ? 'Moneda origen' : 'Moneda'}</Label>
                                 <Select
                                     value={currency}
                                     onValueChange={v =>
                                         setValue('currency', v as TransactionFormInput['currency'], { shouldValidate: true })
                                     }
+                                    disabled={allowedCurrencies.length === 1}
                                 >
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="ARS">ARS</SelectItem>
-                                        <SelectItem value="USD">USD</SelectItem>
+                                        {allowedCurrencies.map((allowedCurrency) => (
+                                            <SelectItem key={allowedCurrency} value={allowedCurrency}>
+                                                {allowedCurrency}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
+                                {allowedCurrencies.length === 1 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Se fija automáticamente según la cuenta seleccionada.
+                                    </p>
+                                )}
                                 {errors.currency && (
                                     <p className="text-sm text-destructive">{errors.currency.message}</p>
                                 )}
                             </div>
                         </div>
+
+                        {isExchange && (
+                            <div
+                                className="rounded-xl border p-4 space-y-4"
+                                style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}
+                            >
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                        <ArrowLeftRight className="w-4 h-4 text-muted-foreground" />
+                                        Cambio manual ARS / USD
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            className="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors"
+                                            style={{
+                                                borderColor:
+                                                    exchangeRecalcMode === 'destinationAmount'
+                                                        ? 'rgba(74,158,204,0.35)'
+                                                        : 'var(--border)',
+                                                background:
+                                                    exchangeRecalcMode === 'destinationAmount'
+                                                        ? 'rgba(74,158,204,0.10)'
+                                                        : 'transparent',
+                                            }}
+                                            onClick={() => setExchangeRecalcMode('destinationAmount')}
+                                        >
+                                            Recalcular destino
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors"
+                                            style={{
+                                                borderColor:
+                                                    exchangeRecalcMode === 'exchangeRate'
+                                                        ? 'rgba(74,158,204,0.35)'
+                                                        : 'var(--border)',
+                                                background:
+                                                    exchangeRecalcMode === 'exchangeRate'
+                                                        ? 'rgba(74,158,204,0.10)'
+                                                        : 'transparent',
+                                            }}
+                                            onClick={() => setExchangeRecalcMode('exchangeRate')}
+                                        >
+                                            Recalcular cotización
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <p className="text-xs text-muted-foreground">
+                                    {exchangeRecalcMode === 'destinationAmount'
+                                        ? 'Si cambiás el monto origen o la cotización, actualizamos el monto destino.'
+                                        : 'Si cambiás el monto origen o destino, actualizamos la cotización manual.'}
+                                </p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+                                    <div className="sm:col-span-2">
+                                        <FormattedAmountInput
+                                            id="destinationAmount"
+                                            label="Monto destino"
+                                            value={exchangeDestinationAmount}
+                                            currency={exchangeDestinationCurrency}
+                                            error={errors.destinationAmount?.message}
+                                            onValueChangeAction={(nextAmount) => {
+                                                setExchangeRecalcMode('exchangeRate')
+                                                setExchangeDestinationAmount(nextAmount)
+                                                setValue('destinationAmount', nextAmount, {
+                                                    shouldValidate: true,
+                                                    shouldDirty: true,
+                                                })
+
+                                                if (amount > 0 && nextAmount > 0 && exchangeDestinationCurrency !== currency) {
+                                                    const nextRate = getArsPerUsdRate({
+                                                        sourceCurrency: currency,
+                                                        sourceAmount: amount,
+                                                        destinationCurrency: exchangeDestinationCurrency,
+                                                        destinationAmount: nextAmount,
+                                                    })
+                                                    setExchangeRate(nextRate)
+                                                    setValue('exchangeRate', nextRate, {
+                                                        shouldValidate: true,
+                                                        shouldDirty: true,
+                                                    })
+                                                }
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Moneda destino</Label>
+                                        <Select
+                                            value={exchangeDestinationCurrency}
+                                            onValueChange={(value) => {
+                                                const nextCurrency = value as TransactionFormInput['currency']
+                                                setExchangeRecalcMode('destinationAmount')
+                                                setExchangeDestinationCurrency(nextCurrency)
+                                                setValue('destinationCurrency', nextCurrency, {
+                                                    shouldValidate: true,
+                                                    shouldDirty: true,
+                                                })
+                                            }}
+                                            disabled={allowedExchangeDestinationCurrencies.length <= 1}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {allowedExchangeDestinationCurrencies.map((allowedCurrency) => (
+                                                    <SelectItem key={allowedCurrency} value={allowedCurrency}>
+                                                        {allowedCurrency}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.destinationCurrency && (
+                                            <p className="text-sm text-destructive">
+                                                {errors.destinationCurrency.message}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="exchangeRate">Cotización manual</Label>
+                                    <Input
+                                        id="exchangeRate"
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="Ej: 1.250"
+                                        value={exchangeRate || ''}
+                                        onChange={(event) => {
+                                            const nextRate = event.target.value === '' ? 0 : Number(event.target.value)
+                                            setExchangeRecalcMode('destinationAmount')
+                                            setExchangeRate(nextRate)
+                                            setValue('exchangeRate', nextRate || undefined, {
+                                                shouldValidate: true,
+                                                shouldDirty: true,
+                                            })
+
+                                            if (amount > 0 && nextRate > 0 && exchangeDestinationCurrency !== currency) {
+                                                const destinationAmount =
+                                                    currency === 'ARS'
+                                                        ? amount / nextRate
+                                                        : amount * nextRate
+                                                setExchangeDestinationAmount(destinationAmount)
+                                                setValue('destinationAmount', destinationAmount, {
+                                                    shouldValidate: true,
+                                                    shouldDirty: true,
+                                                })
+                                            }
+                                        }}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Guardamos la cotización usada para reconstruir el cambio en el futuro.
+                                    </p>
+                                    {errors.exchangeRate && (
+                                        <p className="text-sm text-destructive">{errors.exchangeRate.message}</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* ── Descripción ── */}
                         <div className="space-y-2">
@@ -684,7 +1076,7 @@ export function TransactionDialog({
                                 onChange={e =>
                                     setValue('description', e.target.value, { shouldValidate: true, shouldDirty: true })
                                 }
-                                placeholder="Ej: Compra en kiosco"
+                                placeholder={isExchange ? 'Ej: Cambio ahorro marzo' : 'Ej: Compra en kiosco'}
                             />
                             {errors.description ? (
                                 <p className="text-sm text-destructive">{errors.description.message}</p>
@@ -773,7 +1165,7 @@ export function TransactionDialog({
                                                             key={account._id.toString()}
                                                             value={account._id.toString()}
                                                         >
-                                                            {account.name} · {account.currency}
+                                                            {account.name} · {getAccountCurrencyLabel(account)}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -898,7 +1290,7 @@ export function TransactionDialog({
                                                         key={account._id.toString()}
                                                         value={account._id.toString()}
                                                     >
-                                                        {account.name} · {account.currency}
+                                                        {account.name} · {getAccountCurrencyLabel(account)}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -916,7 +1308,7 @@ export function TransactionDialog({
                         {/* ── Cuenta origen (otros tipos, no expense) ── */}
                         {!isExpense && showSource && (
                             <div className="space-y-2">
-                                <Label>Cuenta de origen</Label>
+                                <Label>{isExchange ? 'Cuenta origen' : 'Cuenta de origen'}</Label>
                                 <Select
                                     value={sourceAccountId}
                                     onValueChange={v =>
@@ -932,7 +1324,7 @@ export function TransactionDialog({
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}
                                             >
-                                                {account.name} · {account.currency}
+                                                {account.name} · {getAccountCurrencyLabel(account)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -962,7 +1354,7 @@ export function TransactionDialog({
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}
                                             >
-                                                {account.name} · {account.currency}
+                                                {account.name} · {getAccountCurrencyLabel(account)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1046,6 +1438,8 @@ export function TransactionDialog({
                                 <Label>
                                     {type === 'credit_card_payment'
                                         ? 'Tarjeta a pagar'
+                                        : type === 'exchange'
+                                            ? 'Cuenta destino'
                                         : 'Cuenta destino'}
                                 </Label>
                                 <Select
@@ -1069,7 +1463,7 @@ export function TransactionDialog({
                                                 key={account._id.toString()}
                                                 value={account._id.toString()}
                                             >
-                                                {account.name} · {account.currency}
+                                                {account.name} · {getAccountCurrencyLabel(account)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1080,38 +1474,137 @@ export function TransactionDialog({
                                     </p>
                                 )}
 
+                                {hasCrossCurrencyTransferConflict && (
+                                    <div
+                                        className="rounded-xl border px-3 py-2.5 text-sm space-y-2"
+                                        style={{ borderColor: 'rgba(217,119,6,0.35)', background: 'rgba(217,119,6,0.10)' }}
+                                    >
+                                        <p className="text-amber-700 dark:text-amber-300">
+                                            Estas cuentas no comparten moneda. Registralo como un cambio manual para guardar la cotización usada.
+                                        </p>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 text-xs"
+                                            onClick={() => setValue('type', 'exchange', { shouldValidate: true, shouldDirty: true })}
+                                        >
+                                            Pasar a cambio manual
+                                        </Button>
+                                    </div>
+                                )}
+
                                 {type === 'credit_card_payment' && paymentSummary && destinationAccountId && (
                                     <div
                                         className="rounded-xl border p-3 space-y-2"
                                         style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}
                                     >
-                                            <div className="flex items-center justify-between gap-3 text-xs">
-                                                <span className="text-muted-foreground">Corresponde pagar este mes</span>
-                                            <span className="font-medium">{fmtCurrency(paymentSummary.due, paymentSummary.currency as TransactionFormInput['currency'])}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-3 text-xs">
-                                            <span className="text-muted-foreground">Ya pagado</span>
-                                            <span className="font-medium">{fmtCurrency(paymentSummary.paid, paymentSummary.currency as TransactionFormInput['currency'])}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-3 text-xs">
-                                            <span className="text-muted-foreground">Pendiente</span>
-                                            <span className="font-medium">{fmtCurrency(paymentSummary.pending, paymentSummary.currency as TransactionFormInput['currency'])}</span>
-                                        </div>
-                                        {paymentSummary.pending > 0 && (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-7 text-xs"
-                                                onClick={() =>
-                                                    setValue('amount', paymentSummary.pending, {
-                                                        shouldValidate: true,
-                                                        shouldDirty: true,
-                                                    })
-                                                }
+                                        {(Object.values(paymentSummary.byCurrency ?? {
+                                            [paymentSummary.currency as 'ARS' | 'USD']: paymentSummary,
+                                        }) as Array<{ due: number; paid: number; pending: number; currency: string }>).map((summaryItem) => {
+                                            const active = summaryItem.currency === currency
+
+                                            return (
+                                                <div
+                                                    key={summaryItem.currency}
+                                                    className="rounded-lg border p-2.5 space-y-1.5"
+                                                    style={{
+                                                        borderColor: active ? 'rgba(74,158,204,0.35)' : 'var(--border)',
+                                                        background: active ? 'rgba(74,158,204,0.08)' : 'transparent',
+                                                    }}
+                                                >
+                                                    <div className="flex items-center justify-between gap-3 text-xs">
+                                                        <span className="font-medium">{summaryItem.currency}</span>
+                                                        {active && (
+                                                            <span className="text-[11px] text-muted-foreground">moneda elegida</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-3 text-xs">
+                                                        <span className="text-muted-foreground">Corresponde pagar este mes</span>
+                                                        <span className="font-medium">{fmtCurrency(summaryItem.due, summaryItem.currency as TransactionFormInput['currency'])}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-3 text-xs">
+                                                        <span className="text-muted-foreground">Ya pagado</span>
+                                                        <span className="font-medium">{fmtCurrency(summaryItem.paid, summaryItem.currency as TransactionFormInput['currency'])}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-3 text-xs">
+                                                        <span className="text-muted-foreground">Pendiente</span>
+                                                        <span className="font-medium">{fmtCurrency(summaryItem.pending, summaryItem.currency as TransactionFormInput['currency'])}</span>
+                                                    </div>
+                                                    {summaryItem.pending > 0 && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 text-xs"
+                                                            onClick={() => {
+                                                                if (summaryItem.currency === currency) {
+                                                                    setValue('amount', summaryItem.pending, {
+                                                                        shouldValidate: true,
+                                                                        shouldDirty: true,
+                                                                    })
+                                                                    return
+                                                                }
+
+                                                                setAdditionalCardPaymentEnabled(true)
+                                                                setSecondaryCardPaymentAmount(summaryItem.pending)
+                                                            }}
+                                                        >
+                                                            Usar pendiente {summaryItem.currency}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+
+                                        {canUseDualCardPayment && secondaryCardPaymentCurrency && (
+                                            <div
+                                                className="rounded-lg border p-3 space-y-3"
+                                                style={{ borderColor: 'var(--border)', background: 'var(--background)' }}
                                             >
-                                                Usar pendiente
-                                            </Button>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-sm font-medium">Pago dual en una sola confirmación</p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Sumá también un pago en {secondaryCardPaymentCurrency} sin salir de este flujo.
+                                                        </p>
+                                                    </div>
+                                                    <Switch
+                                                        checked={additionalCardPaymentEnabled}
+                                                        onCheckedChange={setAdditionalCardPaymentEnabled}
+                                                    />
+                                                </div>
+
+                                                {additionalCardPaymentEnabled && (
+                                                    <div className="space-y-2">
+                                                        <FormattedAmountInput
+                                                            id="secondaryCardPaymentAmount"
+                                                            label={`Monto adicional en ${secondaryCardPaymentCurrency}`}
+                                                            value={secondaryCardPaymentAmount}
+                                                            currency={secondaryCardPaymentCurrency}
+                                                            placeholder="0"
+                                                            onValueChangeAction={setSecondaryCardPaymentAmount}
+                                                        />
+                                                        {secondaryCardPaymentSummary && (
+                                                            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                                                                <span>Pendiente {secondaryCardPaymentCurrency}</span>
+                                                                <span className="font-medium">
+                                                                    {fmtCurrency(
+                                                                        secondaryCardPaymentSummary.pending,
+                                                                        secondaryCardPaymentCurrency
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {transaction?.paymentGroupId && (
+                                            <p className="text-xs text-muted-foreground">
+                                                Este movimiento pertenece a un pago dual relacionado.
+                                            </p>
                                         )}
                                     </div>
                                 )}

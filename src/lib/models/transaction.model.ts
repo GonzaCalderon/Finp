@@ -13,6 +13,10 @@ const TransactionSchema = new Schema<ITransaction>(
         categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
         sourceAccountId: { type: Schema.Types.ObjectId, ref: 'Account' },
         destinationAccountId: { type: Schema.Types.ObjectId, ref: 'Account' },
+        destinationAmount: { type: Number },
+        destinationCurrency: { type: String, enum: Object.values(CURRENCIES) },
+        exchangeRate: { type: Number },
+        paymentGroupId: { type: String },
         notes: { type: String },
         tags: [{ type: String }],
         merchant: { type: String },
@@ -33,12 +37,19 @@ TransactionSchema.index({ userId: 1, type: 1, date: -1 })
 TransactionSchema.index({ userId: 1, sourceAccountId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, destinationAccountId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, categoryId: 1, date: -1 })
+TransactionSchema.index({ userId: 1, paymentGroupId: 1, date: -1 })
 
 const existingTransactionModel = mongoose.models.Transaction as mongoose.Model<ITransaction> | undefined
 const currentTypeEnum = existingTransactionModel?.schema.path('type')?.options?.enum as string[] | undefined
+const hasDestinationAmountPath = Boolean(existingTransactionModel?.schema.path('destinationAmount'))
+const hasPaymentGroupIdPath = Boolean(existingTransactionModel?.schema.path('paymentGroupId'))
 const needsSchemaRefresh =
     !!existingTransactionModel &&
-    (!currentTypeEnum || !currentTypeEnum.includes(TRANSACTION_TYPES.CREDIT_CARD_EXPENSE))
+    (!currentTypeEnum ||
+        !currentTypeEnum.includes(TRANSACTION_TYPES.CREDIT_CARD_EXPENSE) ||
+        !currentTypeEnum.includes(TRANSACTION_TYPES.EXCHANGE) ||
+        !hasDestinationAmountPath ||
+        !hasPaymentGroupIdPath)
 
 if (needsSchemaRefresh) {
     delete mongoose.models.Transaction

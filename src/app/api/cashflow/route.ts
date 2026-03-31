@@ -1,9 +1,22 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, InstallmentPlan, User } from '@/lib/models'
-import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
+import { Transaction, User } from '@/lib/models'
 import { getCurrentFinancialPeriod, parseFinancialPeriod, shiftFinancialPeriod } from '@/lib/utils/period'
+
+type CurrencyTotals = {
+    ars: number
+    usd: number
+}
+
+function emptyCurrencyTotals(): CurrencyTotals {
+    return { ars: 0, usd: 0 }
+}
+
+function addCurrencyAmount(totals: CurrencyTotals, currency: string, amount: number) {
+    if (currency === 'USD') totals.usd += amount
+    else totals.ars += amount
+}
 
 export async function GET(request: Request) {
     try {
@@ -28,42 +41,40 @@ export async function GET(request: Request) {
         const firstRange = parseFinancialPeriod(periods[0], monthStartDay)
         const lastRange = parseFinancialPeriod(periods[periods.length - 1], monthStartDay)
 
-        const [transactions, plans] = await Promise.all([
-            Transaction.find({
-                userId: session.user.id,
-                date: { $gte: firstRange.start, $lt: lastRange.end },
-            })
-                .populate('sourceAccountId', 'name type currency color')
-                .populate('destinationAccountId', 'name type currency color'),
-            InstallmentPlan.find({ userId: session.user.id })
-                .populate('accountId', 'name type currency color')
-                .populate('categoryId', 'name color type'),
-        ])
+        const transactions = await Transaction.find({
+            userId: session.user.id,
+            date: { $gte: firstRange.start, $lt: lastRange.end },
+        })
+            .populate('sourceAccountId', 'name type currency color')
+            .populate('destinationAccountId', 'name type currency color')
 
         const result = periods.map((period) => {
             const { start, end } = parseFinancialPeriod(period, monthStartDay)
             const monthTransactions = transactions.filter((transaction) => transaction.date >= start && transaction.date < end)
-            const cardSummary = buildMonthlyCardPaymentSummary({
-                month: period,
-                monthStartDay,
-                plans,
-                transactions: monthTransactions,
-            })
 
             const income = monthTransactions
                 .filter((t) => t.type === 'income')
-                .reduce((sum, t) => sum + t.amount, 0)
+                .reduce((totals, transaction) => {
+                    addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                    return totals
+                }, emptyCurrencyTotals())
 
             const expense = monthTransactions
                 .filter((t) => t.type === 'expense' && !t.installmentPlanId)
-                .reduce((sum, t) => sum + t.amount, 0) + cardSummary.reduce((sum, item) => sum + item.due, 0)
+                .reduce((totals, transaction) => {
+                    addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                    return totals
+                }, emptyCurrencyTotals())
 
             return {
                 month: period,
                 label: start.toLocaleDateString('es-AR', { month: 'short' }),
                 income,
                 expense,
-                balance: income - expense,
+                balance: {
+                    ars: income.ars - expense.ars,
+                    usd: income.usd - expense.usd,
+                },
             }
         })
 

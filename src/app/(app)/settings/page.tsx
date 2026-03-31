@@ -115,7 +115,8 @@ function TransferList({
     const toggleLeft = (name: string) => {
         setSelectedLeft((prev) => {
             const next = new Set(prev)
-            next.has(name) ? next.delete(name) : next.add(name)
+            if (next.has(name)) next.delete(name)
+            else next.add(name)
             return next
         })
     }
@@ -125,7 +126,8 @@ function TransferList({
         if (existing.find((e) => e.name === item?.name)) return
         setSelectedRight((prev) => {
             const next = new Set(prev)
-            next.has(name) ? next.delete(name) : next.add(name)
+            if (next.has(name)) next.delete(name)
+            else next.add(name)
             return next
         })
     }
@@ -632,7 +634,12 @@ const MONTH_START_DAYS = Array.from({ length: 28 }, (_, i) => i + 1)
 
 function PreferencesSection() {
     const { theme, setTheme } = useTheme()
-    const { preferences, setDefaultView, setMonthStartDay, setDefaultAccountId } = usePreferences()
+    const {
+        preferences,
+        setDefaultView,
+        setMonthStartDay,
+        setDefaultAccountId,
+    } = usePreferences()
     const { success } = useToast()
 
     // Import accounts for default account selection

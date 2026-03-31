@@ -2,14 +2,36 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, Account, ScheduledCommitment, CommitmentApplication, InstallmentPlan, User } from '@/lib/models'
-import { calculateAccountBalance } from '@/lib/utils/balance'
+import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { parseFinancialPeriod, getCurrentFinancialPeriod } from '@/lib/utils/period'
-import { buildMonthlyCardPaymentSummary, getInstallmentStatusForMonth } from '@/lib/utils/credit-card'
+import { buildMonthlyCardPaymentSummary, getInstallmentStatusForMonth, isCreditCardPaymentType } from '@/lib/utils/credit-card'
+import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
     name: string
     color?: string
+}
+
+type CurrencyTotals = {
+    ars: number
+    usd: number
+}
+
+function emptyCurrencyTotals(): CurrencyTotals {
+    return { ars: 0, usd: 0 }
+}
+
+function addCurrencyAmount(totals: CurrencyTotals, currency: string, amount: number) {
+    if (currency === 'USD') totals.usd += amount
+    else totals.ars += amount
+}
+
+function subtractCurrencyTotals(income: CurrencyTotals, expense: CurrencyTotals): CurrencyTotals {
+    return {
+        ars: income.ars - expense.ars,
+        usd: income.usd - expense.usd,
+    }
 }
 
 function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
@@ -93,33 +115,54 @@ export async function GET(request: Request) {
             transactions,
         })
 
-        const prevCardSummary = buildMonthlyCardPaymentSummary({
-            month: prevPeriod,
-            monthStartDay,
-            plans: allPlans,
-            transactions: prevTransactions,
-        })
+        const totalCreditCardExpense = currentCardSummary.reduce((totals, item) => {
+            item.items.forEach((charge) => addCurrencyAmount(totals, charge.currency, charge.amount))
+            return totals
+        }, emptyCurrencyTotals())
 
-        const totalCreditCardExpense = currentCardSummary.reduce((sum, item) => sum + item.due, 0)
-        const prevCreditCardExpense = prevCardSummary.reduce((sum, item) => sum + item.due, 0)
+        const totalCardPayments = transactions
+            .filter((transaction) => isCreditCardPaymentType(transaction.type))
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        const totalRemainingDebt = {
+            ars: Math.max(0, totalCreditCardExpense.ars - totalCardPayments.ars),
+            usd: Math.max(0, totalCreditCardExpense.usd - totalCardPayments.usd),
+        }
 
         const totalIncome = transactions
             .filter((t) => t.type === 'income')
-            .reduce((sum, t) => sum + t.amount, 0)
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
 
         const regularExpense = transactions
             .filter((t) => t.type === 'expense' && !t.installmentPlanId)
-            .reduce((sum, t) => sum + t.amount, 0)
-        const totalExpense = regularExpense + totalCreditCardExpense
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+        const totalExpense = regularExpense
 
         const prevIncome = prevTransactions
             .filter((t) => t.type === 'income')
-            .reduce((sum, t) => sum + t.amount, 0)
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
 
         const prevRegularExpense = prevTransactions
             .filter((t) => t.type === 'expense' && !t.installmentPlanId)
-            .reduce((sum, t) => sum + t.amount, 0)
-        const prevExpense = prevRegularExpense + prevCreditCardExpense
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+        const prevExpense = prevRegularExpense
+        const currentBalance = subtractCurrencyTotals(totalIncome, totalExpense)
+        const prevBalance = subtractCurrencyTotals(prevIncome, prevExpense)
 
         // Calcular tendencias (% de cambio)
         const calcTrend = (current: number, previous: number) => {
@@ -128,13 +171,13 @@ export async function GET(request: Request) {
         }
 
         const trends = {
-            income: calcTrend(totalIncome, prevIncome),
-            expense: calcTrend(totalExpense, prevExpense),
-            balance: calcTrend(totalIncome - totalExpense, prevIncome - prevExpense),
+            income: calcTrend(totalIncome.ars, prevIncome.ars),
+            expense: calcTrend(totalExpense.ars, prevExpense.ars),
+            balance: calcTrend(currentBalance.ars, prevBalance.ars),
         }
 
         // Gastos por categoría
-        const expenseByCategory: Record<string, { key: string; name: string; color?: string; total: number }> = {}
+        const expenseByCategory: Record<string, { key: string; name: string; color?: string; ars: number; usd: number }> = {}
         transactions
             .filter((t) => t.type === 'expense' && t.categoryId)
             .forEach((t) => {
@@ -142,45 +185,44 @@ export async function GET(request: Request) {
                 if (!cat) return
                 const key = cat._id.toString()
                 if (!expenseByCategory[key]) {
-                    expenseByCategory[key] = { key, name: cat.name, color: cat.color, total: 0 }
+                    expenseByCategory[key] = { key, name: cat.name, color: cat.color, ars: 0, usd: 0 }
                 }
-                expenseByCategory[key].total += t.amount
+                addCurrencyAmount(expenseByCategory[key], t.currency, t.amount)
             })
-
-        currentCardSummary.forEach((card) => {
-            card.items.forEach((item) => {
-                const key = item.categoryId || (item.categoryName ? `name:${item.categoryName}` : 'sin-categoria')
-                if (!expenseByCategory[key]) {
-                    expenseByCategory[key] = {
-                        key,
-                        name: item.categoryName ?? 'Sin categoría',
-                        color: item.categoryColor,
-                        total: 0,
-                    }
-                }
-                expenseByCategory[key].total += item.amount
-            })
-        })
 
         // Cuentas activas con saldo calculado
         const accounts = await Account.find({ userId, isActive: true })
 
         const accountsWithBalance = await Promise.all(
             accounts.map(async (account) => {
-                const balance = await calculateAccountBalance(
+                const supportedCurrencies = normalizeSupportedCurrencies(
+                    account.supportedCurrencies,
+                    account.currency,
+                    account.type
+                )
+                const primaryCurrency = getPrimaryCurrency({
+                    type: account.type,
+                    currency: account.currency,
+                    supportedCurrencies,
+                })
+                const balancesByCurrency = await calculateAccountBalancesByCurrency(
                     account._id,
                     account.userId,
-                    account.initialBalance ?? 0
+                    {
+                        initialBalances: getInitialBalancesByCurrency(account),
+                    }
                 )
 
                 return {
                     _id: account._id,
                     name: account.name,
                     type: account.type,
-                    currency: account.currency,
+                    currency: primaryCurrency,
+                    supportedCurrencies,
                     color: account.color,
                     includeInNetWorth: account.includeInNetWorth,
-                    balance,
+                    balancesByCurrency,
+                    balance: balancesByCurrency[primaryCurrency],
                 }
             })
         )
@@ -189,11 +231,19 @@ export async function GET(request: Request) {
         const netWorthAccounts = accountsWithBalance.filter((a) => a.includeInNetWorth)
         const assets = netWorthAccounts
             .filter((a) => !['credit_card', 'debt'].includes(a.type))
-            .reduce((sum, a) => sum + a.balance, 0)
+            .reduce((totals, account) => {
+                totals.ars += account.balancesByCurrency.ARS
+                totals.usd += account.balancesByCurrency.USD
+                return totals
+            }, emptyCurrencyTotals())
         const liabilities = netWorthAccounts
-            .filter((a) => ['credit_card', 'debt'].includes(a.type))
-            .reduce((sum, a) => sum + Math.abs(a.balance), 0)
-        const netWorth = assets - liabilities
+            .filter((a) => a.type === 'debt')
+            .reduce((totals, account) => {
+                totals.ars += Math.abs(account.balancesByCurrency.ARS)
+                totals.usd += Math.abs(account.balancesByCurrency.USD)
+                return totals
+            }, emptyCurrencyTotals())
+        const netWorth = subtractCurrencyTotals(assets, liabilities)
 
         // Compromisos pendientes del mes
         const activeCommitments = await ScheduledCommitment.find({ userId, isActive: true })
@@ -231,14 +281,12 @@ export async function GET(request: Request) {
             summary: {
                 totalIncome,
                 totalExpense,
-                balance: totalIncome - totalExpense,
+                balance: currentBalance,
                 totalCreditCardExpense,
-                totalDebt: accountsWithBalance
-                    .filter((a) => a.balance < 0)
-                    .reduce((sum, a) => sum + Math.abs(a.balance), 0),
+                totalDebt: totalRemainingDebt,
             },
             trends,
-            expenseByCategory: Object.values(expenseByCategory).sort((a, b) => b.total - a.total),
+            expenseByCategory: Object.values(expenseByCategory).sort((a, b) => (b.ars + b.usd) - (a.ars + a.usd)),
             accounts: accountsWithBalance,
             netWorth: {
                 assets,

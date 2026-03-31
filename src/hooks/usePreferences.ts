@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import type { Currency } from '@/lib/constants'
 
 export type DefaultView = 'dashboard' | 'transactions' | 'accounts' | 'projection'
 export type MonthStartDay = number // 1-28
@@ -9,18 +10,24 @@ interface Preferences {
     defaultView: DefaultView
     monthStartDay: MonthStartDay
     defaultAccountId?: string
+    consolidatedCurrency: Currency
+    referenceArsPerUsdRate?: number
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
     defaultView: 'dashboard',
     monthStartDay: 1,
     defaultAccountId: undefined,
+    consolidatedCurrency: 'ARS',
+    referenceArsPerUsdRate: undefined,
 }
 
 const STORAGE_KEYS = {
     defaultView: 'finp-default-view',
     monthStartDay: 'finp-month-start-day',
     defaultAccountId: 'finp-default-account-id',
+    consolidatedCurrency: 'finp-consolidated-currency',
+    referenceArsPerUsdRate: 'finp-reference-ars-per-usd-rate',
 } as const
 
 function readFromStorage(): Preferences {
@@ -30,10 +37,19 @@ function readFromStorage(): Preferences {
         const monthStartDayRaw = localStorage.getItem(STORAGE_KEYS.monthStartDay)
         const monthStartDay: MonthStartDay = monthStartDayRaw ? parseInt(monthStartDayRaw, 10) : DEFAULT_PREFERENCES.monthStartDay
         const defaultAccountId = localStorage.getItem(STORAGE_KEYS.defaultAccountId) ?? undefined
+        const consolidatedCurrencyRaw = localStorage.getItem(STORAGE_KEYS.consolidatedCurrency)
+        const consolidatedCurrency: Currency = consolidatedCurrencyRaw === 'USD' ? 'USD' : DEFAULT_PREFERENCES.consolidatedCurrency
+        const referenceArsPerUsdRateRaw = localStorage.getItem(STORAGE_KEYS.referenceArsPerUsdRate)
+        const parsedRate = referenceArsPerUsdRateRaw ? Number.parseFloat(referenceArsPerUsdRateRaw) : undefined
         return {
             defaultView,
             monthStartDay: isNaN(monthStartDay) ? DEFAULT_PREFERENCES.monthStartDay : monthStartDay,
             defaultAccountId: defaultAccountId || undefined,
+            consolidatedCurrency,
+            referenceArsPerUsdRate:
+                parsedRate && Number.isFinite(parsedRate) && parsedRate > 0
+                    ? parsedRate
+                    : undefined,
         }
     } catch {
         return DEFAULT_PREFERENCES
@@ -49,6 +65,12 @@ function writeToStorage(prefs: Preferences) {
         } else {
             localStorage.removeItem(STORAGE_KEYS.defaultAccountId)
         }
+        localStorage.setItem(STORAGE_KEYS.consolidatedCurrency, prefs.consolidatedCurrency)
+        if (prefs.referenceArsPerUsdRate && prefs.referenceArsPerUsdRate > 0) {
+            localStorage.setItem(STORAGE_KEYS.referenceArsPerUsdRate, String(prefs.referenceArsPerUsdRate))
+        } else {
+            localStorage.removeItem(STORAGE_KEYS.referenceArsPerUsdRate)
+        }
     } catch {
         // ignore
     }
@@ -56,7 +78,9 @@ function writeToStorage(prefs: Preferences) {
 
 function isDefaultPreferences(prefs: Preferences): boolean {
     return prefs.defaultView === DEFAULT_PREFERENCES.defaultView &&
-        prefs.monthStartDay === DEFAULT_PREFERENCES.monthStartDay
+        prefs.monthStartDay === DEFAULT_PREFERENCES.monthStartDay &&
+        prefs.consolidatedCurrency === DEFAULT_PREFERENCES.consolidatedCurrency &&
+        !prefs.referenceArsPerUsdRate
 }
 
 async function patchPreferences(patch: Partial<Preferences>): Promise<void> {
@@ -118,10 +142,25 @@ export function usePreferences() {
         patchPreferences({ defaultAccountId: accountId ?? null } as Partial<Preferences>).catch(() => {})
     }, [])
 
+    const setConsolidatedCurrency = useCallback((currency: Currency) => {
+        setPreferences((prev) => ({ ...prev, consolidatedCurrency: currency }))
+        writeToStorage({ ...readFromStorage(), consolidatedCurrency: currency })
+        patchPreferences({ consolidatedCurrency: currency }).catch(() => {})
+    }, [])
+
+    const setReferenceArsPerUsdRate = useCallback((rate: number | undefined) => {
+        const normalizedRate = rate && Number.isFinite(rate) && rate > 0 ? rate : undefined
+        setPreferences((prev) => ({ ...prev, referenceArsPerUsdRate: normalizedRate }))
+        writeToStorage({ ...readFromStorage(), referenceArsPerUsdRate: normalizedRate })
+        patchPreferences({ referenceArsPerUsdRate: normalizedRate ?? null } as Partial<Preferences>).catch(() => {})
+    }, [])
+
     return {
         preferences,
         setDefaultView,
         setMonthStartDay,
         setDefaultAccountId,
+        setConsolidatedCurrency,
+        setReferenceArsPerUsdRate,
     }
 }

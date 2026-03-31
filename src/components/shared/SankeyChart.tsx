@@ -32,6 +32,7 @@ interface SankeyApiData {
     totalIncome: number
     totalExpense: number
     balance: number
+    currency: 'ARS' | 'USD'
     creditCards?: CreditCardSankeyItem[]
 }
 
@@ -109,19 +110,19 @@ function useElementWidth<T extends HTMLElement>() {
     return { ref, width }
 }
 
-function formatCompactARS(value: number) {
+function formatCompactMoney(value: number, currency: 'ARS' | 'USD') {
     return new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: 'ARS',
+        currency,
         maximumFractionDigits: 0,
         notation: 'compact',
     }).format(value)
 }
 
-function formatARS(value: number) {
+function formatMoney(value: number, currency: 'ARS' | 'USD') {
     return new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: 'ARS',
+        currency,
         maximumFractionDigits: 0,
     }).format(value)
 }
@@ -217,6 +218,7 @@ function normalizeData(data: SankeyApiData): SankeyApiData {
         totalIncome,
         totalExpense,
         balance: rawBalance,
+        currency: data.currency,
         creditCards: data.creditCards,
     }
 }
@@ -678,11 +680,13 @@ function SankeyTooltip({
                            onClose,
                            containerWidth,
                            containerHeight,
+                           currency,
                        }: {
     active: ActiveInfo | null
     onClose: () => void
     containerWidth: number
     containerHeight: number
+    currency: 'ARS' | 'USD'
 }) {
     if (!active) return null
 
@@ -721,7 +725,7 @@ function SankeyTooltip({
                 }}
             >
                 <p className="mb-1 text-sm font-semibold text-foreground">{active.title}</p>
-                <p className="text-sm font-medium text-foreground">{formatARS(active.amount)}</p>
+                <p className="text-sm font-medium text-foreground">{formatMoney(active.amount, currency)}</p>
 
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                     {typeof active.percentOfIncome === 'number' && (
@@ -741,11 +745,13 @@ function MobileLegend({
                           items,
                           totals,
                           onSelect,
+                          currency,
                       }: {
     title: string
     items: SankeyItem[]
     totals: { income: number; expense: number; available: number; deficit: number }
     onSelect: (info: ActiveInfo) => void
+    currency: 'ARS' | 'USD'
 }) {
     return (
         <div className="space-y-2">
@@ -783,7 +789,7 @@ function MobileLegend({
                                 className="text-[11px]"
                                 style={{ color: getReadableAccent(item.color) }}
                             >
-                {truncate(item.name, 18)}
+                {truncate(item.name, 18)} · {formatCompactMoney(item.amount, currency)}
               </span>
                         </button>
                     )
@@ -919,7 +925,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             fontWeight={600}
                                             fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -941,7 +947,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             fontWeight={600}
                                             fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -963,7 +969,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             fontWeight={600}
                                             fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -985,7 +991,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             fontWeight={600}
                                             fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -1007,7 +1013,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             fontWeight={600}
                                             fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -1029,7 +1035,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             fontWeight={600}
                                             fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -1052,7 +1058,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             fontWeight={600}
                                             fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -1087,12 +1093,14 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                             items={graph.legends.income}
                             totals={graph.totals}
                             onSelect={setActive}
+                            currency={data.currency}
                         />
                         <MobileLegend
                             title="Gastos"
                             items={graph.legends.expense}
                             totals={graph.totals}
                             onSelect={setActive}
+                            currency={data.currency}
                         />
                         {graph.legends.creditCards.length > 0 && (
                             <MobileLegend
@@ -1100,6 +1108,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                 items={graph.legends.creditCards}
                                 totals={graph.totals}
                                 onSelect={setActive}
+                                currency={data.currency}
                             />
                         )}
                     </div>
@@ -1109,6 +1118,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                         onClose={() => setActive(null)}
                         containerWidth={layout.width}
                         containerHeight={layout.height + 120}
+                        currency={data.currency}
                     />
                 </>
             )}
@@ -1126,7 +1136,7 @@ export function SankeyChart({ month }: { month?: string }) {
             try {
                 setLoading(true)
 
-                const query = month ? `month=${month}` : `months=${months}`
+                const query = month ? `month=${month}&currency=ARS` : `months=${months}&currency=ARS`
                 const response = await fetch(`/api/sankey?${query}`)
                 const json = await response.json()
 
@@ -1165,31 +1175,33 @@ export function SankeyChart({ month }: { month?: string }) {
                     </p>
                 </div>
 
-                {!month && (
-                    <div
-                        className="flex w-fit shrink-0 overflow-hidden rounded-lg"
-                        style={{ border: '1px solid var(--border)' }}
-                    >
-                        {MONTH_OPTIONS.map((option) => (
-                            <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => setMonths(option.value)}
-                                className="px-3 py-1.5 text-xs font-medium transition-colors"
-                                style={{
-                                    background: months === option.value ? 'var(--sky)' : 'transparent',
-                                    color: months === option.value ? '#FFFFFF' : 'var(--muted-foreground)',
-                                    borderRight:
-                                        option.value !== MONTH_OPTIONS[MONTH_OPTIONS.length - 1].value
-                                            ? '1px solid var(--border)'
-                                            : 'none',
-                                }}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                    </div>
-                )}
+                <div className="flex items-center gap-2">
+                    {!month && (
+                        <div
+                            className="flex w-fit shrink-0 overflow-hidden rounded-lg"
+                            style={{ border: '1px solid var(--border)' }}
+                        >
+                            {MONTH_OPTIONS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setMonths(option.value)}
+                                    className="px-3 py-1.5 text-xs font-medium transition-colors"
+                                    style={{
+                                        background: months === option.value ? 'var(--sky)' : 'transparent',
+                                        color: months === option.value ? '#FFFFFF' : 'var(--muted-foreground)',
+                                        borderRight:
+                                            option.value !== MONTH_OPTIONS[MONTH_OPTIONS.length - 1].value
+                                                ? '1px solid var(--border)'
+                                                : 'none',
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <AnimatePresence mode="wait">

@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Account, Transaction } from '@/lib/models'
-
-type BalanceBucket = {
-    _id: string
-    total: number
-}
-
-type TransactionFlowsResult = {
-    incoming: BalanceBucket[]
-    outgoing: BalanceBucket[]
-}
-
-type AccountBalanceMap = Record<string, number>
+import { Account } from '@/lib/models'
+import { accountSchema } from '@/lib/validations'
+import type { IAccount } from '@/types'
+import {
+    buildCurrencyBalances,
+    getInitialBalancesByCurrency,
+    getPrimaryCurrency,
+    normalizeInitialBalances,
+    normalizeSupportedCurrencies,
+} from '@/lib/utils/accounts'
+import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 
 export async function GET() {
     try {
@@ -27,80 +25,65 @@ export async function GET() {
 
         const accounts = await Account.find({ userId: session.user.id })
             .sort({ createdAt: 1 })
-            .lean()
+            .lean<IAccount[]>()
 
         if (accounts.length === 0) {
             return NextResponse.json({ accounts: [] })
         }
 
-        const accountIds = accounts.map((account) => account._id)
+        const accountsWithBalance = accounts.map((account) => {
+            const supportedCurrencies = normalizeSupportedCurrencies(
+                account.supportedCurrencies,
+                account.currency,
+                account.type
+            )
+            const primaryCurrency = getPrimaryCurrency({
+                type: account.type,
+                currency: account.currency,
+                supportedCurrencies,
+            })
+            const initialBalances = normalizeInitialBalances(
+                account.initialBalances,
+                account.initialBalance,
+                account.currency,
+                supportedCurrencies,
+                account.type
+            )
+            return {
+                ...account,
+                supportedCurrencies,
+                currency: primaryCurrency,
+                initialBalances,
+                primaryCurrency,
+            }
+        })
 
-        const transactionFlows = await Transaction.aggregate<TransactionFlowsResult>([
-            {
-                $match: {
-                    userId: accounts[0].userId,
-                    $or: [
-                        { sourceAccountId: { $in: accountIds } },
-                        { destinationAccountId: { $in: accountIds } },
-                    ],
-                },
-            },
-            {
-                $project: {
-                    amount: 1,
-                    incomingAccountId: '$destinationAccountId',
-                    outgoingAccountId: '$sourceAccountId',
-                },
-            },
-            {
-                $facet: {
-                    incoming: [
-                        {
-                            $match: {
-                                incomingAccountId: { $ne: null },
-                            },
-                        },
-                        {
-                            $group: {
-                                _id: '$incomingAccountId',
-                                total: { $sum: '$amount' },
-                            },
-                        },
-                    ],
-                    outgoing: [
-                        {
-                            $match: {
-                                outgoingAccountId: { $ne: null },
-                            },
-                        },
-                        {
-                            $group: {
-                                _id: '$outgoingAccountId',
-                                total: { $sum: '$amount' },
-                            },
-                        },
-                    ],
-                },
-            },
-        ])
+        const balancesByAccount = await Promise.all(
+            accountsWithBalance.map(async (account) => ({
+                accountId: String(account._id),
+                balancesByCurrency: await calculateAccountBalancesByCurrency(
+                    account._id,
+                    account.userId,
+                    { initialBalances: account.initialBalances }
+                ),
+            }))
+        )
 
-        const balanceMap: AccountBalanceMap = {}
-        const flowResult = transactionFlows[0]
+        const balanceMap = new Map(
+            balancesByAccount.map((item) => [item.accountId, buildCurrencyBalances(item.balancesByCurrency)])
+        )
 
-        for (const bucket of flowResult?.incoming ?? []) {
-            balanceMap[String(bucket._id)] = (balanceMap[String(bucket._id)] ?? 0) + bucket.total
-        }
+        const hydratedAccounts = accountsWithBalance.map((account) => {
+            const balancesByCurrency = balanceMap.get(String(account._id)) ?? buildCurrencyBalances()
 
-        for (const bucket of flowResult?.outgoing ?? []) {
-            balanceMap[String(bucket._id)] = (balanceMap[String(bucket._id)] ?? 0) - bucket.total
-        }
+            return {
+                ...account,
+                balancesByCurrency,
+                balance: balancesByCurrency[account.primaryCurrency],
+            }
+        })
 
-        const accountsWithBalance = accounts.map((account) => ({
-            ...account,
-            balance: (account.initialBalance ?? 0) + (balanceMap[String(account._id)] ?? 0),
-        }))
-
-        return NextResponse.json({ accounts: accountsWithBalance })
+        return NextResponse.json({ accounts: hydratedAccounts })
     } catch (error) {
         console.error('Error al obtener cuentas:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -116,11 +99,11 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { name, type, currency, initialBalance, color, icon, bankName, lastFourDigits } = body
+        const parsed = accountSchema.safeParse(body)
 
-        if (!name || !type || !currency) {
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'Nombre, tipo y moneda son requeridos' },
+                { error: 'Datos de cuenta inválidos', details: parsed.error.flatten() },
                 { status: 400 }
             )
         }
@@ -129,14 +112,9 @@ export async function POST(request: Request) {
 
         const account = await Account.create({
             userId: session.user.id,
-            name,
-            type,
-            currency,
-            initialBalance: initialBalance || 0,
-            color,
-            icon,
-            bankName,
-            lastFourDigits,
+            ...parsed.data,
+            initialBalance: parsed.data.initialBalance ?? 0,
+            initialBalances: getInitialBalancesByCurrency(parsed.data),
         })
 
         return NextResponse.json({ account }, { status: 201 })

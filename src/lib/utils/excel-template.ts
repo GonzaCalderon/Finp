@@ -12,13 +12,16 @@ export const TEMPLATE_HEADERS = [
     'categoría',
     'cuotas',
     'mes de primer pago',
+    'monto destino',
+    'moneda destino',
+    'cotización manual',
     'observaciones',
 ] as const
 
 export type TemplateHeader = typeof TEMPLATE_HEADERS[number]
 
 export interface TemplateOptions {
-    accounts?: Array<{ name: string; currency: string }>
+    accounts?: Array<{ name: string; currencyLabel: string }>
     categories?: Array<{ name: string; type: string }>
 }
 
@@ -46,6 +49,7 @@ const COLORS = {
     income: 'E8F7EE',
     expense: 'FDECEC',
     card: 'EAF4FD',
+    exchange: 'E6F7F5',
     transfer: 'F2ECFC',
     adjustment: 'FFF4E6',
     payment: 'FEF0E7',
@@ -55,6 +59,7 @@ const TYPE_VALUES = [
     'ingreso',
     'gasto',
     'gasto con tc',
+    'cambio',
     'transferencia',
     'ajuste',
     'pago de tarjeta',
@@ -72,6 +77,9 @@ const EXAMPLE_ROWS = [
         'categoría': 'Supermercado',
         cuotas: '',
         'mes de primer pago': '',
+        'monto destino': '',
+        'moneda destino': '',
+        'cotización manual': '',
         observaciones: '',
     },
     {
@@ -85,7 +93,26 @@ const EXAMPLE_ROWS = [
         'categoría': 'Tecnología y herramientas',
         cuotas: 12,
         'mes de primer pago': '2026-04',
+        'monto destino': '',
+        'moneda destino': '',
+        'cotización manual': '',
         observaciones: 'Comprada en Garbarino',
+    },
+    {
+        fecha: '20/03/2026',
+        tipo: 'cambio',
+        'descripción': 'Compra de USD para ahorro',
+        monto: 1200000,
+        moneda: 'ARS',
+        cuenta: 'Cuenta corriente',
+        'cuenta destino': 'Ahorros USD',
+        'categoría': '',
+        cuotas: '',
+        'mes de primer pago': '',
+        'monto destino': 1000,
+        'moneda destino': 'USD',
+        'cotización manual': 1200,
+        observaciones: '',
     },
     {
         fecha: '10/03/2026',
@@ -98,6 +125,9 @@ const EXAMPLE_ROWS = [
         'categoría': 'Sueldo',
         cuotas: '',
         'mes de primer pago': '',
+        'monto destino': '',
+        'moneda destino': '',
+        'cotización manual': '',
         observaciones: '',
     },
     {
@@ -111,6 +141,9 @@ const EXAMPLE_ROWS = [
         'categoría': '',
         cuotas: '',
         'mes de primer pago': '',
+        'monto destino': '',
+        'moneda destino': '',
+        'cotización manual': '',
         observaciones: '',
     },
     {
@@ -124,6 +157,9 @@ const EXAMPLE_ROWS = [
         'categoría': '',
         cuotas: '',
         'mes de primer pago': '',
+        'monto destino': '',
+        'moneda destino': '',
+        'cotización manual': '',
         observaciones: 'Corrección manual',
     },
 ] satisfies Array<Record<TemplateHeader, string | number>>
@@ -131,14 +167,17 @@ const EXAMPLE_ROWS = [
 const HEADER_HELP: Record<TemplateHeader, string> = {
     fecha: 'Obligatorio. Formato sugerido: DD/MM/AAAA.',
     tipo: 'Obligatorio. Usa uno de los tipos validos de Finp.',
-    'descripción': 'Obligatoria salvo en transferencia y pago de tarjeta.',
+    'descripción': 'Obligatoria salvo en transferencia, cambio y pago de tarjeta.',
     monto: 'Obligatorio. Usa numero positivo, excepto ajustes que pueden ser negativos.',
     moneda: 'Obligatoria. Valores validos: ARS o USD.',
     cuenta: 'Cuenta principal. En gasto con TC representa la tarjeta.',
-    'cuenta destino': 'Solo para transferencia y pago de tarjeta.',
+    'cuenta destino': 'Para transferencia, cambio y pago de tarjeta.',
     'categoría': 'Solo para ingreso, gasto y gasto con TC.',
     cuotas: 'Solo para gasto con TC. Usa 1 si es una sola cuota.',
     'mes de primer pago': 'Solo para gasto con TC. Formato YYYY-MM.',
+    'monto destino': 'Solo para cambio manual. Monto que ingresa en la moneda destino.',
+    'moneda destino': 'Solo para cambio manual. Debe ser distinta de la moneda origen.',
+    'cotización manual': 'Solo para cambio manual. Tipo de cambio usado en la operación.',
     observaciones: 'Campo opcional para notas o contexto adicional.',
 }
 
@@ -212,6 +251,8 @@ function getRowFillByType(type?: string) {
             return COLORS.expense
         case 'gasto con tc':
             return COLORS.card
+        case 'cambio':
+            return COLORS.exchange
         case 'transferencia':
             return COLORS.transfer
         case 'ajuste':
@@ -298,14 +339,16 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
         '3. Cada tipo usa solo sus columnas correspondientes.',
         '4. Consulta la hoja "Listas" para copiar nombres exactos de cuentas y categorias.',
         '5. Si importas gasto con TC, completa tambien cuotas y mes de primer pago.',
+        '6. Si importas un cambio manual, completa cuenta destino, monto destino, moneda destino y cotización.',
     ])
 
     addInfoBlock(instructions, 12, 'Campos obligatorios', [
         'fecha, tipo, monto y moneda siempre son obligatorios.',
-        'descripcion es obligatoria salvo en transferencia y pago de tarjeta.',
-        'cuenta destino solo aplica a transferencia y pago de tarjeta.',
+        'descripcion es obligatoria salvo en transferencia, cambio y pago de tarjeta.',
+        'cuenta destino aplica a transferencia, cambio y pago de tarjeta.',
         'categoria solo aplica a ingreso, gasto y gasto con TC.',
         'cuotas y mes de primer pago son obligatorios para gasto con TC.',
+        'monto destino, moneda destino y cotización manual son obligatorios para cambio.',
     ])
 
     addInfoBlock(instructions, 20, 'Tips utiles', [
@@ -313,6 +356,7 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
         'Si un nombre no coincide con Finp, la fila quedara marcada para revision.',
         'En pago de tarjeta: cuenta = cuenta que paga, cuenta destino = tarjeta.',
         'En gasto con TC: cuenta = tarjeta.',
+        'En cambio: cuenta = origen, cuenta destino = destino, y la cotización queda guardada en la operación.',
     ])
 
     for (let row = 1; row <= instructions.rowCount; row += 1) {
@@ -335,12 +379,15 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
         { key: 'categoria', width: 26 },
         { key: 'cuotas', width: 10 },
         { key: 'mes de primer pago', width: 18 },
+        { key: 'monto destino', width: 16 },
+        { key: 'moneda destino', width: 14 },
+        { key: 'cotización manual', width: 16 },
         { key: 'observaciones', width: 34 },
     ]
 
     sheet.mergeCells('A1:F1')
-    sheet.mergeCells('G1:J1')
-    const optionalGroup = sheet.getCell('K1')
+    sheet.mergeCells('G1:M1')
+    const optionalGroup = sheet.getCell('N1')
     sheet.getCell('A1').value = 'Campos comunes'
     sheet.getCell('G1').value = 'Segun el tipo'
     optionalGroup.value = 'Opcional'
@@ -373,11 +420,11 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
                 rowFill,
                 colNumber === 4
                     ? { horizontal: 'right' }
-                    : colNumber === 1 || colNumber === 5 || colNumber === 9 || colNumber === 10
+                    : colNumber === 1 || colNumber === 5 || colNumber === 9 || colNumber === 10 || colNumber === 12
                         ? { horizontal: 'center' }
                         : undefined
             )
-            if (colNumber === 4 && typeof cell.value === 'number') {
+            if ((colNumber === 4 || colNumber === 11 || colNumber === 13) && typeof cell.value === 'number') {
                 cell.numFmt = '#,##0.00'
             }
             if (colNumber === 9 && typeof cell.value === 'number') {
@@ -393,19 +440,19 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
             const cell = row.getCell(index + 1)
             let fill: string = COLORS.white
             if (index <= 5) fill = COLORS.commonSoft
-            if (index >= 6 && index <= 9) fill = COLORS.typeSoft
-            if (index === 10) fill = COLORS.optionalSoft
+            if (index >= 6 && index <= 12) fill = COLORS.typeSoft
+            if (index === 13) fill = COLORS.optionalSoft
 
             styleDataCell(
                 cell,
                 fill,
                 index === 3
                     ? { horizontal: 'right' }
-                    : index === 0 || index === 4 || index === 8 || index === 9
+                    : index === 0 || index === 4 || index === 8 || index === 9 || index === 11
                         ? { horizontal: 'center' }
                         : undefined
             )
-            if (header === 'monto') {
+            if (header === 'monto' || header === 'monto destino' || header === 'cotización manual') {
                 cell.numFmt = '#,##0.00'
             }
         })
@@ -414,7 +461,7 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
 
     sheet.autoFilter = {
         from: 'A2',
-        to: 'K2',
+        to: 'N2',
     }
 
     const lists = workbook.addWorksheet('Listas', {
@@ -489,6 +536,7 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
             ['ingreso', 'Ingreso de dinero a una cuenta'],
             ['gasto', 'Egreso de dinero de una cuenta'],
             ['gasto con tc', 'Consumo con tarjeta de credito'],
+            ['cambio', 'Cambio manual entre ARS y USD'],
             ['transferencia', 'Movimiento entre dos cuentas propias'],
             ['ajuste', 'Correccion manual'],
             ['pago de tarjeta', 'Pago de saldo de tarjeta'],
@@ -500,9 +548,12 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
         ['Columna', 'Uso'],
         [
             ['cuenta', 'Cuenta principal del movimiento'],
-            ['cuenta destino', 'Solo transferencia y pago de tarjeta'],
+            ['cuenta destino', 'Transferencia, cambio y pago de tarjeta'],
             ['cuotas', 'Solo gasto con TC'],
             ['mes de primer pago', 'Solo gasto con TC'],
+            ['monto destino', 'Solo cambio manual'],
+            ['moneda destino', 'Solo cambio manual'],
+            ['cotización manual', 'Solo cambio manual'],
         ]
     )
 
@@ -510,7 +561,7 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
         'Tus cuentas en Finp',
         ['Nombre de cuenta', 'Moneda'],
         options?.accounts?.length
-            ? options.accounts.map((account) => [account.name, account.currency])
+            ? options.accounts.map((account) => [account.name, account.currencyLabel])
             : [['No tienes cuentas activas en Finp todavia', '']]
     )
 
@@ -552,6 +603,35 @@ export async function generateImportTemplate(options?: TemplateOptions): Promise
             showErrorMessage: true,
             errorTitle: 'Cuotas invalidas',
             error: 'Usa un numero entero mayor a 0.',
+        }
+
+        sheet.getCell(`K${rowNumber}`).dataValidation = {
+            type: 'decimal',
+            operator: 'greaterThan',
+            formulae: [0],
+            allowBlank: true,
+            showErrorMessage: true,
+            errorTitle: 'Monto destino invalido',
+            error: 'Usa un numero mayor a 0 cuando cargues un cambio manual.',
+        }
+
+        sheet.getCell(`L${rowNumber}`).dataValidation = {
+            type: 'list',
+            allowBlank: true,
+            formulae: ['"ARS,USD"'],
+            showErrorMessage: true,
+            errorTitle: 'Moneda destino invalida',
+            error: 'Usa ARS o USD.',
+        }
+
+        sheet.getCell(`M${rowNumber}`).dataValidation = {
+            type: 'decimal',
+            operator: 'greaterThan',
+            formulae: [0],
+            allowBlank: true,
+            showErrorMessage: true,
+            errorTitle: 'Cotización invalida',
+            error: 'Usa un numero mayor a 0 para la cotización manual.',
         }
 
         if (options?.accounts?.length) {

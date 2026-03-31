@@ -23,6 +23,7 @@ export async function GET(request: Request) {
         const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
         const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
         const month = searchParams.get('month') ?? getCurrentFinancialPeriod(new Date(), monthStartDay)
+        const currency = searchParams.get('currency') === 'USD' ? 'USD' : 'ARS'
         const { start, end } = parseFinancialPeriod(month, monthStartDay)
 
         const [transactions, plans, card] = await Promise.all([
@@ -36,27 +37,50 @@ export async function GET(request: Request) {
             InstallmentPlan.find({ userId: session.user.id, accountId: cardId })
                 .populate('accountId', 'name type currency color')
                 .populate('categoryId', 'name color type'),
-            Account.findOne({ _id: cardId, userId: session.user.id }, 'name currency color'),
+            Account.findOne({ _id: cardId, userId: session.user.id }, 'name currency supportedCurrencies color'),
         ])
 
-        const summary = buildMonthlyCardPaymentSummary({
+        const rawSummary = buildMonthlyCardPaymentSummary({
             month,
             monthStartDay,
             plans,
             transactions,
         }).find((item) => item.cardId === cardId)
 
+        const buildSummaryForCurrency = (targetCurrency: 'ARS' | 'USD') => {
+            const due = rawSummary?.items
+                .filter((item) => item.currency === targetCurrency)
+                .reduce((sum, item) => sum + item.amount, 0) ?? 0
+            const paid = transactions
+                .filter((transaction) =>
+                    transaction.destinationAccountId?.toString() === cardId &&
+                    transaction.currency === targetCurrency &&
+                    ['credit_card_payment', 'debt_payment'].includes(transaction.type)
+                )
+                .reduce((sum, transaction) => sum + transaction.amount, 0)
+
+            return {
+                due,
+                paid,
+                pending: Math.max(0, due - paid),
+                currency: targetCurrency,
+                items: rawSummary?.items.filter((item) => item.currency === targetCurrency) ?? [],
+            }
+        }
+
+        const byCurrency = {
+            ARS: buildSummaryForCurrency('ARS'),
+            USD: buildSummaryForCurrency('USD'),
+        }
+
         return NextResponse.json({
             month,
-            summary: summary ?? {
+            summary: {
                 cardId,
-                cardName: card?.name,
-                cardColor: card?.color,
-                due: 0,
-                paid: 0,
-                pending: 0,
-                currency: card?.currency ?? 'ARS',
-                items: [],
+                cardName: rawSummary?.cardName ?? card?.name,
+                cardColor: rawSummary?.cardColor ?? card?.color,
+                ...byCurrency[currency],
+                byCurrency,
             },
         })
     } catch (error) {

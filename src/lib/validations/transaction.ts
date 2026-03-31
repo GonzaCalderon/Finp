@@ -5,6 +5,7 @@ const transactionTypeSchema = z.enum([
     'expense',
     'credit_card_expense',
     'transfer',
+    'exchange',
     'credit_card_payment',
     'debt_payment',
     'adjustment',
@@ -40,6 +41,20 @@ const amountSchema = z.preprocess((value) => {
     return value
 }, z.number().refine(n => n !== 0, 'El monto debe ser distinto de cero'))
 
+const optionalAmountSchema = z.preprocess((value) => {
+    if (typeof value === 'number') return value
+
+    if (typeof value === 'string') {
+        const normalized = value.replace(',', '.').trim()
+        if (normalized === '') return undefined
+
+        const parsed = Number(normalized)
+        return Number.isNaN(parsed) ? value : parsed
+    }
+
+    return value
+}, z.number().optional())
+
 const dateSchema = z.preprocess((value) => {
     if (value instanceof Date) return value
 
@@ -65,6 +80,13 @@ export const transactionSchema = z
         categoryId: optionalObjectIdString,
         sourceAccountId: optionalObjectIdString,
         destinationAccountId: optionalObjectIdString,
+        destinationAmount: optionalAmountSchema,
+        destinationCurrency: currencySchema.optional(),
+        exchangeRate: optionalAmountSchema.refine(
+            (value) => value === undefined || value > 0,
+            'La cotización debe ser mayor a 0'
+        ),
+        paymentGroupId: optionalTrimmedString,
         notes: optionalTrimmedString,
         merchant: optionalTrimmedString,
     })
@@ -86,7 +108,7 @@ export const transactionSchema = z
         }
 
         if (
-            ['expense', 'credit_card_expense', 'transfer', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(
+            ['expense', 'credit_card_expense', 'transfer', 'exchange', 'credit_card_payment', 'debt_payment', 'adjustment'].includes(
                 data.type
             ) &&
             !data.sourceAccountId
@@ -99,7 +121,7 @@ export const transactionSchema = z
         }
 
         if (
-            ['transfer', 'credit_card_payment', 'debt_payment'].includes(data.type) &&
+            ['transfer', 'exchange', 'credit_card_payment', 'debt_payment'].includes(data.type) &&
             !data.destinationAccountId
         ) {
             ctx.addIssue({
@@ -120,6 +142,40 @@ export const transactionSchema = z
                 message: 'La cuenta origen y destino no pueden ser la misma',
                 path: ['destinationAccountId'],
             })
+        }
+
+        if (data.type === 'exchange') {
+            if (!data.destinationCurrency) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'La moneda destino es requerida',
+                    path: ['destinationCurrency'],
+                })
+            }
+
+            if (typeof data.destinationAmount !== 'number' || data.destinationAmount <= 0) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'El monto destino debe ser mayor a 0',
+                    path: ['destinationAmount'],
+                })
+            }
+
+            if (!data.exchangeRate || data.exchangeRate <= 0) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'La cotización manual es requerida',
+                    path: ['exchangeRate'],
+                })
+            }
+
+            if (data.destinationCurrency && data.destinationCurrency === data.currency) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'La moneda origen y destino deben ser distintas',
+                    path: ['destinationCurrency'],
+                })
+            }
         }
     })
 
