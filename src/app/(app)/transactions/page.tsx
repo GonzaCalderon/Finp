@@ -44,6 +44,7 @@ import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
+import { buildMonthOptions } from '@/lib/utils/period'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -86,19 +87,7 @@ const getCurrentMonth = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-    const date = new Date()
-    date.setDate(1) // evita overflow (ej. 31 mar - 1 mes → 31 feb → 3 mar duplicado)
-    date.setMonth(date.getMonth() - i)
-
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const label = date.toLocaleDateString('es-AR', {
-        month: 'long',
-        year: 'numeric',
-    })
-
-    return { value, label }
-})
+const MONTHS = buildMonthOptions({ pastMonths: 8, futureMonths: 1 })
 
 type BasicOption = {
     value: string
@@ -829,10 +818,10 @@ export default function TransactionsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Select value={month} onValueChange={setMonth}>
-                        <SelectTrigger className="w-36 sm:w-44 h-8 text-sm">
+                        <SelectTrigger className="w-32 sm:w-40 h-7.5 text-xs sm:text-sm">
                             <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-72">
                             {MONTHS.map((monthOption) => (
                                 <SelectItem key={monthOption.value} value={monthOption.value}>
                                     {monthOption.label}
@@ -1061,30 +1050,14 @@ export default function TransactionsPage() {
                                                     <div className="flex items-center gap-2">
                                                         <p
                                                             className="font-semibold tabular-nums text-sm"
-                                                            style={{
-                                                                color:
-                                                                    transaction.type === 'income'
-                                                                        ? '#10B981'
-                                                                        : transaction.type === 'expense'
-                                                                            ? 'var(--destructive)'
-                                                                            : transaction.type === 'credit_card_expense'
-                                                                                ? '#6366F1'
-                                                                                : 'var(--foreground)',
-                                                            }}
+                                                            style={{ color: getTransactionAmountColor(transaction) }}
                                                         >
+                                                            {getTransactionDisplayPrefix(transaction)}
                                                             <ResponsiveAmount
-                                                                amount={transaction.amount}
+                                                                amount={getTransactionDisplayAmount(transaction)}
                                                                 currency={transaction.currency}
                                                                 hidden={hidden}
-                                                                color={
-                                                                    transaction.type === 'income'
-                                                                        ? '#10B981'
-                                                                        : transaction.type === 'expense'
-                                                                            ? 'var(--destructive)'
-                                                                            : transaction.type === 'credit_card_expense'
-                                                                                ? '#6366F1'
-                                                                                : 'var(--foreground)'
-                                                                }
+                                                                color={getTransactionAmountColor(transaction)}
                                                             />
                                                         </p>
                                                         <Button
@@ -1167,6 +1140,15 @@ export default function TransactionsPage() {
                                                                     · {((transaction.installmentPlanId as { installmentCount?: number } | null)?.installmentCount ?? 'N')} cuotas
                                                                 </span>
                                                             )}
+
+                                                            {transaction.type === 'adjustment' && (
+                                                                <span
+                                                                    className="text-xs font-medium"
+                                                                    style={{ color: getTransactionAmountColor(transaction) }}
+                                                                >
+                                                                    · {isPositiveAdjustment(transaction) ? 'suma saldo' : 'descuenta saldo'}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1174,30 +1156,14 @@ export default function TransactionsPage() {
                                                 <div className="hidden sm:flex items-center gap-2 shrink-0">
                                                     <p
                                                         className="font-semibold tabular-nums text-sm"
-                                                        style={{
-                                                            color:
-                                                                transaction.type === 'income'
-                                                                    ? '#10B981'
-                                                                    : transaction.type === 'expense'
-                                                                        ? 'var(--destructive)'
-                                                                        : transaction.type === 'credit_card_expense'
-                                                                            ? '#6366F1'
-                                                                            : 'var(--foreground)',
-                                                        }}
+                                                        style={{ color: getTransactionAmountColor(transaction) }}
                                                     >
+                                                        {getTransactionDisplayPrefix(transaction)}
                                                         <ResponsiveAmount
-                                                            amount={transaction.amount}
+                                                            amount={getTransactionDisplayAmount(transaction)}
                                                             currency={transaction.currency}
                                                             hidden={hidden}
-                                                            color={
-                                                                transaction.type === 'income'
-                                                                    ? '#10B981'
-                                                                    : transaction.type === 'expense'
-                                                                        ? 'var(--destructive)'
-                                                                        : transaction.type === 'credit_card_expense'
-                                                                            ? '#6366F1'
-                                                                            : 'var(--foreground)'
-                                                            }
+                                                            color={getTransactionAmountColor(transaction)}
                                                         />
                                                     </p>
                                                     <div className="flex gap-1">
@@ -1288,4 +1254,27 @@ export default function TransactionsPage() {
             </AlertDialog>
         </motion.div>
     )
+}
+
+function isPositiveAdjustment(transaction: ITransaction) {
+    return transaction.type === 'adjustment' && transaction.amount < 0
+}
+
+function getTransactionAmountColor(transaction: ITransaction) {
+    if (transaction.type === 'income') return '#10B981'
+    if (transaction.type === 'expense') return 'var(--destructive)'
+    if (transaction.type === 'credit_card_expense') return '#6366F1'
+    if (transaction.type === 'adjustment') {
+        return isPositiveAdjustment(transaction) ? '#10B981' : 'var(--destructive)'
+    }
+    return 'var(--foreground)'
+}
+
+function getTransactionDisplayAmount(transaction: ITransaction) {
+    return transaction.type === 'adjustment' ? Math.abs(transaction.amount) : transaction.amount
+}
+
+function getTransactionDisplayPrefix(transaction: ITransaction) {
+    if (transaction.type !== 'adjustment') return ''
+    return isPositiveAdjustment(transaction) ? '+' : '-'
 }

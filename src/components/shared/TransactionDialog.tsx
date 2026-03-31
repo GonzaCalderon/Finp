@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
     Dialog,
     DialogContent,
@@ -288,7 +289,7 @@ export function TransactionDialog({
         setFirstClosingMonth('')
 
         if (transaction) {
-            setAdjustmentSign(transaction.type === 'adjustment' && transaction.amount < 0 ? '-' : '+')
+            setAdjustmentSign(transaction.type === 'adjustment' && transaction.amount > 0 ? '-' : '+')
             reset({
                 type: (normalizeLegacyTransactionType(transaction.type) ?? transaction.type) as TransactionFormInput['type'],
                 amount: Math.abs(transaction.amount),
@@ -465,9 +466,12 @@ export function TransactionDialog({
             ? { ...data, type: 'credit_card_expense' as TransactionFormInput['type'] }
             : data
 
-        // Apply adjustment sign if negative
-        if (finalData.type === 'adjustment' && adjustmentSign === '-') {
-            finalData = { ...finalData, amount: -finalData.amount }
+        if (finalData.type === 'adjustment') {
+            const absoluteAmount = Math.abs(finalData.amount)
+            finalData = {
+                ...finalData,
+                amount: adjustmentSign === '+' ? -absoluteAmount : absoluteAmount,
+            }
         }
 
         await onSubmit(finalData)
@@ -581,50 +585,75 @@ export function TransactionDialog({
                         )}
 
                         {/* ── Monto + Moneda ── */}
-                        <div className="grid grid-cols-3 gap-3 items-start">
-                            <div className={type === 'adjustment' ? 'col-span-1' : 'col-span-2'}>
+                        <div className={type === 'adjustment' ? 'space-y-3' : 'grid grid-cols-3 gap-3 items-start'}>
+                            <div className={type === 'adjustment' ? '' : 'col-span-2'}>
                                 <FormattedAmountInput
                                     id="amount"
                                     label="Monto"
-                                    value={amount}
+                                    value={type === 'adjustment' && adjustmentSign === '-' ? -amount : amount}
                                     currency={currency}
                                     error={errors.amount?.message}
-                                    onValueChangeAction={nextAmount =>
-                                        setValue('amount', nextAmount, { shouldValidate: true, shouldDirty: true })
-                                    }
+                                    allowNegative={type === 'adjustment'}
+                                    onNegativeInputDetectedAction={() => {
+                                        if (type === 'adjustment') setAdjustmentSign('-')
+                                    }}
+                                    onValueChangeAction={nextAmount => {
+                                        const normalizedAmount =
+                                            type === 'adjustment'
+                                                ? Math.abs(nextAmount)
+                                                : nextAmount
+
+                                        setValue('amount', normalizedAmount, {
+                                            shouldValidate: true,
+                                            shouldDirty: true,
+                                        })
+                                    }}
                                 />
                             </div>
                             {type === 'adjustment' && (
-                                <div className="space-y-2">
-                                    <Label>Signo</Label>
-                                    <div className="grid grid-cols-2 gap-1">
-                                        {(['+', '-'] as const).map(sign => (
-                                            <button
-                                                key={sign}
-                                                type="button"
-                                                onClick={() => setAdjustmentSign(sign)}
-                                                className="rounded-lg border py-2 text-sm font-semibold transition-colors"
+                                <div
+                                    className="rounded-xl border px-3 py-2.5"
+                                    style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-sm">Impacto del ajuste</Label>
+                                            <p className="text-xs text-muted-foreground">
+                                                Positivo suma saldo. Negativo descuenta saldo.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <span
+                                                className="text-xs font-medium transition-colors"
                                                 style={{
-                                                    background: adjustmentSign === sign
-                                                        ? sign === '+'
-                                                            ? 'rgba(16,185,129,0.15)'
-                                                            : 'rgba(239,68,68,0.15)'
-                                                        : 'var(--secondary)',
-                                                    color: adjustmentSign === sign
-                                                        ? sign === '+' ? '#059669' : '#DC2626'
+                                                    color: adjustmentSign === '-'
+                                                        ? 'var(--destructive)'
                                                         : 'var(--muted-foreground)',
-                                                    borderColor: adjustmentSign === sign
-                                                        ? sign === '+' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'
-                                                        : 'var(--border)',
                                                 }}
                                             >
-                                                {sign}
-                                            </button>
-                                        ))}
+                                                Negativo
+                                            </span>
+                                            <Switch
+                                                checked={adjustmentSign === '+'}
+                                                onCheckedChange={(checked) => setAdjustmentSign(checked ? '+' : '-')}
+                                                aria-label="Cambiar impacto del ajuste"
+                                            />
+                                            <span
+                                                className="text-xs font-medium transition-colors"
+                                                style={{
+                                                    color: adjustmentSign === '+'
+                                                        ? '#059669'
+                                                        : 'var(--muted-foreground)',
+                                                }}
+                                            >
+                                                Positivo
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             )}
-                            <div className="space-y-2">
+                            <div className={type === 'adjustment' ? 'max-w-[180px] space-y-2' : 'space-y-2'}>
                                 <Label>Moneda</Label>
                                 <Select
                                     value={currency}

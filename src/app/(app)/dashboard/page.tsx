@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { buildMonthOptions } from '@/lib/utils/period'
 import { TrendingUp, TrendingDown, CheckCircle } from 'lucide-react'
 
 const getCurrentMonth = () => {
@@ -27,14 +28,7 @@ const getCurrentMonth = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-    const date = new Date()
-    date.setDate(1) // evita overflow (ej. 31 ene - 1 mes = 31 dic → se va a ene)
-    date.setMonth(date.getMonth() - i)
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const label = date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
-    return { value, label }
-})
+const MONTHS = buildMonthOptions({ pastMonths: 8, futureMonths: 1 })
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
     bank: 'Banco',
@@ -268,10 +262,10 @@ export default function DashboardPage() {
                     {refreshing && <Spinner className="text-muted-foreground" />}
                 </div>
                 <Select value={month} onValueChange={setMonth}>
-                    <SelectTrigger className="w-44 h-8 text-sm">
+                    <SelectTrigger className="w-32 sm:w-40 h-7.5 text-xs sm:text-sm">
                         <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
                         {MONTHS.map((m) => (
                             <SelectItem key={m.value} value={m.value}>
                                 {m.label}
