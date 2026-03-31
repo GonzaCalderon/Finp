@@ -6,6 +6,34 @@ import { calculateAccountBalance } from '@/lib/utils/balance'
 import { parseFinancialPeriod, getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { buildMonthlyCardPaymentSummary, getInstallmentStatusForMonth } from '@/lib/utils/credit-card'
 
+type PopulatedCategoryRef = {
+    _id: { toString: () => string }
+    name: string
+    color?: string
+}
+
+function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
+    if (!value || typeof value !== 'object' || typeof (value as { name?: unknown }).name !== 'string') {
+        return null
+    }
+
+    const candidate = value as {
+        _id?: { toString?: () => string }
+        name: string
+        color?: unknown
+    }
+
+    if (!candidate._id || typeof candidate._id.toString !== 'function') {
+        return null
+    }
+
+    return {
+        _id: candidate._id as { toString: () => string },
+        name: candidate.name,
+        color: typeof candidate.color === 'string' ? candidate.color : undefined,
+    }
+}
+
 export async function GET(request: Request) {
     try {
         const session = await auth()
@@ -110,7 +138,8 @@ export async function GET(request: Request) {
         transactions
             .filter((t) => t.type === 'expense' && t.categoryId)
             .forEach((t) => {
-                const cat = t.categoryId as { _id: { toString: () => string }; name: string; color?: string }
+                const cat = getPopulatedCategoryRef(t.categoryId)
+                if (!cat) return
                 const key = cat._id.toString()
                 if (!expenseByCategory[key]) {
                     expenseByCategory[key] = { key, name: cat.name, color: cat.color, total: 0 }

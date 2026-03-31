@@ -5,6 +5,34 @@ import { Transaction, InstallmentPlan, User } from '@/lib/models'
 import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
 import { getCurrentFinancialPeriod, parseFinancialPeriod } from '@/lib/utils/period'
 
+type PopulatedCategoryRef = {
+    _id: { toString: () => string }
+    name: string
+    color?: string
+}
+
+function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
+    if (!value || typeof value !== 'object' || typeof (value as { name?: unknown }).name !== 'string') {
+        return null
+    }
+
+    const candidate = value as {
+        _id?: { toString?: () => string }
+        name: string
+        color?: unknown
+    }
+
+    if (!candidate._id || typeof candidate._id.toString !== 'function') {
+        return null
+    }
+
+    return {
+        _id: candidate._id as { toString: () => string },
+        name: candidate.name,
+        color: typeof candidate.color === 'string' ? candidate.color : undefined,
+    }
+}
+
 export async function GET(request: Request) {
     try {
         const session = await auth()
@@ -43,7 +71,7 @@ export async function GET(request: Request) {
         const expenseMap: Record<string, { name: string; amount: number; color: string }> = {}
 
         transactions.forEach((t) => {
-            const cat = t.categoryId as { _id: { toString: () => string }; name: string; color?: string } | null
+            const cat = getPopulatedCategoryRef(t.categoryId)
             const key = cat?._id?.toString() ?? 'sin-categoria'
             const name = cat?.name ?? 'Sin categoría'
             const color = cat?.color ?? '#9CA3AF'
