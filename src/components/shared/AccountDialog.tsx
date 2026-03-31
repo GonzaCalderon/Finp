@@ -24,12 +24,27 @@ import {accountSchema, type AccountFormData, AccountFormInput} from '@/lib/valid
 import type { IAccount } from '@/types'
 import { Spinner } from '@/components/shared/Spinner'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
+import { getAccountCurrencyLabel, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
 
 interface AccountDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     account: IAccount | null
     onSubmit: (data: AccountFormData) => Promise<void>
+}
+
+type CurrencyCapabilityOption = 'ARS' | 'USD' | 'ARS_USD'
+
+function getCurrencyCapabilityValue(supportedCurrencies?: string[]): CurrencyCapabilityOption {
+    const normalized = normalizeSupportedCurrencies(supportedCurrencies as ('ARS' | 'USD')[] | undefined)
+    if (normalized.length > 1) return 'ARS_USD'
+    return normalized[0]
+}
+
+function getSupportedCurrenciesFromCapability(value: CurrencyCapabilityOption): ('ARS' | 'USD')[] {
+    if (value === 'USD') return ['USD']
+    if (value === 'ARS_USD') return ['ARS', 'USD']
+    return ['ARS']
 }
 
 export function AccountDialog({ open, onOpenChange, account, onSubmit }: AccountDialogProps) {
@@ -45,8 +60,13 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
         defaultValues: {
             color: '#6366f1',
             initialBalance: 0,
+            initialBalances: {
+                ARS: 0,
+                USD: 0,
+            },
             type: undefined,
-            currency: undefined,
+            currency: 'ARS',
+            supportedCurrencies: ['ARS'],
             allowNegativeBalance: true,
         },
     })
@@ -55,18 +75,35 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const type = watch('type')
+    const supportedCurrencies = watch('supportedCurrencies')
+    const initialBalances = watch('initialBalances')
     const color = watch('color') ?? '#6366f1'
     const allowNegativeBalance = watch('allowNegativeBalance') ?? true
+    const isCreditCard = type === 'credit_card'
+    const isDualCurrency = (supportedCurrencies?.length ?? 0) > 1
+    const currencyCapability = isCreditCard
+        ? 'ARS_USD'
+        : getCurrencyCapabilityValue(supportedCurrencies as string[] | undefined)
 
     useEffect(() => {
         if (open) {
             if (account) {
+                const normalizedSupportedCurrencies = normalizeSupportedCurrencies(
+                    account.supportedCurrencies,
+                    account.currency,
+                    account.type
+                )
                 reset({
                     name: account.name,
                     type: account.type,
-                    currency: account.currency,
+                    currency: normalizedSupportedCurrencies[0],
+                    supportedCurrencies: normalizedSupportedCurrencies,
                     institution: account.institution ?? '',
                     initialBalance: account.initialBalance ?? 0,
+                    initialBalances: {
+                        ARS: account.initialBalances?.ARS ?? (account.currency === 'ARS' ? account.initialBalance ?? 0 : 0),
+                        USD: account.initialBalances?.USD ?? (account.currency === 'USD' ? account.initialBalance ?? 0 : 0),
+                    },
                     color: (account as IAccount & { color?: string }).color ?? '#6366f1',
                     allowNegativeBalance: (account as IAccount & { allowNegativeBalance?: boolean }).allowNegativeBalance ?? true,
                     creditCardConfig: account.creditCardConfig,
@@ -75,11 +112,42 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                 reset({
                     color: '#6366f1',
                     initialBalance: 0,
+                    initialBalances: {
+                        ARS: 0,
+                        USD: 0,
+                    },
+                    currency: 'ARS',
+                    supportedCurrencies: ['ARS'],
                     allowNegativeBalance: true,
                 })
             }
         }
     }, [open, account, reset])
+
+    useEffect(() => {
+        if (!type) return
+
+        if (type === 'credit_card') {
+            setValue('supportedCurrencies', ['ARS', 'USD'], { shouldValidate: true })
+            setValue('currency', 'ARS', { shouldValidate: true })
+            return
+        }
+
+        if (!supportedCurrencies || supportedCurrencies.length === 0) {
+            setValue('supportedCurrencies', ['ARS'], { shouldValidate: true })
+            setValue('currency', 'ARS', { shouldValidate: true })
+        }
+    }, [type, supportedCurrencies, setValue])
+
+    const handleCurrencyCapabilityChange = (value: CurrencyCapabilityOption) => {
+        const nextSupportedCurrencies = getSupportedCurrenciesFromCapability(value)
+        setValue('supportedCurrencies', nextSupportedCurrencies, { shouldValidate: true, shouldDirty: true })
+        setValue('currency', nextSupportedCurrencies[0], { shouldValidate: true, shouldDirty: true })
+        setValue('initialBalance', initialBalances?.[nextSupportedCurrencies[0]] ?? 0, {
+            shouldValidate: true,
+            shouldDirty: true,
+        })
+    }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,18 +183,33 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Moneda</Label>
-                        <Select value={watch('currency')}
-                                onValueChange={(v) => setValue('currency', v as AccountFormData['currency'], { shouldValidate: true })}>
+                        <Label>Monedas disponibles</Label>
+                        <Select
+                            value={currencyCapability}
+                            onValueChange={(v) => handleCurrencyCapabilityChange(v as CurrencyCapabilityOption)}
+                            disabled={isCreditCard}
+                        >
                             <SelectTrigger>
-                                <SelectValue placeholder="Seleccioná moneda" />
+                                <SelectValue placeholder="Seleccioná monedas" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="ARS">ARS - Peso argentino</SelectItem>
-                                <SelectItem value="USD">USD - Dólar</SelectItem>
+                                <SelectItem value="ARS">ARS</SelectItem>
+                                <SelectItem value="USD">USD</SelectItem>
+                                <SelectItem value="ARS_USD">ARS y USD</SelectItem>
                             </SelectContent>
                         </Select>
-                        {errors.currency && <p className="text-xs text-destructive">{errors.currency.message}</p>}
+                        <p className="text-xs text-muted-foreground">
+                            {isCreditCard
+                                ? 'Las tarjetas de crédito operan en ARS y USD.'
+                                : `Esta cuenta acepta movimientos en ${getAccountCurrencyLabel({
+                                    type: type ?? 'bank',
+                                    currency: watch('currency') ?? 'ARS',
+                                    supportedCurrencies: supportedCurrencies as ('ARS' | 'USD')[] | undefined,
+                                })}.`}
+                        </p>
+                        {errors.supportedCurrencies && (
+                            <p className="text-xs text-destructive">{errors.supportedCurrencies.message}</p>
+                        )}
                     </div>
 
                     <div className="space-y-2">
@@ -134,28 +217,70 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                         <Input id="institution" placeholder="Ej: Galicia, Mercado Pago" {...register('institution')} />
                     </div>
 
-                    {!account ? (
-                        <div className="space-y-2">
-                            <Label htmlFor="initialBalance">Saldo inicial</Label>
-                            <Input
-                                id="initialBalance"
-                                type="number"
-                                placeholder="0"
-                                {...register('initialBalance', { valueAsNumber: true })}
-                            />
-                            {errors.initialBalance && (
-                                <p className="text-xs text-destructive">{errors.initialBalance.message}</p>
-                            )}
-                        </div>
-                    ) : (
-                        <div
-                            className="rounded-lg px-3 py-2.5 text-xs text-muted-foreground"
-                            style={{ background: 'var(--secondary)', border: '0.5px solid var(--border)' }}
-                        >
-                            El saldo inicial no se puede modificar una vez creada la cuenta.
-                            Para corregir diferencias, registrá un <strong>ajuste</strong> desde Transacciones.
-                        </div>
-                    )}
+                    <div className="space-y-2">
+                        <Label>Saldos iniciales</Label>
+                        {isDualCurrency ? (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-2">
+                                    <Label htmlFor="initialBalanceARS" className="text-xs text-muted-foreground">ARS</Label>
+                                    <Input
+                                        id="initialBalanceARS"
+                                        type="number"
+                                        placeholder="0"
+                                        {...register('initialBalances.ARS', { valueAsNumber: true })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="initialBalanceUSD" className="text-xs text-muted-foreground">USD</Label>
+                                    <Input
+                                        id="initialBalanceUSD"
+                                        type="number"
+                                        placeholder="0"
+                                        {...register('initialBalances.USD', { valueAsNumber: true })}
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <Label
+                                    htmlFor="initialBalance"
+                                    className="text-xs text-muted-foreground"
+                                >
+                                    {supportedCurrencies?.[0] ?? 'ARS'}
+                                </Label>
+                                <Input
+                                    id="initialBalance"
+                                    type="number"
+                                    placeholder="0"
+                                    value={initialBalances?.[supportedCurrencies?.[0] ?? 'ARS'] ?? 0}
+                                    onChange={(event) => {
+                                        const value = event.target.value === '' ? 0 : Number(event.target.value)
+                                        const currency = supportedCurrencies?.[0] ?? 'ARS'
+                                        setValue(
+                                            'initialBalances',
+                                            {
+                                                ARS: currency === 'ARS' ? value : 0,
+                                                USD: currency === 'USD' ? value : 0,
+                                            },
+                                            { shouldValidate: true, shouldDirty: true }
+                                        )
+                                        setValue('initialBalance', value, {
+                                            shouldValidate: true,
+                                            shouldDirty: true,
+                                        })
+                                    }}
+                                />
+                            </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                            {isDualCurrency
+                                ? 'Definí por separado el saldo con el que arranca la cuenta en cada moneda.'
+                                : 'Usamos este saldo como punto de partida para la moneda de la cuenta.'}
+                        </p>
+                        {errors.initialBalance && (
+                            <p className="text-xs text-destructive">{errors.initialBalance.message}</p>
+                        )}
+                    </div>
 
                     <ColorPicker
                         label="Color de la cuenta"

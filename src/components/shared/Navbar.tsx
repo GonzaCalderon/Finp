@@ -25,6 +25,7 @@ import {
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
+import { Button } from '@/components/ui/button'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
@@ -83,6 +84,34 @@ const MORE_ITEMS: MoreItem[] = [
     { href: '/rules', label: 'Reglas', icon: Wand2 },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
+
+function MobileNavItem({
+    href,
+    label,
+    icon: Icon,
+    active,
+    onClick,
+}: {
+    href: string
+    label: string
+    icon: React.ElementType
+    active: boolean
+    onClick: () => void
+}) {
+    return (
+        <Link
+            href={href}
+            onClick={onClick}
+            className="flex flex-col items-center justify-center gap-1 w-full h-full"
+            style={{
+                color: active ? 'var(--sky)' : 'var(--muted-foreground)',
+            }}
+        >
+            <Icon size={18} />
+            <span className="text-[11px]">{label}</span>
+        </Link>
+    )
+}
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
     const pathname = usePathname()
@@ -213,41 +242,15 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </div>
     )
 }
-function MobileBottomBar() {
-    const pathname = usePathname()
-    const [moreOpen, setMoreOpen] = useState(false)
-    const [actionSheetOpen, setActionSheetOpen] = useState(false)
+
+function useTransactionLauncher() {
     const [txDialogOpen, setTxDialogOpen] = useState(false)
-    const [moreExpandedSections, setMoreExpandedSections] = useState<Record<string, boolean>>({
-        '/transactions': pathname.startsWith('/transactions/'),
-    })
-
-    const toggleMoreSection = (href: string) => {
-        setMoreExpandedSections(prev => ({ ...prev, [href]: !prev[href] }))
-    }
-
-    const { hidden, toggleHidden } = useHideAmounts()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
     const { rules } = useTransactionRules()
     const { preferences } = usePreferences()
     const { success, error: toastError } = useToast()
     const { createPlan } = useInstallments()
-
-    useEffect(() => {
-        if (moreOpen || actionSheetOpen) {
-            document.body.style.overflow = 'hidden'
-        } else {
-            document.body.style.overflow = ''
-        }
-
-        return () => {
-            document.body.style.overflow = ''
-        }
-    }, [moreOpen, actionSheetOpen])
-
-    const closeMore = () => setMoreOpen(false)
-    const closeActionSheet = () => setActionSheetOpen(false)
 
     const handleCreateTransaction = async (data: TransactionFormData) => {
         try {
@@ -267,6 +270,26 @@ function MobileBottomBar() {
         }
     }
 
+    const handleCreateTransactionBatch = async (items: TransactionFormData[]) => {
+        try {
+            for (const item of items) {
+                const res = await fetch('/api/transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item),
+                })
+
+                const json = await res.json()
+                if (!res.ok) throw new Error(json.error)
+            }
+
+            success(items.length === 2 ? 'Pago dual registrado correctamente' : 'Transacciones creadas correctamente')
+            setTxDialogOpen(false)
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al crear transacciones')
+        }
+    }
+
     const handleCreateInstallment = async (data: InstallmentFormData) => {
         try {
             await createPlan(data)
@@ -277,33 +300,121 @@ function MobileBottomBar() {
         }
     }
 
-    const BOTTOM_BAR_HEIGHT = 65
-
-    const NavItem = ({
-                         href,
-                         label,
-                         icon: Icon,
-                     }: {
-        href: string
-        label: string
-        icon: React.ElementType
-    }) => {
-        const isActive = pathname === href && !moreOpen
-
-        return (
-            <Link
-                href={href}
-                onClick={closeMore}
-                className="flex flex-col items-center justify-center gap-1 w-full h-full"
-                style={{
-                    color: isActive ? 'var(--sky)' : 'var(--muted-foreground)',
-                }}
-            >
-                <Icon size={18} />
-                <span className="text-[11px]">{label}</span>
-            </Link>
-        )
+    return {
+        txDialogOpen,
+        setTxDialogOpen,
+        accounts,
+        categories,
+        rules,
+        preferences,
+        handleCreateTransaction,
+        handleCreateTransactionBatch,
+        handleCreateInstallment,
     }
+}
+
+function DesktopFloatingTransactionButton() {
+    const {
+        txDialogOpen,
+        setTxDialogOpen,
+        accounts,
+        categories,
+        rules,
+        preferences,
+        handleCreateTransaction,
+        handleCreateTransactionBatch,
+        handleCreateInstallment,
+    } = useTransactionLauncher()
+
+    return (
+        <>
+            <div className="hidden md:block fixed right-6 bottom-6 z-40">
+                <div className="relative group">
+                    <div
+                        className="pointer-events-none absolute right-0 bottom-[calc(100%+0.75rem)] translate-y-1 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100"
+                    >
+                        <div
+                            className="rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap shadow-sm"
+                            style={{
+                                background: 'var(--card)',
+                                color: 'var(--foreground)',
+                                border: '0.5px solid var(--border)',
+                            }}
+                        >
+                            Nueva transacción
+                        </div>
+                    </div>
+
+                    <Button
+                        type="button"
+                        onClick={() => setTxDialogOpen(true)}
+                        size="icon"
+                        className="h-14 w-14 rounded-full shadow-lg transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:scale-[1.04] active:scale-[0.98]"
+                        aria-label="Nueva transacción"
+                    >
+                        <Plus className="w-5 h-5" />
+                    </Button>
+                </div>
+            </div>
+
+            <TransactionDialog
+                open={txDialogOpen}
+                onOpenChange={setTxDialogOpen}
+                transaction={null}
+                accounts={accounts}
+                categories={categories}
+                onSubmit={handleCreateTransaction}
+                onBatchSubmit={handleCreateTransactionBatch}
+                onInstallmentSubmit={handleCreateInstallment}
+                rules={rules}
+                defaultAccountId={preferences.defaultAccountId}
+                monthStartDay={preferences.monthStartDay}
+            />
+        </>
+    )
+}
+
+function MobileBottomBar() {
+    const pathname = usePathname()
+    const [moreOpen, setMoreOpen] = useState(false)
+    const [actionSheetOpen, setActionSheetOpen] = useState(false)
+    const [moreExpandedSections, setMoreExpandedSections] = useState<Record<string, boolean>>({
+        '/transactions': pathname.startsWith('/transactions/'),
+    })
+
+    const toggleMoreSection = (href: string) => {
+        setMoreExpandedSections(prev => ({ ...prev, [href]: !prev[href] }))
+    }
+
+    const { hidden, toggleHidden } = useHideAmounts()
+    const {
+        txDialogOpen,
+        setTxDialogOpen,
+        accounts,
+        categories,
+        rules,
+        preferences,
+        handleCreateTransaction,
+        handleCreateTransactionBatch,
+        handleCreateInstallment,
+    } = useTransactionLauncher()
+
+    useEffect(() => {
+        if (moreOpen || actionSheetOpen) {
+            document.body.style.overflow = 'hidden'
+        } else {
+            document.body.style.overflow = ''
+        }
+
+        return () => {
+            document.body.style.overflow = ''
+        }
+    }, [moreOpen, actionSheetOpen])
+
+    const closeMore = () => setMoreOpen(false)
+    const closeActionSheet = () => setActionSheetOpen(false)
+
+    const BOTTOM_BAR_HEIGHT = 65
 
     return (
         <>
@@ -571,11 +682,11 @@ function MobileBottomBar() {
             >
                 <div className="grid h-full grid-cols-5">
                     <div className="flex items-center justify-center">
-                        <NavItem {...BOTTOM_NAV_LEFT[0]} />
+                        <MobileNavItem {...BOTTOM_NAV_LEFT[0]} active={pathname === BOTTOM_NAV_LEFT[0].href && !moreOpen} onClick={closeMore} />
                     </div>
 
                     <div className="flex items-center justify-center">
-                        <NavItem {...BOTTOM_NAV_LEFT[1]} />
+                        <MobileNavItem {...BOTTOM_NAV_LEFT[1]} active={pathname === BOTTOM_NAV_LEFT[1].href && !moreOpen} onClick={closeMore} />
                     </div>
 
                     <div className="flex items-start justify-center">
@@ -594,7 +705,7 @@ function MobileBottomBar() {
                     </div>
 
                     <div className="flex items-center justify-center">
-                        <NavItem {...BOTTOM_NAV_RIGHT[0]} />
+                        <MobileNavItem {...BOTTOM_NAV_RIGHT[0]} active={pathname === BOTTOM_NAV_RIGHT[0].href && !moreOpen} onClick={closeMore} />
                     </div>
 
                     <div className="flex items-center justify-center">
@@ -620,6 +731,7 @@ function MobileBottomBar() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleCreateTransaction}
+                onBatchSubmit={handleCreateTransactionBatch}
                 onInstallmentSubmit={handleCreateInstallment}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
@@ -639,6 +751,7 @@ export function Navbar() {
                 <SidebarContent />
             </aside>
 
+            <DesktopFloatingTransactionButton />
             <MobileBottomBar />
         </>
     )

@@ -24,6 +24,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
+import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -585,9 +586,8 @@ export default function CreditCardExpensesPage() {
             cardId: string
             name: string
             color: string | null
-            currency: string
-            monthlyDue: number
-            remainingDebt: number
+            monthlyDue: { ars: number; usd: number }
+            remainingDebt: { ars: number; usd: number }
             itemCount: number
         }>()
 
@@ -600,19 +600,29 @@ export default function CreditCardExpensesPage() {
                 cardId,
                 name: getRefName(accountRef) ?? 'Tarjeta',
                 color: getRefColor(accountRef),
-                currency: item.kind === 'plan' ? item.plan.currency : item.transaction.currency,
-                monthlyDue: 0,
-                remainingDebt: 0,
+                monthlyDue: { ars: 0, usd: 0 },
+                remainingDebt: { ars: 0, usd: 0 },
                 itemCount: 0,
             }
 
-            existing.monthlyDue += getMonthlyImpact(item, selectedMonth, preferences.monthStartDay)
-            existing.remainingDebt += getRemainingForItem(item, selectedMonth, preferences.monthStartDay)
+            const currency = item.kind === 'plan' ? item.plan.currency : item.transaction.currency
+            const monthlyImpact = getMonthlyImpact(item, selectedMonth, preferences.monthStartDay)
+            const remainingDebt = getRemainingForItem(item, selectedMonth, preferences.monthStartDay)
+
+            if (currency === 'USD') {
+                existing.monthlyDue.usd += monthlyImpact
+                existing.remainingDebt.usd += remainingDebt
+            } else {
+                existing.monthlyDue.ars += monthlyImpact
+                existing.remainingDebt.ars += remainingDebt
+            }
             existing.itemCount += 1
             summaries.set(cardId, existing)
         })
 
-        return Array.from(summaries.values()).sort((a, b) => b.remainingDebt - a.remainingDebt)
+        return Array.from(summaries.values()).sort(
+            (a, b) => (b.remainingDebt.ars + b.remainingDebt.usd) - (a.remainingDebt.ars + a.remainingDebt.usd)
+        )
     }, [preferences.monthStartDay, selectedMonth, summaryItems])
 
     const handleEditItem = (item: CCExpenseItem | null) => {
@@ -643,6 +653,21 @@ export default function CreditCardExpensesPage() {
             await fetchAll()
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al guardar gasto con TC')
+        }
+    }
+
+    const handleSubmitTransactionBatch = async (items: TransactionFormData[]) => {
+        try {
+            for (const item of items) {
+                await postTransaction(item)
+            }
+
+            success(items.length === 2 ? 'Pago dual registrado correctamente' : 'Transacciones registradas correctamente')
+            setDialogOpen(false)
+            setSelectedTransaction(null)
+            await fetchAll()
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al guardar transacciones')
         }
     }
 
@@ -791,17 +816,31 @@ export default function CreditCardExpensesPage() {
                                         <div className="mt-3 grid grid-cols-2 gap-3">
                                             <div>
                                                 <p className="text-[11px] text-muted-foreground">Deuda restante</p>
-                                                <p className="mt-1 text-sm font-semibold">
-                                                    <ResponsiveAmount amount={card.remainingDebt} currency={card.currency} hidden={hidden} />
-                                                </p>
+                                                <div className="mt-1">
+                                                    <CurrencyBreakdownAmount
+                                                        totals={card.remainingDebt}
+                                                        hidden={hidden}
+                                                        primaryColor="var(--foreground)"
+                                                        secondaryColor="var(--muted-foreground)"
+                                                        className="text-sm font-semibold"
+                                                    />
+                                                </div>
                                             </div>
                                             <div>
                                                 <p className="text-[11px] text-muted-foreground">Resumen mensual</p>
-                                                <p className="mt-1 text-sm font-semibold">
-                                                    <ResponsiveAmount amount={card.monthlyDue} currency={card.currency} hidden={hidden} />
-                                                </p>
+                                                <div className="mt-1">
+                                                    <CurrencyBreakdownAmount
+                                                        totals={card.monthlyDue}
+                                                        hidden={hidden}
+                                                        primaryColor="var(--foreground)"
+                                                        secondaryColor="var(--muted-foreground)"
+                                                        className="text-sm font-semibold"
+                                                    />
+                                                </div>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    {card.monthlyDue > 0 ? 'impacta este mes' : 'sin impacto este mes'}
+                                                    {(card.monthlyDue.ars > 0 || card.monthlyDue.usd > 0)
+                                                        ? 'impacta este mes'
+                                                        : 'sin impacto este mes'}
                                                 </p>
                                             </div>
                                         </div>
@@ -1117,6 +1156,7 @@ export default function CreditCardExpensesPage() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleSubmitTransaction}
+                onBatchSubmit={handleSubmitTransactionBatch}
                 onInstallmentSubmit={handleSubmitInstallment}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}

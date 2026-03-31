@@ -15,26 +15,26 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
 import { SankeyChart } from '@/components/shared/SankeyChart'
 import { Spinner } from '@/components/shared/Spinner'
+import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { buildMonthOptions } from '@/lib/utils/period'
 import { TrendingUp, TrendingDown, CheckCircle } from 'lucide-react'
+import {
+    getAccountBalancesByCurrency,
+    getAccountCurrencyLabel,
+    isDualCurrencyAccount,
+} from '@/lib/utils/accounts'
 
 const getCurrentMonth = () => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-    const date = new Date()
-    date.setDate(1) // evita overflow (ej. 31 ene - 1 mes = 31 dic → se va a ene)
-    date.setMonth(date.getMonth() - i)
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const label = date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
-    return { value, label }
-})
+const MONTHS = buildMonthOptions({ pastMonths: 8, futureMonths: 1 })
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
     bank: 'Banco',
@@ -56,30 +56,33 @@ interface CommitmentItem {
 interface DashboardData {
     month: string
     summary: {
-        totalIncome: number
-        totalExpense: number
-        balance: number
-        totalDebt: number
+        totalIncome: { ars: number; usd: number }
+        totalExpense: { ars: number; usd: number }
+        balance: { ars: number; usd: number }
+        totalDebt: { ars: number; usd: number }
+        totalCreditCardExpense: { ars: number; usd: number }
     }
     trends: {
         income: number | null
         expense: number | null
         balance: number | null
     }
-    expenseByCategory: { key: string; name: string; color?: string; total: number }[]
+    expenseByCategory: { key: string; name: string; color?: string; ars: number; usd: number }[]
     accounts: {
         _id: string
         name: string
         type: string
         currency: string
+        supportedCurrencies?: string[]
         includeInNetWorth: boolean
         balance: number
+        balancesByCurrency: { ARS: number; USD: number }
         color?: string
     }[]
     netWorth: {
-        assets: number
-        liabilities: number
-        total: number
+        assets: { ars: number; usd: number }
+        liabilities: { ars: number; usd: number }
+        total: { ars: number; usd: number }
     }
     pendingCommitments: CommitmentItem[]
     installmentsThisMonth: {
@@ -121,46 +124,6 @@ function TrendBadge({ value, inverse = false }: { value: number | null; inverse?
             {!isNeutral && <Icon size={10} />}
             {isNeutral ? '=' : formattedValue}
         </span>
-    )
-}
-
-// Formatea números grandes de forma compacta en mobile
-function FmtAmount({
-                       amount,
-                       currency = 'ARS',
-                       color,
-                       hidden,
-                   }: {
-    amount: number
-    currency?: string
-    color?: string
-    hidden: boolean
-}) {
-    if (hidden) return <span style={{ color }}>••••</span>
-
-    const compact = new Intl.NumberFormat('es-AR', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 1,
-        minimumFractionDigits: 0,
-        notation: 'compact',
-    }).format(amount)
-
-    const full = new Intl.NumberFormat('es-AR', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 0,
-    }).format(amount)
-
-    return (
-        <>
-            <span className="md:hidden" style={{ color }}>
-                {compact}
-            </span>
-            <span className="hidden md:inline" style={{ color }}>
-                {full}
-            </span>
-        </>
     )
 }
 
@@ -268,10 +231,10 @@ export default function DashboardPage() {
                     {refreshing && <Spinner className="text-muted-foreground" />}
                 </div>
                 <Select value={month} onValueChange={setMonth}>
-                    <SelectTrigger className="w-44 h-8 text-sm">
+                    <SelectTrigger className="w-32 sm:w-40 h-7.5 text-xs sm:text-sm">
                         <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
                         {MONTHS.map((m) => (
                             <SelectItem key={m.value} value={m.value}>
                                 {m.label}
@@ -306,9 +269,13 @@ export default function DashboardPage() {
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Ingresos
                                 </p>
-                                <p className="text-base md:text-2xl font-semibold tracking-tight text-green-500">
-                                    <FmtAmount amount={data.summary.totalIncome} hidden={hidden} color="#10B981" />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.summary.totalIncome}
+                                    hidden={hidden}
+                                    primaryColor="#10B981"
+                                    secondaryColor="rgba(16,185,129,0.78)"
+                                    className="text-base md:text-2xl font-semibold tracking-tight text-green-500"
+                                />
                                 <div className="mt-1">
                                     <TrendBadge value={data.trends.income} />
                                 </div>
@@ -322,13 +289,13 @@ export default function DashboardPage() {
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Gastos
                                 </p>
-                                <p className="text-base md:text-2xl font-semibold tracking-tight text-destructive">
-                                    <FmtAmount
-                                        amount={data.summary.totalExpense}
-                                        hidden={hidden}
-                                        color="var(--destructive)"
-                                    />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.summary.totalExpense}
+                                    hidden={hidden}
+                                    primaryColor="var(--destructive)"
+                                    secondaryColor="rgba(239,68,68,0.78)"
+                                    className="text-base md:text-2xl font-semibold tracking-tight text-destructive"
+                                />
                                 <div className="mt-1">
                                     <TrendBadge value={data.trends.expense} inverse />
                                 </div>
@@ -342,17 +309,13 @@ export default function DashboardPage() {
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Balance
                                 </p>
-                                <p className="text-base md:text-2xl font-semibold tracking-tight">
-                                    <FmtAmount
-                                        amount={data.summary.balance}
-                                        hidden={hidden}
-                                        color={
-                                            data.summary.balance >= 0
-                                                ? 'var(--sky-dark)'
-                                                : 'var(--destructive)'
-                                        }
-                                    />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.summary.balance}
+                                    hidden={hidden}
+                                    primaryColor={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    secondaryColor={data.summary.balance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    className="text-base md:text-2xl font-semibold tracking-tight"
+                                />
                                 <div className="mt-1">
                                     <TrendBadge value={data.trends.balance} />
                                 </div>
@@ -360,7 +323,7 @@ export default function DashboardPage() {
                         </div>
                     </motion.div>
 
-                    {/* Grupo 2 — Deuda total / Balance general */}
+                    {/* Grupo 2 — Deuda restante / Balance general */}
                     <motion.div
                         className="rounded-xl overflow-hidden"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
@@ -380,15 +343,15 @@ export default function DashboardPage() {
                                 style={{ borderTop: '2px solid var(--amber)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
-                                    Deuda total
+                                    Deuda restante
                                 </p>
-                                <p className="text-base md:text-2xl font-semibold tracking-tight">
-                                    <FmtAmount
-                                        amount={data.summary.totalDebt}
-                                        hidden={hidden}
-                                        color="var(--amber-dark)"
-                                    />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.summary.totalDebt}
+                                    hidden={hidden}
+                                    primaryColor="var(--amber-dark)"
+                                    secondaryColor="rgba(217,119,6,0.78)"
+                                    className="text-base md:text-2xl font-semibold tracking-tight"
+                                />
                             </motion.div>
 
                             <motion.div
@@ -399,17 +362,13 @@ export default function DashboardPage() {
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Balance general
                                 </p>
-                                <p className="text-base md:text-2xl font-semibold tracking-tight">
-                                    <FmtAmount
-                                        amount={data.netWorth.total}
-                                        hidden={hidden}
-                                        color={
-                                            data.netWorth.total >= 0
-                                                ? 'var(--sky-dark)'
-                                                : 'var(--destructive)'
-                                        }
-                                    />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.netWorth.total}
+                                    hidden={hidden}
+                                    primaryColor={data.netWorth.total.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    secondaryColor={data.netWorth.total.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    className="text-base md:text-2xl font-semibold tracking-tight"
+                                />
                             </motion.div>
                         </div>
                     </motion.div>
@@ -453,18 +412,40 @@ export default function DashboardPage() {
                                                 >
                                                     {ACCOUNT_TYPE_LABELS[account.type]}
                                                 </span>
+                                                <span
+                                                    className="text-xs px-1.5 py-0.5 rounded shrink-0"
+                                                    style={{
+                                                        background: 'var(--secondary)',
+                                                        color: 'var(--muted-foreground)',
+                                                    }}
+                                                >
+                                                    {getAccountCurrencyLabel(account)}
+                                                </span>
                                             </div>
-                                            <span
-                                                className="text-sm font-medium tabular-nums shrink-0 ml-2"
-                                                style={{
-                                                    color:
-                                                        account.balance < 0
-                                                            ? 'var(--destructive)'
-                                                            : 'var(--foreground)',
-                                                }}
-                                            >
-                                                {fmt(account.balance, account.currency)}
-                                            </span>
+                                            <div className="text-right shrink-0 ml-2">
+                                                {isDualCurrencyAccount(account) ? (
+                                                    <>
+                                                        <p className="text-sm font-medium tabular-nums">
+                                                            {fmt(getAccountBalancesByCurrency(account).ARS, 'ARS')}
+                                                        </p>
+                                                        <p className="text-[11px] text-muted-foreground">
+                                                            {fmt(getAccountBalancesByCurrency(account).USD, 'USD')}
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <span
+                                                        className="text-sm font-medium tabular-nums"
+                                                        style={{
+                                                            color:
+                                                                account.balance < 0
+                                                                    ? 'var(--destructive)'
+                                                                    : 'var(--foreground)',
+                                                        }}
+                                                    >
+                                                        {fmt(account.balance, account.currency)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     ))
                                 )}
@@ -484,12 +465,12 @@ export default function DashboardPage() {
                                 ) : (
                                     data.expenseByCategory.map((cat) => {
                                         const pctOfTotal =
-                                            data.summary.totalExpense > 0
-                                                ? (cat.total / data.summary.totalExpense) * 100
+                                            data.summary.totalExpense.ars > 0
+                                                ? (cat.ars / data.summary.totalExpense.ars) * 100
                                                 : 0
                                         const pctOfIncome =
-                                            data.summary.totalIncome > 0
-                                                ? Math.round((cat.total / data.summary.totalIncome) * 100)
+                                            data.summary.totalIncome.ars > 0
+                                                ? Math.round((cat.ars / data.summary.totalIncome.ars) * 100)
                                                 : null
 
                                         return (
@@ -506,9 +487,14 @@ export default function DashboardPage() {
                                                         />
                                                         <span className="text-sm truncate">{cat.name}</span>
                                                     </div>
-                                                    <span className="text-sm font-medium tabular-nums text-destructive shrink-0 ml-2">
-                                                        {fmt(cat.total)}
-                                                    </span>
+                                                    <div className="text-right shrink-0 ml-2">
+                                                        <span className="text-sm font-medium tabular-nums text-destructive">
+                                                            {fmt(cat.ars)}
+                                                        </span>
+                                                        <p className="text-[11px] text-muted-foreground">
+                                                            {fmt(cat.usd, 'USD')}
+                                                        </p>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-2">
@@ -688,37 +674,37 @@ export default function DashboardPage() {
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Activos
                                 </p>
-                                <p className="text-base md:text-xl font-semibold tracking-tight text-green-500">
-                                    <FmtAmount amount={data.netWorth.assets} hidden={hidden} color="#10B981" />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.netWorth.assets}
+                                    hidden={hidden}
+                                    primaryColor="#10B981"
+                                    secondaryColor="rgba(16,185,129,0.78)"
+                                    className="text-base md:text-xl font-semibold tracking-tight text-green-500"
+                                />
                             </div>
                             <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--destructive)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Pasivos
                                 </p>
-                                <p className="text-base md:text-xl font-semibold tracking-tight text-destructive">
-                                    <FmtAmount
-                                        amount={data.netWorth.liabilities}
-                                        hidden={hidden}
-                                        color="var(--destructive)"
-                                    />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.netWorth.liabilities}
+                                    hidden={hidden}
+                                    primaryColor="var(--destructive)"
+                                    secondaryColor="rgba(239,68,68,0.78)"
+                                    className="text-base md:text-xl font-semibold tracking-tight text-destructive"
+                                />
                             </div>
                             <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--sky)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Neto
                                 </p>
-                                <p className="text-base md:text-xl font-semibold tracking-tight">
-                                    <FmtAmount
-                                        amount={data.netWorth.total}
-                                        hidden={hidden}
-                                        color={
-                                            data.netWorth.total >= 0
-                                                ? 'var(--sky-dark)'
-                                                : 'var(--destructive)'
-                                        }
-                                    />
-                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.netWorth.total}
+                                    hidden={hidden}
+                                    primaryColor={data.netWorth.total.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    secondaryColor={data.netWorth.total.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    className="text-base md:text-xl font-semibold tracking-tight"
+                                />
                             </div>
                         </div>
                     </div>

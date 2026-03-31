@@ -32,6 +32,7 @@ interface SankeyApiData {
     totalIncome: number
     totalExpense: number
     balance: number
+    currency: 'ARS' | 'USD'
     creditCards?: CreditCardSankeyItem[]
 }
 
@@ -51,6 +52,7 @@ interface ChartNode {
     type: NodeType
     value: number
     layer: number
+    sortOrder?: number
 }
 
 interface ChartLink {
@@ -108,19 +110,19 @@ function useElementWidth<T extends HTMLElement>() {
     return { ref, width }
 }
 
-function formatCompactARS(value: number) {
+function formatCompactMoney(value: number, currency: 'ARS' | 'USD') {
     return new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: 'ARS',
+        currency,
         maximumFractionDigits: 0,
         notation: 'compact',
     }).format(value)
 }
 
-function formatARS(value: number) {
+function formatMoney(value: number, currency: 'ARS' | 'USD') {
     return new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: 'ARS',
+        currency,
         maximumFractionDigits: 0,
     }).format(value)
 }
@@ -132,6 +134,42 @@ function formatPercent(value: number) {
 function truncate(text: string, max: number) {
     if (text.length <= max) return text
     return `${text.slice(0, max - 1)}…`
+}
+
+function hexToRgb(color: string) {
+    const normalized = color.trim()
+    if (!normalized.startsWith('#')) return null
+
+    const hex = normalized.slice(1)
+    const fullHex = hex.length === 3
+        ? hex.split('').map((char) => `${char}${char}`).join('')
+        : hex
+
+    if (fullHex.length !== 6) return null
+
+    const value = Number.parseInt(fullHex, 16)
+    if (Number.isNaN(value)) return null
+
+    return {
+        r: (value >> 16) & 255,
+        g: (value >> 8) & 255,
+        b: value & 255,
+    }
+}
+
+function getReadableAccent(color: string) {
+    if (!color.startsWith('#')) return color
+
+    const rgb = hexToRgb(color)
+    if (!rgb) return color
+
+    const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255
+    if (luminance >= 0.5) return color
+
+    const mix = 0.45
+    const lift = (channel: number) => Math.round(channel + (255 - channel) * mix)
+
+    return `rgb(${lift(rgb.r)} ${lift(rgb.g)} ${lift(rgb.b)})`
 }
 
 function aggregateExpenses(expenses: SankeyItem[]) {
@@ -180,6 +218,7 @@ function normalizeData(data: SankeyApiData): SankeyApiData {
         totalIncome,
         totalExpense,
         balance: rawBalance,
+        currency: data.currency,
         creditCards: data.creditCards,
     }
 }
@@ -360,6 +399,50 @@ function buildGraph(data: SankeyApiData) {
     }
 }
 
+function normalizeGraphLayers(graph: ReturnType<typeof buildGraph>) {
+    const orderedLayers = [...new Set(graph.nodes.map((node) => node.layer))].sort((a, b) => a - b)
+    const layerMap = new Map(orderedLayers.map((layer, index) => [layer, index]))
+
+    return {
+        ...graph,
+        nodes: graph.nodes.map((node, index) => ({
+            ...node,
+            layer: layerMap.get(node.layer) ?? 0,
+            sortOrder: index,
+        })),
+    }
+}
+
+function compareSankeyNodes(a: ChartNode, b: ChartNode) {
+    if (a.layer === 1 && b.layer === 1) {
+        const aIsCard = a.type === 'credit-card-source'
+        const bIsCard = b.type === 'credit-card-source'
+
+        if (aIsCard && !bIsCard) return -1
+        if (!aIsCard && bIsCard) return 1
+    }
+
+    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+}
+
+function computeSankeyLayout(
+    graph: ReturnType<typeof buildGraph>,
+    generator: ReturnType<typeof d3Sankey<ChartNode, ChartLink>>
+) {
+    const buildWithGraph = (sourceGraph: ReturnType<typeof buildGraph>) =>
+        generator({
+            nodes: sourceGraph.nodes.map((n, index) => ({ ...n, sortOrder: index })),
+            links: sourceGraph.links.map((l) => ({ ...l })),
+        } as SankeyGraph<ChartNode, ChartLink>)
+
+    try {
+        return buildWithGraph(graph)
+    } catch (error) {
+        console.warn('Sankey fallback: normalizando capas por compatibilidad.', error)
+        return buildWithGraph(normalizeGraphLayers(graph))
+    }
+}
+
 function buildDesktopLayout(graph: ReturnType<typeof buildGraph>, width: number) {
     const nodeWidth = 5
     const nodePadding = 18
@@ -385,17 +468,14 @@ function buildDesktopLayout(graph: ReturnType<typeof buildGraph>, width: number)
         .nodeId((d) => d.id)
         .nodeWidth(nodeWidth)
         .nodePadding(nodePadding)
-        .nodeSort(null)
+        .nodeSort(compareSankeyNodes)
         .nodeAlign((node) => node.layer)
         .extent([
             [margin.left, margin.top],
             [width - margin.right, height - margin.bottom],
         ])
 
-    const computed = sankeyGenerator({
-        nodes: graph.nodes.map((n) => ({ ...n })),
-        links: graph.links.map((l) => ({ ...l })),
-    } as SankeyGraph<ChartNode, ChartLink>)
+    const computed = computeSankeyLayout(graph, sankeyGenerator)
 
     return {
         ...computed,
@@ -422,17 +502,14 @@ function buildMobileLayout(graph: ReturnType<typeof buildGraph>, width: number) 
         .nodeId((d) => d.id)
         .nodeWidth(nodeWidth)
         .nodePadding(nodePadding)
-        .nodeSort(null)
+        .nodeSort(compareSankeyNodes)
         .nodeAlign((node) => node.layer)
         .extent([
             [margin.left, margin.top],
             [width - margin.right, height - margin.bottom],
         ])
 
-    const computed = sankeyGenerator({
-        nodes: graph.nodes.map((n) => ({ ...n })),
-        links: graph.links.map((l) => ({ ...l })),
-    } as SankeyGraph<ChartNode, ChartLink>)
+    const computed = computeSankeyLayout(graph, sankeyGenerator)
 
     return {
         ...computed,
@@ -603,11 +680,13 @@ function SankeyTooltip({
                            onClose,
                            containerWidth,
                            containerHeight,
+                           currency,
                        }: {
     active: ActiveInfo | null
     onClose: () => void
     containerWidth: number
     containerHeight: number
+    currency: 'ARS' | 'USD'
 }) {
     if (!active) return null
 
@@ -646,7 +725,7 @@ function SankeyTooltip({
                 }}
             >
                 <p className="mb-1 text-sm font-semibold text-foreground">{active.title}</p>
-                <p className="text-sm font-medium text-foreground">{formatARS(active.amount)}</p>
+                <p className="text-sm font-medium text-foreground">{formatMoney(active.amount, currency)}</p>
 
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                     {typeof active.percentOfIncome === 'number' && (
@@ -666,11 +745,13 @@ function MobileLegend({
                           items,
                           totals,
                           onSelect,
+                          currency,
                       }: {
     title: string
     items: SankeyItem[]
     totals: { income: number; expense: number; available: number; deficit: number }
     onSelect: (info: ActiveInfo) => void
+    currency: 'ARS' | 'USD'
 }) {
     return (
         <div className="space-y-2">
@@ -704,8 +785,11 @@ function MobileLegend({
                   className="h-2 w-2 rounded-full"
                   style={{ backgroundColor: item.color }}
               />
-                            <span className="text-[11px] text-muted-foreground">
-                {truncate(item.name, 18)}
+                            <span
+                                className="text-[11px]"
+                                style={{ color: getReadableAccent(item.color) }}
+                            >
+                {truncate(item.name, 18)} · {formatCompactMoney(item.amount, currency)}
               </span>
                         </button>
                     )
@@ -839,9 +923,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             dy="1.25em"
                                             fontSize={11}
                                             fontWeight={600}
-                                            fill={node.color}
+                                            fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -861,9 +945,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             dy="1.2em"
                                             fontSize={12}
                                             fontWeight={600}
-                                            fill={node.color}
+                                            fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -883,9 +967,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             dy="1.2em"
                                             fontSize={12}
                                             fontWeight={600}
-                                            fill={node.color}
+                                            fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -893,7 +977,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                 {showDesktopLabels && node.type === 'available' && (
                                     <text
                                         x={(bounds.x0 + bounds.x1) / 2}
-                                        y={bounds.y1 + 16}
+                                        y={bounds.y0 - 14}
                                         textAnchor="middle"
                                         style={{ fontFamily: 'inherit' }}
                                     >
@@ -905,9 +989,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             dy="1.2em"
                                             fontSize={12}
                                             fontWeight={600}
-                                            fill={node.color}
+                                            fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -915,7 +999,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                 {showDesktopLabels && node.type === 'deficit' && (
                                     <text
                                         x={(bounds.x0 + bounds.x1) / 2}
-                                        y={bounds.y1 + 16}
+                                        y={bounds.y0 - 14}
                                         textAnchor="middle"
                                         style={{ fontFamily: 'inherit' }}
                                     >
@@ -927,9 +1011,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             dy="1.2em"
                                             fontSize={12}
                                             fontWeight={600}
-                                            fill={node.color}
+                                            fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -937,7 +1021,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                 {showDesktopLabels && node.type === 'credit-card-source' && (
                                     <text
                                         x={(bounds.x0 + bounds.x1) / 2}
-                                        y={bounds.y1 + 16}
+                                        y={bounds.y0 - 14}
                                         textAnchor="middle"
                                         style={{ fontFamily: 'inherit' }}
                                     >
@@ -949,9 +1033,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             dy="1.2em"
                                             fontSize={11}
                                             fontWeight={600}
-                                            fill={node.color}
+                                            fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -972,9 +1056,9 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                             dy="1.25em"
                                             fontSize={11}
                                             fontWeight={600}
-                                            fill={node.color}
+                                            fill={getReadableAccent(node.color)}
                                         >
-                                            {formatCompactARS(node.value ?? 0)}
+                                            {formatCompactMoney(node.value ?? 0, data.currency)}
                                         </tspan>
                                     </text>
                                 )}
@@ -1009,12 +1093,14 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                             items={graph.legends.income}
                             totals={graph.totals}
                             onSelect={setActive}
+                            currency={data.currency}
                         />
                         <MobileLegend
                             title="Gastos"
                             items={graph.legends.expense}
                             totals={graph.totals}
                             onSelect={setActive}
+                            currency={data.currency}
                         />
                         {graph.legends.creditCards.length > 0 && (
                             <MobileLegend
@@ -1022,6 +1108,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                 items={graph.legends.creditCards}
                                 totals={graph.totals}
                                 onSelect={setActive}
+                                currency={data.currency}
                             />
                         )}
                     </div>
@@ -1031,6 +1118,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                         onClose={() => setActive(null)}
                         containerWidth={layout.width}
                         containerHeight={layout.height + 120}
+                        currency={data.currency}
                     />
                 </>
             )}
@@ -1048,7 +1136,7 @@ export function SankeyChart({ month }: { month?: string }) {
             try {
                 setLoading(true)
 
-                const query = month ? `month=${month}` : `months=${months}`
+                const query = month ? `month=${month}&currency=ARS` : `months=${months}&currency=ARS`
                 const response = await fetch(`/api/sankey?${query}`)
                 const json = await response.json()
 
@@ -1087,31 +1175,33 @@ export function SankeyChart({ month }: { month?: string }) {
                     </p>
                 </div>
 
-                {!month && (
-                    <div
-                        className="flex w-fit shrink-0 overflow-hidden rounded-lg"
-                        style={{ border: '1px solid var(--border)' }}
-                    >
-                        {MONTH_OPTIONS.map((option) => (
-                            <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => setMonths(option.value)}
-                                className="px-3 py-1.5 text-xs font-medium transition-colors"
-                                style={{
-                                    background: months === option.value ? 'var(--sky)' : 'transparent',
-                                    color: months === option.value ? '#FFFFFF' : 'var(--muted-foreground)',
-                                    borderRight:
-                                        option.value !== MONTH_OPTIONS[MONTH_OPTIONS.length - 1].value
-                                            ? '1px solid var(--border)'
-                                            : 'none',
-                                }}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                    </div>
-                )}
+                <div className="flex items-center gap-2">
+                    {!month && (
+                        <div
+                            className="flex w-fit shrink-0 overflow-hidden rounded-lg"
+                            style={{ border: '1px solid var(--border)' }}
+                        >
+                            {MONTH_OPTIONS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setMonths(option.value)}
+                                    className="px-3 py-1.5 text-xs font-medium transition-colors"
+                                    style={{
+                                        background: months === option.value ? 'var(--sky)' : 'transparent',
+                                        color: months === option.value ? '#FFFFFF' : 'var(--muted-foreground)',
+                                        borderRight:
+                                            option.value !== MONTH_OPTIONS[MONTH_OPTIONS.length - 1].value
+                                                ? '1px solid var(--border)'
+                                                : 'none',
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <AnimatePresence mode="wait">

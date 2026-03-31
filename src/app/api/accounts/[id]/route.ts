@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account } from '@/lib/models'
+import { accountSchema } from '@/lib/validations'
+import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
 
 export async function GET(
     request: Request,
@@ -26,7 +28,25 @@ export async function GET(
             return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
         }
 
-        return NextResponse.json({ account })
+        const accountObject = account.toObject()
+        const supportedCurrencies = normalizeSupportedCurrencies(
+            accountObject.supportedCurrencies,
+            accountObject.currency,
+            accountObject.type
+        )
+
+        return NextResponse.json({
+            account: {
+                ...accountObject,
+                supportedCurrencies,
+                initialBalances: getInitialBalancesByCurrency(accountObject),
+                currency: getPrimaryCurrency({
+                    type: accountObject.type,
+                    currency: accountObject.currency,
+                    supportedCurrencies,
+                }),
+            },
+        })
     } catch (error) {
         console.error('Error al obtener cuenta:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -48,15 +68,37 @@ export async function PATCH(
 
         await connectDB()
 
-        const account = await Account.findOneAndUpdate(
-            { _id: id, userId: session.user.id },
-            { $set: body },
-            { new: true }
-        )
+        const existingAccount = await Account.findOne({ _id: id, userId: session.user.id })
 
-        if (!account) {
+        if (!existingAccount) {
             return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
         }
+
+        const existingObject = existingAccount.toObject()
+        const parsed = accountSchema.safeParse({
+            ...existingObject,
+            ...body,
+            supportedCurrencies: body.supportedCurrencies ?? existingObject.supportedCurrencies,
+            currency: body.currency ?? existingObject.currency,
+        })
+
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Datos de cuenta inválidos', details: parsed.error.flatten() },
+                { status: 400 }
+            )
+        }
+
+        const account = await Account.findOneAndUpdate(
+            { _id: id, userId: session.user.id },
+            {
+                $set: {
+                    ...parsed.data,
+                    initialBalances: getInitialBalancesByCurrency(parsed.data),
+                },
+            },
+            { new: true }
+        )
 
         return NextResponse.json({ account })
     } catch (error) {

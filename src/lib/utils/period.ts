@@ -68,3 +68,30 @@ export function shiftFinancialPeriod(period: string, offsetMonths: number): stri
     const shifted = new Date(year, month - 1 + offsetMonths, 1)
     return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`
 }
+
+export function buildMonthOptions({
+    pastMonths = 8,
+    futureMonths = 1,
+    from = new Date(),
+    locale = 'es-AR',
+}: {
+    pastMonths?: number
+    futureMonths?: number
+    from?: Date
+    locale?: string
+} = {}) {
+    return Array.from({ length: pastMonths + futureMonths + 1 }, (_, index) => {
+        const offset = futureMonths - index
+        const date = new Date(from)
+        date.setDate(1)
+        date.setMonth(date.getMonth() + offset)
+
+        const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        const label = date.toLocaleDateString(locale, {
+            month: 'long',
+            year: 'numeric',
+        })
+
+        return { value, label }
+    })
+}

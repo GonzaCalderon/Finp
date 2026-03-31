@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Category } from '@/lib/models'
 import { generateImportTemplate } from '@/lib/utils/excel-template'
+import { getAccountCurrencyLabel } from '@/lib/utils/accounts'
 
 export async function GET() {
     const session = await auth()
@@ -11,12 +12,19 @@ export async function GET() {
     await connectDB()
 
     const [accounts, categories] = await Promise.all([
-        Account.find({ userId: session.user.id, isActive: true }).select('name currency').lean(),
+        Account.find({ userId: session.user.id, isActive: true }).select('name currency supportedCurrencies type').lean(),
         Category.find({ userId: session.user.id, isArchived: false }).select('name type').sort({ sortOrder: 1 }).lean(),
     ])
 
     const buffer = await generateImportTemplate({
-        accounts: accounts.map((a) => ({ name: a.name, currency: a.currency })),
+        accounts: accounts.map((a) => ({
+            name: a.name,
+            currencyLabel: getAccountCurrencyLabel({
+                type: a.type,
+                currency: a.currency,
+                supportedCurrencies: a.supportedCurrencies,
+            }),
+        })),
         categories: categories.map((c) => ({ name: c.name, type: c.type })),
     })
 

@@ -1,6 +1,7 @@
-import { ACCOUNT_TYPES, CURRENCIES, IMPORT_ROW_STATUS } from '@/lib/constants'
+import { ACCOUNT_TYPES, CURRENCIES, IMPORT_ROW_STATUS, type Currency } from '@/lib/constants'
 import type { IAccount, ICategory, ImportParsedData } from '@/types'
 import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
+import { getCommonSupportedCurrencies, supportsCurrency } from '@/lib/utils/accounts'
 
 type ImportTypeOption = {
     value: string
@@ -38,6 +39,7 @@ const IMPORT_TYPE_OPTIONS: ImportTypeOption[] = [
     { value: 'income', label: 'Ingreso' },
     { value: 'expense', label: 'Gasto' },
     { value: 'credit_card_expense', label: 'Gasto con TC' },
+    { value: 'exchange', label: 'Cambio' },
     { value: 'transfer', label: 'Transferencia' },
     { value: 'adjustment', label: 'Ajuste' },
     { value: 'credit_card_payment', label: 'Pago de tarjeta' },
@@ -66,6 +68,10 @@ export const IMPORT_TYPE_ALIASES: Record<string, string> = {
     'consumo tarjeta': 'credit_card_expense',
     'consumo con tc': 'credit_card_expense',
     credit_card_expense: 'credit_card_expense',
+    cambio: 'exchange',
+    exchange: 'exchange',
+    'cambio manual': 'exchange',
+    cambio_manual: 'exchange',
     transferencia: 'transfer',
     transferencias: 'transfer',
     transfer: 'transfer',
@@ -112,6 +118,15 @@ function getRequirement(type?: string | null): ImportRequirement {
     const normalized = normalizeImportTransactionType(type)
 
     if (normalized === 'transfer') {
+        return {
+            descriptionRequired: false,
+            categoryRequired: false,
+            sourceRequired: true,
+            destinationRequired: true,
+        }
+    }
+
+    if (normalized === 'exchange') {
         return {
             descriptionRequired: false,
             categoryRequired: false,
@@ -206,6 +221,12 @@ export function getCompatibleSourceAccounts(accounts: IAccount[], type?: string 
         )
     }
 
+    if (normalized === 'exchange' || normalized === 'transfer' || normalized === 'income') {
+        return accounts.filter(
+            (account) => !([ACCOUNT_TYPES.CREDIT_CARD, ACCOUNT_TYPES.DEBT] as string[]).includes(account.type)
+        )
+    }
+
     if (normalized === 'expense') {
         return accounts.filter((account) => account.type !== ACCOUNT_TYPES.DEBT)
     }
@@ -219,6 +240,12 @@ export function getCompatibleDestinationAccounts(accounts: IAccount[], type?: st
     if (normalized === 'credit_card_payment') {
         return accounts.filter((account) =>
             ([ACCOUNT_TYPES.CREDIT_CARD, ACCOUNT_TYPES.DEBT] as string[]).includes(account.type)
+        )
+    }
+
+    if (normalized === 'exchange' || normalized === 'transfer') {
+        return accounts.filter(
+            (account) => !([ACCOUNT_TYPES.CREDIT_CARD, ACCOUNT_TYPES.DEBT] as string[]).includes(account.type)
         )
     }
 
@@ -287,6 +314,17 @@ export function mergeImportRawDataFallbacks(
     if (!next.accountName) next.accountName = getRawField(rawData, 'cuenta')
     if (!next.destinationAccountName) next.destinationAccountName = getRawField(rawData, 'cuenta destino')
     if (!next.notes) next.notes = getRawField(rawData, 'observaciones')
+    if (next.destinationAmount === undefined) {
+        const destinationAmountRaw = getRawField(rawData, 'monto destino')
+        next.destinationAmount = destinationAmountRaw ? Number(destinationAmountRaw.replace(',', '.')) : undefined
+    }
+    if (!next.destinationCurrency) {
+        next.destinationCurrency = getRawField(rawData, 'moneda destino')?.toUpperCase()
+    }
+    if (next.exchangeRate === undefined) {
+        const exchangeRateRaw = getRawField(rawData, 'cotización manual')
+        next.exchangeRate = exchangeRateRaw ? Number(exchangeRateRaw.replace(',', '.')) : undefined
+    }
     if (!next.installmentCount) next.installmentCount = parseImportInteger(getRawField(rawData, 'cuotas'))
     if (!next.installmentNumber) next.installmentNumber = parseImportInteger(getRawField(rawData, 'cuota actual'))
     if (!next.firstClosingMonth) {
@@ -395,6 +433,14 @@ export function applyImportTypeTransition(
         next.firstClosingMonth = undefined
     }
 
+    if (normalizedType !== 'exchange') {
+        next.destinationAmount = undefined
+        next.destinationCurrency = undefined
+        next.exchangeRate = undefined
+    } else if (!next.destinationCurrency && next.currency) {
+        next.destinationCurrency = next.currency === 'ARS' ? 'USD' : 'ARS'
+    }
+
     if (!typeSupportsCategory(normalizedType)) {
         next.categoryId = undefined
         next.categoryName = undefined
@@ -413,6 +459,7 @@ export function getImportFallbackDescription(type?: string | null): string | und
 
     if (normalizedType === 'transfer') return 'Transferencia'
     if (normalizedType === 'credit_card_payment') return 'Pago de tarjeta'
+    if (normalizedType === 'exchange') return 'Cambio manual'
 
     return undefined
 }
@@ -446,7 +493,7 @@ export function evaluateImportRow({
 
     if (!normalizedType) {
         errors.push(
-            'El tipo es requerido. Valores válidos: ingreso, gasto, gasto con TC, transferencia, ajuste o pago de tarjeta.'
+            'El tipo es requerido. Valores válidos: ingreso, gasto, gasto con TC, cambio, transferencia, ajuste o pago de tarjeta.'
         )
     }
 
@@ -466,6 +513,20 @@ export function evaluateImportRow({
         errors.push('La moneda es obligatoria.')
     } else if (!Object.values(CURRENCIES).includes(normalizedData.currency as (typeof CURRENCIES)[keyof typeof CURRENCIES])) {
         errors.push(`Moneda desconocida: "${normalizedData.currency}". Usá ARS o USD.`)
+    }
+
+    if (sourceAccount && normalizedData.currency && !supportsCurrency(sourceAccount, normalizedData.currency as Currency)) {
+        errors.push(`La cuenta "${sourceAccount.name}" no opera en ${normalizedData.currency}.`)
+    }
+
+    if (
+        destinationAccount &&
+        normalizedType !== 'exchange' &&
+        normalizedData.currency &&
+        typeRequiresDestinationAccount(normalizedType) &&
+        !supportsCurrency(destinationAccount, normalizedData.currency as Currency)
+    ) {
+        errors.push(`La cuenta destino "${destinationAccount.name}" no opera en ${normalizedData.currency}.`)
     }
 
     if (requirement.categoryRequired && !normalizedData.categoryId) {
@@ -551,6 +612,53 @@ export function evaluateImportRow({
         errors.push('La cuenta y la cuenta destino no pueden ser la misma.')
     }
 
+    if (
+        normalizedType === 'transfer' &&
+        sourceAccount &&
+        destinationAccount &&
+        getCommonSupportedCurrencies([sourceAccount, destinationAccount]).length === 0
+    ) {
+        errors.push('La transferencia entre cuentas sin moneda compartida debe importarse como cambio manual.')
+    }
+
+    if (normalizedType === 'exchange') {
+        if (typeof normalizedData.destinationAmount !== 'number' || normalizedData.destinationAmount <= 0) {
+            errors.push('El monto destino es obligatorio para Cambio.')
+        }
+
+        if (!normalizedData.destinationCurrency || !['ARS', 'USD'].includes(normalizedData.destinationCurrency)) {
+            errors.push('La moneda destino es obligatoria para Cambio.')
+        }
+
+        if (!normalizedData.exchangeRate || normalizedData.exchangeRate <= 0) {
+            errors.push('La cotización manual es obligatoria para Cambio.')
+        }
+
+        if (
+            normalizedData.currency &&
+            normalizedData.destinationCurrency &&
+            normalizedData.currency === normalizedData.destinationCurrency
+        ) {
+            errors.push('La moneda origen y destino deben ser distintas en un Cambio.')
+        }
+
+        if (
+            normalizedData.sourceAccountId &&
+            normalizedData.destinationAccountId &&
+            normalizedData.sourceAccountId === normalizedData.destinationAccountId
+        ) {
+            errors.push('La cuenta origen y destino no pueden ser la misma en un Cambio.')
+        }
+
+        if (
+            destinationAccount &&
+            normalizedData.destinationCurrency &&
+            !supportsCurrency(destinationAccount, normalizedData.destinationCurrency as Currency)
+        ) {
+            errors.push(`La cuenta destino "${destinationAccount.name}" no opera en ${normalizedData.destinationCurrency}.`)
+        }
+    }
+
     if (!typeSupportsCategory(normalizedType)) {
         normalizedData.categoryId = undefined
         normalizedData.categoryName = undefined
@@ -562,6 +670,12 @@ export function evaluateImportRow({
         normalizedData.firstClosingMonth = undefined
     } else {
         normalizedData.installmentNumber = 1
+    }
+
+    if (normalizedType !== 'exchange') {
+        normalizedData.destinationAmount = undefined
+        normalizedData.destinationCurrency = undefined
+        normalizedData.exchangeRate = undefined
     }
 
     const status = errors.length > 0

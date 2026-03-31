@@ -3,8 +3,10 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, Account, InstallmentPlan } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
-import { calculateAccountBalance } from '@/lib/utils/balance'
+import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
+import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
+import { normalizeManualExchange } from '@/lib/utils/exchange'
 
 export async function GET(
     request: Request,
@@ -26,8 +28,8 @@ export async function GET(
             userId: session.user.id,
         })
             .populate('categoryId', 'name color type')
-            .populate('sourceAccountId', 'name type currency')
-            .populate('destinationAccountId', 'name type currency')
+            .populate('sourceAccountId', 'name type currency supportedCurrencies')
+            .populate('destinationAccountId', 'name type currency supportedCurrencies')
             .populate('installmentPlanId', 'installmentCount')
 
         if (!transaction) {
@@ -74,24 +76,85 @@ export async function PATCH(
             type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
         }
 
-        // Validar saldo si la cuenta destino del débito no permite saldo negativo
-        if (data.sourceAccountId) {
-            const [oldTransaction, sourceAccount] = await Promise.all([
-                Transaction.findOne({ _id: id, userId: session.user.id }),
-                Account.findOne({ _id: data.sourceAccountId, userId: session.user.id }),
-            ])
+        const accountIds = [data.sourceAccountId, data.destinationAccountId].filter(Boolean)
+        const [oldTransaction, relatedAccounts] = await Promise.all([
+            Transaction.findOne({ _id: id, userId: session.user.id }),
+            accountIds.length > 0
+                ? Account.find({
+                    _id: { $in: accountIds },
+                    userId: session.user.id,
+                })
+                : Promise.resolve([]),
+        ])
 
-            if (sourceAccount?.allowNegativeBalance === false) {
-                const currentBalance = await calculateAccountBalance(
+        const accountMap = new Map(relatedAccounts.map((account) => [account._id.toString(), account]))
+        const sourceAccount = data.sourceAccountId ? accountMap.get(data.sourceAccountId) : null
+        const destinationAccount = data.destinationAccountId ? accountMap.get(data.destinationAccountId) : null
+
+        if (data.sourceAccountId && !sourceAccount) {
+            return NextResponse.json({ error: 'La cuenta origen no existe o no pertenece al usuario.' }, { status: 400 })
+        }
+
+        if (data.destinationAccountId && !destinationAccount) {
+            return NextResponse.json({ error: 'La cuenta destino no existe o no pertenece al usuario.' }, { status: 400 })
+        }
+
+        if (data.type === 'transfer' && sourceAccount && destinationAccount) {
+            const commonCurrencies = getCommonSupportedCurrencies([sourceAccount, destinationAccount])
+            if (commonCurrencies.length === 0) {
+                return NextResponse.json(
+                    {
+                        error: 'La transferencia entre cuentas de distinta moneda debe registrarse como un cambio manual.',
+                    },
+                    { status: 400 }
+                )
+            }
+        }
+
+        if (sourceAccount && !supportsCurrency(sourceAccount, data.currency)) {
+            return NextResponse.json(
+                { error: `La cuenta "${sourceAccount.name}" no opera en ${data.currency}.` },
+                { status: 400 }
+            )
+        }
+
+        if (
+            data.type === 'exchange' &&
+            destinationAccount &&
+            data.destinationCurrency &&
+            !supportsCurrency(destinationAccount, data.destinationCurrency)
+        ) {
+            return NextResponse.json(
+                { error: `La cuenta "${destinationAccount.name}" no opera en ${data.destinationCurrency}.` },
+                { status: 400 }
+            )
+        }
+
+        if (data.type !== 'exchange' && destinationAccount && !supportsCurrency(destinationAccount, data.currency)) {
+            return NextResponse.json(
+                { error: `La cuenta "${destinationAccount.name}" no opera en ${data.currency}.` },
+                { status: 400 }
+            )
+        }
+
+        // Validar saldo si la cuenta destino del débito no permite saldo negativo
+        if (sourceAccount) {
+            if (sourceAccount.allowNegativeBalance === false) {
+                const currentBalances = await calculateAccountBalancesByCurrency(
                     sourceAccount._id,
                     sourceAccount.userId,
-                    sourceAccount.initialBalance ?? 0
+                    {
+                        initialBalances: getInitialBalancesByCurrency(sourceAccount),
+                    }
                 )
+                const currentBalance = currentBalances[data.currency]
 
                 // Si la transacción anterior ya debitaba de esta misma cuenta,
                 // devolver ese monto al saldo para evaluar el nuevo débito limpiamente
                 const previousDebit =
-                    oldTransaction?.sourceAccountId?.toString() === data.sourceAccountId
+                    oldTransaction &&
+                    oldTransaction.sourceAccountId?.toString() === data.sourceAccountId &&
+                    oldTransaction.currency === data.currency
                         ? oldTransaction.amount
                         : 0
 
@@ -100,7 +163,7 @@ export async function PATCH(
                         {
                             error: `Saldo insuficiente en "${sourceAccount.name}". Disponible: ${new Intl.NumberFormat('es-AR', {
                                 style: 'currency',
-                                currency: sourceAccount.currency,
+                                currency: data.currency,
                                 maximumFractionDigits: 0,
                             }).format(currentBalance + previousDebit)}`,
                         },
@@ -110,10 +173,24 @@ export async function PATCH(
             }
         }
 
-        const existingTransaction = await Transaction.findOne({
-            _id: id,
-            userId: session.user.id,
-        })
+        if (data.type === 'exchange') {
+            try {
+                normalizeManualExchange({
+                    sourceCurrency: data.currency,
+                    sourceAmount: data.amount,
+                    destinationCurrency: data.destinationCurrency!,
+                    destinationAmount: data.destinationAmount!,
+                    exchangeRate: data.exchangeRate!,
+                })
+            } catch (error) {
+                return NextResponse.json(
+                    { error: error instanceof Error ? error.message : 'Datos de cambio manual inválidos.' },
+                    { status: 400 }
+                )
+            }
+        }
+
+        const existingTransaction = oldTransaction
 
         const transaction = await Transaction.findOneAndUpdate(
             {
@@ -130,6 +207,10 @@ export async function PATCH(
                     categoryId: data.categoryId,
                     sourceAccountId: data.sourceAccountId,
                     destinationAccountId: data.destinationAccountId,
+                    destinationAmount: data.type === 'exchange' ? data.destinationAmount : undefined,
+                    destinationCurrency: data.type === 'exchange' ? data.destinationCurrency : undefined,
+                    exchangeRate: data.type === 'exchange' ? data.exchangeRate : undefined,
+                    paymentGroupId: data.paymentGroupId ?? existingTransaction?.paymentGroupId,
                     notes: data.notes,
                     merchant: data.merchant,
                 },
@@ -139,8 +220,8 @@ export async function PATCH(
             }
         )
             .populate('categoryId', 'name color type')
-            .populate('sourceAccountId', 'name type currency')
-            .populate('destinationAccountId', 'name type currency')
+            .populate('sourceAccountId', 'name type currency supportedCurrencies')
+            .populate('destinationAccountId', 'name type currency supportedCurrencies')
             .populate('installmentPlanId', 'installmentCount')
 
         if (!transaction) {

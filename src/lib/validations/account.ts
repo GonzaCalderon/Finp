@@ -1,11 +1,19 @@
 import { z } from 'zod'
+import { normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+
+const currencySchema = z.enum(['ARS', 'USD'])
 
 export const accountSchema = z.object({
     name: z.string().min(1, 'El nombre es requerido'),
     type: z.enum(['bank', 'cash', 'wallet', 'credit_card', 'debt', 'savings']),
-    currency: z.enum(['ARS', 'USD']),
+    currency: currencySchema.optional(),
+    supportedCurrencies: z.array(currencySchema).min(1, 'Seleccioná al menos una moneda').max(2).optional(),
     institution: z.string().optional(),
     initialBalance: z.number().optional(),
+    initialBalances: z.object({
+        ARS: z.number().optional(),
+        USD: z.number().optional(),
+    }).optional(),
     color: z.string().optional(),
     allowNegativeBalance: z.boolean().default(true),
     creditCardConfig: z.object({
@@ -29,6 +37,25 @@ export const accountSchema = z.object({
                 path: ['creditCardConfig', 'dueDay'],
             })
         }
+    }
+}).transform((data) => {
+    const supportedCurrencies = normalizeSupportedCurrencies(data.supportedCurrencies, data.currency, data.type)
+    const primaryCurrency = supportedCurrencies[0] ?? 'ARS'
+    const initialBalances = {
+        ARS: data.initialBalances?.ARS ?? 0,
+        USD: data.initialBalances?.USD ?? 0,
+    }
+
+    if ((data.initialBalance ?? 0) !== 0 && initialBalances[primaryCurrency] === 0) {
+        initialBalances[primaryCurrency] = data.initialBalance ?? 0
+    }
+
+    return {
+        ...data,
+        supportedCurrencies,
+        currency: supportedCurrencies[0],
+        initialBalances,
+        initialBalance: initialBalances[primaryCurrency],
     }
 })
 

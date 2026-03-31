@@ -16,6 +16,8 @@ const UserSchema = new Schema<IUser>(
             },
             monthStartDay: { type: Number, min: 1, max: 28, default: 1 },
             defaultAccountId: { type: Schema.Types.ObjectId, ref: 'Account' },
+            consolidatedCurrency: { type: String, enum: ['ARS', 'USD'], default: 'ARS' },
+            referenceArsPerUsdRate: { type: Number, min: 0 },
         },
     },
     { timestamps: true }

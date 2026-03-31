@@ -39,6 +39,12 @@ import type { AccountFormData } from '@/lib/validations'
 import type { IAccount } from '@/types'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { cn } from '@/lib/utils'
+import {
+    getAccountBalancesByCurrency,
+    getAccountCurrencyLabel,
+    getPrimaryCurrency,
+    isDualCurrencyAccount,
+} from '@/lib/utils/accounts'
 
 type AccountWithBalance = IAccount & { color?: string; balance?: number }
 
@@ -125,11 +131,16 @@ function summarizeByCurrency(accounts: AccountWithBalance[]): CurrencySummary[] 
     const map = new Map<string, CurrencySummary>()
 
     for (const account of accounts) {
-        const currency = account.currency ?? 'ARS'
-        const current = map.get(currency) ?? { currency, total: 0, count: 0 }
-        current.total += account.balance ?? 0
-        current.count += 1
-        map.set(currency, current)
+        const balancesByCurrency = getAccountBalancesByCurrency(account)
+        const supportedCurrencies = account.supportedCurrencies ?? [account.currency]
+        ;(['ARS', 'USD'] as const).forEach((currency) => {
+            if (!supportedCurrencies.includes(currency) && balancesByCurrency[currency] === 0) return
+
+            const current = map.get(currency) ?? { currency, total: 0, count: 0 }
+            current.total += balancesByCurrency[currency]
+            current.count += 1
+            map.set(currency, current)
+        })
     }
 
     return Array.from(map.values()).sort((a, b) => a.currency.localeCompare(b.currency))
@@ -146,7 +157,7 @@ function getAccountSecondaryMeta(account: AccountWithBalance): string[] {
     }
 
     if (account.type === 'credit_card' && account.creditCardConfig?.creditLimit) {
-        items.push(`Límite ${formatAmount(account.creditCardConfig.creditLimit, account.currency)}`)
+        items.push(`Límite ${formatAmount(account.creditCardConfig.creditLimit, getPrimaryCurrency(account))}`)
     }
 
     return items
@@ -219,8 +230,12 @@ function AccountRow({
 }) {
     const meta = getTypeMeta(account.type)
     const Icon = meta.icon
-    const balanceNegative = (account.balance ?? 0) < 0
+    const balancesByCurrency = getAccountBalancesByCurrency(account)
+    const primaryCurrency = getPrimaryCurrency(account)
+    const primaryBalance = balancesByCurrency[primaryCurrency]
+    const balanceNegative = primaryBalance < 0
     const secondaryMeta = getAccountSecondaryMeta(account)
+    const dualCurrency = isDualCurrencyAccount(account)
 
     return (
         <motion.div
@@ -249,7 +264,7 @@ function AccountRow({
                                     )}
                                     <p className="truncate text-[12.5px] font-medium md:text-[15px]">{account.name}</p>
                                     <Badge variant="outline" className="h-4 rounded-md px-1.5 text-[9px] md:h-5 md:text-[10px]">
-                                        {account.currency}
+                                        {getAccountCurrencyLabel(account)}
                                     </Badge>
                                 </div>
 
@@ -269,19 +284,39 @@ function AccountRow({
                                     <p className="hidden text-[11px] uppercase tracking-[0.08em] text-muted-foreground md:block">
                                         Saldo actual
                                     </p>
-                                    <p
-                                        className="text-[13px] font-semibold tabular-nums md:mt-0.5 md:text-lg"
-                                        style={{ color: balanceNegative ? 'var(--destructive)' : 'var(--foreground)' }}
-                                    >
-                                        {account.balance === undefined ? '—' : (
+                                    {dualCurrency ? (
+                                        <div className="space-y-0.5 md:mt-0.5">
+                                            {(['ARS', 'USD'] as const).map((currency) => (
+                                                <p
+                                            key={currency}
+                                            className="text-[11px] font-semibold tabular-nums md:text-sm"
+                                            style={{
+                                                color: balancesByCurrency[currency] < 0 ? 'var(--destructive)' : 'var(--foreground)',
+                                            }}
+                                                >
+                                                    <span className="mr-1 text-[10px] text-muted-foreground md:text-xs">{currency}</span>
+                                                    <ResponsiveAmount
+                                                        amount={balancesByCurrency[currency]}
+                                                        currency={currency}
+                                                        hidden={hidden}
+                                                    color={balancesByCurrency[currency] < 0 ? 'var(--destructive)' : 'var(--foreground)'}
+                                                />
+                                            </p>
+                                        ))}
+                                        </div>
+                                    ) : (
+                                        <p
+                                            className="text-[13px] font-semibold tabular-nums md:mt-0.5 md:text-lg"
+                                            style={{ color: balanceNegative ? 'var(--destructive)' : 'var(--foreground)' }}
+                                        >
                                             <ResponsiveAmount
-                                                amount={account.balance}
-                                                currency={account.currency}
+                                                amount={primaryBalance}
+                                                currency={primaryCurrency}
                                                 hidden={hidden}
                                                 color={balanceNegative ? 'var(--destructive)' : 'var(--foreground)'}
                                             />
-                                        )}
-                                    </p>
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="flex items-center gap-0 md:gap-1">
@@ -313,8 +348,8 @@ function AccountRow({
                                     <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[8.5px] md:px-2 md:py-0.5 md:text-[10px]">
                                         Disponible{' '}
                                         <ResponsiveAmount
-                                            amount={account.creditCardConfig.creditLimit + (account.balance ?? 0)}
-                                            currency={account.currency}
+                                            amount={account.creditCardConfig.creditLimit + primaryBalance}
+                                            currency={primaryCurrency}
                                             hidden={hidden}
                                             compactMaximumFractionDigits={0}
                                             className="font-medium"
@@ -578,7 +613,6 @@ export default function AccountsPage() {
                             hint="Incluye cuentas con balance negativo o deuda visible"
                         />
                     </div>
-
                     <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {groupedAccounts.map((group) => {
                             const meta = getTypeMeta(group.type)

@@ -41,9 +41,11 @@ import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
+import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
+import { buildMonthOptions } from '@/lib/utils/period'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -53,6 +55,7 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     expense: 'Gasto',
     credit_card_expense: 'Gasto con TC',
     transfer: 'Transferencia',
+    exchange: 'Cambio',
     credit_card_payment: 'Pago de tarjeta',
     debt_payment: 'Pago de tarjeta',      // backwards compat
     adjustment: 'Ajuste',
@@ -66,6 +69,7 @@ const TRANSACTION_TYPE_COLORS: Record<
     expense: 'destructive',
     credit_card_expense: 'outline',
     transfer: 'secondary',
+    exchange: 'secondary',
     credit_card_payment: 'outline',
     debt_payment: 'outline',
     adjustment: 'secondary',
@@ -86,19 +90,7 @@ const getCurrentMonth = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-    const date = new Date()
-    date.setDate(1) // evita overflow (ej. 31 mar - 1 mes → 31 feb → 3 mar duplicado)
-    date.setMonth(date.getMonth() - i)
-
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const label = date.toLocaleDateString('es-AR', {
-        month: 'long',
-        year: 'numeric',
-    })
-
-    return { value, label }
-})
+const MONTHS = buildMonthOptions({ pastMonths: 8, futureMonths: 1 })
 
 type BasicOption = {
     value: string
@@ -109,6 +101,7 @@ const DEFAULT_FILTERS: Filters = {
     type: '',
     categoryId: '',
     accountId: '',
+    currency: '',
 }
 
 const CATEGORY_TYPE_META: Record<string, { bg: string; border: string; text: string }> = {
@@ -229,6 +222,7 @@ function TypeFilterChip({
         { value: 'expense', label: 'Gasto' },
         { value: 'credit_card_expense', label: 'Gasto con TC' },
         { value: 'transfer', label: 'Transferencia' },
+        { value: 'exchange', label: 'Cambio' },
         { value: 'credit_card_payment', label: 'Pago de tarjeta' },
         { value: 'adjustment', label: 'Ajuste' },
     ]
@@ -434,6 +428,7 @@ function FilterSheet({
                          typeOptions,
                          categoryOptions,
                          accountOptions,
+                         currencyOptions,
                          activeCount,
                      }: {
     open: boolean
@@ -445,6 +440,7 @@ function FilterSheet({
     typeOptions: BasicOption[]
     categoryOptions: CategoryOption[]
     accountOptions: BasicOption[]
+    currencyOptions: BasicOption[]
     activeCount: number
 }) {
     return (
@@ -608,6 +604,27 @@ function FilterSheet({
                                         ))}
                                     </div>
                                 </div>
+
+                                <div>
+                                    <p className="text-xs font-medium mb-2">Moneda</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[{ value: '', label: 'Todas' }, ...currencyOptions].map((option) => (
+                                            <button
+                                                key={option.value || 'all-currency'}
+                                                type="button"
+                                                onClick={() => onChange('currency', option.value)}
+                                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                                style={{
+                                                    background:
+                                                        filters.currency === option.value ? 'var(--sky)' : 'var(--secondary)',
+                                                    color: filters.currency === option.value ? '#fff' : 'var(--foreground)',
+                                                }}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="mt-6 flex gap-2">
@@ -670,6 +687,7 @@ export default function TransactionsPage() {
         type: appliedFilters.type || undefined,
         categoryId: appliedFilters.categoryId || undefined,
         accountId: appliedFilters.accountId || undefined,
+        currency: appliedFilters.currency || undefined,
         sort,
     })
 
@@ -724,6 +742,22 @@ export default function TransactionsPage() {
         }
     }
 
+    const handleTransactionBatchSubmit = async (items: TransactionFormData[]) => {
+        try {
+            for (const item of items) {
+                await createTransaction(item)
+            }
+            success(
+                items.length === 2
+                    ? 'Pago dual registrado correctamente'
+                    : `${items.length} transacciones registradas correctamente`
+            )
+            setTransactionDialogOpen(false)
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al guardar las transacciones')
+        }
+    }
+
     const handleInstallmentSubmit = async (data: InstallmentFormData) => {
         try {
             await createPlan(data as never)
@@ -766,6 +800,7 @@ export default function TransactionsPage() {
         if (appliedFilters.type) count++
         if (appliedFilters.categoryId) count++
         if (appliedFilters.accountId) count++
+        if (appliedFilters.currency) count++
         return count
     }, [appliedFilters])
 
@@ -775,6 +810,7 @@ export default function TransactionsPage() {
             { value: 'expense', label: 'Gasto' },
             { value: 'credit_card_expense', label: 'Gasto con TC' },
             { value: 'transfer', label: 'Transferencia' },
+            { value: 'exchange', label: 'Cambio' },
         { value: 'credit_card_payment', label: 'Pago de tarjeta' },
             { value: 'adjustment', label: 'Ajuste' },
         ],
@@ -797,6 +833,10 @@ export default function TransactionsPage() {
     const totalIncome = summary.income
     const totalExpense = summary.expense
     const totalCreditCardExpense = summary.creditCardExpense
+    const totalBalance = {
+        ars: totalIncome.ars - totalExpense.ars,
+        usd: totalIncome.usd - totalExpense.usd,
+    }
 
     if (loading) {
         return (
@@ -829,10 +869,10 @@ export default function TransactionsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Select value={month} onValueChange={setMonth}>
-                        <SelectTrigger className="w-36 sm:w-44 h-8 text-sm">
+                        <SelectTrigger className="w-32 sm:w-40 h-7.5 text-xs sm:text-sm">
                             <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-72">
                             {MONTHS.map((monthOption) => (
                                 <SelectItem key={monthOption.value} value={monthOption.value}>
                                     {monthOption.label}
@@ -846,9 +886,6 @@ export default function TransactionsPage() {
                             Importar
                         </Link>
                     </Button>
-                    <Button size="sm" className="hidden sm:flex" onClick={handleNewTransaction} data-testid="btn-nueva-transaccion">
-                        + Nueva
-                    </Button>
                 </div>
             </div>
 
@@ -859,48 +896,56 @@ export default function TransactionsPage() {
                 <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid #10B981' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Ingresos</p>
-                        <p className="text-base md:text-xl font-semibold tracking-tight text-green-500 truncate">
-                            <ResponsiveAmount amount={totalIncome} currency="ARS" hidden={hidden} color="#10B981" />
-                        </p>
+                        <CurrencyBreakdownAmount
+                            totals={totalIncome}
+                            hidden={hidden}
+                            primaryColor="#10B981"
+                            secondaryColor="rgba(16,185,129,0.78)"
+                            className="text-base md:text-xl font-semibold tracking-tight"
+                        />
                     </div>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--destructive)' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Gastos</p>
-                        <p className="text-base md:text-xl font-semibold tracking-tight text-destructive truncate">
-                            <ResponsiveAmount amount={totalExpense} currency="ARS" hidden={hidden} color="var(--destructive)" />
-                        </p>
+                        <CurrencyBreakdownAmount
+                            totals={totalExpense}
+                            hidden={hidden}
+                            primaryColor="var(--destructive)"
+                            secondaryColor="rgba(239,68,68,0.78)"
+                            className="text-base md:text-xl font-semibold tracking-tight"
+                        />
                         <AnimatePresence>
-                            {totalCreditCardExpense > 0 && (
-                                <motion.p
+                            {(totalCreditCardExpense.ars > 0 || totalCreditCardExpense.usd > 0) && (
+                                <motion.div
                                     initial={{ opacity: 0, y: 4 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: 4 }}
                                     transition={{ duration: 0.2 }}
-                                    className="flex items-center gap-1 text-xs mt-1 truncate"
+                                    className="flex items-start gap-1 text-xs mt-1"
                                     style={{ color: '#6366F1' }}
                                 >
                                     <CreditCard className="w-3 h-3 shrink-0" />
-                                    <ResponsiveAmount amount={totalCreditCardExpense} currency="ARS" hidden={hidden} />
-                                    <span>con TC</span>
-                                </motion.p>
+                                    <div>
+                                        <div className="font-medium">
+                                            <ResponsiveAmount amount={totalCreditCardExpense.ars} currency="ARS" hidden={hidden} color="#6366F1" />
+                                            <span className="ml-1">con TC</span>
+                                        </div>
+                                        <div className="text-[11px]" style={{ color: 'rgba(99,102,241,0.78)' }}>
+                                            <ResponsiveAmount amount={totalCreditCardExpense.usd} currency="USD" hidden={hidden} color="rgba(99,102,241,0.78)" compactMaximumFractionDigits={1} />
+                                        </div>
+                                    </div>
+                                </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
                     <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--sky)' }}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Balance</p>
-                        <p
-                            className="text-base md:text-xl font-semibold tracking-tight truncate"
-                            style={{
-                                color:
-                                    totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)',
-                            }}
-                        >
-                            <ResponsiveAmount
-                                amount={totalIncome - totalExpense}
-                                currency="ARS"
-                                hidden={hidden}
-                                color={totalIncome - totalExpense >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                            />
-                        </p>
+                        <CurrencyBreakdownAmount
+                            totals={totalBalance}
+                            hidden={hidden}
+                            primaryColor={totalBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                            secondaryColor={totalBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                            className="text-base md:text-xl font-semibold tracking-tight"
+                        />
                     </div>
                 </div>
             </div>
@@ -925,6 +970,17 @@ export default function TransactionsPage() {
                     options={accountOptions}
                     value={appliedFilters.accountId}
                     onChange={(value) => setAppliedFilter('accountId', value)}
+                />
+
+                <BasicFilterChip
+                    label="Moneda"
+                    active={Boolean(appliedFilters.currency)}
+                    options={[
+                        { value: 'ARS', label: 'ARS' },
+                        { value: 'USD', label: 'USD' },
+                    ]}
+                    value={appliedFilters.currency ?? ''}
+                    onChange={(value) => setAppliedFilter('currency', value)}
                 />
 
                 <BasicFilterChip
@@ -1061,30 +1117,14 @@ export default function TransactionsPage() {
                                                     <div className="flex items-center gap-2">
                                                         <p
                                                             className="font-semibold tabular-nums text-sm"
-                                                            style={{
-                                                                color:
-                                                                    transaction.type === 'income'
-                                                                        ? '#10B981'
-                                                                        : transaction.type === 'expense'
-                                                                            ? 'var(--destructive)'
-                                                                            : transaction.type === 'credit_card_expense'
-                                                                                ? '#6366F1'
-                                                                                : 'var(--foreground)',
-                                                            }}
+                                                            style={{ color: getTransactionAmountColor(transaction) }}
                                                         >
+                                                            {getTransactionDisplayPrefix(transaction)}
                                                             <ResponsiveAmount
-                                                                amount={transaction.amount}
+                                                                amount={getTransactionDisplayAmount(transaction)}
                                                                 currency={transaction.currency}
                                                                 hidden={hidden}
-                                                                color={
-                                                                    transaction.type === 'income'
-                                                                        ? '#10B981'
-                                                                        : transaction.type === 'expense'
-                                                                            ? 'var(--destructive)'
-                                                                            : transaction.type === 'credit_card_expense'
-                                                                                ? '#6366F1'
-                                                                                : 'var(--foreground)'
-                                                                }
+                                                                color={getTransactionAmountColor(transaction)}
                                                             />
                                                         </p>
                                                         <Button
@@ -1167,6 +1207,40 @@ export default function TransactionsPage() {
                                                                     · {((transaction.installmentPlanId as { installmentCount?: number } | null)?.installmentCount ?? 'N')} cuotas
                                                                 </span>
                                                             )}
+
+                                                            {transaction.type === 'adjustment' && (
+                                                                <span
+                                                                    className="text-xs font-medium"
+                                                                    style={{ color: getTransactionAmountColor(transaction) }}
+                                                                >
+                                                                    · {isPositiveAdjustment(transaction) ? 'suma saldo' : 'descuenta saldo'}
+                                                                </span>
+                                                            )}
+
+                                                            {transaction.type === 'exchange' && transaction.destinationAmount && transaction.destinationCurrency && (
+                                                                <span className="text-xs font-medium text-muted-foreground">
+                                                                    · recibís {new Intl.NumberFormat('es-AR', {
+                                                                        style: 'currency',
+                                                                        currency: transaction.destinationCurrency,
+                                                                        maximumFractionDigits: 2,
+                                                                    }).format(transaction.destinationAmount)}
+                                                                </span>
+                                                            )}
+
+                                                            {transaction.type === 'exchange' && transaction.exchangeRate && (
+                                                                <span className="text-xs font-medium text-muted-foreground">
+                                                                    · TC {new Intl.NumberFormat('es-AR', {
+                                                                        minimumFractionDigits: 2,
+                                                                        maximumFractionDigits: 4,
+                                                                    }).format(transaction.exchangeRate)}
+                                                                </span>
+                                                            )}
+
+                                                            {transaction.type === 'credit_card_payment' && transaction.paymentGroupId && (
+                                                                <span className="text-xs font-medium text-muted-foreground">
+                                                                    · pago dual
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1174,30 +1248,14 @@ export default function TransactionsPage() {
                                                 <div className="hidden sm:flex items-center gap-2 shrink-0">
                                                     <p
                                                         className="font-semibold tabular-nums text-sm"
-                                                        style={{
-                                                            color:
-                                                                transaction.type === 'income'
-                                                                    ? '#10B981'
-                                                                    : transaction.type === 'expense'
-                                                                        ? 'var(--destructive)'
-                                                                        : transaction.type === 'credit_card_expense'
-                                                                            ? '#6366F1'
-                                                                            : 'var(--foreground)',
-                                                        }}
+                                                        style={{ color: getTransactionAmountColor(transaction) }}
                                                     >
+                                                        {getTransactionDisplayPrefix(transaction)}
                                                         <ResponsiveAmount
-                                                            amount={transaction.amount}
+                                                            amount={getTransactionDisplayAmount(transaction)}
                                                             currency={transaction.currency}
                                                             hidden={hidden}
-                                                            color={
-                                                                transaction.type === 'income'
-                                                                    ? '#10B981'
-                                                                    : transaction.type === 'expense'
-                                                                        ? 'var(--destructive)'
-                                                                        : transaction.type === 'credit_card_expense'
-                                                                            ? '#6366F1'
-                                                                            : 'var(--foreground)'
-                                                            }
+                                                            color={getTransactionAmountColor(transaction)}
                                                         />
                                                     </p>
                                                     <div className="flex gap-1">
@@ -1256,6 +1314,10 @@ export default function TransactionsPage() {
                 typeOptions={typeOptions}
                 categoryOptions={categoryOptions}
                 accountOptions={accountOptions}
+                currencyOptions={[
+                    { value: 'ARS', label: 'ARS' },
+                    { value: 'USD', label: 'USD' },
+                ]}
                 activeCount={activeFilterCount}
             />
 
@@ -1266,6 +1328,7 @@ export default function TransactionsPage() {
                 accounts={accounts}
                 categories={categories}
                 onSubmit={handleTransactionSubmit}
+                onBatchSubmit={handleTransactionBatchSubmit}
                 onInstallmentSubmit={handleInstallmentSubmit}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
@@ -1288,4 +1351,29 @@ export default function TransactionsPage() {
             </AlertDialog>
         </motion.div>
     )
+}
+
+function isPositiveAdjustment(transaction: ITransaction) {
+    return transaction.type === 'adjustment' && transaction.amount < 0
+}
+
+function getTransactionAmountColor(transaction: ITransaction) {
+    if (transaction.type === 'income') return '#10B981'
+    if (transaction.type === 'expense') return 'var(--destructive)'
+    if (transaction.type === 'credit_card_expense') return '#6366F1'
+    if (transaction.type === 'exchange') return 'var(--sky-dark)'
+    if (transaction.type === 'adjustment') {
+        return isPositiveAdjustment(transaction) ? '#10B981' : 'var(--destructive)'
+    }
+    return 'var(--foreground)'
+}
+
+function getTransactionDisplayAmount(transaction: ITransaction) {
+    return transaction.type === 'adjustment' ? Math.abs(transaction.amount) : transaction.amount
+}
+
+function getTransactionDisplayPrefix(transaction: ITransaction) {
+    if (transaction.type === 'exchange') return '↔ '
+    if (transaction.type !== 'adjustment') return ''
+    return isPositiveAdjustment(transaction) ? '+' : '-'
 }

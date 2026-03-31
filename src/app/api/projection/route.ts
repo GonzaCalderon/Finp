@@ -3,10 +3,25 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { ScheduledCommitment, InstallmentPlan } from '@/lib/models'
 
-const USD_TO_ARS = 1450
+type CurrencyTotals = {
+    ars: number
+    usd: number
+}
 
-function convertToARS(amount: number, currency: string): number {
-    return currency === 'USD' ? amount * USD_TO_ARS : amount
+function emptyCurrencyTotals(): CurrencyTotals {
+    return { ars: 0, usd: 0 }
+}
+
+function addCurrencyAmount(totals: CurrencyTotals, currency: string, amount: number) {
+    if (currency === 'USD') totals.usd += amount
+    else totals.ars += amount
+}
+
+function addCurrencyTotals(base: CurrencyTotals, extra: CurrencyTotals): CurrencyTotals {
+    return {
+        ars: base.ars + extra.ars,
+        usd: base.usd + extra.usd,
+    }
 }
 
 export async function GET(request: Request) {
@@ -70,11 +85,13 @@ export async function GET(request: Request) {
                     description: c.description,
                     amount: c.amount,
                     currency: c.currency,
-                    amountARS: convertToARS(c.amount, c.currency),
                     dayOfMonth: c.dayOfMonth,
                 }))
 
-            const totalCommitmentsARS = monthCommitments.reduce((sum, c) => sum + c.amountARS, 0)
+            const totalCommitments = monthCommitments.reduce((totals, commitment) => {
+                addCurrencyAmount(totals, commitment.currency, commitment.amount)
+                return totals
+            }, emptyCurrencyTotals())
 
             // Cuotas agrupadas por cuenta (tarjeta)
             const installmentsByAccount: Record<string, {
@@ -84,11 +101,10 @@ export async function GET(request: Request) {
                     description: string
                     installmentAmount: number
                     currency: string
-                    amountARS: number
                     currentInstallment: number
                     installmentCount: number
                 }[]
-                totalARS: number
+                total: CurrencyTotals
             }> = {}
 
             installmentPlans.forEach((plan) => {
@@ -104,14 +120,13 @@ export async function GET(request: Request) {
                 const account = plan.accountId as { _id: { toString: () => string }; name: string } | null
                 const accountId = account?._id?.toString() ?? 'sin-cuenta'
                 const accountName = account?.name ?? 'Sin tarjeta'
-                const amountARS = convertToARS(plan.installmentAmount, plan.currency)
 
                 if (!installmentsByAccount[accountId]) {
                     installmentsByAccount[accountId] = {
                         accountId,
                         accountName,
                         items: [],
-                        totalARS: 0,
+                        total: emptyCurrencyTotals(),
                     }
                 }
 
@@ -119,18 +134,22 @@ export async function GET(request: Request) {
                     description: plan.description,
                     installmentAmount: plan.installmentAmount,
                     currency: plan.currency,
-                    amountARS,
                     currentInstallment,
                     installmentCount: plan.installmentCount,
                 })
 
-                installmentsByAccount[accountId].totalARS += amountARS
+                addCurrencyAmount(
+                    installmentsByAccount[accountId].total,
+                    plan.currency,
+                    plan.installmentAmount
+                )
             })
 
-            const totalInstallmentsARS = Object.values(installmentsByAccount).reduce(
-                (sum, a) => sum + a.totalARS,
-                0
-            )
+            const totalInstallments = Object.values(installmentsByAccount).reduce((totals, account) => {
+                totals.ars += account.total.ars
+                totals.usd += account.total.usd
+                return totals
+            }, emptyCurrencyTotals())
 
             return {
                 month,
@@ -138,16 +157,13 @@ export async function GET(request: Request) {
                 isPast,
                 commitments: monthCommitments,
                 installmentsByAccount: Object.values(installmentsByAccount),
-                totalCommitmentsARS,
-                totalInstallmentsARS,
-                totalARS: totalCommitmentsARS + totalInstallmentsARS,
+                totalCommitments,
+                totalInstallments,
+                total: addCurrencyTotals(totalCommitments, totalInstallments),
             }
         })
 
-        return NextResponse.json({
-            projection,
-            usdToArs: USD_TO_ARS,
-        })
+        return NextResponse.json({ projection })
     } catch (error) {
         console.error('Error en proyección:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

@@ -14,6 +14,7 @@ export type Filters = {
     type: string
     categoryId: string
     accountId: string
+    currency?: string
 }
 
 /** Normaliza tipos de transacción al dominio de categorías. */

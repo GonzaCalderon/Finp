@@ -1,5 +1,18 @@
+import type { Currency } from '@/lib/constants'
 import type { Types } from 'mongoose'
 import { Transaction } from '@/lib/models'
+import { buildCurrencyBalances, normalizeInitialBalances } from '@/lib/utils/accounts'
+
+type BalanceBucket = {
+    _id: Currency
+    total: number
+}
+
+type BalanceFacet = {
+    regularIncoming: BalanceBucket[]
+    exchangeIncoming: BalanceBucket[]
+    outgoing: BalanceBucket[]
+}
 
 /**
  * Calcula el saldo actual de una cuenta sumando todas sus transacciones.
@@ -15,9 +28,28 @@ import { Transaction } from '@/lib/models'
 export async function calculateAccountBalance(
     accountId: Types.ObjectId,
     userId: Types.ObjectId,
-    initialBalance = 0
+    initialBalance = 0,
+    initialCurrency: Currency = 'ARS',
+    targetCurrency: Currency = initialCurrency
 ): Promise<number> {
-    const [result] = await Transaction.aggregate<{ incoming: number; outgoing: number }>([
+    const balances = await calculateAccountBalancesByCurrency(accountId, userId, {
+        initialBalance,
+        initialCurrency,
+    })
+
+    return balances[targetCurrency]
+}
+
+export async function calculateAccountBalancesByCurrency(
+    accountId: Types.ObjectId,
+    userId: Types.ObjectId,
+    options?: {
+        initialBalance?: number
+        initialCurrency?: Currency
+        initialBalances?: Partial<Record<Currency, number>>
+    }
+): Promise<Record<Currency, number>> {
+    const result = await Transaction.aggregate<BalanceFacet>([
         {
             $match: {
                 userId,
@@ -28,21 +60,78 @@ export async function calculateAccountBalance(
             },
         },
         {
-            $group: {
-                _id: null,
-                incoming: {
-                    $sum: {
-                        $cond: [{ $eq: ['$destinationAccountId', accountId] }, '$amount', 0],
+            $facet: {
+                regularIncoming: [
+                    {
+                        $match: {
+                            destinationAccountId: accountId,
+                            $or: [
+                                { type: { $ne: 'exchange' } },
+                                { destinationCurrency: { $exists: false } },
+                            ],
+                        },
                     },
-                },
-                outgoing: {
-                    $sum: {
-                        $cond: [{ $eq: ['$sourceAccountId', accountId] }, '$amount', 0],
+                    {
+                        $group: {
+                            _id: '$currency',
+                            total: { $sum: '$amount' },
+                        },
                     },
-                },
+                ],
+                exchangeIncoming: [
+                    {
+                        $match: {
+                            type: 'exchange',
+                            destinationAccountId: accountId,
+                            destinationCurrency: { $exists: true },
+                            destinationAmount: { $exists: true },
+                        },
+                    },
+                    {
+                        $group: {
+                            _id: '$destinationCurrency',
+                            total: { $sum: '$destinationAmount' },
+                        },
+                    },
+                ],
+                outgoing: [
+                    {
+                        $match: {
+                            sourceAccountId: accountId,
+                        },
+                    },
+                    {
+                        $group: {
+                            _id: '$currency',
+                            total: { $sum: '$amount' },
+                        },
+                    },
+                ],
             },
         },
     ])
 
-    return initialBalance + (result?.incoming ?? 0) - (result?.outgoing ?? 0)
+    const balances = buildCurrencyBalances(
+        normalizeInitialBalances(
+            options?.initialBalances,
+            options?.initialBalance,
+            options?.initialCurrency
+        )
+    )
+
+    const buckets = result[0]
+
+    for (const bucket of buckets?.regularIncoming ?? []) {
+        balances[bucket._id] += bucket.total ?? 0
+    }
+
+    for (const bucket of buckets?.exchangeIncoming ?? []) {
+        balances[bucket._id] += bucket.total ?? 0
+    }
+
+    for (const bucket of buckets?.outgoing ?? []) {
+        balances[bucket._id] -= bucket.total ?? 0
+    }
+
+    return balances
 }

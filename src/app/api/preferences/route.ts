@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { User } from '@/lib/models'
 import type { UserPreferences } from '@/types'
+import type { Currency } from '@/lib/constants'
 
 export async function GET() {
     try {
@@ -26,6 +27,8 @@ export async function GET() {
             defaultView: user.preferences?.defaultView ?? 'dashboard',
             monthStartDay: user.preferences?.monthStartDay ?? 1,
             defaultAccountId: user.preferences?.defaultAccountId?.toString(),
+            consolidatedCurrency: (user.preferences?.consolidatedCurrency as Currency | undefined) ?? 'ARS',
+            referenceArsPerUsdRate: user.preferences?.referenceArsPerUsdRate,
         }
 
         return NextResponse.json({ preferences })
@@ -67,6 +70,29 @@ export async function PATCH(request: Request) {
                 body.defaultAccountId ? body.defaultAccountId : null
         }
 
+        if (body.consolidatedCurrency !== undefined) {
+            if (!['ARS', 'USD'].includes(body.consolidatedCurrency)) {
+                return NextResponse.json({ error: 'Moneda consolidada inválida' }, { status: 400 })
+            }
+            update['preferences.consolidatedCurrency'] = body.consolidatedCurrency
+        }
+
+        if ('referenceArsPerUsdRate' in body) {
+            if (
+                body.referenceArsPerUsdRate === null ||
+                body.referenceArsPerUsdRate === undefined ||
+                body.referenceArsPerUsdRate === 0
+            ) {
+                update['preferences.referenceArsPerUsdRate'] = null
+            } else {
+                const rate = Number(body.referenceArsPerUsdRate)
+                if (!Number.isFinite(rate) || rate <= 0) {
+                    return NextResponse.json({ error: 'Cotización de referencia inválida' }, { status: 400 })
+                }
+                update['preferences.referenceArsPerUsdRate'] = rate
+            }
+        }
+
         if (Object.keys(update).length === 0) {
             return NextResponse.json({ error: 'No hay campos válidos para actualizar' }, { status: 400 })
         }
@@ -87,6 +113,8 @@ export async function PATCH(request: Request) {
             defaultView: user.preferences?.defaultView ?? 'dashboard',
             monthStartDay: user.preferences?.monthStartDay ?? 1,
             defaultAccountId: user.preferences?.defaultAccountId?.toString(),
+            consolidatedCurrency: (user.preferences?.consolidatedCurrency as Currency | undefined) ?? 'ARS',
+            referenceArsPerUsdRate: user.preferences?.referenceArsPerUsdRate,
         }
 
         return NextResponse.json({ preferences })

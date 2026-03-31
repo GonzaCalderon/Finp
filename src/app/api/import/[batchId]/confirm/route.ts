@@ -187,6 +187,14 @@ export async function POST(
                     txDoc.sourceAccountId = data.sourceAccountId
                 }
 
+                if (normalizedType === 'exchange') {
+                    txDoc.sourceAccountId = data.sourceAccountId
+                    txDoc.destinationAccountId = data.destinationAccountId
+                    txDoc.destinationAmount = data.destinationAmount
+                    txDoc.destinationCurrency = data.destinationCurrency
+                    txDoc.exchangeRate = data.exchangeRate
+                }
+
                 if (normalizedType === 'income') {
                     txDoc.destinationAccountId = data.sourceAccountId
                 }

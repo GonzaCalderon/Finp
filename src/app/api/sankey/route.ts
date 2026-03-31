@@ -42,6 +42,7 @@ export async function GET(request: Request) {
 
         const { searchParams } = new URL(request.url)
         const monthParam = searchParams.get('month')
+        const currency = searchParams.get('currency') === 'USD' ? 'USD' : 'ARS'
 
         await connectDB()
 
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
         const expenseMap: Record<string, { name: string; amount: number; color: string }> = {}
 
         transactions.forEach((t) => {
+            if (t.currency !== currency) return
             const cat = getPopulatedCategoryRef(t.categoryId)
             const key = cat?._id?.toString() ?? 'sin-categoria'
             const name = cat?.name ?? 'Sin categoría'
@@ -92,6 +94,7 @@ export async function GET(request: Request) {
             transactions,
         }).map((card) => {
             card.items.forEach((item) => {
+                if (item.currency !== currency) return
                 const key = item.categoryName ?? 'sin-categoria'
                 if (!expenseMap[key]) {
                     expenseMap[key] = {
@@ -107,11 +110,22 @@ export async function GET(request: Request) {
                 id: card.cardId,
                 name: card.cardName ?? 'Tarjeta',
                 color: card.cardColor ?? '#6366F1',
-                totalExpenses: card.due,
-                totalPaid: card.paid,
-                netOwed: card.pending,
+                totalExpenses: card.items
+                    .filter((item) => item.currency === currency)
+                    .reduce((sum, item) => sum + item.amount, 0),
+                totalPaid: transactions
+                    .filter((transaction) =>
+                        transaction.destinationAccountId?.toString() === card.cardId &&
+                        transaction.currency === currency &&
+                        ['credit_card_payment', 'debt_payment'].includes(transaction.type)
+                    )
+                    .reduce((sum, transaction) => sum + transaction.amount, 0),
+                netOwed: 0,
             }
-        }).filter((cc) => cc.totalExpenses > 0)
+        }).map((card) => ({
+            ...card,
+            netOwed: Math.max(0, card.totalExpenses - card.totalPaid),
+        })).filter((cc) => cc.totalExpenses > 0)
 
         const income = Object.values(incomeMap).sort((a, b) => b.amount - a.amount)
         const expenses = Object.values(expenseMap).sort((a, b) => b.amount - a.amount)
@@ -127,6 +141,7 @@ export async function GET(request: Request) {
             totalExpense,
             balance,
             creditCards,
+            currency,
         })
     } catch (error) {
         console.error('Error en sankey:', error)

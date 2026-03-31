@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { ITransaction } from '@/types'
 import type { TransactionFormData } from '@/lib/validations'
 
@@ -7,21 +7,22 @@ interface TransactionFilters {
     type?: string
     categoryId?: string
     accountId?: string
+    currency?: string
     noInstallmentPlan?: boolean
     sort?: string
     limit?: number
 }
 
 export interface TransactionSummary {
-    income: number
-    expense: number
-    creditCardExpense: number
+    income: { ars: number; usd: number }
+    expense: { ars: number; usd: number }
+    creditCardExpense: { ars: number; usd: number }
 }
 
 const DEFAULT_SUMMARY: TransactionSummary = {
-    income: 0,
-    expense: 0,
-    creditCardExpense: 0,
+    income: { ars: 0, usd: 0 },
+    expense: { ars: 0, usd: 0 },
+    creditCardExpense: { ars: 0, usd: 0 },
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
@@ -35,20 +36,43 @@ export function useTransactions(filters: TransactionFilters = {}) {
     const [total, setTotal] = useState(0)
     const [page, setPage] = useState(1)
     const isFirstLoad = useRef(true)
-    const PAGE_LIMIT = filters.limit ?? 30
+    const normalizedFilters = useMemo(
+        () => ({
+            month: filters.month,
+            type: filters.type,
+            categoryId: filters.categoryId,
+            accountId: filters.accountId,
+            currency: filters.currency,
+            noInstallmentPlan: filters.noInstallmentPlan,
+            sort: filters.sort,
+            limit: filters.limit ?? 30,
+        }),
+        [
+            filters.month,
+            filters.type,
+            filters.categoryId,
+            filters.accountId,
+            filters.currency,
+            filters.noInstallmentPlan,
+            filters.sort,
+            filters.limit,
+        ]
+    )
+    const PAGE_LIMIT = normalizedFilters.limit
 
-    const buildQuery = (f: TransactionFilters, p: number) => {
+    const buildQuery = useCallback((p: number) => {
         const params = new URLSearchParams()
-        if (f.month) params.set('month', f.month)
-        if (f.type) params.set('type', f.type)
-        if (f.categoryId) params.set('categoryId', f.categoryId)
-        if (f.accountId) params.set('accountId', f.accountId)
-        if (f.noInstallmentPlan) params.set('noInstallmentPlan', 'true')
-        if (f.sort) params.set('sort', f.sort)
+        if (normalizedFilters.month) params.set('month', normalizedFilters.month)
+        if (normalizedFilters.type) params.set('type', normalizedFilters.type)
+        if (normalizedFilters.categoryId) params.set('categoryId', normalizedFilters.categoryId)
+        if (normalizedFilters.accountId) params.set('accountId', normalizedFilters.accountId)
+        if (normalizedFilters.currency) params.set('currency', normalizedFilters.currency)
+        if (normalizedFilters.noInstallmentPlan) params.set('noInstallmentPlan', 'true')
+        if (normalizedFilters.sort) params.set('sort', normalizedFilters.sort)
         params.set('page', String(p))
         params.set('limit', String(PAGE_LIMIT))
         return params.toString()
-    }
+    }, [PAGE_LIMIT, normalizedFilters])
 
     const fetchTransactions = useCallback(async (isRefresh = false) => {
         try {
@@ -57,7 +81,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
             else if (isRefresh) setRefreshing(true)
             else setRefreshing(true)
 
-            const query = buildQuery(filters, 1)
+            const query = buildQuery(1)
             const res = await fetch(`/api/transactions?${query}`)
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Error al cargar transacciones')
@@ -74,14 +98,14 @@ export function useTransactions(filters: TransactionFilters = {}) {
             setRefreshing(false)
             isFirstLoad.current = false
         }
-    }, [filters.month, filters.type, filters.categoryId, filters.accountId, filters.sort, filters.noInstallmentPlan])
+    }, [buildQuery])
 
     const loadMore = async () => {
         if (!hasMore || loadingMore) return
         try {
             setLoadingMore(true)
             const nextPage = page + 1
-            const query = buildQuery(filters, nextPage)
+            const query = buildQuery(nextPage)
             const res = await fetch(`/api/transactions?${query}`)
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)
@@ -129,7 +153,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     useEffect(() => {
         isFirstLoad.current = true
         fetchTransactions()
-    }, [filters.month, filters.type, filters.categoryId, filters.accountId, filters.sort, filters.noInstallmentPlan])
+    }, [fetchTransactions])
 
     return {
         transactions,

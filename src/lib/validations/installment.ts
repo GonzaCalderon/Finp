@@ -35,7 +35,7 @@ const installmentCountSchema = z.preprocess((value) => {
     }
 
     return value
-}, z.number().int().min(2, 'Mínimo 2 cuotas'))
+}, z.number().int().min(1, 'Mínimo 1 cuota'))
 
 const dateSchema = z.preprocess((value) => {
     if (value instanceof Date) return value
