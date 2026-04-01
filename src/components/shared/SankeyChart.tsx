@@ -81,7 +81,7 @@ const MONTH_OPTIONS = [
 ]
 
 const MOBILE_BREAKPOINT = 768
-const MAX_VISIBLE_EXPENSE_CATEGORIES = 7
+const MAX_VISIBLE_EXPENSE_CATEGORIES = 6
 const DEFICIT_COLOR = '#EF4444'
 const TOOLTIP_WIDTH = 224
 const TOOLTIP_MARGIN = 12
@@ -232,7 +232,9 @@ function buildGraph(data: SankeyApiData) {
 
     // Prorrateo de tarjetas: gastos en tarjeta aún no pagados en el período
     // netOwed = max(0, gastos_en_tarjeta - pagos_realizados_este_período)
-    const creditCards = (normalized.creditCards ?? []).filter((cc) => cc.netOwed > 0)
+    const creditCards = [...(normalized.creditCards ?? [])]
+        .filter((cc) => cc.netOwed > 0)
+        .sort((a, b) => b.netOwed - a.netOwed)
     const totalCcOwed = creditCards.reduce((sum, cc) => sum + cc.netOwed, 0)
 
     // Gastos que requieren financiamiento real (ingreso o déficit), descontando deuda pendiente de tarjetas
@@ -445,7 +447,7 @@ function computeSankeyLayout(
 
 function buildDesktopLayout(graph: ReturnType<typeof buildGraph>, width: number) {
     const nodeWidth = 5
-    const nodePadding = 18
+    const nodePadding = 24
 
     const margin = {
         top: 42,
@@ -933,7 +935,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                 {showDesktopLabels && node.type === 'income-total' && (
                                     <text
                                         x={(bounds.x0 + bounds.x1) / 2}
-                                        y={bounds.y0 - 22}
+                                        y={bounds.y1 + 16}
                                         textAnchor="middle"
                                         style={{ fontFamily: 'inherit' }}
                                     >
@@ -1021,7 +1023,7 @@ function SankeyDiagram({ data }: { data: SankeyApiData }) {
                                 {showDesktopLabels && node.type === 'credit-card-source' && (
                                     <text
                                         x={(bounds.x0 + bounds.x1) / 2}
-                                        y={bounds.y0 - 14}
+                                        y={bounds.y0 - 18}
                                         textAnchor="middle"
                                         style={{ fontFamily: 'inherit' }}
                                     >
