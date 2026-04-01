@@ -6,6 +6,7 @@ import { accountSchema } from '@/lib/validations'
 import type { IAccount } from '@/types'
 import {
     buildCurrencyBalances,
+    normalizeDefaultPaymentMethods,
     getInitialBalancesByCurrency,
     getPrimaryCurrency,
     normalizeInitialBalances,
@@ -45,6 +46,10 @@ export async function GET() {
                 account.currency,
                 account.type
             )
+            const defaultPaymentMethods = normalizeDefaultPaymentMethods(
+                account.defaultPaymentMethods,
+                account.type
+            )
             const primaryCurrency = getPrimaryCurrency({
                 type: account.type,
                 currency: account.currency,
@@ -60,6 +65,7 @@ export async function GET() {
             return {
                 ...account,
                 supportedCurrencies,
+                defaultPaymentMethods,
                 currency: primaryCurrency,
                 initialBalances,
                 primaryCurrency,
@@ -130,6 +136,21 @@ export async function POST(request: Request) {
             initialBalance: parsed.data.initialBalance ?? 0,
             initialBalances: getInitialBalancesByCurrency(parsed.data),
         })
+
+        if ((parsed.data.defaultPaymentMethods?.length ?? 0) > 0) {
+            await Account.updateMany(
+                {
+                    userId: session.user.id,
+                    _id: { $ne: account._id },
+                    defaultPaymentMethods: { $in: parsed.data.defaultPaymentMethods },
+                },
+                {
+                    $pull: {
+                        defaultPaymentMethods: { $in: parsed.data.defaultPaymentMethods },
+                    },
+                }
+            )
+        }
 
         return NextResponse.json({ account }, { status: 201 })
     } catch (error) {

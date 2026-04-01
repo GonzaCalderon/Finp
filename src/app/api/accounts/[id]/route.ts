@@ -3,7 +3,12 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account } from '@/lib/models'
 import { accountSchema } from '@/lib/validations'
-import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+import {
+    getInitialBalancesByCurrency,
+    getPrimaryCurrency,
+    normalizeDefaultPaymentMethods,
+    normalizeSupportedCurrencies,
+} from '@/lib/utils/accounts'
 
 export async function GET(
     request: Request,
@@ -34,11 +39,16 @@ export async function GET(
             accountObject.currency,
             accountObject.type
         )
+        const defaultPaymentMethods = normalizeDefaultPaymentMethods(
+            accountObject.defaultPaymentMethods,
+            accountObject.type
+        )
 
         return NextResponse.json({
             account: {
                 ...accountObject,
                 supportedCurrencies,
+                defaultPaymentMethods,
                 initialBalances: getInitialBalancesByCurrency(accountObject),
                 currency: getPrimaryCurrency({
                     type: accountObject.type,
@@ -99,6 +109,21 @@ export async function PATCH(
             },
             { new: true }
         )
+
+        if ((parsed.data.defaultPaymentMethods?.length ?? 0) > 0) {
+            await Account.updateMany(
+                {
+                    userId: session.user.id,
+                    _id: { $ne: id },
+                    defaultPaymentMethods: { $in: parsed.data.defaultPaymentMethods },
+                },
+                {
+                    $pull: {
+                        defaultPaymentMethods: { $in: parsed.data.defaultPaymentMethods },
+                    },
+                }
+            )
+        }
 
         return NextResponse.json({ account })
     } catch (error) {

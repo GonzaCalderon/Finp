@@ -43,6 +43,8 @@ import { cn } from '@/lib/utils'
 import {
     getAccountBalancesByCurrency,
     getAccountCurrencyLabel,
+    getDefaultPaymentMethodLabel,
+    getDefaultPaymentMethods,
     getPrimaryCurrency,
     isDualCurrencyAccount,
 } from '@/lib/utils/accounts'
@@ -237,6 +239,7 @@ function AccountRow({
     const balanceNegative = primaryBalance < 0
     const secondaryMeta = getAccountSecondaryMeta(account)
     const dualCurrency = isDualCurrencyAccount(account)
+    const defaultPaymentMethods = getDefaultPaymentMethods(account)
 
     return (
         <motion.div
@@ -345,6 +348,15 @@ function AccountRow({
 
                         <div className="mt-2 flex items-center justify-between md:mt-3">
                             <div className="flex flex-wrap items-center gap-1 md:gap-2">
+                                {defaultPaymentMethods.map((paymentMethod) => (
+                                    <Badge
+                                        key={paymentMethod}
+                                        variant="secondary"
+                                        className="rounded-md px-1.5 py-0 text-[8.5px] md:px-2 md:py-0.5 md:text-[10px]"
+                                    >
+                                        {getDefaultPaymentMethodLabel(paymentMethod)}
+                                    </Badge>
+                                ))}
                                 {account.type === 'credit_card' && account.creditCardConfig?.creditLimit && (
                                     <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[8.5px] md:px-2 md:py-0.5 md:text-[10px]">
                                         Disponible{' '}

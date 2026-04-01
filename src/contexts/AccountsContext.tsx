@@ -67,6 +67,7 @@ export function AccountsProvider({
         }
 
         const newAccount = data.account as IAccount
+        const newDefaultPaymentMethods = newAccount.defaultPaymentMethods ?? []
 
         setAccounts((prev) => {
             const exists = prev.some(
@@ -74,7 +75,16 @@ export function AccountsProvider({
             )
 
             if (exists) return prev
-            return [...prev, newAccount]
+            const nextAccounts = prev.map((account) => {
+                if (newDefaultPaymentMethods.length === 0) return account
+                return {
+                    ...account,
+                    defaultPaymentMethods: (account.defaultPaymentMethods ?? []).filter(
+                        (method) => !newDefaultPaymentMethods.includes(method)
+                    ),
+                }
+            })
+            return [...nextAccounts, newAccount]
         })
 
         return newAccount
@@ -95,11 +105,21 @@ export function AccountsProvider({
             }
 
             const updatedAccount = data.account as IAccount
+            const updatedDefaultPaymentMethods = updatedAccount.defaultPaymentMethods ?? []
 
             setAccounts((prev) =>
-                prev.map((account) =>
-                    account._id.toString() === id ? updatedAccount : account
-                )
+                prev.map((account) => {
+                    if (account._id.toString() === id) return updatedAccount
+
+                    if (updatedDefaultPaymentMethods.length === 0) return account
+
+                    return {
+                        ...account,
+                        defaultPaymentMethods: (account.defaultPaymentMethods ?? []).filter(
+                            (method) => !updatedDefaultPaymentMethods.includes(method)
+                        ),
+                    }
+                })
             )
 
             return updatedAccount
