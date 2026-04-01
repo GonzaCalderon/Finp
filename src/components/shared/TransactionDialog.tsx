@@ -762,7 +762,7 @@ export function TransactionDialog({
                     onSubmit={handleSubmit(handleFormSubmit)}
                     className="flex flex-col overflow-hidden flex-1 sm:max-h-[85vh]"
                 >
-                    <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                    <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 pt-4 pb-24 sm:pb-28 space-y-5">
 
                         {/* ── Tipo ── */}
                         {isEditing ? (
@@ -820,11 +820,11 @@ export function TransactionDialog({
                                                 key={option}
                                                 type="button"
                                                 onClick={() => setValue('type', option, { shouldValidate: true })}
-                                                className="rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors"
+                                                className="rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-all"
                                                 style={{
-                                                    background: selected ? 'rgba(99,102,241,0.12)' : 'var(--secondary)',
-                                                    color: selected ? '#6366F1' : 'var(--muted-foreground)',
-                                                    borderColor: selected ? 'rgba(99,102,241,0.5)' : 'var(--border)',
+                                                    background: selected ? 'rgba(99,102,241,0.10)' : 'rgba(148,163,184,0.04)',
+                                                    color: selected ? '#7C8CFF' : 'rgba(226,232,240,0.72)',
+                                                    borderColor: selected ? 'rgba(99,102,241,0.32)' : 'rgba(148,163,184,0.12)',
                                                 }}
                                             >
                                                 {SECONDARY_TYPE_LABELS[option]}
@@ -1756,18 +1756,21 @@ export function TransactionDialog({
 
                     {/* ── Footer ── */}
                     <div
-                        className="shrink-0 border-t px-5 py-4 flex gap-2 bg-background"
-                        style={{ borderColor: 'var(--border)' }}
+                        className="shrink-0 border-t px-4 pt-3 pb-4 sm:px-5 sm:py-4 flex gap-2 bg-background"
+                        style={{
+                            borderColor: 'var(--border)',
+                            boxShadow: '0 -10px 24px rgba(0,0,0,0.14)',
+                        }}
                     >
                         <Button
                             type="button"
                             variant="outline"
-                            className="flex-1"
+                            className="flex-1 h-10 sm:h-10"
                             onClick={() => onOpenChange(false)}
                         >
                             Cancelar
                         </Button>
-                        <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                        <Button type="submit" className="flex-1 h-10 sm:h-10" disabled={isSubmitting}>
                             {isSubmitting ? (
                                 <>
                                     <Spinner className="mr-2" />
