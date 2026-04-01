@@ -1,5 +1,10 @@
 import type { IInstallmentPlan, ITransaction } from '@/types'
 import { parseFinancialPeriod } from '@/lib/utils/period'
+import {
+    getOperationalStartFinancialPeriod,
+    hasOperationalCoverage,
+    isOnOrAfterOperationalStart,
+} from '@/lib/utils/operational-start'
 
 export type MonthlyInstallmentStatus =
     | { state: 'not_started'; label: 'Aún no inicia'; current: null; total: number }
@@ -168,9 +173,17 @@ export function buildMonthlyCardPaymentSummary(params: {
     monthStartDay?: number
     plans: IInstallmentPlan[]
     transactions: ITransaction[]
+    operationalStartDate?: string | Date
 }): MonthlyCardPaymentSummary[] {
-    const { month, monthStartDay = 1, plans, transactions } = params
+    const { month, monthStartDay = 1, plans, transactions, operationalStartDate } = params
     const summaryByCard = new Map<string, MonthlyCardPaymentSummary>()
+    const { start, end } = parseFinancialPeriod(month, monthStartDay)
+
+    if (!hasOperationalCoverage(start, end, operationalStartDate)) {
+        return []
+    }
+
+    const operationalStartPeriod = getOperationalStartFinancialPeriod(operationalStartDate, monthStartDay)
 
     const ensureCard = (args: {
         cardId: string
@@ -197,6 +210,12 @@ export function buildMonthlyCardPaymentSummary(params: {
     }
 
     for (const plan of plans) {
+        if (operationalStartPeriod) {
+            const operationalDiff = getInstallmentIndexForMonth(plan, operationalStartPeriod)
+            const selectedDiff = getInstallmentIndexForMonth(plan, month)
+            if (selectedDiff < Math.max(0, operationalDiff)) continue
+        }
+
         const status = getInstallmentStatusForMonth(plan, month)
         if (status.state !== 'active') continue
 
@@ -232,6 +251,7 @@ export function buildMonthlyCardPaymentSummary(params: {
     for (const transaction of transactions) {
         const normalizedType = normalizeLegacyTransactionType(transaction.type)
         if (normalizedType === 'credit_card_expense' && !transaction.installmentPlanId) {
+            if (!isOnOrAfterOperationalStart(transaction.date, operationalStartDate)) continue
             if (!isDateInFinancialPeriod(transaction.date, month, monthStartDay)) continue
 
             const cardId = getRefId(transaction.sourceAccountId)
@@ -264,6 +284,7 @@ export function buildMonthlyCardPaymentSummary(params: {
         }
 
         if (isCreditCardPaymentType(normalizedType)) {
+            if (!isOnOrAfterOperationalStart(transaction.date, operationalStartDate)) continue
             if (!isDateInFinancialPeriod(transaction.date, month, monthStartDay)) continue
 
             const cardId = getRefId(transaction.destinationAccountId)

@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, InstallmentPlan, User } from '@/lib/models'
-import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
+import { buildMonthlyCardPaymentSummary, getRefId } from '@/lib/utils/credit-card'
 import { getCurrentFinancialPeriod, parseFinancialPeriod } from '@/lib/utils/period'
+import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
@@ -47,8 +48,12 @@ export async function GET(request: Request) {
         await connectDB()
 
         const now = new Date()
-        const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
+        const userDoc = await User.findById(session.user.id, {
+            'preferences.monthStartDay': 1,
+            'preferences.operationalStartDate': 1,
+        })
         const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+        const operationalStartDate = userDoc?.preferences?.operationalStartDate
         const month = monthParam ?? getCurrentFinancialPeriod(now, monthStartDay)
         const { start, end } = parseFinancialPeriod(month, monthStartDay)
 
@@ -56,7 +61,10 @@ export async function GET(request: Request) {
         const [transactions, installmentPlans] = await Promise.all([
             Transaction.find({
                 userId: session.user.id,
-                date: { $gte: start, $lt: end },
+                date: {
+                    $gte: clampRangeStartToOperationalStart(start, operationalStartDate),
+                    $lt: end,
+                },
             })
                 .populate('categoryId', 'name color')
                 .populate('sourceAccountId', 'name type color currency')
@@ -92,6 +100,7 @@ export async function GET(request: Request) {
             monthStartDay,
             plans: installmentPlans,
             transactions,
+            operationalStartDate,
         }).map((card) => {
             card.items.forEach((item) => {
                 if (item.currency !== currency) return
@@ -115,7 +124,7 @@ export async function GET(request: Request) {
                     .reduce((sum, item) => sum + item.amount, 0),
                 totalPaid: transactions
                     .filter((transaction) =>
-                        transaction.destinationAccountId?.toString() === card.cardId &&
+                        getRefId(transaction.destinationAccountId) === card.cardId &&
                         transaction.currency === currency &&
                         ['credit_card_payment', 'debt_payment'].includes(transaction.type)
                     )

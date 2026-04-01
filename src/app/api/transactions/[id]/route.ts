@@ -7,6 +7,7 @@ import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
 import { normalizeManualExchange } from '@/lib/utils/exchange'
+import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 
 export async function GET(
     request: Request,
@@ -90,6 +91,14 @@ export async function PATCH(
         const accountMap = new Map(relatedAccounts.map((account) => [account._id.toString(), account]))
         const sourceAccount = data.sourceAccountId ? accountMap.get(data.sourceAccountId) : null
         const destinationAccount = data.destinationAccountId ? accountMap.get(data.destinationAccountId) : null
+        const description = resolveTransactionDescription({
+            type: data.type,
+            description: data.description,
+            amount: data.amount,
+            currency: data.currency,
+            sourceAccount,
+            destinationAccount,
+        })
 
         if (data.sourceAccountId && !sourceAccount) {
             return NextResponse.json({ error: 'La cuenta origen no existe o no pertenece al usuario.' }, { status: 400 })
@@ -203,7 +212,7 @@ export async function PATCH(
                     amount: data.amount,
                     currency: data.currency,
                     date: data.date,
-                    description: data.description,
+                    description,
                     categoryId: data.categoryId,
                     sourceAccountId: data.sourceAccountId,
                     destinationAccountId: data.destinationAccountId,
@@ -245,7 +254,7 @@ export async function PATCH(
                         $set: {
                             accountId: data.sourceAccountId,
                             categoryId: data.categoryId,
-                            description: data.description,
+                            description,
                             merchant: data.merchant,
                             currency: data.currency,
                             totalAmount: data.amount,

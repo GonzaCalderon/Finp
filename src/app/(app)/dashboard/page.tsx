@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,8 +21,10 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { usePreferences } from '@/hooks/usePreferences'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import { buildMonthOptions } from '@/lib/utils/period'
+import { buildMonthOptions, getCurrentFinancialPeriod } from '@/lib/utils/period'
+import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-start'
 import { TrendingUp, TrendingDown, CheckCircle } from 'lucide-react'
 import {
     getAccountBalancesByCurrency,
@@ -29,12 +32,10 @@ import {
     isDualCurrencyAccount,
 } from '@/lib/utils/accounts'
 
-const getCurrentMonth = () => {
+const getCurrentMonth = (monthStartDay = 1) => {
     const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return getCurrentFinancialPeriod(now, monthStartDay)
 }
-
-const MONTHS = buildMonthOptions({ pastMonths: 8, futureMonths: 1 })
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
     bank: 'Banco',
@@ -61,6 +62,7 @@ interface DashboardData {
         balance: { ars: number; usd: number }
         totalDebt: { ars: number; usd: number }
         totalCreditCardExpense: { ars: number; usd: number }
+        operationalStartDate?: string
     }
     trends: {
         income: number | null
@@ -128,7 +130,7 @@ function TrendBadge({ value, inverse = false }: { value: number | null; inverse?
 }
 
 export default function DashboardPage() {
-    const [month, setMonth] = useState(getCurrentMonth())
+    const [month, setMonth] = useState(() => getCurrentMonth())
     const [data, setData] = useState<DashboardData | null>(null)
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
@@ -141,8 +143,34 @@ export default function DashboardPage() {
     const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
     const { hidden } = useHideAmounts()
+    const { preferences } = usePreferences()
 
     usePageTitle('Dashboard')
+
+    const firstOperationalMonth = useMemo(
+        () => getOperationalStartFinancialPeriod(preferences.operationalStartDate, preferences.monthStartDay),
+        [preferences.operationalStartDate, preferences.monthStartDay]
+    )
+
+    const monthOptions = useMemo(() => {
+        const options = buildMonthOptions({ pastMonths: 8, futureMonths: 1, from: new Date() })
+        if (!firstOperationalMonth) return options
+        return options.filter((option) => option.value >= firstOperationalMonth)
+    }, [firstOperationalMonth])
+
+    useEffect(() => {
+        const currentMonth = getCurrentMonth(preferences.monthStartDay)
+        const minimumMonth =
+            firstOperationalMonth && firstOperationalMonth > currentMonth
+                ? firstOperationalMonth
+                : currentMonth
+
+        setMonth((prev) =>
+            prev >= minimumMonth && (!firstOperationalMonth || prev >= firstOperationalMonth)
+                ? prev
+                : minimumMonth
+        )
+    }, [firstOperationalMonth, preferences.monthStartDay])
 
     const fetchDashboard = useCallback(async (isRefresh = false) => {
         try {
@@ -222,6 +250,9 @@ export default function DashboardPage() {
     if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
     if (!data) return null
 
+    const totalCategoryExpenseArs = data.expenseByCategory.reduce((sum, category) => sum + category.ars, 0)
+    const totalCategoryExpenseUsd = data.expenseByCategory.reduce((sum, category) => sum + category.usd, 0)
+
     return (
         <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
             {/* Header */}
@@ -235,7 +266,7 @@ export default function DashboardPage() {
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
-                        {MONTHS.map((m) => (
+                        {monthOptions.map((m) => (
                             <SelectItem key={m.value} value={m.value}>
                                 {m.label}
                             </SelectItem>
@@ -246,6 +277,29 @@ export default function DashboardPage() {
 
             <AnimatePresence mode="wait">
                 <motion.div key={month} {...fadeIn} className="space-y-4">
+                    {!preferences.operationalStartDate && (
+                        <motion.div
+                            className="rounded-xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                            style={{
+                                background: 'var(--card)',
+                                borderColor: 'rgba(56,189,248,0.18)',
+                            }}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                        >
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium">Definí tu fecha de inicio en Finp</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Mejora la precisión de balances, métricas y cálculos de tarjeta sin ocultar tu historial.
+                                </p>
+                            </div>
+                            <Button asChild variant="outline" size="sm" className="shrink-0">
+                                <Link href="/settings?tab=preferencias">Ir a configuración</Link>
+                            </Button>
+                        </motion.div>
+                    )}
+
                     {/* Grupo 1 — Ingresos / Gastos / Balance mensual */}
                     <motion.div
                         className="rounded-xl overflow-hidden"
@@ -465,13 +519,17 @@ export default function DashboardPage() {
                                 ) : (
                                     data.expenseByCategory.map((cat) => {
                                         const pctOfTotal =
-                                            data.summary.totalExpense.ars > 0
-                                                ? (cat.ars / data.summary.totalExpense.ars) * 100
-                                                : 0
+                                            totalCategoryExpenseArs > 0
+                                                ? (cat.ars / totalCategoryExpenseArs) * 100
+                                                : totalCategoryExpenseUsd > 0
+                                                    ? (cat.usd / totalCategoryExpenseUsd) * 100
+                                                    : 0
                                         const pctOfIncome =
                                             data.summary.totalIncome.ars > 0
                                                 ? Math.round((cat.ars / data.summary.totalIncome.ars) * 100)
-                                                : null
+                                                : data.summary.totalIncome.usd > 0
+                                                    ? Math.round((cat.usd / data.summary.totalIncome.usd) * 100)
+                                                    : null
 
                                         return (
                                             <div

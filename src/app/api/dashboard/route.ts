@@ -6,6 +6,12 @@ import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { parseFinancialPeriod, getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { buildMonthlyCardPaymentSummary, getInstallmentStatusForMonth, isCreditCardPaymentType } from '@/lib/utils/credit-card'
 import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+import {
+    clampRangeStartToOperationalStart,
+    hasOperationalCoverage,
+    parseOperationalStartDate,
+    startsOnOrAfterOperationalStart,
+} from '@/lib/utils/operational-start'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
@@ -71,8 +77,13 @@ export async function GET(request: Request) {
         const userId = session.user.id
 
         // Leer preferencias del usuario para respetar el inicio del mes financiero
-        const userDoc = await User.findById(userId, { 'preferences.monthStartDay': 1 })
+        const userDoc = await User.findById(userId, {
+            'preferences.monthStartDay': 1,
+            'preferences.operationalStartDate': 1,
+        })
         const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+        const operationalStartDate = userDoc?.preferences?.operationalStartDate
+        const operationalStart = parseOperationalStartDate(operationalStartDate)
 
         const monthParam = searchParams.get('month')
         const month = monthParam ?? getCurrentFinancialPeriod(now, monthStartDay)
@@ -87,9 +98,14 @@ export async function GET(request: Request) {
         const { start: startOfPrevMonth, end: endOfPrevMonth } = parseFinancialPeriod(prevPeriod, monthStartDay)
 
         // Transacciones del mes actual
+        const currentPeriodHasCoverage = hasOperationalCoverage(startOfMonth, endOfMonth, operationalStartDate)
+
         const transactions = await Transaction.find({
             userId,
-            date: { $gte: startOfMonth, $lt: endOfMonth },
+            date: {
+                $gte: clampRangeStartToOperationalStart(startOfMonth, operationalStartDate),
+                $lt: endOfMonth,
+            },
         })
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency color')
@@ -98,7 +114,10 @@ export async function GET(request: Request) {
         // Transacciones del mes anterior
         const prevTransactions = await Transaction.find({
             userId,
-            date: { $gte: startOfPrevMonth, $lt: endOfPrevMonth },
+            date: {
+                $gte: clampRangeStartToOperationalStart(startOfPrevMonth, operationalStartDate),
+                $lt: endOfPrevMonth,
+            },
         })
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency color')
@@ -113,6 +132,7 @@ export async function GET(request: Request) {
             monthStartDay,
             plans: allPlans,
             transactions,
+            operationalStartDate,
         })
 
         const totalCreditCardExpense = currentCardSummary.reduce((totals, item) => {
@@ -145,7 +165,10 @@ export async function GET(request: Request) {
                 addCurrencyAmount(totals, transaction.currency, transaction.amount)
                 return totals
             }, emptyCurrencyTotals())
-        const totalExpense = regularExpense
+        const totalExpense = {
+            ars: regularExpense.ars + totalCardPayments.ars,
+            usd: regularExpense.usd + totalCardPayments.usd,
+        }
 
         const prevIncome = prevTransactions
             .filter((t) => t.type === 'income')
@@ -160,7 +183,16 @@ export async function GET(request: Request) {
                 addCurrencyAmount(totals, transaction.currency, transaction.amount)
                 return totals
             }, emptyCurrencyTotals())
-        const prevExpense = prevRegularExpense
+        const prevCardPayments = prevTransactions
+            .filter((transaction) => isCreditCardPaymentType(transaction.type))
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+        const prevExpense = {
+            ars: prevRegularExpense.ars + prevCardPayments.ars,
+            usd: prevRegularExpense.usd + prevCardPayments.usd,
+        }
         const currentBalance = subtractCurrencyTotals(totalIncome, totalExpense)
         const prevBalance = subtractCurrencyTotals(prevIncome, prevExpense)
 
@@ -170,13 +202,14 @@ export async function GET(request: Request) {
             return Math.round(((current - previous) / previous) * 100)
         }
 
+        const hasPreviousFullBase = startsOnOrAfterOperationalStart(startOfPrevMonth, operationalStartDate)
         const trends = {
-            income: calcTrend(totalIncome.ars, prevIncome.ars),
-            expense: calcTrend(totalExpense.ars, prevExpense.ars),
-            balance: calcTrend(currentBalance.ars, prevBalance.ars),
+            income: hasPreviousFullBase ? calcTrend(totalIncome.ars, prevIncome.ars) : null,
+            expense: hasPreviousFullBase ? calcTrend(totalExpense.ars, prevExpense.ars) : null,
+            balance: hasPreviousFullBase ? calcTrend(currentBalance.ars, prevBalance.ars) : null,
         }
 
-        // Gastos por categoría
+        // Gastos por categoría (incluye gasto común y el impacto mensual de TC)
         const expenseByCategory: Record<string, { key: string; name: string; color?: string; ars: number; usd: number }> = {}
         transactions
             .filter((t) => t.type === 'expense' && t.categoryId)
@@ -189,6 +222,24 @@ export async function GET(request: Request) {
                 }
                 addCurrencyAmount(expenseByCategory[key], t.currency, t.amount)
             })
+        currentCardSummary.forEach((cardSummary) => {
+            cardSummary.items.forEach((item) => {
+                if (!item.categoryId || !item.categoryName) return
+
+                const key = item.categoryId
+                if (!expenseByCategory[key]) {
+                    expenseByCategory[key] = {
+                        key,
+                        name: item.categoryName,
+                        color: item.categoryColor,
+                        ars: 0,
+                        usd: 0,
+                    }
+                }
+
+                addCurrencyAmount(expenseByCategory[key], item.currency, item.amount)
+            })
+        })
 
         // Cuentas activas con saldo calculado
         const accounts = await Account.find({ userId, isActive: true })
@@ -210,6 +261,10 @@ export async function GET(request: Request) {
                     account.userId,
                     {
                         initialBalances: getInitialBalancesByCurrency(account),
+                        sinceDate: operationalStart,
+                        includeCreditCardInstallmentDebt: account.type === 'credit_card',
+                        monthStartDay,
+                        operationalStartDate,
                     }
                 )
 
@@ -249,7 +304,7 @@ export async function GET(request: Request) {
         const activeCommitments = await ScheduledCommitment.find({ userId, isActive: true })
         const appliedThisMonth = await CommitmentApplication.find({ userId, period: month })
         const appliedIds = new Set(appliedThisMonth.map((a) => a.commitmentId.toString()))
-        const pendingCommitments = activeCommitments
+        const pendingCommitments = (currentPeriodHasCoverage ? activeCommitments : [])
             .filter((c) => c.recurrence === 'monthly' && !appliedIds.has(c._id.toString()))
             .map((c) => ({
                 _id: c._id,
@@ -259,7 +314,8 @@ export async function GET(request: Request) {
                 dayOfMonth: c.dayOfMonth,
             }))
 
-        const installmentsThisMonth = allPlans
+        const installmentsThisMonth = (currentPeriodHasCoverage ? allPlans : [])
+            .filter((plan) => plan.installmentCount > 1)
             .map((plan) => {
                 const status = getInstallmentStatusForMonth(plan, month)
                 if (status.state !== 'active') return null
@@ -275,6 +331,7 @@ export async function GET(request: Request) {
                 }
             })
             .filter(Boolean)
+            .sort((a, b) => (b?.installmentAmount ?? 0) - (a?.installmentAmount ?? 0))
 
         return NextResponse.json({
             month,
@@ -284,6 +341,7 @@ export async function GET(request: Request) {
                 balance: currentBalance,
                 totalCreditCardExpense,
                 totalDebt: totalRemainingDebt,
+                operationalStartDate,
             },
             trends,
             expenseByCategory: Object.values(expenseByCategory).sort((a, b) => (b.ars + b.usd) - (a.ars + a.usd)),
