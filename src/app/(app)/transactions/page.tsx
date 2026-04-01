@@ -1,8 +1,17 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeftRight, SlidersHorizontal, X, ChevronDown, Pencil, Trash2, Upload, CreditCard } from 'lucide-react'
+import {
+    ArrowLeftRight,
+    ChevronDown,
+    CreditCard,
+    Pencil,
+    SlidersHorizontal,
+    Trash2,
+    Upload,
+    X,
+} from 'lucide-react'
 import Link from 'next/link'
 
 import { useTransactions } from '@/hooks/useTransactions'
@@ -43,7 +52,7 @@ import { Spinner } from '@/components/shared/Spinner'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 
-import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { DURATION, easeSmooth, fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
 import { buildMonthOptions } from '@/lib/utils/period'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
@@ -117,6 +126,87 @@ const CATEGORY_TYPE_META: Record<string, { bg: string; border: string; text: str
     },
 }
 
+function easeOutCubic(value: number) {
+    return 1 - Math.pow(1 - value, 3)
+}
+
+function useAnimatedTotals(totals: { ars: number; usd: number }) {
+    const [animated, setAnimated] = useState(totals)
+
+    useEffect(() => {
+        let frame = 0
+        const startedAt = performance.now()
+        const previous = animated
+        const duration = 550
+
+        const tick = (now: number) => {
+            const progress = Math.min((now - startedAt) / duration, 1)
+            const eased = easeOutCubic(progress)
+
+            setAnimated({
+                ars: previous.ars + (totals.ars - previous.ars) * eased,
+                usd: previous.usd + (totals.usd - previous.usd) * eased,
+            })
+
+            if (progress < 1) {
+                frame = requestAnimationFrame(tick)
+            }
+        }
+
+        frame = requestAnimationFrame(tick)
+        return () => cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [totals.ars, totals.usd])
+
+    return animated
+}
+
+function SummaryMetricCard({
+    title,
+    totals,
+    hidden,
+    accent,
+    primaryColor,
+    secondaryColor,
+    children,
+}: {
+    title: string
+    totals: { ars: number; usd: number }
+    hidden: boolean
+    accent: string
+    primaryColor: string
+    secondaryColor: string
+    children?: React.ReactNode
+}) {
+    return (
+        <motion.div
+            variants={staggerItem}
+            className="relative p-3.5 md:p-4"
+            style={{
+                borderTop: `1px solid ${accent}`,
+            }}
+        >
+            <div
+                className="absolute inset-x-0 top-0 h-px opacity-70"
+                style={{ background: accent }}
+            />
+            <p className="mb-1.5 text-[11px] text-muted-foreground uppercase tracking-[0.16em] md:text-xs">
+                {title}
+            </p>
+            <CurrencyBreakdownAmount
+                totals={totals}
+                hidden={hidden}
+                primaryColor={primaryColor}
+                secondaryColor={secondaryColor}
+                hideZeroSecondary
+                preserveSecondarySpace
+                className="text-lg font-semibold tracking-tight md:text-[1.7rem]"
+            />
+            {children}
+        </motion.div>
+    )
+}
+
 function BasicFilterChip({
                              label,
                              active,
@@ -139,15 +229,22 @@ function BasicFilterChip({
             <button
                 type="button"
                 onClick={() => setOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
                 style={{
-                    background: active ? 'var(--sky)' : 'var(--secondary)',
-                    color: active ? '#fff' : 'var(--muted-foreground)',
-                    border: `0.5px solid ${active ? 'var(--sky)' : 'var(--border)'}`,
+                    background: active ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
+                    color: active ? 'var(--sky-dark)' : 'var(--muted-foreground)',
+                    border: `0.5px solid ${open || active ? 'rgba(96,184,224,0.32)' : 'var(--border)'}`,
+                    boxShadow: open ? '0 10px 24px rgba(0,0,0,0.12)' : undefined,
                 }}
             >
                 {active ? selectedLabel : label}
-                <ChevronDown className="w-3.5 h-3.5" />
+                <motion.span
+                    animate={{ rotate: open ? 180 : 0 }}
+                    transition={{ duration: DURATION.fast, ease: easeSmooth }}
+                    className="inline-flex"
+                >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                </motion.span>
             </button>
 
             {open && (
@@ -160,10 +257,11 @@ function BasicFilterChip({
                     />
 
                     <div
-                        className="absolute top-full mt-2 right-0 z-40 min-w-44 rounded-xl border shadow-lg p-1.5"
+                        className="absolute top-full mt-2 right-0 z-40 min-w-48 rounded-2xl border p-1.5 backdrop-blur-md"
                         style={{
-                            background: 'var(--card)',
-                            borderColor: 'var(--border)',
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
                         }}
                     >
                         <button
@@ -232,15 +330,22 @@ function TypeFilterChip({
             <button
                 type="button"
                 onClick={() => setOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
                 style={{
-                    background: value ? 'var(--sky)' : 'var(--secondary)',
-                    color: value ? '#fff' : 'var(--muted-foreground)',
-                    border: `0.5px solid ${value ? 'var(--sky)' : 'var(--border)'}`,
+                    background: value ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
+                    color: value ? 'var(--sky-dark)' : 'var(--muted-foreground)',
+                    border: `0.5px solid ${open || value ? 'rgba(96,184,224,0.32)' : 'var(--border)'}`,
+                    boxShadow: open ? '0 10px 24px rgba(0,0,0,0.12)' : undefined,
                 }}
             >
                 {value ? selectedLabel : 'Tipo'}
-                <ChevronDown className="w-3.5 h-3.5" />
+                <motion.span
+                    animate={{ rotate: open ? 180 : 0 }}
+                    transition={{ duration: DURATION.fast, ease: easeSmooth }}
+                    className="inline-flex"
+                >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                </motion.span>
             </button>
 
             {open && (
@@ -253,10 +358,11 @@ function TypeFilterChip({
                     />
 
                     <div
-                        className="absolute top-full mt-2 right-0 z-40 min-w-44 rounded-xl border shadow-lg p-1.5"
+                        className="absolute top-full mt-2 right-0 z-40 min-w-48 rounded-2xl border p-1.5 backdrop-blur-md"
                         style={{
-                            background: 'var(--card)',
-                            borderColor: 'var(--border)',
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
                         }}
                     >
                         <button
@@ -325,15 +431,22 @@ function CategoryFilterChip({
             <button
                 type="button"
                 onClick={() => setOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
                 style={{
-                    background: value ? 'var(--sky)' : 'var(--secondary)',
-                    color: value ? '#fff' : 'var(--muted-foreground)',
-                    border: `0.5px solid ${value ? 'var(--sky)' : 'var(--border)'}`,
+                    background: value ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
+                    color: value ? 'var(--sky-dark)' : 'var(--muted-foreground)',
+                    border: `0.5px solid ${open || value ? 'rgba(96,184,224,0.32)' : 'var(--border)'}`,
+                    boxShadow: open ? '0 10px 24px rgba(0,0,0,0.12)' : undefined,
                 }}
             >
                 {value ? selectedCategory?.label : 'Categoría'}
-                <ChevronDown className="w-3.5 h-3.5" />
+                <motion.span
+                    animate={{ rotate: open ? 180 : 0 }}
+                    transition={{ duration: DURATION.fast, ease: easeSmooth }}
+                    className="inline-flex"
+                >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                </motion.span>
             </button>
 
             {open && (
@@ -346,10 +459,11 @@ function CategoryFilterChip({
                     />
 
                     <div
-                        className="absolute top-full mt-2 right-0 z-40 min-w-60 max-w-72 rounded-xl border shadow-lg p-1.5"
+                        className="absolute top-full mt-2 right-0 z-40 min-w-64 max-w-80 rounded-2xl border p-1.5 backdrop-blur-md"
                         style={{
-                            background: 'var(--card)',
-                            borderColor: 'var(--border)',
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
                         }}
                     >
                         <button
@@ -837,10 +951,14 @@ export default function TransactionsPage() {
         ars: totalIncome.ars - totalExpense.ars,
         usd: totalIncome.usd - totalExpense.usd,
     }
+    const animatedIncome = useAnimatedTotals(totalIncome)
+    const animatedExpense = useAnimatedTotals(totalExpense)
+    const animatedCreditCardExpense = useAnimatedTotals(totalCreditCardExpense)
+    const animatedBalance = useAnimatedTotals(totalBalance)
 
     if (loading) {
         return (
-            <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+            <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                     <Skeleton className="h-7 w-40" />
                     <Skeleton className="h-8 w-32" />
@@ -861,15 +979,20 @@ export default function TransactionsPage() {
     }
 
     return (
-        <motion.div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4" {...fadeIn}>
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <h1 className="text-xl font-semibold tracking-tight">Transacciones</h1>
-                    {refreshing && <Spinner className="text-muted-foreground" />}
+        <motion.div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4 md:space-y-5" {...fadeIn}>
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Transacciones</h1>
+                        {refreshing && <Spinner className="text-muted-foreground" />}
+                    </div>
+                    <p className="text-xs text-muted-foreground md:text-sm">
+                        Movimientos del mes con filtros rápidos y edición directa.
+                    </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start md:self-auto">
                     <Select value={month} onValueChange={setMonth}>
-                        <SelectTrigger className="w-32 sm:w-40 h-7.5 text-xs sm:text-sm">
+                        <SelectTrigger className="w-40 sm:w-44 h-9 text-sm rounded-xl bg-card/75 backdrop-blur-sm">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
@@ -880,7 +1003,7 @@ export default function TransactionsPage() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" size="sm" className="hidden sm:flex" asChild>
+                    <Button variant="outline" size="sm" className="hidden sm:flex h-9 rounded-xl bg-card/70 backdrop-blur-sm" asChild>
                         <Link href="/transactions/import">
                             <Upload className="w-3.5 h-3.5 mr-1.5" />
                             Importar
@@ -889,68 +1012,93 @@ export default function TransactionsPage() {
                 </div>
             </div>
 
-            <div
-                className="rounded-xl overflow-hidden"
-                style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+            <motion.div
+                className="rounded-2xl overflow-hidden"
+                style={{
+                    background: 'var(--card)',
+                    border: '0.5px solid var(--border)',
+                    boxShadow: 'var(--card-shadow)',
+                }}
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
             >
-                <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
-                    <div className="p-3 md:p-4" style={{ borderTop: '2px solid #10B981' }}>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Ingresos</p>
-                        <CurrencyBreakdownAmount
-                            totals={totalIncome}
-                            hidden={hidden}
-                            primaryColor="#10B981"
-                            secondaryColor="rgba(16,185,129,0.78)"
-                            className="text-base md:text-xl font-semibold tracking-tight"
-                        />
+                <div className="flex items-center justify-between gap-3 px-4 py-2" style={{ borderBottom: '0.5px solid var(--border)' }}>
+                    <div className="flex items-baseline gap-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mensual</p>
+                        <p className="text-[10px] text-muted-foreground">Resumen operativo del período</p>
                     </div>
-                    <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--destructive)' }}>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Gastos</p>
-                        <CurrencyBreakdownAmount
-                            totals={totalExpense}
-                            hidden={hidden}
-                            primaryColor="var(--destructive)"
-                            secondaryColor="rgba(239,68,68,0.78)"
-                            className="text-base md:text-xl font-semibold tracking-tight"
-                        />
+                    {activeFilterCount > 0 && (
+                        <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
+                            {activeFilterCount} filtros
+                        </Badge>
+                    )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3">
+                    <SummaryMetricCard
+                        title="Ingresos"
+                        totals={animatedIncome}
+                        hidden={hidden}
+                        accent="rgba(16,185,129,0.30)"
+                        primaryColor="#10B981"
+                        secondaryColor="rgba(16,185,129,0.78)"
+                    />
+                    <SummaryMetricCard
+                        title="Gastos"
+                        totals={animatedExpense}
+                        hidden={hidden}
+                        accent="rgba(239,68,68,0.30)"
+                        primaryColor="var(--destructive)"
+                        secondaryColor="rgba(239,68,68,0.78)"
+                    >
                         <AnimatePresence>
                             {(totalCreditCardExpense.ars > 0 || totalCreditCardExpense.usd > 0) && (
                                 <motion.div
                                     initial={{ opacity: 0, y: 4 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: 4 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="flex items-start gap-1 text-xs mt-1"
-                                    style={{ color: '#6366F1' }}
+                                    transition={{ duration: DURATION.fast, ease: easeSmooth }}
+                                    className="mt-2.5 inline-flex items-start gap-2 rounded-xl border px-2.5 py-1.5 text-xs"
+                                    style={{
+                                        color: '#6366F1',
+                                        borderColor: 'rgba(99,102,241,0.18)',
+                                        background: 'rgba(99,102,241,0.07)',
+                                    }}
                                 >
-                                    <CreditCard className="w-3 h-3 shrink-0" />
+                                    <CreditCard className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                                     <div>
                                         <div className="font-medium">
-                                            <ResponsiveAmount amount={totalCreditCardExpense.ars} currency="ARS" hidden={hidden} color="#6366F1" />
+                                            <ResponsiveAmount amount={animatedCreditCardExpense.ars} currency="ARS" hidden={hidden} color="#6366F1" />
                                             <span className="ml-1">con TC</span>
                                         </div>
                                         <div className="text-[11px]" style={{ color: 'rgba(99,102,241,0.78)' }}>
-                                            <ResponsiveAmount amount={totalCreditCardExpense.usd} currency="USD" hidden={hidden} color="rgba(99,102,241,0.78)" compactMaximumFractionDigits={1} />
+                                            <ResponsiveAmount amount={animatedCreditCardExpense.usd} currency="USD" hidden={hidden} color="rgba(99,102,241,0.78)" compactMaximumFractionDigits={1} />
                                         </div>
                                     </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
-                    </div>
-                    <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--sky)' }}>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Balance</p>
-                        <CurrencyBreakdownAmount
-                            totals={totalBalance}
-                            hidden={hidden}
-                            primaryColor={totalBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                            secondaryColor={totalBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                            className="text-base md:text-xl font-semibold tracking-tight"
-                        />
-                    </div>
+                    </SummaryMetricCard>
+                    <SummaryMetricCard
+                        title="Balance"
+                        totals={animatedBalance}
+                        hidden={hidden}
+                        accent="rgba(74,158,204,0.30)"
+                        primaryColor={totalBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        secondaryColor={totalBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                    />
                 </div>
-            </div>
+            </motion.div>
 
-            <div className="hidden md:flex items-center gap-2 flex-wrap">
+            <div
+                className="hidden md:flex items-center justify-between gap-3 rounded-2xl border px-3 py-3"
+                style={{
+                    background: 'color-mix(in srgb, var(--card) 88%, transparent)',
+                    borderColor: 'var(--border)',
+                    boxShadow: 'var(--card-shadow)',
+                }}
+            >
+                <div className="flex items-center gap-2 flex-wrap">
                 <TypeFilterChip
                     value={appliedFilters.type}
                     onChange={(value) => setAppliedFilter('type', value)}
@@ -1004,17 +1152,28 @@ export default function TransactionsPage() {
                         <X size={12} /> Limpiar
                     </button>
                 )}
+                </div>
+                <p className="text-xs text-muted-foreground shrink-0">
+                    {total > 0 ? `${transactions.length} de ${total} transacciones` : 'Sin movimientos'}
+                </p>
             </div>
 
-            <div className="flex md:hidden items-center gap-2 w-full">
+            <div
+                className="flex md:hidden items-center gap-2 w-full rounded-2xl border px-3 py-3 overflow-x-auto"
+                style={{
+                    background: 'color-mix(in srgb, var(--card) 88%, transparent)',
+                    borderColor: 'var(--border)',
+                    boxShadow: 'var(--card-shadow)',
+                }}
+            >
                 <button
                     type="button"
                     onClick={openFilterSheet}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium shrink-0"
                     style={{
-                        background: activeFilterCount > 0 ? 'var(--sky)' : 'var(--secondary)',
-                        color: activeFilterCount > 0 ? '#fff' : 'var(--muted-foreground)',
-                        border: `0.5px solid ${activeFilterCount > 0 ? 'var(--sky)' : 'var(--border)'}`,
+                        background: activeFilterCount > 0 ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
+                        color: activeFilterCount > 0 ? 'var(--sky-dark)' : 'var(--muted-foreground)',
+                        border: `0.5px solid ${activeFilterCount > 0 ? 'rgba(96,184,224,0.32)' : 'var(--border)'}`,
                     }}
                 >
                     <SlidersHorizontal size={13} />
@@ -1034,18 +1193,18 @@ export default function TransactionsPage() {
 
                 {activeFilterCount > 0 && (
                     <button
-                        type="button"
-                        onClick={clearAppliedFilters}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs"
-                        style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
-                    >
-                        <X size={12} /> Limpiar
-                    </button>
+                    type="button"
+                    onClick={clearAppliedFilters}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs shrink-0"
+                    style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
+                >
+                    <X size={12} /> Limpiar
+                </button>
                 )}
 
                 <Link
                     href="/transactions/import"
-                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
+                    className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0"
                     style={{
                         background: 'var(--secondary)',
                         color: 'var(--muted-foreground)',
@@ -1089,7 +1248,7 @@ export default function TransactionsPage() {
                     ) : (
                         <>
                             <motion.div
-                                className="space-y-2"
+                                className="space-y-3"
                                 variants={staggerContainer}
                                 initial="initial"
                                 animate="animate"
@@ -1105,13 +1264,21 @@ export default function TransactionsPage() {
                                         <motion.div
                                             key={transaction._id.toString()}
                                             variants={staggerItem}
-                                            className="rounded-xl"
+                                            className="group relative overflow-hidden rounded-2xl"
                                             data-testid="transaction-item"
-                                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                                            style={{
+                                                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                                                border: '0.5px solid var(--border)',
+                                                boxShadow: 'var(--card-shadow)',
+                                            }}
                                         >
-                                            <div className="py-3 px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <div
+                                                className="absolute inset-y-0 left-0 w-px opacity-85"
+                                                style={{ background: getTransactionAccentColor(transaction) }}
+                                            />
+                                            <div className="px-4 py-3.5 flex flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between">
                                                 <div className="flex items-center justify-between sm:hidden">
-                                                    <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]} className="shrink-0">
+                                                    <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]} className="shrink-0 rounded-full px-2.5">
                                                         {TRANSACTION_TYPE_LABELS[transaction.type]}
                                                     </Badge>
                                                     <div className="flex items-center gap-2">
@@ -1130,6 +1297,7 @@ export default function TransactionsPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon-sm"
+                                                            className="rounded-xl"
                                                             onClick={() => handleEdit(transaction)}
                                                             aria-label="Editar"
                                                             data-testid="btn-editar-transaccion"
@@ -1139,6 +1307,7 @@ export default function TransactionsPage() {
                                                         <Button
                                                             variant="destructive"
                                                             size="icon-sm"
+                                                            className="rounded-xl"
                                                             onClick={() => handleDelete(transaction._id.toString())}
                                                             aria-label="Eliminar"
                                                             data-testid="btn-eliminar-transaccion"
@@ -1148,23 +1317,25 @@ export default function TransactionsPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-3 min-w-0">
+                                                <div className="flex items-start gap-3 min-w-0 flex-1">
                                                     <Badge
                                                         variant={TRANSACTION_TYPE_COLORS[transaction.type]}
-                                                        className="shrink-0 hidden sm:flex"
+                                                        className="shrink-0 hidden sm:flex rounded-full px-2.5 mt-0.5"
                                                     >
                                                         {TRANSACTION_TYPE_LABELS[transaction.type]}
                                                     </Badge>
                                                     <div className="min-w-0 flex-1">
-                                                        <p className="text-sm font-medium">{transaction.description}</p>
-                                                        <div className="flex items-center gap-1 flex-wrap">
-                                                            <p className="text-xs text-muted-foreground">
+                                                        <p className="text-[15px] font-semibold tracking-tight leading-tight">
+                                                            {transaction.description}
+                                                        </p>
+                                                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                                            <p className="text-xs text-muted-foreground/90">
                                                                 {new Date(transaction.date).toLocaleDateString('es-AR')}
                                                                 {transaction.merchant && ` · ${transaction.merchant}`}
                                                             </p>
 
                                                             {category?.name && (
-                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground/90">
                                   ·
                                                                     {category.color && (
                                                                         <span
@@ -1177,7 +1348,7 @@ export default function TransactionsPage() {
                                                             )}
 
                                                             {sourceAccount?.name && (
-                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground/90">
                                   ·
                                                                     {sourceAccount.color && (
                                                                         <span
@@ -1190,7 +1361,7 @@ export default function TransactionsPage() {
                                                             )}
 
                                                             {destAccount?.name && (
-                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground/90">
                                   →
                                                                     {destAccount.color && (
                                                                         <span
@@ -1245,24 +1416,32 @@ export default function TransactionsPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="hidden sm:flex items-center gap-2 shrink-0">
-                                                    <p
-                                                        className="font-semibold tabular-nums text-sm"
-                                                        style={{ color: getTransactionAmountColor(transaction) }}
-                                                    >
-                                                        {getTransactionDisplayPrefix(transaction)}
-                                                        <ResponsiveAmount
-                                                            amount={getTransactionDisplayAmount(transaction)}
-                                                            currency={transaction.currency}
-                                                            hidden={hidden}
-                                                            color={getTransactionAmountColor(transaction)}
-                                                        />
-                                                    </p>
+                                                <div
+                                                    className="hidden sm:flex items-center gap-3 shrink-0 pl-4"
+                                                    style={{ borderLeft: '0.5px solid var(--border)' }}
+                                                >
+                                                    <div className="min-w-[136px] text-right">
+                                                        <p
+                                                            className="font-semibold tabular-nums text-sm md:text-base"
+                                                            style={{ color: getTransactionAmountColor(transaction) }}
+                                                        >
+                                                            {getTransactionDisplayPrefix(transaction)}
+                                                            <ResponsiveAmount
+                                                                amount={getTransactionDisplayAmount(transaction)}
+                                                                currency={transaction.currency}
+                                                                hidden={hidden}
+                                                                color={getTransactionAmountColor(transaction)}
+                                                            />
+                                                        </p>
+                                                        <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                                                            {transaction.currency}
+                                                        </p>
+                                                    </div>
                                                     <div className="flex gap-1">
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            className="h-7 text-xs"
+                                                            className="h-8 rounded-xl text-xs bg-background/60"
                                                             onClick={() => handleEdit(transaction)}
                                                             data-testid="btn-editar-transaccion"
                                                         >
@@ -1271,7 +1450,7 @@ export default function TransactionsPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="h-7 text-xs"
+                                                            className="h-8 rounded-xl text-xs"
                                                             onClick={() => handleDelete(transaction._id.toString())}
                                                             data-testid="btn-eliminar-transaccion"
                                                         >
@@ -1336,7 +1515,9 @@ export default function TransactionsPage() {
             />
 
             <AlertDialog open={Boolean(deleteId)} onOpenChange={(open) => !open && setDeleteId(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent
+                    className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl"
+                >
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Eliminar esta transacción?</AlertDialogTitle>
                         <AlertDialogDescription>
@@ -1366,6 +1547,19 @@ function getTransactionAmountColor(transaction: ITransaction) {
         return isPositiveAdjustment(transaction) ? '#10B981' : 'var(--destructive)'
     }
     return 'var(--foreground)'
+}
+
+function getTransactionAccentColor(transaction: ITransaction) {
+    if (transaction.type === 'income') return 'rgba(16,185,129,0.42)'
+    if (transaction.type === 'expense') return 'rgba(239,68,68,0.42)'
+    if (transaction.type === 'credit_card_expense') return 'rgba(99,102,241,0.42)'
+    if (transaction.type === 'exchange') return 'rgba(74,158,204,0.42)'
+    if (transaction.type === 'transfer') return 'rgba(148,163,184,0.28)'
+    if (transaction.type === 'credit_card_payment') return 'rgba(217,119,6,0.42)'
+    if (transaction.type === 'adjustment') {
+        return isPositiveAdjustment(transaction) ? 'rgba(16,185,129,0.42)' : 'rgba(239,68,68,0.42)'
+    }
+    return 'rgba(148,163,184,0.28)'
 }
 
 function getTransactionDisplayAmount(transaction: ITransaction) {

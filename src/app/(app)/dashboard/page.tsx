@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { usePreferences } from '@/hooks/usePreferences'
-import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { buildMonthOptions, getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-start'
 import { TrendingUp, TrendingDown, CheckCircle } from 'lucide-react'
@@ -157,6 +157,7 @@ function useAnimatedTotals(totals: { ars: number; usd: number }) {
         }
         rafRef.current = requestAnimationFrame(tick)
         return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [totals.ars, totals.usd])
 
     return current
@@ -707,13 +708,13 @@ export default function DashboardPage() {
                         </Card>
 
                         {/* Compromisos pendientes */}
-                        <Card>
+                        <Card className="flex min-h-[420px] flex-col">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                     Compromisos pendientes
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-1 pt-0">
+                            <CardContent className="flex-1 space-y-1 overflow-y-auto pt-0">
                                 {data.pendingCommitments.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">Sin compromisos pendientes</p>
                                 ) : (
@@ -779,13 +780,13 @@ export default function DashboardPage() {
                         </Card>
 
                         {/* Cuotas del mes */}
-                        <Card>
+                        <Card className="flex min-h-[420px] flex-col">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                     Cuotas del mes
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-1 pt-0">
+                            <CardContent className="flex-1 space-y-1 overflow-y-auto pt-0">
                                 {data.installmentsThisMonth.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">Sin cuotas este mes</p>
                                 ) : (

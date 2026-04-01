@@ -83,7 +83,11 @@ function SummaryCard({
     return (
         <div
             className="min-w-[190px] shrink-0 snap-start rounded-xl p-3 md:min-w-0 md:rounded-2xl md:p-4"
-            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+            style={{
+                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                boxShadow: 'var(--card-shadow)',
+            }}
         >
             <p className="text-xs font-medium text-muted-foreground">{title}</p>
             <p className="mt-1.5 text-lg font-semibold tracking-tight md:mt-2 md:text-2xl">{value}</p>
@@ -190,7 +194,7 @@ function CommitmentRow({
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between gap-2 md:justify-end md:gap-3">
+                            <div className="flex items-center justify-between gap-2 md:justify-end md:gap-3 md:border-l md:border-foreground/[0.06] md:pl-4">
                                 <div className="text-left md:text-right">
                                     <p className="hidden text-[11px] uppercase tracking-[0.08em] text-muted-foreground md:block">
                                         Monto
@@ -281,7 +285,11 @@ function CommitmentSection({
 
             <motion.div
                 className="overflow-hidden rounded-2xl"
-                style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                style={{
+                    background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                    border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                    boxShadow: 'var(--card-shadow)',
+                }}
                 variants={staggerContainer}
                 initial="initial"
                 animate="animate"
@@ -480,7 +488,12 @@ export default function CommitmentsPage() {
                             type="button"
                             onClick={() => document.getElementById('commitments-pending')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '0.5px solid var(--border)' }}
+                            style={{
+                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
+                                color: 'var(--foreground)',
+                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                boxShadow: 'var(--card-shadow)',
+                            }}
                         >
                             <Clock3 className="h-3.5 w-3.5 text-[var(--sky)]" />
                             Pendientes
@@ -490,7 +503,12 @@ export default function CommitmentsPage() {
                             type="button"
                             onClick={() => document.getElementById('commitments-applied')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '0.5px solid var(--border)' }}
+                            style={{
+                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
+                                color: 'var(--foreground)',
+                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                boxShadow: 'var(--card-shadow)',
+                            }}
                         >
                             <CheckCircle className="h-3.5 w-3.5 text-[#10B981]" />
                             Aplicados
@@ -500,7 +518,12 @@ export default function CommitmentsPage() {
                             type="button"
                             onClick={() => document.getElementById('commitments-automatic')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '0.5px solid var(--border)' }}
+                            style={{
+                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
+                                color: 'var(--foreground)',
+                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                boxShadow: 'var(--card-shadow)',
+                            }}
                         >
                             <Sparkles className="h-3.5 w-3.5 text-[#D97706]" />
                             Automáticos
@@ -575,7 +598,7 @@ export default function CommitmentsPage() {
             />
 
             <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl">
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Desactivar este compromiso?</AlertDialogTitle>
                         <AlertDialogDescription>
