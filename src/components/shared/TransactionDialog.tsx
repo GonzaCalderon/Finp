@@ -253,6 +253,7 @@ export function TransactionDialog({
     const isExpense = type === 'expense' || type === 'credit_card_expense'
     const isExchange = type === 'exchange'
     const isQuickFlow = type === 'income' || type === 'expense' || type === 'credit_card_expense'
+    const descriptionIsOptional = ['transfer', 'exchange', 'credit_card_payment', 'adjustment'].includes(type)
 
     // Payment method section for all expenses (new and editing)
     const showPaymentMethod = isExpense
@@ -414,7 +415,7 @@ export function TransactionDialog({
             setExchangeRate(transaction.exchangeRate ?? 0)
             setAdditionalCardPaymentEnabled(false)
             setSecondaryCardPaymentAmount(0)
-            setShowMoreOptions(Boolean(transaction.notes || transaction.merchant))
+            setShowMoreOptions(Boolean(transaction.description || transaction.notes || transaction.merchant))
 
             // Auto-detect payment method from account type
             const srcId =
@@ -658,7 +659,7 @@ export function TransactionDialog({
             }
             setFirstMonthError(null)
             await onInstallmentSubmit({
-                description: data.description,
+                description: data.description ?? '',
                 totalAmount: data.amount,
                 currency: data.currency,
                 installmentCount,
@@ -1100,26 +1101,27 @@ export function TransactionDialog({
                             </div>
                         )}
 
-                        {/* ── Descripción ── */}
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Descripción</Label>
-                            <Input
-                                id="description"
-                                value={description}
-                                onChange={e =>
-                                    setValue('description', e.target.value, { shouldValidate: true, shouldDirty: true })
-                                }
-                                placeholder={isExchange ? 'Ej: Cambio ahorro marzo' : 'Ej: Compra en kiosco'}
-                            />
-                            {errors.description ? (
-                                <p className="text-sm text-destructive">{errors.description.message}</p>
-                            ) : isQuickFlow && !transaction && rules.length > 0 ? (
-                                <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                                    <Wand2 size={10} className="shrink-0" />
-                                    La descripción puede disparar reglas automáticas
-                                </p>
-                            ) : null}
-                        </div>
+                        {!descriptionIsOptional && (
+                            <div className="space-y-2">
+                                <Label htmlFor="description">Descripción</Label>
+                                <Input
+                                    id="description"
+                                    value={description}
+                                    onChange={e =>
+                                        setValue('description', e.target.value, { shouldValidate: true, shouldDirty: true })
+                                    }
+                                    placeholder={isExchange ? 'Ej: Cambio ahorro marzo' : 'Ej: Compra en kiosco'}
+                                />
+                                {errors.description ? (
+                                    <p className="text-sm text-destructive">{errors.description.message}</p>
+                                ) : isQuickFlow && !transaction && rules.length > 0 ? (
+                                    <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                                        <Wand2 size={10} className="shrink-0" />
+                                        La descripción puede disparar reglas automáticas
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
 
                         {/* ── Fecha — siempre visible ── */}
                         <div className="space-y-2">
@@ -1686,6 +1688,34 @@ export function TransactionDialog({
                                     className="space-y-4 rounded-xl border p-3"
                                     style={{ borderColor: 'var(--border)' }}
                                 >
+                                    {descriptionIsOptional && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="descriptionOptional">Descripción (opcional)</Label>
+                                            <Input
+                                                id="descriptionOptional"
+                                                value={description}
+                                                placeholder={
+                                                    type === 'credit_card_payment'
+                                                        ? 'Ej: Pago resumen marzo'
+                                                        : type === 'transfer'
+                                                            ? 'Ej: Pase a ahorro'
+                                                            : type === 'exchange'
+                                                                ? 'Ej: Compra de USD'
+                                                                : 'Descripción'
+                                                }
+                                                onChange={e =>
+                                                    setValue('description', e.target.value, {
+                                                        shouldValidate: true,
+                                                        shouldDirty: true,
+                                                    })
+                                                }
+                                            />
+                                            {errors.description && (
+                                                <p className="text-sm text-destructive">{errors.description.message}</p>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div className="space-y-2">
                                         <Label htmlFor="merchant">Comercio (opcional)</Label>
                                         <Input

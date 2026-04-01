@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Account, Transaction, InstallmentPlan } from '@/lib/models'
+import { Account, Transaction, InstallmentPlan, User } from '@/lib/models'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+import { parseOperationalStartDate } from '@/lib/utils/operational-start'
 
 export async function GET(
     request: Request,
@@ -17,6 +18,13 @@ export async function GET(
 
         const { id } = await params
         await connectDB()
+
+        const userDoc = await User.findById(session.user.id, {
+            'preferences.monthStartDay': 1,
+            'preferences.operationalStartDate': 1,
+        })
+        const operationalStart = parseOperationalStartDate(userDoc?.preferences?.operationalStartDate)
+        const monthStartDay = userDoc?.preferences?.monthStartDay ?? 1
 
         const account = await Account.findOne({ _id: id, userId: session.user.id })
         if (!account) {
@@ -39,6 +47,10 @@ export async function GET(
             account.userId,
             {
                 initialBalances: getInitialBalancesByCurrency(account),
+                sinceDate: operationalStart,
+                includeCreditCardInstallmentDebt: account.type === 'credit_card',
+                monthStartDay,
+                operationalStartDate: userDoc?.preferences?.operationalStartDate,
             }
         )
 

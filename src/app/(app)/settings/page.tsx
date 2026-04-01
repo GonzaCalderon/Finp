@@ -639,6 +639,7 @@ function PreferencesSection() {
         setDefaultView,
         setMonthStartDay,
         setDefaultAccountId,
+        setOperationalStartDate,
     } = usePreferences()
     const { success } = useToast()
 
@@ -672,6 +673,16 @@ function PreferencesSection() {
         const newValue = value === '__none__' ? undefined : value
         setDefaultAccountId(newValue)
         success('Cuenta predeterminada actualizada')
+    }
+
+    const handleOperationalStartDateChange = (value: string) => {
+        setOperationalStartDate(value || undefined)
+        success('Fecha de inicio operativo actualizada')
+    }
+
+    const handleOperationalStartDateClear = () => {
+        setOperationalStartDate(undefined)
+        success('Fecha de inicio operativo eliminada')
     }
 
     const themeOptions = [
@@ -804,6 +815,37 @@ function PreferencesSection() {
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+                </div>
+
+                <div
+                    className="flex flex-col gap-3 px-4 py-3"
+                    style={{ borderTop: '0.5px solid var(--border)' }}
+                >
+                    <div>
+                        <p className="text-sm font-medium">Inicio operativo en Finp</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Finp usará esta fecha como inicio operativo para balances, métricas y deuda activa.
+                            Los movimientos anteriores seguirán visibles como historial.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <Input
+                            type="date"
+                            value={preferences.operationalStartDate ?? ''}
+                            onChange={(event) => handleOperationalStartDateChange(event.target.value)}
+                            className="h-9 sm:max-w-xs"
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9"
+                            onClick={handleOperationalStartDateClear}
+                            disabled={!preferences.operationalStartDate}
+                        >
+                            Limpiar
+                        </Button>
                     </div>
                 </div>
             </motion.div>

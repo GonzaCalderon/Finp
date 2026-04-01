@@ -12,6 +12,7 @@ interface Preferences {
     defaultAccountId?: string
     consolidatedCurrency: Currency
     referenceArsPerUsdRate?: number
+    operationalStartDate?: string
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -20,6 +21,7 @@ const DEFAULT_PREFERENCES: Preferences = {
     defaultAccountId: undefined,
     consolidatedCurrency: 'ARS',
     referenceArsPerUsdRate: undefined,
+    operationalStartDate: undefined,
 }
 
 const STORAGE_KEYS = {
@@ -28,6 +30,7 @@ const STORAGE_KEYS = {
     defaultAccountId: 'finp-default-account-id',
     consolidatedCurrency: 'finp-consolidated-currency',
     referenceArsPerUsdRate: 'finp-reference-ars-per-usd-rate',
+    operationalStartDate: 'finp-operational-start-date',
 } as const
 
 function readFromStorage(): Preferences {
@@ -40,6 +43,7 @@ function readFromStorage(): Preferences {
         const consolidatedCurrencyRaw = localStorage.getItem(STORAGE_KEYS.consolidatedCurrency)
         const consolidatedCurrency: Currency = consolidatedCurrencyRaw === 'USD' ? 'USD' : DEFAULT_PREFERENCES.consolidatedCurrency
         const referenceArsPerUsdRateRaw = localStorage.getItem(STORAGE_KEYS.referenceArsPerUsdRate)
+        const operationalStartDate = localStorage.getItem(STORAGE_KEYS.operationalStartDate) ?? undefined
         const parsedRate = referenceArsPerUsdRateRaw ? Number.parseFloat(referenceArsPerUsdRateRaw) : undefined
         return {
             defaultView,
@@ -50,6 +54,7 @@ function readFromStorage(): Preferences {
                 parsedRate && Number.isFinite(parsedRate) && parsedRate > 0
                     ? parsedRate
                     : undefined,
+            operationalStartDate: operationalStartDate || undefined,
         }
     } catch {
         return DEFAULT_PREFERENCES
@@ -71,6 +76,11 @@ function writeToStorage(prefs: Preferences) {
         } else {
             localStorage.removeItem(STORAGE_KEYS.referenceArsPerUsdRate)
         }
+        if (prefs.operationalStartDate) {
+            localStorage.setItem(STORAGE_KEYS.operationalStartDate, prefs.operationalStartDate)
+        } else {
+            localStorage.removeItem(STORAGE_KEYS.operationalStartDate)
+        }
     } catch {
         // ignore
     }
@@ -80,7 +90,8 @@ function isDefaultPreferences(prefs: Preferences): boolean {
     return prefs.defaultView === DEFAULT_PREFERENCES.defaultView &&
         prefs.monthStartDay === DEFAULT_PREFERENCES.monthStartDay &&
         prefs.consolidatedCurrency === DEFAULT_PREFERENCES.consolidatedCurrency &&
-        !prefs.referenceArsPerUsdRate
+        !prefs.referenceArsPerUsdRate &&
+        !prefs.operationalStartDate
 }
 
 async function patchPreferences(patch: Partial<Preferences>): Promise<void> {
@@ -155,6 +166,13 @@ export function usePreferences() {
         patchPreferences({ referenceArsPerUsdRate: normalizedRate ?? null } as Partial<Preferences>).catch(() => {})
     }, [])
 
+    const setOperationalStartDate = useCallback((date: string | undefined) => {
+        const normalizedDate = date?.trim() || undefined
+        setPreferences((prev) => ({ ...prev, operationalStartDate: normalizedDate }))
+        writeToStorage({ ...readFromStorage(), operationalStartDate: normalizedDate })
+        patchPreferences({ operationalStartDate: normalizedDate ?? null } as Partial<Preferences>).catch(() => {})
+    }, [])
+
     return {
         preferences,
         setDefaultView,
@@ -162,5 +180,6 @@ export function usePreferences() {
         setDefaultAccountId,
         setConsolidatedCurrency,
         setReferenceArsPerUsdRate,
+        setOperationalStartDate,
     }
 }

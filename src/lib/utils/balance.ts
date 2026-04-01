@@ -1,7 +1,10 @@
 import type { Currency } from '@/lib/constants'
 import type { Types } from 'mongoose'
-import { Transaction } from '@/lib/models'
+import { InstallmentPlan, Transaction } from '@/lib/models'
 import { buildCurrencyBalances, normalizeInitialBalances } from '@/lib/utils/accounts'
+import { getRemainingDebtForMonth } from '@/lib/utils/credit-card'
+import { getCurrentFinancialPeriod } from '@/lib/utils/period'
+import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-start'
 
 type BalanceBucket = {
     _id: Currency
@@ -47,12 +50,17 @@ export async function calculateAccountBalancesByCurrency(
         initialBalance?: number
         initialCurrency?: Currency
         initialBalances?: Partial<Record<Currency, number>>
+        sinceDate?: Date
+        includeCreditCardInstallmentDebt?: boolean
+        monthStartDay?: number
+        operationalStartDate?: string | Date
     }
 ): Promise<Record<Currency, number>> {
     const result = await Transaction.aggregate<BalanceFacet>([
         {
             $match: {
                 userId,
+                ...(options?.sinceDate ? { date: { $gte: options.sinceDate } } : {}),
                 $or: [
                     { sourceAccountId: accountId },
                     { destinationAccountId: accountId },
@@ -131,6 +139,29 @@ export async function calculateAccountBalancesByCurrency(
 
     for (const bucket of buckets?.outgoing ?? []) {
         balances[bucket._id] -= bucket.total ?? 0
+    }
+
+    if (options?.includeCreditCardInstallmentDebt) {
+        const monthStartDay = options.monthStartDay ?? 1
+        const currentPeriod = getCurrentFinancialPeriod(new Date(), monthStartDay)
+        const operationalStartPeriod = getOperationalStartFinancialPeriod(
+            options.operationalStartDate,
+            monthStartDay
+        )
+        const referencePeriod =
+            operationalStartPeriod && operationalStartPeriod > currentPeriod
+                ? operationalStartPeriod
+                : currentPeriod
+
+        const plans = await InstallmentPlan.find({
+            userId,
+            accountId,
+        })
+
+        for (const plan of plans) {
+            const currency: Currency = plan.currency === 'USD' ? 'USD' : 'ARS'
+            balances[currency] -= getRemainingDebtForMonth(plan, referencePeriod)
+        }
     }
 
     return balances

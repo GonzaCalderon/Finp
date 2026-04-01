@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, User } from '@/lib/models'
 import { getCurrentFinancialPeriod, parseFinancialPeriod, shiftFinancialPeriod } from '@/lib/utils/period'
+import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
 
 type CurrencyTotals = {
     ars: number
@@ -31,8 +32,12 @@ export async function GET(request: Request) {
         await connectDB()
 
         const now = new Date()
-        const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
+        const userDoc = await User.findById(session.user.id, {
+            'preferences.monthStartDay': 1,
+            'preferences.operationalStartDate': 1,
+        })
         const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+        const operationalStartDate = userDoc?.preferences?.operationalStartDate
         const currentPeriod = getCurrentFinancialPeriod(now, monthStartDay)
         const periods = Array.from({ length: months }, (_, index) =>
             shiftFinancialPeriod(currentPeriod, -(months - 1 - index))
@@ -43,7 +48,10 @@ export async function GET(request: Request) {
 
         const transactions = await Transaction.find({
             userId: session.user.id,
-            date: { $gte: firstRange.start, $lt: lastRange.end },
+            date: {
+                $gte: clampRangeStartToOperationalStart(firstRange.start, operationalStartDate),
+                $lt: lastRange.end,
+            },
         })
             .populate('sourceAccountId', 'name type currency color')
             .populate('destinationAccountId', 'name type currency color')

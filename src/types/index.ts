@@ -22,6 +22,7 @@ export interface UserPreferences {
     defaultAccountId?: string // ObjectId as string
     consolidatedCurrency?: Currency
     referenceArsPerUsdRate?: number
+    operationalStartDate?: string
 }
 
 export interface IUser {

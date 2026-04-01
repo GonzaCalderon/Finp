@@ -10,6 +10,7 @@ import { evaluateRules } from '@/lib/utils/rules'
 import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
 import { normalizeManualExchange } from '@/lib/utils/exchange'
+import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 import type { Currency } from '@/lib/constants'
 
 const PAGE_LIMIT = 30
@@ -175,6 +176,14 @@ export async function POST(request: Request) {
         const accountMap = new Map(relatedAccounts.map((account) => [account._id.toString(), account]))
         const sourceAccount = data.sourceAccountId ? accountMap.get(data.sourceAccountId) : null
         const destinationAccount = data.destinationAccountId ? accountMap.get(data.destinationAccountId) : null
+        const description = resolveTransactionDescription({
+            type: data.type,
+            description: data.description,
+            amount: data.amount,
+            currency: data.currency,
+            sourceAccount,
+            destinationAccount,
+        })
 
         if (data.sourceAccountId && !sourceAccount) {
             return NextResponse.json({ error: 'La cuenta origen no existe o no pertenece al usuario.' }, { status: 400 })
@@ -281,7 +290,7 @@ export async function POST(request: Request) {
 
             const { matched, rule } = evaluateRules(rules, {
                 type: ruleType,
-                description: data.description,
+                description,
                 merchant: data.merchant,
             })
 
@@ -303,7 +312,7 @@ export async function POST(request: Request) {
             amount: data.amount,
             currency: data.currency,
             date: data.date,
-            description: data.description,
+            description,
             categoryId: resolvedCategoryId,
             sourceAccountId: data.sourceAccountId,
             destinationAccountId: data.destinationAccountId,

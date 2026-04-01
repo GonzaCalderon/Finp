@@ -4,6 +4,7 @@ import { connectDB } from '@/lib/db'
 import { User } from '@/lib/models'
 import type { UserPreferences } from '@/types'
 import type { Currency } from '@/lib/constants'
+import { normalizeOperationalStartDate } from '@/lib/utils/operational-start'
 
 export async function GET() {
     try {
@@ -29,6 +30,7 @@ export async function GET() {
             defaultAccountId: user.preferences?.defaultAccountId?.toString(),
             consolidatedCurrency: (user.preferences?.consolidatedCurrency as Currency | undefined) ?? 'ARS',
             referenceArsPerUsdRate: user.preferences?.referenceArsPerUsdRate,
+            operationalStartDate: user.preferences?.operationalStartDate,
         }
 
         return NextResponse.json({ preferences })
@@ -93,6 +95,18 @@ export async function PATCH(request: Request) {
             }
         }
 
+        if ('operationalStartDate' in body) {
+            if (!body.operationalStartDate) {
+                update['preferences.operationalStartDate'] = null
+            } else {
+                const normalizedDate = normalizeOperationalStartDate(body.operationalStartDate)
+                if (!normalizedDate) {
+                    return NextResponse.json({ error: 'Fecha de inicio operativo inválida' }, { status: 400 })
+                }
+                update['preferences.operationalStartDate'] = normalizedDate
+            }
+        }
+
         if (Object.keys(update).length === 0) {
             return NextResponse.json({ error: 'No hay campos válidos para actualizar' }, { status: 400 })
         }
@@ -115,6 +129,7 @@ export async function PATCH(request: Request) {
             defaultAccountId: user.preferences?.defaultAccountId?.toString(),
             consolidatedCurrency: (user.preferences?.consolidatedCurrency as Currency | undefined) ?? 'ARS',
             referenceArsPerUsdRate: user.preferences?.referenceArsPerUsdRate,
+            operationalStartDate: user.preferences?.operationalStartDate,
         }
 
         return NextResponse.json({ preferences })

@@ -18,9 +18,21 @@ const UserSchema = new Schema<IUser>(
             defaultAccountId: { type: Schema.Types.ObjectId, ref: 'Account' },
             consolidatedCurrency: { type: String, enum: ['ARS', 'USD'], default: 'ARS' },
             referenceArsPerUsdRate: { type: Number, min: 0 },
+            operationalStartDate: { type: String, trim: true },
         },
     },
     { timestamps: true }
 )
 
-export const User = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
+const existingUserModel = mongoose.models.User as mongoose.Model<IUser> | undefined
+const hasOperationalStartDatePath = Boolean(existingUserModel?.schema.path('preferences.operationalStartDate'))
+
+if (existingUserModel && !hasOperationalStartDatePath) {
+    delete mongoose.models.User
+}
+
+export const User =
+    ((!existingUserModel || hasOperationalStartDatePath)
+        ? (mongoose.models.User as mongoose.Model<IUser> | undefined)
+        : undefined) ||
+    mongoose.model<IUser>('User', UserSchema)

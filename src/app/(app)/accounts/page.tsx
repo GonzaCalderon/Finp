@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
     AlertCircle,
@@ -17,6 +17,7 @@ import {
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePreferences } from '@/hooks/usePreferences'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -468,9 +469,10 @@ function AccountTypeSection({
 }
 
 export default function AccountsPage() {
-    const { accounts, loading, error, createAccount, updateAccount, deleteAccount } = useAccounts()
+    const { accounts, loading, error, fetchAccounts, createAccount, updateAccount, deleteAccount } = useAccounts()
     const { success, error: toastError } = useToast()
     const { hidden } = useHideAmounts()
+    const { preferences } = usePreferences()
 
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selectedAccount, setSelectedAccount] = useState<IAccount | null>(null)
@@ -479,6 +481,10 @@ export default function AccountsPage() {
     const [detailAccountId, setDetailAccountId] = useState<string | null>(null)
 
     usePageTitle('Cuentas')
+
+    useEffect(() => {
+        void fetchAccounts()
+    }, [fetchAccounts, preferences.operationalStartDate])
 
     const groupedAccounts = useMemo(() => {
         const source = accounts as AccountWithBalance[]

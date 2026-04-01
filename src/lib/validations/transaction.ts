@@ -72,11 +72,10 @@ export const transactionSchema = z
         amount: amountSchema,
         currency: currencySchema,
         date: dateSchema,
-        description: z
-            .string()
-            .trim()
-            .min(1, 'La descripción es requerida')
-            .max(200, 'La descripción no puede superar los 200 caracteres'),
+        description: optionalTrimmedString.refine(
+            (value) => value === undefined || value.length <= 200,
+            'La descripción no puede superar los 200 caracteres'
+        ),
         categoryId: optionalObjectIdString,
         sourceAccountId: optionalObjectIdString,
         destinationAccountId: optionalObjectIdString,
@@ -91,6 +90,14 @@ export const transactionSchema = z
         merchant: optionalTrimmedString,
     })
     .superRefine((data, ctx) => {
+        if (['income', 'expense', 'credit_card_expense'].includes(data.type) && !data.description) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'La descripción es requerida',
+                path: ['description'],
+            })
+        }
+
         if (data.type !== 'adjustment' && data.amount < 0) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,

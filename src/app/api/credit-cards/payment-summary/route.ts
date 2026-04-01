@@ -4,6 +4,7 @@ import { connectDB } from '@/lib/db'
 import { Account, InstallmentPlan, Transaction, User } from '@/lib/models'
 import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
 import { getCurrentFinancialPeriod, parseFinancialPeriod } from '@/lib/utils/period'
+import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
 
 export async function GET(request: Request) {
     try {
@@ -20,8 +21,12 @@ export async function GET(request: Request) {
 
         await connectDB()
 
-        const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
+        const userDoc = await User.findById(session.user.id, {
+            'preferences.monthStartDay': 1,
+            'preferences.operationalStartDate': 1,
+        })
         const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+        const operationalStartDate = userDoc?.preferences?.operationalStartDate
         const month = searchParams.get('month') ?? getCurrentFinancialPeriod(new Date(), monthStartDay)
         const currency = searchParams.get('currency') === 'USD' ? 'USD' : 'ARS'
         const { start, end } = parseFinancialPeriod(month, monthStartDay)
@@ -29,7 +34,10 @@ export async function GET(request: Request) {
         const [transactions, plans, card] = await Promise.all([
             Transaction.find({
                 userId: session.user.id,
-                date: { $gte: start, $lt: end },
+                date: {
+                    $gte: clampRangeStartToOperationalStart(start, operationalStartDate),
+                    $lt: end,
+                },
             })
                 .populate('categoryId', 'name color type')
                 .populate('sourceAccountId', 'name type currency color')
@@ -45,6 +53,7 @@ export async function GET(request: Request) {
             monthStartDay,
             plans,
             transactions,
+            operationalStartDate,
         }).find((item) => item.cardId === cardId)
 
         const buildSummaryForCurrency = (targetCurrency: 'ARS' | 'USD') => {
