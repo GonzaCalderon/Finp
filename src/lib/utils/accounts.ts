@@ -1,6 +1,7 @@
 import type { AccountType, Currency } from '@/lib/constants'
 
 export type CurrencyBalances = Record<Currency, number>
+export type AccountDefaultPaymentMethod = 'cash' | 'debit' | 'credit_card'
 
 export const EMPTY_CURRENCY_BALANCES: CurrencyBalances = {
     ARS: 0,
@@ -8,6 +9,7 @@ export const EMPTY_CURRENCY_BALANCES: CurrencyBalances = {
 }
 
 const VALID_CURRENCIES: Currency[] = ['ARS', 'USD']
+const VALID_DEFAULT_PAYMENT_METHODS: AccountDefaultPaymentMethod[] = ['cash', 'debit', 'credit_card']
 
 type AccountCurrencyLike = {
     type?: AccountType | string
@@ -16,6 +18,8 @@ type AccountCurrencyLike = {
     initialBalance?: number
     initialBalances?: Partial<Record<Currency, number>>
     balancesByCurrency?: Partial<Record<Currency, number>>
+    defaultPaymentMethods?: readonly (AccountDefaultPaymentMethod | string)[]
+    isActive?: boolean
 }
 
 export function buildCurrencyBalances(
@@ -73,6 +77,76 @@ export function normalizeSupportedCurrencies(
 export function getSupportedCurrencies(account?: AccountCurrencyLike | null): Currency[] {
     if (!account) return ['ARS']
     return normalizeSupportedCurrencies(account.supportedCurrencies, account.currency, account.type)
+}
+
+export function getSupportedDefaultPaymentMethodsForAccountType(
+    accountType?: AccountType | string | null
+): AccountDefaultPaymentMethod[] {
+    if (accountType === 'cash') return ['cash']
+    if (accountType === 'credit_card') return ['credit_card']
+    if (accountType === 'bank' || accountType === 'wallet' || accountType === 'savings') return ['debit']
+    return []
+}
+
+export function normalizeDefaultPaymentMethods(
+    defaultPaymentMethods?: readonly (AccountDefaultPaymentMethod | string)[] | null,
+    accountType?: AccountType | string | null
+): AccountDefaultPaymentMethod[] {
+    const allowedMethods = getSupportedDefaultPaymentMethodsForAccountType(accountType)
+
+    if (allowedMethods.length === 0) return []
+
+    const normalized = (defaultPaymentMethods ?? [])
+        .filter((value): value is AccountDefaultPaymentMethod =>
+            VALID_DEFAULT_PAYMENT_METHODS.includes(value as AccountDefaultPaymentMethod)
+        )
+        .filter((value, index, array) => array.indexOf(value) === index)
+        .filter((value) => allowedMethods.includes(value))
+
+    if (normalized.length > 0) return normalized
+    return []
+}
+
+export function accountSupportsPaymentMethod(
+    account: AccountCurrencyLike | null | undefined,
+    paymentMethod: AccountDefaultPaymentMethod
+): boolean {
+    if (!account) return false
+    return getSupportedDefaultPaymentMethodsForAccountType(account.type).includes(paymentMethod)
+}
+
+export function getDefaultPaymentMethods(account?: AccountCurrencyLike | null): AccountDefaultPaymentMethod[] {
+    if (!account) return []
+    return normalizeDefaultPaymentMethods(account.defaultPaymentMethods, account.type)
+}
+
+export function getDefaultPaymentMethodLabel(paymentMethod: AccountDefaultPaymentMethod): string {
+    if (paymentMethod === 'cash') return 'Efectivo predeterminado'
+    if (paymentMethod === 'credit_card') return 'Tarjeta predeterminada'
+    return 'Débito predeterminado'
+}
+
+export function getDefaultAccountForPaymentMethod<T extends AccountCurrencyLike & { _id?: { toString(): string } | string }>(
+    accounts: readonly T[],
+    paymentMethod: AccountDefaultPaymentMethod,
+    fallbackAccountId?: string
+): T | undefined {
+    const activeAccounts = accounts.filter((account) => account.isActive !== false)
+    const preferred = activeAccounts.find((account) =>
+        getDefaultPaymentMethods(account).includes(paymentMethod)
+    )
+
+    if (preferred) return preferred
+
+    if (!fallbackAccountId) return undefined
+
+    return activeAccounts.find((account) => {
+        const accountId =
+            typeof account._id === 'string'
+                ? account._id
+                : account._id?.toString()
+        return accountId === fallbackAccountId && accountSupportsPaymentMethod(account, paymentMethod)
+    })
 }
 
 export function supportsCurrency(account: AccountCurrencyLike | null | undefined, currency: Currency): boolean {

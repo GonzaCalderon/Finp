@@ -134,8 +134,19 @@ export async function GET(request: Request) {
             transactions,
             operationalStartDate,
         })
+        const prevCardSummary = buildMonthlyCardPaymentSummary({
+            month: prevPeriod,
+            monthStartDay,
+            plans: allPlans,
+            transactions: prevTransactions,
+            operationalStartDate,
+        })
 
         const totalCreditCardExpense = currentCardSummary.reduce((totals, item) => {
+            item.items.forEach((charge) => addCurrencyAmount(totals, charge.currency, charge.amount))
+            return totals
+        }, emptyCurrencyTotals())
+        const prevTotalCreditCardExpense = prevCardSummary.reduce((totals, item) => {
             item.items.forEach((charge) => addCurrencyAmount(totals, charge.currency, charge.amount))
             return totals
         }, emptyCurrencyTotals())
@@ -207,6 +218,7 @@ export async function GET(request: Request) {
             income: hasPreviousFullBase ? calcTrend(totalIncome.ars, prevIncome.ars) : null,
             expense: hasPreviousFullBase ? calcTrend(totalExpense.ars, prevExpense.ars) : null,
             balance: hasPreviousFullBase ? calcTrend(currentBalance.ars, prevBalance.ars) : null,
+            debt: hasPreviousFullBase ? calcTrend(totalCreditCardExpense.ars, prevTotalCreditCardExpense.ars) : null,
         }
 
         // Gastos por categoría (incluye gasto común y el impacto mensual de TC)

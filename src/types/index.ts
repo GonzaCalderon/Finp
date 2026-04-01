@@ -44,6 +44,7 @@ export interface IAccount {
     type: AccountType
     currency: Currency
     supportedCurrencies?: Currency[]
+    defaultPaymentMethods?: Array<'cash' | 'debit' | 'credit_card'>
     institution?: string
     description?: string
     color?: string

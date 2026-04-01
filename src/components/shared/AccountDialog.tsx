@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
     Dialog,
     DialogContent,
@@ -24,7 +25,13 @@ import {accountSchema, type AccountFormData, AccountFormInput} from '@/lib/valid
 import type { IAccount } from '@/types'
 import { Spinner } from '@/components/shared/Spinner'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
-import { getAccountCurrencyLabel, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+import {
+    getAccountCurrencyLabel,
+    getDefaultPaymentMethodLabel,
+    getSupportedDefaultPaymentMethodsForAccountType,
+    normalizeDefaultPaymentMethods,
+    normalizeSupportedCurrencies,
+} from '@/lib/utils/accounts'
 
 interface AccountDialogProps {
     open: boolean
@@ -67,6 +74,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
             type: undefined,
             currency: 'ARS',
             supportedCurrencies: ['ARS'],
+            defaultPaymentMethods: [],
             allowNegativeBalance: true,
         },
     })
@@ -76,11 +84,15 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
 
     const type = watch('type')
     const supportedCurrencies = watch('supportedCurrencies')
+    const defaultPaymentMethods = watch('defaultPaymentMethods')
     const initialBalances = watch('initialBalances')
+    const currency = watch('currency')
     const color = watch('color') ?? '#6366f1'
     const allowNegativeBalance = watch('allowNegativeBalance') ?? true
     const isCreditCard = type === 'credit_card'
     const isDualCurrency = (supportedCurrencies?.length ?? 0) > 1
+    const availableDefaultPaymentMethods = getSupportedDefaultPaymentMethodsForAccountType(type)
+    const primaryDefaultPaymentMethod = availableDefaultPaymentMethods[0]
     const currencyCapability = isCreditCard
         ? 'ARS_USD'
         : getCurrencyCapabilityValue(supportedCurrencies as string[] | undefined)
@@ -98,6 +110,10 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                     type: account.type,
                     currency: normalizedSupportedCurrencies[0],
                     supportedCurrencies: normalizedSupportedCurrencies,
+                    defaultPaymentMethods: normalizeDefaultPaymentMethods(
+                        account.defaultPaymentMethods,
+                        account.type
+                    ),
                     institution: account.institution ?? '',
                     initialBalance: account.initialBalance ?? 0,
                     initialBalances: {
@@ -118,6 +134,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                     },
                     currency: 'ARS',
                     supportedCurrencies: ['ARS'],
+                    defaultPaymentMethods: [],
                     allowNegativeBalance: true,
                 })
             }
@@ -128,22 +145,55 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
         if (!type) return
 
         if (type === 'credit_card') {
-            setValue('supportedCurrencies', ['ARS', 'USD'], { shouldValidate: true })
-            setValue('currency', 'ARS', { shouldValidate: true })
-            return
+            const currentSupportedCurrencies = supportedCurrencies ?? []
+            const hasCreditCardCurrencies =
+                currentSupportedCurrencies.length === 2 &&
+                currentSupportedCurrencies.includes('ARS') &&
+                currentSupportedCurrencies.includes('USD')
+
+            if (!hasCreditCardCurrencies) {
+                setValue('supportedCurrencies', ['ARS', 'USD'], { shouldValidate: true })
+            }
+
+            if (currency !== 'ARS') {
+                setValue('currency', 'ARS', { shouldValidate: true })
+            }
+        } else if (!supportedCurrencies || supportedCurrencies.length === 0) {
+            setValue('supportedCurrencies', ['ARS'], { shouldValidate: true })
+            if (currency !== 'ARS') {
+                setValue('currency', 'ARS', { shouldValidate: true })
+            }
         }
 
-        if (!supportedCurrencies || supportedCurrencies.length === 0) {
-            setValue('supportedCurrencies', ['ARS'], { shouldValidate: true })
-            setValue('currency', 'ARS', { shouldValidate: true })
+        const normalizedDefaultPaymentMethods = normalizeDefaultPaymentMethods(defaultPaymentMethods, type)
+        const currentDefaultPaymentMethods = defaultPaymentMethods ?? []
+
+        if (normalizedDefaultPaymentMethods.join('|') !== currentDefaultPaymentMethods.join('|')) {
+            setValue(
+                'defaultPaymentMethods',
+                normalizedDefaultPaymentMethods,
+                { shouldValidate: true }
+            )
         }
-    }, [type, supportedCurrencies, setValue])
+    }, [currency, defaultPaymentMethods, type, supportedCurrencies, setValue])
 
     const handleCurrencyCapabilityChange = (value: CurrencyCapabilityOption) => {
         const nextSupportedCurrencies = getSupportedCurrenciesFromCapability(value)
         setValue('supportedCurrencies', nextSupportedCurrencies, { shouldValidate: true, shouldDirty: true })
         setValue('currency', nextSupportedCurrencies[0], { shouldValidate: true, shouldDirty: true })
         setValue('initialBalance', initialBalances?.[nextSupportedCurrencies[0]] ?? 0, {
+            shouldValidate: true,
+            shouldDirty: true,
+        })
+    }
+
+    const isDefaultForPrimaryMethod = primaryDefaultPaymentMethod
+        ? (defaultPaymentMethods ?? []).includes(primaryDefaultPaymentMethod)
+        : false
+
+    const handleDefaultPaymentMethodToggle = (checked: boolean) => {
+        if (!primaryDefaultPaymentMethod) return
+        setValue('defaultPaymentMethods', checked ? [primaryDefaultPaymentMethod] : [], {
             shouldValidate: true,
             shouldDirty: true,
         })
@@ -203,7 +253,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                                 ? 'Las tarjetas de crédito operan en ARS y USD.'
                                 : `Esta cuenta acepta movimientos en ${getAccountCurrencyLabel({
                                     type: type ?? 'bank',
-                                    currency: watch('currency') ?? 'ARS',
+                                    currency: currency ?? 'ARS',
                                     supportedCurrencies: supportedCurrencies as ('ARS' | 'USD')[] | undefined,
                                 })}.`}
                         </p>
@@ -216,6 +266,30 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                         <Label htmlFor="institution">Entidad (opcional)</Label>
                         <Input id="institution" placeholder="Ej: Galicia, Mercado Pago" {...register('institution')} />
                     </div>
+
+                    {primaryDefaultPaymentMethod && (
+                        <div
+                            className="flex items-center justify-between rounded-lg p-3"
+                            style={{ background: 'var(--secondary)', border: '0.5px solid var(--border)' }}
+                        >
+                            <div className="pr-4">
+                                <p className="text-sm font-medium">
+                                    {getDefaultPaymentMethodLabel(primaryDefaultPaymentMethod)}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Se preselecciona al registrar movimientos con {primaryDefaultPaymentMethod === 'cash'
+                                        ? 'efectivo'
+                                        : primaryDefaultPaymentMethod === 'credit_card'
+                                            ? 'tarjeta'
+                                            : 'débito'}.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={isDefaultForPrimaryMethod}
+                                onCheckedChange={handleDefaultPaymentMethodToggle}
+                            />
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label>Saldos iniciales</Label>

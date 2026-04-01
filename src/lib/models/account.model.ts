@@ -1,7 +1,7 @@
 import mongoose, { Schema } from 'mongoose'
 import type { IAccount } from '@/types'
 import { ACCOUNT_TYPES, CURRENCIES } from '@/lib/constants'
-import { normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+import { normalizeDefaultPaymentMethods, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
 
 const AccountSchema = new Schema<IAccount>(
     {
@@ -10,6 +10,7 @@ const AccountSchema = new Schema<IAccount>(
         type: { type: String, enum: Object.values(ACCOUNT_TYPES), required: true },
         currency: { type: String, enum: Object.values(CURRENCIES), required: true },
         supportedCurrencies: [{ type: String, enum: Object.values(CURRENCIES) }],
+        defaultPaymentMethods: [{ type: String, enum: ['cash', 'debit', 'credit_card'] }],
         institution: { type: String },
         description: { type: String },
         color: { type: String },
@@ -36,6 +37,7 @@ const AccountSchema = new Schema<IAccount>(
 
 AccountSchema.pre('validate', function applyCurrencyCapabilities(next) {
     this.supportedCurrencies = normalizeSupportedCurrencies(this.supportedCurrencies, this.currency, this.type)
+    this.defaultPaymentMethods = normalizeDefaultPaymentMethods(this.defaultPaymentMethods, this.type)
     this.currency = this.supportedCurrencies[0] ?? this.currency ?? 'ARS'
     if (!this.initialBalances) {
         this.initialBalances = { ARS: 0, USD: 0 }

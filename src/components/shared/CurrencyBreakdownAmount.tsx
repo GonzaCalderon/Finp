@@ -14,6 +14,8 @@ interface CurrencyBreakdownAmountProps {
     secondaryColor?: string
     align?: 'left' | 'right'
     className?: string
+    hideZeroSecondary?: boolean
+    preserveSecondarySpace?: boolean
     consolidated?: {
         amount: number
         currency: 'ARS' | 'USD'
@@ -28,8 +30,12 @@ export function CurrencyBreakdownAmount({
     secondaryColor = 'var(--muted-foreground)',
     align = 'left',
     className,
+    hideZeroSecondary = false,
+    preserveSecondarySpace = false,
     consolidated,
 }: CurrencyBreakdownAmountProps) {
+    const showSecondary = !hideZeroSecondary || totals.usd !== 0
+
     return (
         <div className={className}>
             <div className={align === 'right' ? 'text-right' : 'text-left'}>
@@ -40,18 +46,23 @@ export function CurrencyBreakdownAmount({
                     color={primaryColor}
                 />
             </div>
-            <div
-                className={`mt-1 text-[11px] md:text-xs ${align === 'right' ? 'text-right' : 'text-left'}`}
-                style={{ color: secondaryColor }}
-            >
-                <ResponsiveAmount
-                    amount={totals.usd}
-                    currency="USD"
-                    hidden={hidden}
-                    color={secondaryColor}
-                    compactMaximumFractionDigits={1}
-                />
-            </div>
+            {(showSecondary || preserveSecondarySpace) && (
+                <div
+                    className={`mt-1 text-[11px] md:text-xs ${align === 'right' ? 'text-right' : 'text-left'}`}
+                    style={{
+                        color: secondaryColor,
+                        visibility: showSecondary ? 'visible' : 'hidden',
+                    }}
+                >
+                    <ResponsiveAmount
+                        amount={totals.usd}
+                        currency="USD"
+                        hidden={hidden}
+                        color={secondaryColor}
+                        compactMaximumFractionDigits={1}
+                    />
+                </div>
+            )}
             {consolidated && (
                 <div
                     className={`mt-1.5 text-[10px] md:text-[11px] ${align === 'right' ? 'text-right' : 'text-left'}`}

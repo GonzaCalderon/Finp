@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -13,6 +13,7 @@ import {
     CreditCard,
     Minus,
     Plus,
+    Search,
     Wand2,
 } from 'lucide-react'
 
@@ -49,6 +50,7 @@ import { evaluateRules } from '@/lib/utils/rules'
 import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 import {
+    getDefaultAccountForPaymentMethod,
     getAccountCurrencyLabel,
     getCommonSupportedCurrencies,
     getPrimaryCurrency,
@@ -204,6 +206,8 @@ export function TransactionDialog({
     const [showMoreOptions, setShowMoreOptions] = useState(false)
     const [categoryManuallySet, setCategoryManuallySet] = useState(false)
     const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
+    const [categoryQuery, setCategoryQuery] = useState('')
+    const [showAllCategories, setShowAllCategories] = useState(false)
 
     // Adjustment sign state
     const [adjustmentSign, setAdjustmentSign] = useState<'+' | '-'>('+')
@@ -321,6 +325,28 @@ export function TransactionDialog({
         }),
         [categories, type]
     )
+    const normalizedCategoryQuery = categoryQuery.trim().toLowerCase()
+    const visibleCategories = useMemo(() => {
+        const matching = filteredCategories.filter((category) =>
+            category.name.toLowerCase().includes(normalizedCategoryQuery)
+        )
+
+        if (normalizedCategoryQuery) return matching
+        if (showAllCategories || matching.length <= 10) return matching
+
+        const selected = categoryId
+            ? matching.find((category) => category._id.toString() === categoryId)
+            : undefined
+        const remainder = matching.filter((category) => category._id.toString() !== categoryId)
+
+        return selected
+            ? [selected, ...remainder.slice(0, 9)]
+            : matching.slice(0, 10)
+    }, [categoryId, filteredCategories, normalizedCategoryQuery, showAllCategories])
+    const hiddenCategoryCount =
+        normalizedCategoryQuery.length > 0 || showAllCategories
+            ? 0
+            : Math.max(0, filteredCategories.length - visibleCategories.length)
 
     const selectedSourceAccount = useMemo(
         () => accounts.find((account) => account._id.toString() === sourceAccountId),
@@ -330,6 +356,11 @@ export function TransactionDialog({
     const selectedDestinationAccount = useMemo(
         () => accounts.find((account) => account._id.toString() === destinationAccountId),
         [accounts, destinationAccountId]
+    )
+
+    const getPreselectedExpenseAccount = useCallback(
+        (method: PaymentMethod) => getDefaultAccountForPaymentMethod(accounts, method, defaultAccountId),
+        [accounts, defaultAccountId]
     )
 
     const allowedCurrencies = useMemo(() => {
@@ -369,6 +400,51 @@ export function TransactionDialog({
         !isEditing &&
         type === 'credit_card_payment' &&
         Boolean(secondaryCardPaymentCurrency)
+    const dialogContext = useMemo(() => {
+        if (type === 'credit_card_payment') {
+            return destinationAccountId
+                ? `Pagá el resumen mensual de ${selectedDestinationAccount?.name ?? 'tu tarjeta'}`
+                : 'Registrá el pago del resumen de una tarjeta'
+        }
+
+        if (type === 'exchange') {
+            return 'Mové saldo entre ARS y USD guardando la cotización usada'
+        }
+
+        if (type === 'transfer') {
+            return sourceAccountId && destinationAccountId
+                ? `Mové dinero entre ${selectedSourceAccount?.name ?? 'origen'} y ${selectedDestinationAccount?.name ?? 'destino'}`
+                : 'Mové dinero entre tus cuentas sin afectar ingresos ni gastos'
+        }
+
+        if (type === 'adjustment') {
+            return 'Corregí un desvío puntual de saldo sin alterar tu historial'
+        }
+
+        if (isCardExpense) {
+            return installmentCount > 1
+                ? `Registrá una compra en ${installmentCount} cuotas`
+                : 'Registrá una compra con tarjeta para su próximo resumen'
+        }
+
+        if (type === 'income') {
+            return destinationAccountId
+                ? `Sumá un ingreso a ${selectedDestinationAccount?.name ?? 'tu cuenta'}`
+                : 'Registrá un ingreso en la cuenta que corresponda'
+        }
+
+        return sourceAccountId
+            ? `Registrá un gasto desde ${selectedSourceAccount?.name ?? 'tu cuenta'}`
+            : 'Registrá el movimiento principal de tus finanzas'
+    }, [
+        destinationAccountId,
+        installmentCount,
+        isCardExpense,
+        selectedDestinationAccount?.name,
+        selectedSourceAccount?.name,
+        sourceAccountId,
+        type,
+    ])
 
     // ─── Effects ──────────────────────────────────────────────────────────────
 
@@ -377,6 +453,8 @@ export function TransactionDialog({
 
         setCategoryManuallySet(false)
         setAppliedRuleName(null)
+        setCategoryQuery('')
+        setShowAllCategories(false)
         setFirstMonthError(null)
         setFirstClosingMonth('')
         setInstallmentQuoteAmount(0)
@@ -429,16 +507,16 @@ export function TransactionDialog({
             return
         }
 
+        const defaultExpenseAccount = getPreselectedExpenseAccount('debit')
+
         reset({
             type: 'expense',
             amount: 0,
-            currency: defaultAccountId
-                ? getPrimaryCurrency(accounts.find((account) => account._id.toString() === defaultAccountId))
-                : 'ARS',
+            currency: getPrimaryCurrency(defaultExpenseAccount),
             date: new Date(),
             description: '',
             categoryId: undefined,
-            sourceAccountId: defaultAccountId,
+            sourceAccountId: defaultExpenseAccount?._id.toString(),
             destinationAccountId: undefined,
             destinationAmount: undefined,
             destinationCurrency: undefined,
@@ -450,15 +528,8 @@ export function TransactionDialog({
         setInstallmentCount(1)
         setInstallmentQuoteAmount(0)
         setAdjustmentSign('+')
-
-        // Auto-detectar medio de pago según el tipo de cuenta por defecto
-        const defaultAccount = defaultAccountId
-            ? accounts.find(a => a._id.toString() === defaultAccountId)
-            : undefined
-        if (defaultAccount?.type === 'cash') setPaymentMethod('cash')
-        else if (defaultAccount?.type === 'credit_card') setPaymentMethod('credit_card')
-        else setPaymentMethod('debit')
-    }, [open, transaction, reset, defaultAccountId, accounts])
+        setPaymentMethod('debit')
+    }, [open, transaction, reset, accounts, getPreselectedExpenseAccount])
 
     // Clear category when type doesn't support it
     useEffect(() => {
@@ -504,14 +575,23 @@ export function TransactionDialog({
         }
     }, [showSource, showDestination, setValue, type])
 
-    // When paymentMethod changes, clear sourceAccountId if no longer compatible
+    // When payment method changes, keep or restore the account that fits that flow.
     useEffect(() => {
         if (!isExpense) return
+        const defaultExpenseAccount = getPreselectedExpenseAccount(paymentMethod)
         const compatible = expenseAccounts.some(a => a._id.toString() === sourceAccountId)
-        if (sourceAccountId && !compatible) {
-            setValue('sourceAccountId', undefined, { shouldValidate: true })
+
+        if (!sourceAccountId) {
+            if (defaultExpenseAccount) {
+                setValue('sourceAccountId', defaultExpenseAccount._id.toString(), { shouldValidate: true })
+            }
+            return
         }
-    }, [paymentMethod, expenseAccounts, sourceAccountId, isExpense, setValue])
+
+        if (!compatible) {
+            setValue('sourceAccountId', defaultExpenseAccount?._id.toString() ?? undefined, { shouldValidate: true })
+        }
+    }, [paymentMethod, expenseAccounts, sourceAccountId, isExpense, setValue, getPreselectedExpenseAccount])
 
     useEffect(() => {
         if (allowedCurrencies.length > 0 && !allowedCurrencies.includes(currency)) {
@@ -643,6 +723,13 @@ export function TransactionDialog({
 
     const handlePaymentMethodChange = (pm: PaymentMethod) => {
         setPaymentMethod(pm)
+        const defaultExpenseAccount = getPreselectedExpenseAccount(pm)
+        if (defaultExpenseAccount) {
+            setValue('sourceAccountId', defaultExpenseAccount._id.toString(), {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
         if (pm !== 'credit_card') {
             setInstallmentCount(1)
             setFirstClosingMonth('')
@@ -744,10 +831,13 @@ export function TransactionDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 variant="fullscreen-mobile"
-                className="p-0 overflow-hidden sm:max-w-lg"
+                className="p-0 overflow-hidden sm:max-w-2xl"
             >
-                <DialogHeader className="shrink-0 px-5 pt-5 pb-0">
-                        <DialogTitle>
+                <DialogHeader
+                    className="shrink-0 px-5 pt-5 pb-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+                    style={{ borderColor: 'var(--border)' }}
+                >
+                        <DialogTitle className="text-[1.1rem] tracking-tight">
                             {transaction
                             ? `Editar · ${TRANSACTION_TYPE_LABELS[(normalizeLegacyTransactionType(transaction.type) ?? transaction.type) as TransactionFormInput['type']] ?? 'Transacción'}`
                             : usesCardExpensePlanFlow
@@ -756,13 +846,40 @@ export function TransactionDialog({
                                     : 'Gasto con tarjeta'
                                 : 'Nueva transacción'}
                     </DialogTitle>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <p className="text-sm text-muted-foreground">{dialogContext}</p>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                            <span
+                                className="inline-flex items-center rounded-full px-2 py-0.5"
+                                style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
+                            >
+                                {TRANSACTION_TYPE_LABELS[type] ?? type}
+                            </span>
+                            {showCategory && filteredCategories.length > 0 && (
+                                <span
+                                    className="inline-flex items-center rounded-full px-2 py-0.5"
+                                    style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
+                                >
+                                    {filteredCategories.length} categorías
+                                </span>
+                            )}
+                            {isCardExpense && (
+                                <span
+                                    className="inline-flex items-center rounded-full px-2 py-0.5"
+                                    style={{ background: 'rgba(56,189,248,0.10)', color: 'var(--sky)' }}
+                                >
+                                    {installmentCount} cuota{installmentCount === 1 ? '' : 's'}
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 </DialogHeader>
 
                 <form
                     onSubmit={handleSubmit(handleFormSubmit)}
                     className="flex flex-col overflow-hidden flex-1 sm:max-h-[85vh]"
                 >
-                    <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                    <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 pt-4 pb-24 sm:pb-28 space-y-5">
 
                         {/* ── Tipo ── */}
                         {isEditing ? (
@@ -790,7 +907,11 @@ export function TransactionDialog({
                                 {TRANSACTION_TYPE_LABELS[type] ?? type}
                             </div>
                         ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-2.5">
+                                <div className="space-y-1">
+                                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                        Tipo principal
+                                    </p>
                                 <div className="grid grid-cols-2 gap-2">
                                     {QUICK_TYPES.map(option => {
                                         const selected = type === option
@@ -811,7 +932,12 @@ export function TransactionDialog({
                                         )
                                     })}
                                 </div>
+                                </div>
 
+                                <div className="space-y-1">
+                                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                        Otros movimientos
+                                    </p>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                                     {SECONDARY_TYPES.map(option => {
                                         const selected = type === option
@@ -820,17 +946,18 @@ export function TransactionDialog({
                                                 key={option}
                                                 type="button"
                                                 onClick={() => setValue('type', option, { shouldValidate: true })}
-                                                className="rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors"
+                                                className="rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-all"
                                                 style={{
-                                                    background: selected ? 'rgba(99,102,241,0.12)' : 'var(--secondary)',
-                                                    color: selected ? '#6366F1' : 'var(--muted-foreground)',
-                                                    borderColor: selected ? 'rgba(99,102,241,0.5)' : 'var(--border)',
+                                                    background: selected ? 'rgba(99,102,241,0.10)' : 'rgba(148,163,184,0.04)',
+                                                    color: selected ? '#7C8CFF' : 'rgba(226,232,240,0.72)',
+                                                    borderColor: selected ? 'rgba(99,102,241,0.32)' : 'rgba(148,163,184,0.12)',
                                                 }}
                                             >
                                                 {SECONDARY_TYPE_LABELS[option]}
                                             </button>
                                         )
                                     })}
+                                </div>
                                 </div>
 
                                 {errors.type && (
@@ -1441,9 +1568,34 @@ export function TransactionDialog({
                                     )}
                                 </div>
 
-                                {filteredCategories.length > 0 ? (
+                                {filteredCategories.length > 8 && (
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="relative sm:max-w-xs">
+                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                            <Input
+                                                value={categoryQuery}
+                                                onChange={(event) => setCategoryQuery(event.target.value)}
+                                                placeholder="Buscar categoría"
+                                                className="pl-9 h-9"
+                                            />
+                                        </div>
+                                        {filteredCategories.length > 10 && normalizedCategoryQuery.length === 0 && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 px-2.5 text-xs self-start sm:self-auto"
+                                                onClick={() => setShowAllCategories((prev) => !prev)}
+                                            >
+                                                {showAllCategories ? 'Ver menos' : `Ver todas (${filteredCategories.length})`}
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {visibleCategories.length > 0 ? (
                                     <div className="flex flex-wrap gap-2">
-                                        {filteredCategories.map(category => {
+                                        {visibleCategories.map(category => {
                                             const selected = categoryId === category._id.toString()
                                             return (
                                                 <button
@@ -1480,9 +1632,19 @@ export function TransactionDialog({
                                             )
                                         })}
                                     </div>
+                                ) : filteredCategories.length > 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        No encontramos categorías para “{categoryQuery}”.
+                                    </p>
                                 ) : (
                                     <p className="text-sm text-muted-foreground">
                                         No hay categorías para este tipo.
+                                    </p>
+                                )}
+
+                                {hiddenCategoryCount > 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Mostrando {visibleCategories.length} de {filteredCategories.length} categorías.
                                     </p>
                                 )}
 
@@ -1756,18 +1918,21 @@ export function TransactionDialog({
 
                     {/* ── Footer ── */}
                     <div
-                        className="shrink-0 border-t px-5 py-4 flex gap-2 bg-background"
-                        style={{ borderColor: 'var(--border)' }}
+                        className="shrink-0 border-t px-4 pt-3 pb-4 sm:px-5 sm:py-4 flex gap-2 bg-background"
+                        style={{
+                            borderColor: 'var(--border)',
+                            boxShadow: '0 -10px 24px rgba(0,0,0,0.14)',
+                        }}
                     >
                         <Button
                             type="button"
                             variant="outline"
-                            className="flex-1"
+                            className="flex-1 h-10 sm:h-10"
                             onClick={() => onOpenChange(false)}
                         >
                             Cancelar
                         </Button>
-                        <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                        <Button type="submit" className="flex-1 h-10 sm:h-10" disabled={isSubmitting}>
                             {isSubmitting ? (
                                 <>
                                     <Spinner className="mr-2" />

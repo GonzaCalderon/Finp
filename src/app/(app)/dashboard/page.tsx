@@ -17,6 +17,7 @@ import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog
 import { SankeyChart } from '@/components/shared/SankeyChart'
 import { Spinner } from '@/components/shared/Spinner'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
+import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -68,6 +69,7 @@ interface DashboardData {
         income: number | null
         expense: number | null
         balance: number | null
+        debt: number | null
     }
     expenseByCategory: { key: string; name: string; color?: string; ars: number; usd: number }[]
     accounts: {
@@ -300,7 +302,7 @@ export default function DashboardPage() {
                         </motion.div>
                     )}
 
-                    {/* Grupo 1 — Ingresos / Gastos / Balance mensual */}
+                    {/* Grupo 1 — Mensual */}
                     <motion.div
                         className="rounded-xl overflow-hidden"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
@@ -312,13 +314,13 @@ export default function DashboardPage() {
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                 Mensual
                             </p>
-                            <p className="text-[10px] text-muted-foreground">vs mes anterior</p>
+                            <p className="text-[10px] text-muted-foreground">Comparativa vs mes anterior</p>
                         </div>
-                        <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
+                        <div className="grid grid-cols-2" style={{ borderColor: 'var(--border)' }}>
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid #10B981' }}
+                                style={{ borderTop: '2px solid #10B981', borderRight: '0.5px solid var(--border)', borderBottom: '0.5px solid var(--border)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Ingresos
@@ -328,6 +330,8 @@ export default function DashboardPage() {
                                     hidden={hidden}
                                     primaryColor="#10B981"
                                     secondaryColor="rgba(16,185,129,0.78)"
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
                                     className="text-base md:text-2xl font-semibold tracking-tight text-green-500"
                                 />
                                 <div className="mt-1">
@@ -338,7 +342,7 @@ export default function DashboardPage() {
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid var(--destructive)' }}
+                                style={{ borderTop: '2px solid var(--destructive)', borderBottom: '0.5px solid var(--border)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Gastos
@@ -348,6 +352,8 @@ export default function DashboardPage() {
                                     hidden={hidden}
                                     primaryColor="var(--destructive)"
                                     secondaryColor="rgba(239,68,68,0.78)"
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
                                     className="text-base md:text-2xl font-semibold tracking-tight text-destructive"
                                 />
                                 <div className="mt-1">
@@ -358,7 +364,7 @@ export default function DashboardPage() {
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid var(--sky)' }}
+                                style={{ borderTop: '2px solid var(--sky)', borderRight: '0.5px solid var(--border)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Balance
@@ -368,61 +374,82 @@ export default function DashboardPage() {
                                     hidden={hidden}
                                     primaryColor={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
                                     secondaryColor={data.summary.balance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
                                     className="text-base md:text-2xl font-semibold tracking-tight"
                                 />
-                                <div className="mt-1">
+                                <div className="mt-3 border-t pt-2 space-y-1.5" style={{ borderColor: 'rgba(148,163,184,0.14)' }}>
+                                    <div className="text-[10px] md:text-xs text-muted-foreground">
+                                        <span className="mr-1">General</span>
+                                        <ResponsiveAmount
+                                            amount={data.netWorth.total.ars}
+                                            currency="ARS"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            className="font-medium"
+                                        />
+                                    </div>
+                                    <div
+                                        className="text-[10px] md:text-xs text-muted-foreground"
+                                        style={{ visibility: data.netWorth.total.usd !== 0 ? 'visible' : 'hidden' }}
+                                    >
+                                        <ResponsiveAmount
+                                            amount={data.netWorth.total.usd}
+                                            currency="USD"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            compactMaximumFractionDigits={1}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-2">
                                     <TrendBadge value={data.trends.balance} />
                                 </div>
                             </motion.div>
-                        </div>
-                    </motion.div>
-
-                    {/* Grupo 2 — Deuda restante / Balance general */}
-                    <motion.div
-                        className="rounded-xl overflow-hidden"
-                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        variants={staggerContainer}
-                        initial="initial"
-                        animate="animate"
-                    >
-                        <div className="px-4 py-2.5" style={{ borderBottom: '0.5px solid var(--border)' }}>
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                General
-                            </p>
-                        </div>
-                        <div className="grid grid-cols-2 divide-x" style={{ borderColor: 'var(--border)' }}>
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
                                 style={{ borderTop: '2px solid var(--amber)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
-                                    Deuda restante
+                                    Deuda mensual
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.summary.totalDebt}
+                                    totals={data.summary.totalCreditCardExpense}
                                     hidden={hidden}
                                     primaryColor="var(--amber-dark)"
                                     secondaryColor="rgba(217,119,6,0.78)"
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
                                     className="text-base md:text-2xl font-semibold tracking-tight"
                                 />
-                            </motion.div>
-
-                            <motion.div
-                                variants={staggerItem}
-                                className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid var(--sky)' }}
-                            >
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
-                                    Balance general
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={data.netWorth.total}
-                                    hidden={hidden}
-                                    primaryColor={data.netWorth.total.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                    secondaryColor={data.netWorth.total.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                    className="text-base md:text-2xl font-semibold tracking-tight"
-                                />
+                                <div className="mt-3 border-t pt-2 space-y-1.5" style={{ borderColor: 'rgba(148,163,184,0.14)' }}>
+                                    <div className="text-[10px] md:text-xs text-muted-foreground">
+                                        <span className="mr-1">Restante</span>
+                                        <ResponsiveAmount
+                                            amount={data.summary.totalDebt.ars}
+                                            currency="ARS"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            className="font-medium"
+                                        />
+                                    </div>
+                                    <div
+                                        className="text-[10px] md:text-xs text-muted-foreground"
+                                        style={{ visibility: data.summary.totalDebt.usd !== 0 ? 'visible' : 'hidden' }}
+                                    >
+                                        <ResponsiveAmount
+                                            amount={data.summary.totalDebt.usd}
+                                            currency="USD"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            compactMaximumFractionDigits={1}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-2">
+                                    <TrendBadge value={data.trends.debt} inverse />
+                                </div>
                             </motion.div>
                         </div>
                     </motion.div>
