@@ -159,10 +159,14 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                                 <Link
                                     href={href}
                                     onClick={onClose}
-                                    className="flex flex-1 items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors"
+                                    className="flex flex-1 items-center gap-2.5 py-2 pr-3 rounded-md text-sm transition-all duration-150"
                                     style={{
                                         color: isSectionActive ? '#fff' : 'var(--sidebar-foreground)',
-                                        background: isActive ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
+                                        background: isActive
+                                            ? 'linear-gradient(to right, rgba(96,184,224,0.28) 0%, rgba(96,184,224,0) 85%)'
+                                            : 'transparent',
+                                        borderLeft: isActive ? "3px solid var(--sky)" : "3px solid transparent",
+                                        paddingLeft: '9px',
                                     }}
                                 >
                                     <Icon size={16} />
@@ -349,7 +353,7 @@ function DesktopFloatingTransactionButton() {
                         type="button"
                         onClick={() => setTxDialogOpen(true)}
                         size="icon"
-                        className="h-14 w-14 rounded-full shadow-lg transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:scale-[1.04] active:scale-[0.98]"
+                        className="h-14 w-14 rounded-full shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:scale-[1.04] active:scale-[0.98]"
                         aria-label="Nueva transacción"
                     >
                         <Plus className="w-5 h-5" />

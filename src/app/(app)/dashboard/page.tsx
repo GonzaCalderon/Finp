@@ -131,6 +131,39 @@ function TrendBadge({ value, inverse = false }: { value: number | null; inverse?
     )
 }
 
+/** Anima suavemente entre valores numéricos cuando cambian (ej. al cambiar de mes) */
+function useAnimatedTotals(totals: { ars: number; usd: number }) {
+    const [current, setCurrent] = useState(totals)
+    const prevRef = useRef(totals)
+    const rafRef = useRef<number | null>(null)
+
+    useEffect(() => {
+        const from = prevRef.current
+        prevRef.current = totals
+        if (from.ars === totals.ars && from.usd === totals.usd) return
+
+        if (rafRef.current) cancelAnimationFrame(rafRef.current)
+        const start = performance.now()
+        const duration = 550
+
+        const tick = (now: number) => {
+            const t = Math.min((now - start) / duration, 1)
+            const ease = 1 - Math.pow(1 - t, 3) // ease-out cubic
+            setCurrent({
+                ars: Math.round(from.ars + (totals.ars - from.ars) * ease),
+                usd: from.usd + (totals.usd - from.usd) * ease,
+            })
+            if (t < 1) rafRef.current = requestAnimationFrame(tick)
+        }
+        rafRef.current = requestAnimationFrame(tick)
+        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+    }, [totals.ars, totals.usd])
+
+    return current
+}
+
+const ZERO_TOTALS = { ars: 0, usd: 0 }
+
 export default function DashboardPage() {
     const [month, setMonth] = useState(() => getCurrentMonth())
     const [data, setData] = useState<DashboardData | null>(null)
@@ -148,6 +181,15 @@ export default function DashboardPage() {
     const { preferences } = usePreferences()
 
     usePageTitle('Dashboard')
+
+    // Count-up hooks — se llaman antes de los early returns (regla de hooks)
+    const animatedIncome = useAnimatedTotals(data?.summary.totalIncome ?? ZERO_TOTALS)
+    const animatedExpense = useAnimatedTotals(data?.summary.totalExpense ?? ZERO_TOTALS)
+    const animatedBalance = useAnimatedTotals(data?.summary.balance ?? ZERO_TOTALS)
+    const animatedDebt = useAnimatedTotals(data?.summary.totalCreditCardExpense ?? ZERO_TOTALS)
+    const animatedAssets = useAnimatedTotals(data?.netWorth.assets ?? ZERO_TOTALS)
+    const animatedLiabilities = useAnimatedTotals(data?.netWorth.liabilities ?? ZERO_TOTALS)
+    const animatedNetWorth = useAnimatedTotals(data?.netWorth.total ?? ZERO_TOTALS)
 
     const firstOperationalMonth = useMemo(
         () => getOperationalStartFinancialPeriod(preferences.operationalStartDate, preferences.monthStartDay),
@@ -255,6 +297,11 @@ export default function DashboardPage() {
     const totalCategoryExpenseArs = data.expenseByCategory.reduce((sum, category) => sum + category.ars, 0)
     const totalCategoryExpenseUsd = data.expenseByCategory.reduce((sum, category) => sum + category.usd, 0)
 
+    // Ratio deuda mensual / ingreso para la barra de progreso
+    const debtToIncomeRatio = data.summary.totalIncome.ars > 0
+        ? Math.min((data.summary.totalCreditCardExpense.ars / data.summary.totalIncome.ars) * 100, 100)
+        : 0
+
     return (
         <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
             {/* Header */}
@@ -264,7 +311,7 @@ export default function DashboardPage() {
                     {refreshing && <Spinner className="text-muted-foreground" />}
                 </div>
                 <Select value={month} onValueChange={setMonth}>
-                    <SelectTrigger className="w-32 sm:w-40 h-7.5 text-xs sm:text-sm">
+                    <SelectTrigger className="w-32 sm:w-40 h-8 text-xs sm:text-sm">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
@@ -278,7 +325,14 @@ export default function DashboardPage() {
             </div>
 
             <AnimatePresence mode="wait">
-                <motion.div key={month} {...fadeIn} className="space-y-4">
+                <motion.div
+                    key={month}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    className="space-y-4"
+                >
                     {!preferences.operationalStartDate && (
                         <motion.div
                             className="rounded-xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
@@ -305,7 +359,7 @@ export default function DashboardPage() {
                     {/* Grupo 1 — Mensual */}
                     <motion.div
                         className="rounded-xl overflow-hidden"
-                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
                         variants={staggerContainer}
                         initial="initial"
                         animate="animate"
@@ -317,16 +371,17 @@ export default function DashboardPage() {
                             <p className="text-[10px] text-muted-foreground">Comparativa vs mes anterior</p>
                         </div>
                         <div className="grid grid-cols-2" style={{ borderColor: 'var(--border)' }}>
+                            {/* Ingresos */}
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid #10B981', borderRight: '0.5px solid var(--border)', borderBottom: '0.5px solid var(--border)' }}
+                                style={{ borderTop: '1px solid rgba(16,185,129,0.25)', borderRight: '0.5px solid var(--border)', borderBottom: '0.5px solid var(--border)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Ingresos
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.summary.totalIncome}
+                                    totals={animatedIncome}
                                     hidden={hidden}
                                     primaryColor="#10B981"
                                     secondaryColor="rgba(16,185,129,0.78)"
@@ -339,16 +394,17 @@ export default function DashboardPage() {
                                 </div>
                             </motion.div>
 
+                            {/* Gastos */}
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid var(--destructive)', borderBottom: '0.5px solid var(--border)' }}
+                                style={{ borderTop: '1px solid rgba(239,68,68,0.25)', borderBottom: '0.5px solid var(--border)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Gastos
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.summary.totalExpense}
+                                    totals={animatedExpense}
                                     hidden={hidden}
                                     primaryColor="var(--destructive)"
                                     secondaryColor="rgba(239,68,68,0.78)"
@@ -361,16 +417,17 @@ export default function DashboardPage() {
                                 </div>
                             </motion.div>
 
+                            {/* Balance */}
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid var(--sky)', borderRight: '0.5px solid var(--border)' }}
+                                style={{ borderTop: '1px solid rgba(74,158,204,0.25)', borderRight: '0.5px solid var(--border)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Balance
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.summary.balance}
+                                    totals={animatedBalance}
                                     hidden={hidden}
                                     primaryColor={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
                                     secondaryColor={data.summary.balance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
@@ -406,16 +463,18 @@ export default function DashboardPage() {
                                     <TrendBadge value={data.trends.balance} />
                                 </div>
                             </motion.div>
+
+                            {/* Deuda mensual */}
                             <motion.div
                                 variants={staggerItem}
                                 className="p-3 md:p-4"
-                                style={{ borderTop: '2px solid var(--amber)' }}
+                                style={{ borderTop: '1px solid rgba(212,160,23,0.25)' }}
                             >
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Deuda mensual
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.summary.totalCreditCardExpense}
+                                    totals={animatedDebt}
                                     hidden={hidden}
                                     primaryColor="var(--amber-dark)"
                                     secondaryColor="rgba(217,119,6,0.78)"
@@ -447,7 +506,27 @@ export default function DashboardPage() {
                                         />
                                     </div>
                                 </div>
-                                <div className="mt-2">
+                                {/* Barra de progreso: deuda mensual vs ingreso */}
+                                {data.summary.totalIncome.ars > 0 && (
+                                    <div className="mt-2.5 space-y-1">
+                                        <div
+                                            className="h-1 rounded-full overflow-hidden"
+                                            style={{ background: 'var(--secondary)' }}
+                                        >
+                                            <motion.div
+                                                className="h-full rounded-full"
+                                                style={{ backgroundColor: 'var(--amber)' }}
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${debtToIncomeRatio}%` }}
+                                                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground">
+                                            {Math.round(debtToIncomeRatio)}% del ingreso
+                                        </p>
+                                    </div>
+                                )}
+                                <div className="mt-1">
                                     <TrendBadge value={data.trends.debt} inverse />
                                 </div>
                             </motion.div>
@@ -747,7 +826,7 @@ export default function DashboardPage() {
                     {/* Grupo 3 — Activos / Pasivos / Neto */}
                     <div
                         className="rounded-xl overflow-hidden"
-                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
                     >
                         <div className="px-4 py-2.5" style={{ borderBottom: '0.5px solid var(--border)' }}>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -755,36 +834,36 @@ export default function DashboardPage() {
                             </p>
                         </div>
                         <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
-                            <div className="p-3 md:p-4" style={{ borderTop: '2px solid #10B981' }}>
+                            <div className="p-3 md:p-4" style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Activos
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.netWorth.assets}
+                                    totals={animatedAssets}
                                     hidden={hidden}
                                     primaryColor="#10B981"
                                     secondaryColor="rgba(16,185,129,0.78)"
                                     className="text-base md:text-xl font-semibold tracking-tight text-green-500"
                                 />
                             </div>
-                            <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--destructive)' }}>
+                            <div className="p-3 md:p-4" style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Pasivos
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.netWorth.liabilities}
+                                    totals={animatedLiabilities}
                                     hidden={hidden}
                                     primaryColor="var(--destructive)"
                                     secondaryColor="rgba(239,68,68,0.78)"
                                     className="text-base md:text-xl font-semibold tracking-tight text-destructive"
                                 />
                             </div>
-                            <div className="p-3 md:p-4" style={{ borderTop: '2px solid var(--sky)' }}>
+                            <div className="p-3 md:p-4" style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Neto
                                 </p>
                                 <CurrencyBreakdownAmount
-                                    totals={data.netWorth.total}
+                                    totals={animatedNetWorth}
                                     hidden={hidden}
                                     primaryColor={data.netWorth.total.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
                                     secondaryColor={data.netWorth.total.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}

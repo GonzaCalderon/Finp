@@ -52,7 +52,14 @@
       "Bash(py -c \"import openpyxl; print\\(''openpyxl ok''\\)\")",
       "Bash(py -c \"import openpyxl; print\\(''ok''\\)\")",
       "Bash(py -m pip install openpyxl)",
-      "Bash(py -c \":*)"
+      "Bash(py -c \":*)",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const c=fs.readFileSync\\(''src/components/shared/Navbar.tsx'',''utf8''\\);const i=c.indexOf\\(''gap-2.5 px-3 py-2 rounded-md''\\);console.log\\(JSON.stringify\\(c.slice\\(i-20,i+200\\)\\)\\)\")",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const c=fs.readFileSync\\(''src/components/shared/Navbar.tsx'',''utf8''\\);const i=c.indexOf\\(''gap-2.5 py-2 pr-3''\\);console.log\\(JSON.stringify\\(c.slice\\(i-20,i+400\\)\\)\\)\")",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const c=fs.readFileSync\\(''src/components/shared/Navbar.tsx'',''utf8''\\);const i=c.indexOf\\(''borderLeft''\\);console.log\\(JSON.stringify\\(c.slice\\(i,i+200\\)\\)\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const c=fs.readFileSync\\(''src/components/shared/Navbar.tsx'',''utf8''\\);const i=c.indexOf\\(''borderLeft''\\);console.log\\(JSON.stringify\\(c.slice\\(i,i+100\\)\\)\\);const j=c.indexOf\\(''shadow-sky-500''\\);console.log\\(''fab glow:'', j > -1\\)\")",
+      "Bash(wc -l /c/Users/gonza/WebstormProjects/Finp/finm/src/components/shared/*.tsx)",
+      "Bash(ls -la \"C:\\\\Users\\\\gonza\\\\WebstormProjects\\\\Finp\\\\finm\\\\src\\\\app\\\\\\(app\\)\\\\transactions\"\")"
     ]
   }
 }
