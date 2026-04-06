@@ -28,7 +28,7 @@ import { usePreferences } from '@/hooks/usePreferences'
 import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { buildMonthOptions, getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-start'
-import { TrendingUp, TrendingDown, CheckCircle } from 'lucide-react'
+import { TrendingUp, TrendingDown, CheckCircle, ChevronDown } from 'lucide-react'
 import {
     getAccountBalancesByCurrency,
     getAccountCurrencyLabel,
@@ -138,6 +138,33 @@ function TrendBadge({ value, inverse = false }: { value: number | null; inverse?
     )
 }
 
+function MobileSummaryMetric({
+    title,
+    amount,
+    color,
+    hidden,
+}: {
+    title: string
+    amount: number
+    color: string
+    hidden: boolean
+}) {
+    return (
+        <div className="space-y-2 px-3 py-3 text-center">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                {title}
+            </p>
+            <ResponsiveAmount
+                amount={amount}
+                currency="ARS"
+                hidden={hidden}
+                color={color}
+                className="text-[1.2rem] font-semibold tracking-tight"
+            />
+        </div>
+    )
+}
+
 /** Anima suavemente entre valores numéricos cuando cambian (ej. al cambiar de mes) */
 function useAnimatedTotals(totals: { ars: number; usd: number }) {
     const [current, setCurrent] = useState(totals)
@@ -181,7 +208,14 @@ export default function DashboardPage() {
     const [applyDialogOpen, setApplyDialogOpen] = useState(false)
     const [selectedCommitment, setSelectedCommitment] = useState<CommitmentItem | null>(null)
     const [appliedId, setAppliedId] = useState<string | null>(null)
+    const [isMobileSummaryExpanded, setIsMobileSummaryExpanded] = useState(false)
+    const [analyticsPrimaryHeight, setAnalyticsPrimaryHeight] = useState<number | null>(null)
+    const [mobileCategoryExpanded, setMobileCategoryExpanded] = useState(false)
+    const [mobileCategoryNeedsExpansion, setMobileCategoryNeedsExpansion] = useState(false)
+    const [mobileCategoryExpandedHeight, setMobileCategoryExpandedHeight] = useState<number | null>(null)
     const hasLoadedOnce = useRef(false)
+    const sankeyMobileCardRef = useRef<HTMLDivElement | null>(null)
+    const mobileCategoryCardRef = useRef<HTMLDivElement | null>(null)
 
     const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
@@ -242,6 +276,34 @@ export default function DashboardPage() {
         fetchDashboard(hasLoadedOnce.current)
         hasLoadedOnce.current = true
     }, [fetchDashboard])
+
+    useEffect(() => {
+        const sankeyElement = sankeyMobileCardRef.current
+        const categoryElement = mobileCategoryCardRef.current
+        if (!sankeyElement || !categoryElement) return
+
+        const updateAnalyticsLayout = () => {
+            const nextPrimaryHeight = Math.round(sankeyElement.getBoundingClientRect().height)
+            setAnalyticsPrimaryHeight(nextPrimaryHeight > 0 ? nextPrimaryHeight : null)
+            setMobileCategoryExpandedHeight(categoryElement.scrollHeight)
+            setMobileCategoryNeedsExpansion(categoryElement.scrollHeight > nextPrimaryHeight + 8)
+        }
+
+        updateAnalyticsLayout()
+
+        const observer = new ResizeObserver(() => {
+            updateAnalyticsLayout()
+        })
+
+        observer.observe(sankeyElement)
+        observer.observe(categoryElement)
+
+        return () => observer.disconnect()
+    }, [data, month, hidden])
+
+    useEffect(() => {
+        setMobileCategoryExpanded(false)
+    }, [month])
 
     useDataInvalidation(['dashboard'], () => {
         void fetchDashboard(true)
@@ -365,163 +427,155 @@ export default function DashboardPage() {
                     )}
 
                     {/* Grupo 1 — Mensual */}
-                    <MobileCardCarousel
-                        hint="Deslizá para recorrer el resumen mensual"
-                        ariaLabel="Resumen mensual del dashboard"
+                    <div
+                        className="md:hidden rounded-xl overflow-hidden"
+                        style={{
+                            background: 'var(--card)',
+                            border: '0.5px solid var(--border)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
                     >
-                        <div
-                            className="rounded-xl overflow-hidden"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
-                        >
-                            <div className="p-4" style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                                    Ingresos
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={animatedIncome}
+                        <div className="px-4 py-3" style={{ borderBottom: '0.5px solid var(--border)' }}>
+                            <p className="text-sm font-semibold tracking-tight">Resumen del período</p>
+                        </div>
+
+                        <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
+                            <div style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
+                                <MobileSummaryMetric
+                                    title="Ingresos"
+                                    amount={animatedIncome.ars}
+                                    color="#10B981"
                                     hidden={hidden}
-                                    primaryColor="#10B981"
-                                    secondaryColor="rgba(16,185,129,0.78)"
-                                    hideZeroSecondary
-                                    preserveSecondarySpace
-                                    className="text-xl font-semibold tracking-tight text-green-500"
                                 />
-                                <div className="mt-2">
-                                    <TrendBadge value={data.trends.income} />
-                                </div>
+                            </div>
+                            <div style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
+                                <MobileSummaryMetric
+                                    title="Gastos"
+                                    amount={animatedExpense.ars}
+                                    color="var(--destructive)"
+                                    hidden={hidden}
+                                />
+                            </div>
+                            <div style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
+                                <MobileSummaryMetric
+                                    title="Balance"
+                                    amount={animatedBalance.ars}
+                                    color={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    hidden={hidden}
+                                />
                             </div>
                         </div>
-                        <div
-                            className="rounded-xl overflow-hidden"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+
+                        <button
+                            type="button"
+                            onClick={() => setIsMobileSummaryExpanded((prev) => !prev)}
+                            className="mx-auto flex h-9 w-full items-center justify-center"
+                            style={{ color: 'var(--muted-foreground)' }}
+                            aria-label={isMobileSummaryExpanded ? 'Ocultar detalle del resumen' : 'Ver detalle del resumen'}
                         >
-                            <div className="p-4" style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                                    Gastos
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={animatedExpense}
-                                    hidden={hidden}
-                                    primaryColor="var(--destructive)"
-                                    secondaryColor="rgba(239,68,68,0.78)"
-                                    hideZeroSecondary
-                                    preserveSecondarySpace
-                                    className="text-xl font-semibold tracking-tight text-destructive"
-                                />
-                                <div className="mt-2">
-                                    <TrendBadge value={data.trends.expense} inverse />
-                                </div>
-                            </div>
-                        </div>
-                        <div
-                            className="rounded-xl overflow-hidden"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
-                        >
-                            <div className="p-4" style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                                    Balance
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={animatedBalance}
-                                    hidden={hidden}
-                                    primaryColor={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                    secondaryColor={data.summary.balance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                    hideZeroSecondary
-                                    preserveSecondarySpace
-                                    className="text-xl font-semibold tracking-tight"
-                                />
-                                <div className="mt-3 border-t pt-2 space-y-1.5" style={{ borderColor: 'rgba(148,163,184,0.14)' }}>
-                                    <div className="text-[10px] text-muted-foreground">
-                                        <span className="mr-1">General</span>
-                                        <ResponsiveAmount
-                                            amount={data.netWorth.total.ars}
-                                            currency="ARS"
-                                            hidden={hidden}
-                                            color="var(--muted-foreground)"
-                                            className="font-medium"
-                                        />
-                                    </div>
+                            <ChevronDown
+                                className="h-4 w-4 transition-transform"
+                                style={{ transform: isMobileSummaryExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                            />
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                            {isMobileSummaryExpanded && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.18 }}
+                                    className="overflow-hidden"
+                                >
                                     <div
-                                        className="text-[10px] text-muted-foreground"
-                                        style={{ visibility: data.netWorth.total.usd !== 0 ? 'visible' : 'hidden' }}
+                                        className="grid grid-cols-2 gap-3 border-t px-4 pb-4 pt-3"
+                                        style={{ borderColor: 'rgba(148,163,184,0.14)' }}
                                     >
-                                        <ResponsiveAmount
-                                            amount={data.netWorth.total.usd}
-                                            currency="USD"
-                                            hidden={hidden}
-                                            color="var(--muted-foreground)"
-                                            compactMaximumFractionDigits={1}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="mt-2">
-                                    <TrendBadge value={data.trends.balance} />
-                                </div>
-                            </div>
-                        </div>
-                        <div
-                            className="rounded-xl overflow-hidden"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
-                        >
-                            <div className="p-4" style={{ borderTop: '1px solid rgba(212,160,23,0.25)' }}>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                                    Deuda mensual
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={animatedDebt}
-                                    hidden={hidden}
-                                    primaryColor="var(--amber-dark)"
-                                    secondaryColor="rgba(217,119,6,0.78)"
-                                    hideZeroSecondary
-                                    preserveSecondarySpace
-                                    className="text-xl font-semibold tracking-tight"
-                                />
-                                <div className="mt-3 border-t pt-2 space-y-1.5" style={{ borderColor: 'rgba(148,163,184,0.14)' }}>
-                                    <div className="text-[10px] text-muted-foreground">
-                                        <span className="mr-1">Restante</span>
-                                        <ResponsiveAmount
-                                            amount={data.summary.totalDebt.ars}
-                                            currency="ARS"
-                                            hidden={hidden}
-                                            color="var(--muted-foreground)"
-                                            className="font-medium"
-                                        />
-                                    </div>
-                                    <div
-                                        className="text-[10px] text-muted-foreground"
-                                        style={{ visibility: data.summary.totalDebt.usd !== 0 ? 'visible' : 'hidden' }}
-                                    >
-                                        <ResponsiveAmount
-                                            amount={data.summary.totalDebt.usd}
-                                            currency="USD"
-                                            hidden={hidden}
-                                            color="var(--muted-foreground)"
-                                            compactMaximumFractionDigits={1}
-                                        />
-                                    </div>
-                                </div>
-                                {data.summary.totalIncome.ars > 0 && (
-                                    <div className="mt-2.5 space-y-1">
                                         <div
-                                            className="h-1 rounded-full overflow-hidden"
-                                            style={{ background: 'var(--secondary)' }}
+                                            className="rounded-lg border p-3"
+                                            style={{ borderColor: 'rgba(148,163,184,0.14)' }}
                                         >
-                                            <div
-                                                className="h-full rounded-full"
-                                                style={{ width: `${debtToIncomeRatio}%`, backgroundColor: 'var(--amber)' }}
-                                            />
+                                            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                                                Balance general
+                                            </p>
+                                            <div className="mt-2 space-y-1.5 text-[11px] text-muted-foreground">
+                                                <ResponsiveAmount
+                                                    amount={data.netWorth.total.ars}
+                                                    currency="ARS"
+                                                    hidden={hidden}
+                                                    color="var(--foreground)"
+                                                    className="text-sm font-semibold"
+                                                />
+                                                <ResponsiveAmount
+                                                    amount={data.netWorth.total.usd}
+                                                    currency="USD"
+                                                    hidden={hidden}
+                                                    color="var(--muted-foreground)"
+                                                    compactMaximumFractionDigits={1}
+                                                />
+                                                <div className="pt-1">
+                                                    <TrendBadge value={data.trends.balance} />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground">
-                                            {Math.round(debtToIncomeRatio)}% del ingreso
-                                        </p>
+
+                                        <div
+                                            className="rounded-lg border p-3"
+                                            style={{ borderColor: 'rgba(148,163,184,0.14)' }}
+                                        >
+                                            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                                                Deuda mensual
+                                            </p>
+                                            <div className="mt-2 space-y-1.5 text-[11px] text-muted-foreground">
+                                                <ResponsiveAmount
+                                                    amount={animatedDebt.ars}
+                                                    currency="ARS"
+                                                    hidden={hidden}
+                                                    color="var(--amber-dark)"
+                                                    className="text-sm font-semibold"
+                                                />
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span>Restante</span>
+                                                    <ResponsiveAmount
+                                                        amount={data.summary.totalDebt.ars}
+                                                        currency="ARS"
+                                                        hidden={hidden}
+                                                        color="var(--muted-foreground)"
+                                                        className="font-medium"
+                                                    />
+                                                </div>
+                                                {data.summary.totalIncome.ars > 0 && (
+                                                    <div className="space-y-1 pt-1">
+                                                        <div
+                                                            className="h-1 rounded-full overflow-hidden"
+                                                            style={{ background: 'var(--secondary)' }}
+                                                        >
+                                                            <div
+                                                                className="h-full rounded-full"
+                                                                style={{
+                                                                    width: `${debtToIncomeRatio}%`,
+                                                                    backgroundColor: 'var(--amber)',
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <p>{Math.round(debtToIncomeRatio)}% del ingreso</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="col-span-2 flex flex-wrap gap-2">
+                                            <TrendBadge value={data.trends.income} />
+                                            <TrendBadge value={data.trends.expense} inverse />
+                                            <TrendBadge value={data.trends.balance} />
+                                            <TrendBadge value={data.trends.debt} inverse />
+                                        </div>
                                     </div>
-                                )}
-                                <div className="mt-2">
-                                    <TrendBadge value={data.trends.debt} inverse />
-                                </div>
-                            </div>
-                        </div>
-                    </MobileCardCarousel>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                     <motion.div
                         className="hidden md:block rounded-xl overflow-hidden"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
@@ -698,8 +752,181 @@ export default function DashboardPage() {
                         </div>
                     </motion.div>
 
+                    {/* Bloques analíticos mobile */}
+                    <MobileCardCarousel
+                        ariaLabel="Bloques analíticos del dashboard"
+                        itemClassName="basis-[calc(100%-0.75rem)]"
+                        viewportClassName="gap-3 px-0.5 pb-0"
+                        showHeader={false}
+                        showIndicators={false}
+                        overlayHint
+                        onActiveIndexChange={(index) => {
+                            if (index !== 1) {
+                                setMobileCategoryExpanded(false)
+                            }
+                        }}
+                    >
+                        <div ref={sankeyMobileCardRef}>
+                            <SankeyChart month={month} />
+                        </div>
+
+                        <motion.div
+                            ref={mobileCategoryCardRef}
+                            className="relative overflow-hidden"
+                            initial={false}
+                            animate={{
+                                height:
+                                    mobileCategoryExpanded && mobileCategoryExpandedHeight
+                                        ? Math.max(
+                                            mobileCategoryExpandedHeight,
+                                            analyticsPrimaryHeight ?? mobileCategoryExpandedHeight
+                                        )
+                                        : analyticsPrimaryHeight ?? mobileCategoryExpandedHeight ?? 'auto',
+                            }}
+                            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                            <Card className="relative h-full overflow-hidden">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                        Gastos por categoría
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-1 pt-0">
+                                    {data.expenseByCategory.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">Sin gastos este mes</p>
+                                    ) : (
+                                        data.expenseByCategory.map((cat) => {
+                                            const pctOfTotal =
+                                                totalCategoryExpenseArs > 0
+                                                    ? (cat.ars / totalCategoryExpenseArs) * 100
+                                                    : totalCategoryExpenseUsd > 0
+                                                        ? (cat.usd / totalCategoryExpenseUsd) * 100
+                                                        : 0
+                                            const pctOfIncome =
+                                                data.summary.totalIncome.ars > 0
+                                                    ? Math.round((cat.ars / data.summary.totalIncome.ars) * 100)
+                                                    : data.summary.totalIncome.usd > 0
+                                                        ? Math.round((cat.usd / data.summary.totalIncome.usd) * 100)
+                                                        : null
+
+                                            return (
+                                                <div
+                                                    key={cat.key}
+                                                    className="py-2 border-b last:border-0"
+                                                    style={{ borderColor: 'var(--border)' }}
+                                                >
+                                                    <div className="mb-1 flex items-center justify-between gap-2">
+                                                        <div className="flex min-w-0 items-center gap-2">
+                                                            <div
+                                                                className="h-2 w-2 shrink-0 rounded-full"
+                                                                style={{ backgroundColor: cat.color ?? '#9CA3AF' }}
+                                                            />
+                                                            <span className="text-sm truncate">{cat.name}</span>
+                                                        </div>
+                                                        <div className="ml-2 shrink-0 text-right">
+                                                            <span className="text-sm font-medium tabular-nums text-destructive">
+                                                                {fmt(cat.ars)}
+                                                            </span>
+                                                            <p className="text-[11px] text-muted-foreground">
+                                                                {fmt(cat.usd, 'USD')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        <div
+                                                            className="h-1 flex-1 overflow-hidden rounded-full"
+                                                            style={{ background: 'var(--secondary)' }}
+                                                        >
+                                                            <div
+                                                                className="h-full rounded-full transition-all"
+                                                                style={{
+                                                                    width: `${pctOfTotal}%`,
+                                                                    backgroundColor: cat.color ?? '#EF4444',
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div className="flex shrink-0 items-center gap-1">
+                                                            <span
+                                                                className="text-xs tabular-nums"
+                                                                style={{ color: 'var(--muted-foreground)' }}
+                                                            >
+                                                                {Math.round(pctOfTotal)}% gasto
+                                                            </span>
+                                                            {pctOfIncome !== null && (
+                                                                <>
+                                                                    <span
+                                                                        className="text-xs"
+                                                                        style={{ color: 'var(--border)' }}
+                                                                    >
+                                                                        ·
+                                                                    </span>
+                                                                    <span
+                                                                        className="text-xs tabular-nums"
+                                                                        style={{ color: 'var(--muted-foreground)' }}
+                                                                    >
+                                                                        {pctOfIncome}% ing
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    )}
+                                </CardContent>
+                                {mobileCategoryNeedsExpansion && !mobileCategoryExpanded && (
+                                    <>
+                                        <div
+                                            className="pointer-events-none absolute inset-x-0 bottom-0 h-20"
+                                            style={{
+                                                background:
+                                                    'linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--card) 92%, transparent) 58%, var(--card) 100%)',
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setMobileCategoryExpanded(true)}
+                                            className="absolute bottom-2 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center"
+                                            style={{ color: 'var(--muted-foreground)' }}
+                                            aria-label="Expandir gastos por categoría"
+                                        >
+                                            <motion.div
+                                                initial={false}
+                                                animate={{ rotate: 0 }}
+                                                transition={{ duration: 0.2 }}
+                                            >
+                                                <ChevronDown className="h-4 w-4" />
+                                            </motion.div>
+                                        </button>
+                                    </>
+                                )}
+                                {mobileCategoryNeedsExpansion && mobileCategoryExpanded && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setMobileCategoryExpanded(false)}
+                                        className="absolute bottom-2 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center"
+                                        style={{ color: 'var(--muted-foreground)' }}
+                                        aria-label="Contraer gastos por categoría"
+                                    >
+                                        <motion.div
+                                            initial={false}
+                                            animate={{ rotate: 180 }}
+                                            transition={{ duration: 0.2 }}
+                                        >
+                                            <ChevronDown className="h-4 w-4" />
+                                        </motion.div>
+                                    </button>
+                                )}
+                            </Card>
+                        </motion.div>
+                    </MobileCardCarousel>
+
                     {/* Sankey */}
-                    <SankeyChart month={month} />
+                    <div className="hidden md:block">
+                        <SankeyChart month={month} />
+                    </div>
 
                     {/* Grid principal */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -778,7 +1005,7 @@ export default function DashboardPage() {
                         </Card>
 
                         {/* Gastos por categoría */}
-                        <Card>
+                        <Card className="hidden md:flex md:flex-col">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                     Gastos por categoría
@@ -872,13 +1099,13 @@ export default function DashboardPage() {
                         </Card>
 
                         {/* Compromisos pendientes */}
-                        <Card className="flex min-h-[420px] flex-col">
+                        <Card className="flex min-h-[220px] flex-col md:min-h-[420px]">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                     Compromisos pendientes
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="flex-1 space-y-1 overflow-y-auto pt-0">
+                            <CardContent className="flex-1 space-y-1 overflow-visible pt-0 md:overflow-y-auto">
                                 {data.pendingCommitments.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">Sin compromisos pendientes</p>
                                 ) : (
@@ -944,13 +1171,13 @@ export default function DashboardPage() {
                         </Card>
 
                         {/* Cuotas del mes */}
-                        <Card className="flex min-h-[420px] flex-col">
+                        <Card className="flex min-h-[220px] flex-col md:min-h-[420px]">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                     Cuotas del mes
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="flex-1 space-y-1 overflow-y-auto pt-0">
+                            <CardContent className="flex-1 space-y-1 overflow-visible pt-0 md:overflow-y-auto">
                                 {data.installmentsThisMonth.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">Sin cuotas este mes</p>
                                 ) : (
@@ -989,64 +1216,8 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Grupo 3 — Activos / Pasivos / Neto */}
-                    <MobileCardCarousel
-                        hint="Deslizá para ver el patrimonio"
-                        ariaLabel="Patrimonio"
-                    >
-                        <div
-                            className="rounded-xl overflow-hidden"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
-                        >
-                            <div className="p-4" style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                                    Activos
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={animatedAssets}
-                                    hidden={hidden}
-                                    primaryColor="#10B981"
-                                    secondaryColor="rgba(16,185,129,0.78)"
-                                    className="text-xl font-semibold tracking-tight text-green-500"
-                                />
-                            </div>
-                        </div>
-                        <div
-                            className="rounded-xl overflow-hidden"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
-                        >
-                            <div className="p-4" style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                                    Pasivos
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={animatedLiabilities}
-                                    hidden={hidden}
-                                    primaryColor="var(--destructive)"
-                                    secondaryColor="rgba(239,68,68,0.78)"
-                                    className="text-xl font-semibold tracking-tight text-destructive"
-                                />
-                            </div>
-                        </div>
-                        <div
-                            className="rounded-xl overflow-hidden"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
-                        >
-                            <div className="p-4" style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                                    Neto
-                                </p>
-                                <CurrencyBreakdownAmount
-                                    totals={animatedNetWorth}
-                                    hidden={hidden}
-                                    primaryColor={data.netWorth.total.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                    secondaryColor={data.netWorth.total.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                    className="text-xl font-semibold tracking-tight"
-                                />
-                            </div>
-                        </div>
-                    </MobileCardCarousel>
                     <div
-                        className="hidden md:block rounded-xl overflow-hidden"
+                        className="rounded-xl overflow-hidden"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
                     >
                         <div className="px-4 py-2.5" style={{ borderBottom: '0.5px solid var(--border)' }}>
@@ -1055,7 +1226,7 @@ export default function DashboardPage() {
                             </p>
                         </div>
                         <div className="grid grid-cols-3 divide-x" style={{ borderColor: 'var(--border)' }}>
-                            <div className="p-3 md:p-4" style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
+                            <div className="p-2.5 md:p-4" style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Activos
                                 </p>
@@ -1064,10 +1235,10 @@ export default function DashboardPage() {
                                     hidden={hidden}
                                     primaryColor="#10B981"
                                     secondaryColor="rgba(16,185,129,0.78)"
-                                    className="text-base md:text-xl font-semibold tracking-tight text-green-500"
+                                    className="text-sm md:text-xl font-semibold tracking-tight text-green-500"
                                 />
                             </div>
-                            <div className="p-3 md:p-4" style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
+                            <div className="p-2.5 md:p-4" style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Pasivos
                                 </p>
@@ -1076,10 +1247,10 @@ export default function DashboardPage() {
                                     hidden={hidden}
                                     primaryColor="var(--destructive)"
                                     secondaryColor="rgba(239,68,68,0.78)"
-                                    className="text-base md:text-xl font-semibold tracking-tight text-destructive"
+                                    className="text-sm md:text-xl font-semibold tracking-tight text-destructive"
                                 />
                             </div>
-                            <div className="p-3 md:p-4" style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
+                            <div className="p-2.5 md:p-4" style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
                                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 md:mb-2">
                                     Neto
                                 </p>
@@ -1088,7 +1259,7 @@ export default function DashboardPage() {
                                     hidden={hidden}
                                     primaryColor={data.netWorth.total.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
                                     secondaryColor={data.netWorth.total.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                    className="text-base md:text-xl font-semibold tracking-tight"
+                                    className="text-sm md:text-xl font-semibold tracking-tight"
                                 />
                             </div>
                         </div>

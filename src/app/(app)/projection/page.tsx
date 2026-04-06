@@ -6,7 +6,6 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { fadeIn } from '@/lib/utils/animations'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
-import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import {
@@ -441,6 +440,30 @@ export default function ProjectionPage() {
                 </div>
             ) : (
                 <>
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                        <div
+                            className="rounded-xl p-3 md:p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        >
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Compromisos</p>
+                            <InlineTotals totals={totals.commitments} align="left" />
+                        </div>
+                        <div
+                            className="rounded-xl p-3 md:p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        >
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cuotas</p>
+                            <InlineTotals totals={totals.installments} align="left" />
+                        </div>
+                        <div
+                            className="col-span-2 rounded-xl p-3 md:col-span-1 md:p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--amber)' }}
+                        >
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
+                            <InlineTotals totals={totals.total} align="left" />
+                        </div>
+                    </div>
+
                     <div
                         className="rounded-xl p-4"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
@@ -526,7 +549,7 @@ export default function ProjectionPage() {
                             >
                                 <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
                                     <div className="flex items-center justify-between gap-3">
-                                        <div>
+                                        <div className="min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <p className="text-sm font-semibold">{formatMonth(row.month, isMultiYear)}</p>
                                                 {row.isCurrentMonth && (
@@ -538,7 +561,16 @@ export default function ProjectionPage() {
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="mt-1 text-xs text-muted-foreground">Resumen mensual compacto.</p>
+                                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-muted-foreground">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] uppercase tracking-[0.12em]">Compromisos</span>
+                                                    <InlineTotals totals={row.totalCommitments} align="left" />
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] uppercase tracking-[0.12em]">Cuotas</span>
+                                                    <InlineTotals totals={row.totalInstallments} align="left" />
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Total</p>
@@ -548,28 +580,7 @@ export default function ProjectionPage() {
                                 </div>
 
                                 <div className="px-4 py-3">
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="rounded-lg border p-2.5" style={{ borderColor: 'var(--border)' }}>
-                                            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Compromisos</p>
-                                            <div className="mt-1">
-                                                <InlineTotals totals={row.totalCommitments} align="left" />
-                                            </div>
-                                        </div>
-                                        <div className="rounded-lg border p-2.5" style={{ borderColor: 'var(--border)' }}>
-                                            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Cuotas</p>
-                                            <div className="mt-1">
-                                                <InlineTotals totals={row.totalInstallments} align="left" />
-                                            </div>
-                                        </div>
-                                        <div className="rounded-lg border p-2.5" style={{ borderColor: 'var(--border)' }}>
-                                            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Total</p>
-                                            <div className="mt-1">
-                                                <InlineTotals totals={row.total} align="left" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-3">
+                                    <div>
                                         <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--secondary)' }}>
                                             <div
                                                 className="h-full rounded-full transition-all"
@@ -752,54 +763,6 @@ export default function ProjectionPage() {
                                 </div>
                             </div>
                         ))}
-                    </div>
-
-                    <MobileCardCarousel hint="Deslizá para ver los totales" ariaLabel="Totales de proyección">
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Compromisos</p>
-                            <InlineTotals totals={totals.commitments} align="left" />
-                        </div>
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cuotas</p>
-                            <InlineTotals totals={totals.installments} align="left" />
-                        </div>
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--amber)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
-                            <InlineTotals totals={totals.total} align="left" />
-                        </div>
-                    </MobileCardCarousel>
-
-                    <div className="hidden md:grid md:grid-cols-3 gap-2">
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Compromisos</p>
-                            <InlineTotals totals={totals.commitments} align="left" />
-                        </div>
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cuotas</p>
-                            <InlineTotals totals={totals.installments} align="left" />
-                        </div>
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--amber)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
-                            <InlineTotals totals={totals.total} align="left" />
-                        </div>
                     </div>
                 </>
             )}

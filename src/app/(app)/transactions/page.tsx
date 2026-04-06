@@ -48,7 +48,6 @@ import {
 
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { Spinner } from '@/components/shared/Spinner'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
@@ -169,6 +168,7 @@ function SummaryMetricCard({
     accent,
     primaryColor,
     secondaryColor,
+    align = 'left',
     children,
 }: {
     title: string
@@ -177,12 +177,13 @@ function SummaryMetricCard({
     accent: string
     primaryColor: string
     secondaryColor: string
+    align?: 'left' | 'center'
     children?: React.ReactNode
 }) {
     return (
         <motion.div
             variants={staggerItem}
-            className="relative p-3.5 md:p-4"
+            className={`relative p-3.5 md:p-4 ${align === 'center' ? 'text-center' : ''}`}
             style={{
                 borderTop: `1px solid ${accent}`,
             }}
@@ -199,6 +200,7 @@ function SummaryMetricCard({
                 hidden={hidden}
                 primaryColor={primaryColor}
                 secondaryColor={secondaryColor}
+                align={align === 'center' ? 'center' : 'left'}
                 hideZeroSecondary
                 preserveSecondarySpace
                 className="text-lg font-semibold tracking-tight md:text-[1.7rem]"
@@ -1039,64 +1041,6 @@ export default function TransactionsPage() {
                 </div>
             </div>
 
-            <MobileCardCarousel
-                hint="Deslizá para recorrer los KPIs"
-                ariaLabel="Resumen de transacciones"
-            >
-                <SummaryMetricCard
-                    title="Ingresos"
-                    totals={animatedIncome}
-                    hidden={hidden}
-                    accent="rgba(16,185,129,0.30)"
-                    primaryColor="#10B981"
-                    secondaryColor="rgba(16,185,129,0.78)"
-                />
-                <SummaryMetricCard
-                    title="Gastos"
-                    totals={animatedExpense}
-                    hidden={hidden}
-                    accent="rgba(239,68,68,0.30)"
-                    primaryColor="var(--destructive)"
-                    secondaryColor="rgba(239,68,68,0.78)"
-                >
-                    <AnimatePresence>
-                        {(totalCreditCardExpense.ars > 0 || totalCreditCardExpense.usd > 0) && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 4 }}
-                                transition={{ duration: DURATION.fast, ease: easeSmooth }}
-                                className="mt-2.5 inline-flex items-start gap-2 rounded-xl border px-2.5 py-1.5 text-xs"
-                                style={{
-                                    color: '#6366F1',
-                                    borderColor: 'rgba(99,102,241,0.18)',
-                                    background: 'rgba(99,102,241,0.07)',
-                                }}
-                            >
-                                <CreditCard className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                <div>
-                                    <div className="font-medium">
-                                        <ResponsiveAmount amount={animatedCreditCardExpense.ars} currency="ARS" hidden={hidden} color="#6366F1" />
-                                        <span className="ml-1">con TC</span>
-                                    </div>
-                                    <div className="text-[11px]" style={{ color: 'rgba(99,102,241,0.78)' }}>
-                                        <ResponsiveAmount amount={animatedCreditCardExpense.usd} currency="USD" hidden={hidden} color="rgba(99,102,241,0.78)" compactMaximumFractionDigits={1} />
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </SummaryMetricCard>
-                <SummaryMetricCard
-                    title="Balance"
-                    totals={animatedBalance}
-                    hidden={hidden}
-                    accent="rgba(74,158,204,0.30)"
-                    primaryColor={totalBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                    secondaryColor={totalBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                />
-            </MobileCardCarousel>
-
             <motion.div
                 className="rounded-2xl overflow-hidden"
                 style={{
@@ -1109,9 +1053,12 @@ export default function TransactionsPage() {
                 animate="animate"
             >
                 <div className="flex items-center justify-between gap-3 px-4 py-2" style={{ borderBottom: '0.5px solid var(--border)' }}>
-                    <div className="flex items-baseline gap-2">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mensual</p>
-                        <p className="text-[10px] text-muted-foreground">Resumen operativo del período</p>
+                    <div>
+                        <p className="text-sm font-medium md:hidden">Resumen del período</p>
+                        <div className="hidden md:flex items-baseline gap-2">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mensual</p>
+                            <p className="text-[10px] text-muted-foreground">Resumen operativo del período</p>
+                        </div>
                     </div>
                     {activeFilterCount > 0 && (
                         <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
@@ -1119,7 +1066,7 @@ export default function TransactionsPage() {
                         </Badge>
                     )}
                 </div>
-                <div className="hidden md:grid md:grid-cols-3">
+                <div className="grid grid-cols-3">
                     <SummaryMetricCard
                         title="Ingresos"
                         totals={animatedIncome}
@@ -1171,6 +1118,7 @@ export default function TransactionsPage() {
                         accent="rgba(74,158,204,0.30)"
                         primaryColor={totalBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
                         secondaryColor={totalBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        align="center"
                     />
                 </div>
             </motion.div>
@@ -1244,7 +1192,7 @@ export default function TransactionsPage() {
             </div>
 
             <div
-                className="flex md:hidden items-center gap-2 w-full rounded-2xl border px-3 py-3 overflow-x-auto"
+                className="grid md:hidden grid-cols-3 gap-2 w-full rounded-2xl border px-3 py-3"
                 style={{
                     background: 'color-mix(in srgb, var(--card) 88%, transparent)',
                     borderColor: 'var(--border)',
@@ -1254,7 +1202,7 @@ export default function TransactionsPage() {
                 <button
                     type="button"
                     onClick={openFilterSheet}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium shrink-0"
+                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium"
                     style={{
                         background: activeFilterCount > 0 ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
                         color: activeFilterCount > 0 ? 'var(--sky-dark)' : 'var(--muted-foreground)',
@@ -1265,11 +1213,31 @@ export default function TransactionsPage() {
                     Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                 </button>
 
+                <Select value={sort} onValueChange={(value) => setSort(value || DEFAULT_SORT)}>
+                    <SelectTrigger
+                        className="h-[38px] w-full rounded-xl border text-xs"
+                        style={{
+                            background: sort !== DEFAULT_SORT ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
+                            color: sort !== DEFAULT_SORT ? 'var(--sky-dark)' : 'var(--muted-foreground)',
+                            borderColor: sort !== DEFAULT_SORT ? 'rgba(96,184,224,0.32)' : 'var(--border)',
+                        }}
+                    >
+                        <SelectValue placeholder="Ordenar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {SORT_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
                 {activeFilterCount > 0 && (
                     <button
                     type="button"
                     onClick={clearAppliedFilters}
-                    className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs shrink-0"
+                    className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl text-xs"
                     style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
                 >
                     <X size={12} /> Limpiar
@@ -1278,7 +1246,7 @@ export default function TransactionsPage() {
 
                 <Link
                     href="/transactions/import"
-                    className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0"
+                    className={`${activeFilterCount > 0 ? 'col-span-3' : ''} flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium`}
                     style={{
                         background: 'var(--secondary)',
                         color: 'var(--muted-foreground)',
