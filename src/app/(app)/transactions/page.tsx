@@ -48,6 +48,7 @@ import {
 
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { Spinner } from '@/components/shared/Spinner'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
@@ -536,7 +537,9 @@ function FilterSheet({
                          open,
                          onClose,
                          filters,
+                         sort,
                          onChange,
+                         onSortChange,
                          onApply,
                          onClear,
                          typeOptions,
@@ -548,7 +551,9 @@ function FilterSheet({
     open: boolean
     onClose: () => void
     filters: Filters
+    sort: string
     onChange: (key: keyof Filters, value: string) => void
+    onSortChange: (value: string) => void
     onApply: () => void
     onClear: () => void
     typeOptions: BasicOption[]
@@ -572,7 +577,7 @@ function FilterSheet({
                     />
 
                     <motion.div
-                        className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl"
+                        className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl safe-area-pb"
                         style={{
                             background: 'var(--background)',
                             borderColor: 'var(--border)',
@@ -739,6 +744,22 @@ function FilterSheet({
                                         ))}
                                     </div>
                                 </div>
+
+                                <div className="space-y-2">
+                                    <p className="text-xs font-medium">Ordenar</p>
+                                    <Select value={sort} onValueChange={onSortChange}>
+                                        <SelectTrigger className="h-10">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SORT_OPTIONS.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
 
                             <div className="mt-6 flex gap-2">
@@ -762,6 +783,7 @@ export default function TransactionsPage() {
     const [appliedFilters, setAppliedFilters] = useState<Filters>(DEFAULT_FILTERS)
     const [draftFilters, setDraftFilters] = useState<Filters>(DEFAULT_FILTERS)
     const [sort, setSort] = useState(DEFAULT_SORT)
+    const [draftSort, setDraftSort] = useState(DEFAULT_SORT)
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
@@ -893,19 +915,24 @@ export default function TransactionsPage() {
     const clearAppliedFilters = () => {
         setAppliedFilters(DEFAULT_FILTERS)
         setDraftFilters(DEFAULT_FILTERS)
+        setSort(DEFAULT_SORT)
+        setDraftSort(DEFAULT_SORT)
     }
 
     const clearDraftFilters = () => {
         setDraftFilters(DEFAULT_FILTERS)
+        setDraftSort(DEFAULT_SORT)
     }
 
     const openFilterSheet = () => {
         setDraftFilters(appliedFilters)
+        setDraftSort(sort)
         setFilterSheetOpen(true)
     }
 
     const applyDraftFilters = () => {
         setAppliedFilters(normalizeFilters(draftFilters, categoryOptions))
+        setSort(draftSort)
         setFilterSheetOpen(false)
     }
 
@@ -1012,6 +1039,64 @@ export default function TransactionsPage() {
                 </div>
             </div>
 
+            <MobileCardCarousel
+                hint="Deslizá para recorrer los KPIs"
+                ariaLabel="Resumen de transacciones"
+            >
+                <SummaryMetricCard
+                    title="Ingresos"
+                    totals={animatedIncome}
+                    hidden={hidden}
+                    accent="rgba(16,185,129,0.30)"
+                    primaryColor="#10B981"
+                    secondaryColor="rgba(16,185,129,0.78)"
+                />
+                <SummaryMetricCard
+                    title="Gastos"
+                    totals={animatedExpense}
+                    hidden={hidden}
+                    accent="rgba(239,68,68,0.30)"
+                    primaryColor="var(--destructive)"
+                    secondaryColor="rgba(239,68,68,0.78)"
+                >
+                    <AnimatePresence>
+                        {(totalCreditCardExpense.ars > 0 || totalCreditCardExpense.usd > 0) && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 4 }}
+                                transition={{ duration: DURATION.fast, ease: easeSmooth }}
+                                className="mt-2.5 inline-flex items-start gap-2 rounded-xl border px-2.5 py-1.5 text-xs"
+                                style={{
+                                    color: '#6366F1',
+                                    borderColor: 'rgba(99,102,241,0.18)',
+                                    background: 'rgba(99,102,241,0.07)',
+                                }}
+                            >
+                                <CreditCard className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                <div>
+                                    <div className="font-medium">
+                                        <ResponsiveAmount amount={animatedCreditCardExpense.ars} currency="ARS" hidden={hidden} color="#6366F1" />
+                                        <span className="ml-1">con TC</span>
+                                    </div>
+                                    <div className="text-[11px]" style={{ color: 'rgba(99,102,241,0.78)' }}>
+                                        <ResponsiveAmount amount={animatedCreditCardExpense.usd} currency="USD" hidden={hidden} color="rgba(99,102,241,0.78)" compactMaximumFractionDigits={1} />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </SummaryMetricCard>
+                <SummaryMetricCard
+                    title="Balance"
+                    totals={animatedBalance}
+                    hidden={hidden}
+                    accent="rgba(74,158,204,0.30)"
+                    primaryColor={totalBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                    secondaryColor={totalBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                />
+            </MobileCardCarousel>
+
             <motion.div
                 className="rounded-2xl overflow-hidden"
                 style={{
@@ -1034,7 +1119,7 @@ export default function TransactionsPage() {
                         </Badge>
                     )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3">
+                <div className="hidden md:grid md:grid-cols-3">
                     <SummaryMetricCard
                         title="Ingresos"
                         totals={animatedIncome}
@@ -1179,17 +1264,6 @@ export default function TransactionsPage() {
                     <SlidersHorizontal size={13} />
                     Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                 </button>
-
-                <BasicFilterChip
-                    label="Ordenar"
-                    active={sort !== DEFAULT_SORT}
-                    options={SORT_OPTIONS.map((option) => ({
-                        value: option.value,
-                        label: option.label,
-                    }))}
-                    value={sort}
-                    onChange={(value) => setSort(value || DEFAULT_SORT)}
-                />
 
                 {activeFilterCount > 0 && (
                     <button
@@ -1487,7 +1561,9 @@ export default function TransactionsPage() {
                 open={filterSheetOpen}
                 onClose={() => setFilterSheetOpen(false)}
                 filters={draftFilters}
+                sort={draftSort}
                 onChange={setDraftFilter}
+                onSortChange={(value) => setDraftSort(value || DEFAULT_SORT)}
                 onApply={applyDraftFilters}
                 onClear={clearDraftFilters}
                 typeOptions={typeOptions}

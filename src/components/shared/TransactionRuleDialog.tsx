@@ -160,7 +160,7 @@ export function TransactionRuleDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg p-0 overflow-hidden">
+            <DialogContent variant="fullscreen-mobile" className="max-w-lg p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{rule ? 'Editar regla' : 'Nueva regla automática'}</DialogTitle>
                 </DialogHeader>
@@ -410,6 +410,7 @@ export function TransactionRuleDialog({
                                 <Input
                                     id="priority"
                                     type="number"
+                                    inputMode="numeric"
                                     min={0}
                                     max={9999}
                                     {...register('priority', { valueAsNumber: true })}
@@ -422,7 +423,7 @@ export function TransactionRuleDialog({
                     </div>
 
                     <div
-                        className="border-t px-5 py-4 flex gap-2 sticky bottom-0 bg-background"
+                        className="border-t px-5 py-4 flex flex-col-reverse gap-2 sticky bottom-0 bg-background safe-area-pb sm:flex-row"
                         style={{ borderColor: 'var(--border)' }}
                     >
                         <Button

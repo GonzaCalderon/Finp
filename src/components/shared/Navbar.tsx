@@ -34,6 +34,11 @@ import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { usePreferences } from '@/hooks/usePreferences'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import { useInstallments } from '@/hooks/useInstallments'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    invalidateData,
+    TRANSACTION_INVALIDATION_TAGS,
+} from '@/lib/client/data-sync'
 
 type SubNavItem = { href: string; label: string; icon: React.ElementType }
 type NavItemDef = { href: string; label: string; icon: React.ElementType; subItems?: SubNavItem[] }
@@ -258,15 +263,12 @@ function useTransactionLauncher() {
 
     const handleCreateTransaction = async (data: TransactionFormData) => {
         try {
-            const res = await fetch('/api/transactions', {
+            await apiJson('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             })
-
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
-
+            invalidateData(TRANSACTION_INVALIDATION_TAGS)
             success('Transacción creada correctamente')
             setTxDialogOpen(false)
         } catch (err) {
@@ -277,16 +279,14 @@ function useTransactionLauncher() {
     const handleCreateTransactionBatch = async (items: TransactionFormData[]) => {
         try {
             for (const item of items) {
-                const res = await fetch('/api/transactions', {
+                await apiJson('/api/transactions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(item),
                 })
-
-                const json = await res.json()
-                if (!res.ok) throw new Error(json.error)
             }
 
+            invalidateData(TRANSACTION_INVALIDATION_TAGS)
             success(items.length === 2 ? 'Pago dual registrado correctamente' : 'Transacciones creadas correctamente')
             setTxDialogOpen(false)
         } catch (err) {
@@ -589,7 +589,7 @@ function MobileBottomBar() {
                         />
 
                         <motion.div
-                            className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl"
+                            className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl safe-area-pb"
                             style={{
                                 background: 'var(--background)',
                                 borderColor: 'var(--border)',
@@ -677,14 +677,14 @@ function MobileBottomBar() {
             </AnimatePresence>
 
             <div
-                className="fixed bottom-0 left-0 right-0 z-30 md:hidden border-t backdrop-blur supports-[backdrop-filter]:bg-background/90"
+                className="fixed bottom-0 left-0 right-0 z-30 md:hidden border-t backdrop-blur supports-[backdrop-filter]:bg-background/90 safe-area-bottom-bar"
                 style={{
-                    height: BOTTOM_BAR_HEIGHT,
+                    minHeight: BOTTOM_BAR_HEIGHT,
                     borderColor: 'var(--border)',
                     background: 'var(--background)',
                 }}
             >
-                <div className="grid h-full grid-cols-5">
+                <div className="grid grid-cols-5" style={{ height: BOTTOM_BAR_HEIGHT }}>
                     <div className="flex items-center justify-center">
                         <MobileNavItem {...BOTTOM_NAV_LEFT[0]} active={pathname === BOTTOM_NAV_LEFT[0].href && !moreOpen} onClick={closeMore} />
                     </div>

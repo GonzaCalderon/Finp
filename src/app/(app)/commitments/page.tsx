@@ -18,6 +18,7 @@ import { useCategories } from '@/hooks/useCategories'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { apiJson } from '@/lib/client/auth-client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -34,11 +35,16 @@ import {
 import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
 import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
 import { cn } from '@/lib/utils'
+import {
+    COMMITMENT_INVALIDATION_TAGS,
+    invalidateData,
+} from '@/lib/client/data-sync'
 
 const RECURRENCE_LABELS: Record<string, string> = {
     monthly: 'Mensual',
@@ -408,17 +414,16 @@ export default function CommitmentsPage() {
 
     const handleApplySubmit = async (commitmentId: string, data: Record<string, unknown>) => {
         try {
-            const res = await fetch(`/api/commitments/${commitmentId}/apply`, {
+            await apiJson(`/api/commitments/${commitmentId}/apply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
             success('Compromiso aplicado correctamente')
             setApplyDialogOpen(false)
             setAppliedId(commitmentId)
-            setTimeout(() => setAppliedId(null), 1800)
+            invalidateData(COMMITMENT_INVALIDATION_TAGS)
+            window.setTimeout(() => setAppliedId(null), 1800)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al aplicar compromiso')
         }
@@ -465,7 +470,27 @@ export default function CommitmentsPage() {
                 </div>
             ) : (
                 <>
-                    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-3 md:overflow-visible">
+                    <MobileCardCarousel
+                        hint="Deslizá para recorrer el resumen"
+                        ariaLabel="Resumen de compromisos"
+                    >
+                        <SummaryCard
+                            title="Compromisos activos"
+                            value={String(commitments.length)}
+                            hint="Todo lo que sigue vigente y aparece en tu planificación"
+                        />
+                        <SummaryCard
+                            title="Pendientes este mes"
+                            value={String(outstandingCount)}
+                            hint="Incluye manuales y automáticos que todavía no impactaron"
+                        />
+                        <SummaryCard
+                            title="Automáticos"
+                            value={String(automaticCommitments.length)}
+                            hint="Se aplican solos al inicio del período configurado"
+                        />
+                    </MobileCardCarousel>
+                    <div className="hidden md:grid md:grid-cols-3 md:gap-3">
                         <SummaryCard
                             title="Compromisos activos"
                             value={String(commitments.length)}

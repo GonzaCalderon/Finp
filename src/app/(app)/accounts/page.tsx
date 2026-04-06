@@ -34,6 +34,7 @@ import {
 import { AccountDialog } from '@/components/shared/AccountDialog'
 import { AccountDetailSheet } from '@/components/shared/AccountDetailSheet'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { AccountFormData } from '@/lib/validations'
@@ -622,7 +623,27 @@ export default function AccountsPage() {
                 </div>
             ) : (
                 <>
-                    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-3 md:overflow-visible">
+                    <MobileCardCarousel
+                        hint="Deslizá para ver los indicadores"
+                        ariaLabel="Resumen de cuentas"
+                    >
+                        <SummaryCard
+                            title="Cuentas activas"
+                            value={String(summary.totalAccounts)}
+                            hint={`${summary.activeTypes} tipos visibles en esta página`}
+                        />
+                        <SummaryCard
+                            title="Tarjetas de crédito"
+                            value={String(summary.creditCards)}
+                            hint="Acceso rápido al detalle y a cuotas activas"
+                        />
+                        <SummaryCard
+                            title="Con saldo en rojo"
+                            value={String(summary.negativeCount)}
+                            hint="Incluye cuentas con balance negativo o deuda visible"
+                        />
+                    </MobileCardCarousel>
+                    <div className="hidden md:grid md:grid-cols-3 md:gap-3">
                         <SummaryCard
                             title="Cuentas activas"
                             value={String(summary.totalAccounts)}

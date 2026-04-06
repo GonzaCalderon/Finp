@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { Currency } from '@/lib/constants'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    invalidateData,
+    PREFERENCE_INVALIDATION_TAGS,
+} from '@/lib/client/data-sync'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 
 export type DefaultView = 'dashboard' | 'transactions' | 'accounts' | 'projection'
 export type MonthStartDay = number // 1-28
@@ -95,7 +101,7 @@ function isDefaultPreferences(prefs: Preferences): boolean {
 }
 
 async function patchPreferences(patch: Partial<Preferences>): Promise<void> {
-    await fetch('/api/preferences', {
+    await apiJson('/api/preferences', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
@@ -106,71 +112,89 @@ export function usePreferences() {
     // Initialize from localStorage immediately to avoid flash of defaults
     const [preferences, setPreferences] = useState<Preferences>(() => readFromStorage())
 
-    useEffect(() => {
-        fetch('/api/preferences')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((data: { preferences: Preferences } | null) => {
-                if (!data?.preferences) return
+    const fetchPreferences = useCallback(async () => {
+        try {
+            const data = await apiJson<{ preferences: Preferences }>('/api/preferences')
+            if (!data?.preferences) return
 
-                const apiPrefs = data.preferences
+            const apiPrefs = data.preferences
 
-                // If backend has default values, check whether localStorage has a
-                // non-default config that should be migrated (existing users).
-                if (isDefaultPreferences(apiPrefs)) {
-                    const localPrefs = readFromStorage()
-                    if (!isDefaultPreferences(localPrefs)) {
-                        // Migrate localStorage → backend (one-time)
-                        patchPreferences(localPrefs).catch(() => {})
-                        setPreferences(localPrefs)
-                        return
-                    }
+            if (isDefaultPreferences(apiPrefs)) {
+                const localPrefs = readFromStorage()
+                if (!isDefaultPreferences(localPrefs)) {
+                    patchPreferences(localPrefs)
+                        .then(() => {
+                            invalidateData(PREFERENCE_INVALIDATION_TAGS)
+                        })
+                        .catch(() => {})
+                    setPreferences(localPrefs)
+                    return
                 }
+            }
 
-                // Backend has explicit values → backend wins
-                setPreferences(apiPrefs)
-                writeToStorage(apiPrefs) // keep localStorage in sync as cache
-            })
-            .catch(() => {
-                // API unavailable → localStorage fallback already in state
-            })
+            setPreferences(apiPrefs)
+            writeToStorage(apiPrefs)
+        } catch {
+            // API unavailable → localStorage fallback already in state
+        }
     }, [])
+
+    useEffect(() => {
+        void fetchPreferences()
+    }, [fetchPreferences])
+
+    useDataInvalidation(['preferences'], () => {
+        void fetchPreferences()
+    })
 
     const setDefaultView = useCallback((view: DefaultView) => {
         setPreferences((prev) => ({ ...prev, defaultView: view }))
         writeToStorage({ ...readFromStorage(), defaultView: view })
-        patchPreferences({ defaultView: view }).catch(() => {})
+        patchPreferences({ defaultView: view })
+            .then(() => invalidateData(PREFERENCE_INVALIDATION_TAGS))
+            .catch(() => {})
     }, [])
 
     const setMonthStartDay = useCallback((day: MonthStartDay) => {
         setPreferences((prev) => ({ ...prev, monthStartDay: day }))
         writeToStorage({ ...readFromStorage(), monthStartDay: day })
-        patchPreferences({ monthStartDay: day }).catch(() => {})
+        patchPreferences({ monthStartDay: day })
+            .then(() => invalidateData(PREFERENCE_INVALIDATION_TAGS))
+            .catch(() => {})
     }, [])
 
     const setDefaultAccountId = useCallback((accountId: string | undefined) => {
         setPreferences((prev) => ({ ...prev, defaultAccountId: accountId }))
         writeToStorage({ ...readFromStorage(), defaultAccountId: accountId })
-        patchPreferences({ defaultAccountId: accountId ?? null } as Partial<Preferences>).catch(() => {})
+        patchPreferences({ defaultAccountId: accountId ?? null } as Partial<Preferences>)
+            .then(() => invalidateData(PREFERENCE_INVALIDATION_TAGS))
+            .catch(() => {})
     }, [])
 
     const setConsolidatedCurrency = useCallback((currency: Currency) => {
         setPreferences((prev) => ({ ...prev, consolidatedCurrency: currency }))
         writeToStorage({ ...readFromStorage(), consolidatedCurrency: currency })
-        patchPreferences({ consolidatedCurrency: currency }).catch(() => {})
+        patchPreferences({ consolidatedCurrency: currency })
+            .then(() => invalidateData(PREFERENCE_INVALIDATION_TAGS))
+            .catch(() => {})
     }, [])
 
     const setReferenceArsPerUsdRate = useCallback((rate: number | undefined) => {
         const normalizedRate = rate && Number.isFinite(rate) && rate > 0 ? rate : undefined
         setPreferences((prev) => ({ ...prev, referenceArsPerUsdRate: normalizedRate }))
         writeToStorage({ ...readFromStorage(), referenceArsPerUsdRate: normalizedRate })
-        patchPreferences({ referenceArsPerUsdRate: normalizedRate ?? null } as Partial<Preferences>).catch(() => {})
+        patchPreferences({ referenceArsPerUsdRate: normalizedRate ?? null } as Partial<Preferences>)
+            .then(() => invalidateData(PREFERENCE_INVALIDATION_TAGS))
+            .catch(() => {})
     }, [])
 
     const setOperationalStartDate = useCallback((date: string | undefined) => {
         const normalizedDate = date?.trim() || undefined
         setPreferences((prev) => ({ ...prev, operationalStartDate: normalizedDate }))
         writeToStorage({ ...readFromStorage(), operationalStartDate: normalizedDate })
-        patchPreferences({ operationalStartDate: normalizedDate ?? null } as Partial<Preferences>).catch(() => {})
+        patchPreferences({ operationalStartDate: normalizedDate ?? null } as Partial<Preferences>)
+            .then(() => invalidateData(PREFERENCE_INVALIDATION_TAGS))
+            .catch(() => {})
     }, [])
 
     return {

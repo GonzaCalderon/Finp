@@ -160,7 +160,7 @@ function TransferList({
 
     return (
         <div className="space-y-4">
-            <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+            <div className="grid grid-cols-1 gap-3 items-center md:grid-cols-[1fr_auto_1fr]">
                 <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                         Disponibles ({left.length})
@@ -182,7 +182,7 @@ function TransferList({
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-row justify-center gap-2 md:flex-col">
                     <Button variant="outline" size="sm" className="w-8 h-8 p-0"
                         onClick={moveToRight} disabled={selectedLeft.size === 0}>
                         <ChevronRight size={14} />
@@ -223,7 +223,7 @@ function TransferList({
                 Las categorías en gris ya existen y no se pueden quitar desde acá.
             </p>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button variant="outline" onClick={onClose}>Cancelar</Button>
                 <Button onClick={handleConfirm} disabled={saving}>
                     {saving ? 'Guardando...' : 'Agregar seleccionadas'}
@@ -569,11 +569,12 @@ function AccountSection() {
 
             {/* Dialog: cambiar contraseña */}
             <Dialog open={passwordDialogOpen} onOpenChange={handlePasswordDialogClose}>
-                <DialogContent className="max-w-sm">
-                    <DialogHeader>
+                <DialogContent variant="fullscreen-mobile" className="max-w-sm p-0 overflow-hidden">
+                    <DialogHeader className="px-5 pt-5 pb-0">
                         <DialogTitle>Cambiar contraseña</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">
+                        <div className="overflow-y-auto px-5 py-4 space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="currentPassword">Contraseña actual</Label>
                             <Input
@@ -606,7 +607,11 @@ function AccountSection() {
                                 }}
                             />
                         </div>
-                        <div className="flex justify-end gap-2 pt-1">
+                        </div>
+                        <div
+                            className="sticky bottom-0 border-t bg-background px-5 py-4 safe-area-pb flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+                            style={{ borderColor: 'var(--border)' }}
+                        >
                             <Button variant="outline" onClick={() => handlePasswordDialogClose(false)}>
                                 Cancelar
                             </Button>
@@ -993,18 +998,20 @@ function CategoriesSection() {
             />
 
             <Dialog open={defaultsDialogOpen} onOpenChange={setDefaultsDialogOpen}>
-                <DialogContent className="max-w-2xl" style={{ maxWidth: '42rem' }}>
-                    <DialogHeader>
+                <DialogContent variant="fullscreen-mobile" className="max-w-2xl p-0 overflow-hidden" style={{ maxWidth: '42rem' }}>
+                    <DialogHeader className="px-5 pt-5 pb-0">
                         <DialogTitle>Categorías predeterminadas</DialogTitle>
                     </DialogHeader>
-                    {defaultsData && (
-                        <TransferList
-                            missing={defaultsData.missing}
-                            existing={defaultsData.existing}
-                            onConfirm={handleAddDefaults}
-                            onClose={() => setDefaultsDialogOpen(false)}
-                        />
-                    )}
+                    <div className="overflow-y-auto px-5 py-4">
+                        {defaultsData && (
+                            <TransferList
+                                missing={defaultsData.missing}
+                                existing={defaultsData.existing}
+                                onConfirm={handleAddDefaults}
+                                onClose={() => setDefaultsDialogOpen(false)}
+                            />
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>
@@ -1039,7 +1046,7 @@ function SettingsContent() {
 
             {/* Tab nav */}
             <div
-                className="flex gap-0"
+                className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-0 md:overflow-visible"
                 style={{ borderBottom: '0.5px solid var(--border)' }}
             >
                 {tabs.map(({ key, label }) => (
@@ -1047,16 +1054,17 @@ function SettingsContent() {
                         key={key}
                         type="button"
                         onClick={() => setActiveTab(key)}
-                        className="relative px-4 py-2 text-sm font-medium transition-colors"
+                        className="relative shrink-0 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors md:rounded-none md:px-4"
                         style={{
                             color: activeTab === key ? 'var(--sky)' : 'var(--muted-foreground)',
+                            background: activeTab === key ? 'rgba(96,184,224,0.14)' : 'transparent',
                         }}
                     >
                         {label}
                         {activeTab === key && (
                             <motion.div
                                 layoutId="tab-indicator"
-                                className="absolute bottom-0 left-0 right-0 h-0.5"
+                                className="absolute bottom-0 left-0 right-0 h-0.5 hidden md:block"
                                 style={{ background: 'var(--sky)', marginBottom: '-0.5px' }}
                                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                             />

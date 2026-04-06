@@ -102,12 +102,13 @@ export function CommitmentDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+            <DialogContent variant="fullscreen-mobile" className="max-w-md p-0 overflow-hidden">
+                <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{commitment ? 'Editar compromiso' : 'Nuevo compromiso'}</DialogTitle>
                 </DialogHeader>
 
-                <form ref={scrollRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <form ref={scrollRef} onSubmit={handleSubmit(onSubmit)} className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">
+                    <div className="overflow-y-auto px-5 py-4 space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="description">Descripción</Label>
                         <Input id="description" placeholder="Ej: Alquiler" autoFocus {...register('description')} />
@@ -117,7 +118,7 @@ export function CommitmentDialog({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="amount">Monto</Label>
-                            <Input id="amount" type="number" min="0" step="0.01" placeholder="0.00"
+                            <Input id="amount" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00"
                                    {...register('amount', { valueAsNumber: true })} />
                             {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
                         </div>
@@ -148,7 +149,7 @@ export function CommitmentDialog({
                         {recurrence === 'monthly' && (
                             <div className="space-y-2">
                                 <Label htmlFor="dayOfMonth">Día del mes</Label>
-                                <Input id="dayOfMonth" type="number" min="1" max="31" placeholder="Ej: 10"
+                                <Input id="dayOfMonth" type="number" inputMode="numeric" min="1" max="31" placeholder="Ej: 10"
                                        {...register('dayOfMonth', { valueAsNumber: true })} />
                                 {errors.dayOfMonth && <p className="text-xs text-destructive">{errors.dayOfMonth.message}</p>}
                             </div>
@@ -236,7 +237,12 @@ export function CommitmentDialog({
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-2">
+                    </div>
+
+                    <div
+                        className="sticky bottom-0 border-t bg-background px-5 py-4 safe-area-pb flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+                        style={{ borderColor: 'var(--border)' }}
+                    >
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>

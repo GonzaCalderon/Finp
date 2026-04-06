@@ -14,11 +14,13 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { SankeyChart } from '@/components/shared/SankeyChart'
 import { Spinner } from '@/components/shared/Spinner'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { useAccounts } from '@/hooks/useAccounts'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
@@ -32,6 +34,11 @@ import {
     getAccountCurrencyLabel,
     isDualCurrencyAccount,
 } from '@/lib/utils/accounts'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    COMMITMENT_INVALIDATION_TAGS,
+    invalidateData,
+} from '@/lib/client/data-sync'
 
 const getCurrentMonth = (monthStartDay = 1) => {
     const now = new Date()
@@ -221,9 +228,7 @@ export default function DashboardPage() {
         try {
             if (isRefresh) setRefreshing(true)
             else setLoading(true)
-            const res = await fetch(`/api/dashboard?month=${month}`)
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
+            const json = await apiJson<DashboardData>(`/api/dashboard?month=${month}`)
             setData(json)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar dashboard')
@@ -238,6 +243,10 @@ export default function DashboardPage() {
         hasLoadedOnce.current = true
     }, [fetchDashboard])
 
+    useDataInvalidation(['dashboard'], () => {
+        void fetchDashboard(true)
+    })
+
     const handleApplyCommitment = (commitment: CommitmentItem) => {
         setSelectedCommitment(commitment)
         setApplyDialogOpen(true)
@@ -245,20 +254,18 @@ export default function DashboardPage() {
 
     const handleApplySubmit = async (commitmentId: string, applyData: Record<string, unknown>) => {
         try {
-            const res = await fetch(`/api/commitments/${commitmentId}/apply`, {
+            await apiJson(`/api/commitments/${commitmentId}/apply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(applyData),
             })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
             success('Compromiso aplicado correctamente')
             setApplyDialogOpen(false)
             setAppliedId(commitmentId)
-            setTimeout(() => {
+            invalidateData(COMMITMENT_INVALIDATION_TAGS)
+            window.setTimeout(() => {
                 setAppliedId(null)
-                fetchDashboard(true)
-            }, 1000)
+            }, 1400)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al aplicar compromiso')
         }
@@ -358,8 +365,165 @@ export default function DashboardPage() {
                     )}
 
                     {/* Grupo 1 — Mensual */}
+                    <MobileCardCarousel
+                        hint="Deslizá para recorrer el resumen mensual"
+                        ariaLabel="Resumen mensual del dashboard"
+                    >
+                        <div
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                        >
+                            <div className="p-4" style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Ingresos
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={animatedIncome}
+                                    hidden={hidden}
+                                    primaryColor="#10B981"
+                                    secondaryColor="rgba(16,185,129,0.78)"
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
+                                    className="text-xl font-semibold tracking-tight text-green-500"
+                                />
+                                <div className="mt-2">
+                                    <TrendBadge value={data.trends.income} />
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                        >
+                            <div className="p-4" style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Gastos
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={animatedExpense}
+                                    hidden={hidden}
+                                    primaryColor="var(--destructive)"
+                                    secondaryColor="rgba(239,68,68,0.78)"
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
+                                    className="text-xl font-semibold tracking-tight text-destructive"
+                                />
+                                <div className="mt-2">
+                                    <TrendBadge value={data.trends.expense} inverse />
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                        >
+                            <div className="p-4" style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Balance
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={animatedBalance}
+                                    hidden={hidden}
+                                    primaryColor={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    secondaryColor={data.summary.balance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
+                                    className="text-xl font-semibold tracking-tight"
+                                />
+                                <div className="mt-3 border-t pt-2 space-y-1.5" style={{ borderColor: 'rgba(148,163,184,0.14)' }}>
+                                    <div className="text-[10px] text-muted-foreground">
+                                        <span className="mr-1">General</span>
+                                        <ResponsiveAmount
+                                            amount={data.netWorth.total.ars}
+                                            currency="ARS"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            className="font-medium"
+                                        />
+                                    </div>
+                                    <div
+                                        className="text-[10px] text-muted-foreground"
+                                        style={{ visibility: data.netWorth.total.usd !== 0 ? 'visible' : 'hidden' }}
+                                    >
+                                        <ResponsiveAmount
+                                            amount={data.netWorth.total.usd}
+                                            currency="USD"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            compactMaximumFractionDigits={1}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-2">
+                                    <TrendBadge value={data.trends.balance} />
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                        >
+                            <div className="p-4" style={{ borderTop: '1px solid rgba(212,160,23,0.25)' }}>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Deuda mensual
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={animatedDebt}
+                                    hidden={hidden}
+                                    primaryColor="var(--amber-dark)"
+                                    secondaryColor="rgba(217,119,6,0.78)"
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
+                                    className="text-xl font-semibold tracking-tight"
+                                />
+                                <div className="mt-3 border-t pt-2 space-y-1.5" style={{ borderColor: 'rgba(148,163,184,0.14)' }}>
+                                    <div className="text-[10px] text-muted-foreground">
+                                        <span className="mr-1">Restante</span>
+                                        <ResponsiveAmount
+                                            amount={data.summary.totalDebt.ars}
+                                            currency="ARS"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            className="font-medium"
+                                        />
+                                    </div>
+                                    <div
+                                        className="text-[10px] text-muted-foreground"
+                                        style={{ visibility: data.summary.totalDebt.usd !== 0 ? 'visible' : 'hidden' }}
+                                    >
+                                        <ResponsiveAmount
+                                            amount={data.summary.totalDebt.usd}
+                                            currency="USD"
+                                            hidden={hidden}
+                                            color="var(--muted-foreground)"
+                                            compactMaximumFractionDigits={1}
+                                        />
+                                    </div>
+                                </div>
+                                {data.summary.totalIncome.ars > 0 && (
+                                    <div className="mt-2.5 space-y-1">
+                                        <div
+                                            className="h-1 rounded-full overflow-hidden"
+                                            style={{ background: 'var(--secondary)' }}
+                                        >
+                                            <div
+                                                className="h-full rounded-full"
+                                                style={{ width: `${debtToIncomeRatio}%`, backgroundColor: 'var(--amber)' }}
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground">
+                                            {Math.round(debtToIncomeRatio)}% del ingreso
+                                        </p>
+                                    </div>
+                                )}
+                                <div className="mt-2">
+                                    <TrendBadge value={data.trends.debt} inverse />
+                                </div>
+                            </div>
+                        </div>
+                    </MobileCardCarousel>
                     <motion.div
-                        className="rounded-xl overflow-hidden"
+                        className="hidden md:block rounded-xl overflow-hidden"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
                         variants={staggerContainer}
                         initial="initial"
@@ -825,8 +989,64 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Grupo 3 — Activos / Pasivos / Neto */}
+                    <MobileCardCarousel
+                        hint="Deslizá para ver el patrimonio"
+                        ariaLabel="Patrimonio"
+                    >
+                        <div
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                        >
+                            <div className="p-4" style={{ borderTop: '1px solid rgba(16,185,129,0.25)' }}>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Activos
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={animatedAssets}
+                                    hidden={hidden}
+                                    primaryColor="#10B981"
+                                    secondaryColor="rgba(16,185,129,0.78)"
+                                    className="text-xl font-semibold tracking-tight text-green-500"
+                                />
+                            </div>
+                        </div>
+                        <div
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                        >
+                            <div className="p-4" style={{ borderTop: '1px solid rgba(239,68,68,0.25)' }}>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Pasivos
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={animatedLiabilities}
+                                    hidden={hidden}
+                                    primaryColor="var(--destructive)"
+                                    secondaryColor="rgba(239,68,68,0.78)"
+                                    className="text-xl font-semibold tracking-tight text-destructive"
+                                />
+                            </div>
+                        </div>
+                        <div
+                            className="rounded-xl overflow-hidden"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                        >
+                            <div className="p-4" style={{ borderTop: '1px solid rgba(74,158,204,0.25)' }}>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Neto
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={animatedNetWorth}
+                                    hidden={hidden}
+                                    primaryColor={data.netWorth.total.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    secondaryColor={data.netWorth.total.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    className="text-xl font-semibold tracking-tight"
+                                />
+                            </div>
+                        </div>
+                    </MobileCardCarousel>
                     <div
-                        className="rounded-xl overflow-hidden"
+                        className="hidden md:block rounded-xl overflow-hidden"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
                     >
                         <div className="px-4 py-2.5" style={{ borderBottom: '0.5px solid var(--border)' }}>

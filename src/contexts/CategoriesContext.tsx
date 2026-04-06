@@ -9,6 +9,12 @@ import {
     useState,
 } from 'react'
 import type { ICategory } from '@/types'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    CATEGORY_INVALIDATION_TAGS,
+    invalidateData,
+} from '@/lib/client/data-sync'
 
 type DefaultCategoryItem = {
     name: string
@@ -20,7 +26,7 @@ type CategoriesContextValue = {
     categories: ICategory[]
     loading: boolean
     error: string | null
-    fetchCategories: () => Promise<void>
+    fetchCategories: (options?: { silent?: boolean }) => Promise<void>
     createCategory: (body: Partial<ICategory>) => Promise<ICategory>
     updateCategory: (id: string, body: Partial<ICategory>) => Promise<ICategory>
     deleteCategory: (id: string, migrateTo?: string) => Promise<void>
@@ -44,41 +50,33 @@ export function CategoriesProvider({
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    const fetchCategories = useCallback(async () => {
+    const fetchCategories = useCallback(async (options?: { silent?: boolean }) => {
         try {
-            setLoading(true)
+            if (!options?.silent) {
+                setLoading(true)
+            }
             setError(null)
 
-            const res = await fetch('/api/categories')
-            const data = await res.json()
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Error al cargar categorías')
-            }
-
+            const data = await apiJson<{ categories?: ICategory[] }>('/api/categories')
             setCategories(data.categories ?? [])
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : 'Error al cargar categorías'
             )
         } finally {
-            setLoading(false)
+            if (!options?.silent) {
+                setLoading(false)
+            }
         }
     }, [])
 
     const createCategory = useCallback(
         async (body: Partial<ICategory>) => {
-            const res = await fetch('/api/categories', {
+            const data = await apiJson<{ category: ICategory }>('/api/categories', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             })
-
-            const data = await res.json()
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Error al crear categoría')
-            }
 
             const newCategory = data.category as ICategory
 
@@ -91,6 +89,7 @@ export function CategoriesProvider({
                 return [...prev, newCategory]
             })
 
+            invalidateData(CATEGORY_INVALIDATION_TAGS)
             return newCategory
         },
         []
@@ -98,17 +97,11 @@ export function CategoriesProvider({
 
     const updateCategory = useCallback(
         async (id: string, body: Partial<ICategory>) => {
-            const res = await fetch(`/api/categories/${id}`, {
+            const data = await apiJson<{ category: ICategory }>(`/api/categories/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             })
-
-            const data = await res.json()
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Error al actualizar categoría')
-            }
 
             const updatedCategory = data.category as ICategory
 
@@ -118,59 +111,46 @@ export function CategoriesProvider({
                 )
             )
 
+            invalidateData(CATEGORY_INVALIDATION_TAGS)
             return updatedCategory
         },
         []
     )
 
     const deleteCategory = useCallback(async (id: string, migrateTo?: string) => {
-        const res = await fetch(`/api/categories/${id}`, {
+        await apiJson(`/api/categories/${id}`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ migrateTo }),
         })
 
-        const data = await res.json()
-
-        if (!res.ok) {
-            throw new Error(data.error || 'Error al eliminar categoría')
-        }
-
         setCategories((prev) =>
             prev.filter((category) => category._id.toString() !== id)
         )
+        invalidateData(CATEGORY_INVALIDATION_TAGS)
     }, [])
 
     const addDefaultCategories = useCallback(async (names: string[]) => {
-        const res = await fetch('/api/categories/defaults', {
+        const data = await apiJson<{ created: number }>('/api/categories/defaults', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ names }),
         })
 
-        const data = await res.json()
-
-        if (!res.ok) {
-            throw new Error(data.error || 'Error al agregar categorías predeterminadas')
-        }
-
-        await fetchCategories()
+        invalidateData(CATEGORY_INVALIDATION_TAGS)
         return data.created as number
     }, [fetchCategories])
 
     const fetchMissingDefaults = useCallback(async () => {
-        const res = await fetch('/api/categories/defaults')
-        const data = await res.json()
-
-        if (!res.ok) {
-            throw new Error(data.error || 'Error al cargar categorías predeterminadas')
-        }
-
-        return data as {
+        return apiJson<{
             missing: DefaultCategoryItem[]
             existing: DefaultCategoryItem[]
-        }
+        }>('/api/categories/defaults')
     }, [])
+
+    useDataInvalidation(['categories'], () => {
+        void fetchCategories({ silent: true })
+    })
 
     useEffect(() => {
         void fetchCategories()

@@ -201,12 +201,17 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+            <DialogContent variant="fullscreen-mobile" className="max-w-md p-0 overflow-hidden">
+                <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{account ? 'Editar cuenta' : 'Nueva cuenta'}</DialogTitle>
                 </DialogHeader>
 
-                <form ref={scrollRef} onSubmit={handleSubmit((data) => onSubmit(data as AccountFormData))} className="space-y-4">
+                <form
+                    ref={scrollRef}
+                    onSubmit={handleSubmit((data) => onSubmit(data as AccountFormData))}
+                    className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]"
+                >
+                    <div className="overflow-y-auto px-5 py-4 space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Nombre</Label>
                         <Input id="name" autoFocus placeholder="Ej: Cuenta corriente" {...register('name')} />
@@ -300,6 +305,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                                     <Input
                                         id="initialBalanceARS"
                                         type="number"
+                                        inputMode="decimal"
                                         placeholder="0"
                                         {...register('initialBalances.ARS', { valueAsNumber: true })}
                                     />
@@ -309,6 +315,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                                     <Input
                                         id="initialBalanceUSD"
                                         type="number"
+                                        inputMode="decimal"
                                         placeholder="0"
                                         {...register('initialBalances.USD', { valueAsNumber: true })}
                                     />
@@ -325,6 +332,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                                 <Input
                                     id="initialBalance"
                                     type="number"
+                                    inputMode="decimal"
                                     placeholder="0"
                                     value={initialBalances?.[supportedCurrencies?.[0] ?? 'ARS'] ?? 0}
                                     onChange={(event) => {
@@ -394,7 +402,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="closingDay">Día de cierre</Label>
-                                    <Input id="closingDay" type="number" min="1" max="31" placeholder="Ej: 20"
+                                    <Input id="closingDay" type="number" inputMode="numeric" min="1" max="31" placeholder="Ej: 20"
                                            {...register('creditCardConfig.closingDay', { valueAsNumber: true })} />
                                     {errors.creditCardConfig?.closingDay && (
                                         <p className="text-xs text-destructive">{errors.creditCardConfig.closingDay.message}</p>
@@ -402,7 +410,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="dueDay">Día de vencimiento</Label>
-                                    <Input id="dueDay" type="number" min="1" max="31" placeholder="Ej: 10"
+                                    <Input id="dueDay" type="number" inputMode="numeric" min="1" max="31" placeholder="Ej: 10"
                                            {...register('creditCardConfig.dueDay', { valueAsNumber: true })} />
                                     {errors.creditCardConfig?.dueDay && (
                                         <p className="text-xs text-destructive">{errors.creditCardConfig.dueDay.message}</p>
@@ -411,13 +419,17 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="creditLimit">Límite de crédito (opcional)</Label>
-                                <Input id="creditLimit" type="number" placeholder="Ej: 500000"
+                                <Input id="creditLimit" type="number" inputMode="decimal" placeholder="Ej: 500000"
                                        {...register('creditCardConfig.creditLimit', { valueAsNumber: true })} />
                             </div>
                         </div>
                     )}
+                    </div>
 
-                    <div className="flex justify-end gap-2 pt-2">
+                    <div
+                        className="sticky bottom-0 border-t bg-background px-5 py-4 safe-area-pb flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+                        style={{ borderColor: 'var(--border)' }}
+                    >
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>

@@ -22,6 +22,7 @@ import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { CreditCardExpenseSheet } from '@/components/shared/CreditCardExpenseSheet'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
@@ -44,6 +45,11 @@ import type { InstallmentFormData, TransactionFormData } from '@/lib/validations
 import type { ITransaction } from '@/types'
 import type { InstallmentPlanWithTransaction } from '@/hooks/useCreditCardExpenses'
 import { getSingleCreditCardExpenseStatusForMonth } from '@/lib/utils/credit-card'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    invalidateData,
+    TRANSACTION_INVALIDATION_TAGS,
+} from '@/lib/client/data-sync'
 
 type StatusFilter = 'active' | 'finished' | 'all'
 type InstallmentFilter = 'all' | 'single' | 'multi'
@@ -380,7 +386,9 @@ function CreditCardFilterSheet({
     open,
     onClose,
     draftFilters,
+    sort,
     onChange,
+    onSortChange,
     onApply,
     onClear,
     cardOptions,
@@ -389,7 +397,9 @@ function CreditCardFilterSheet({
     open: boolean
     onClose: () => void
     draftFilters: PageFilters
+    sort: SortFilter
     onChange: (key: keyof PageFilters, value: string) => void
+    onSortChange: (value: SortFilter) => void
     onApply: () => void
     onClear: () => void
     cardOptions: BasicOption[]
@@ -410,7 +420,7 @@ function CreditCardFilterSheet({
                     />
 
                     <motion.div
-                        className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl"
+                        className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl safe-area-pb"
                         style={{
                             background: 'var(--background)',
                             borderColor: 'var(--border)',
@@ -518,6 +528,22 @@ function CreditCardFilterSheet({
                                         </Select>
                                     </div>
                                 </div>
+
+                                <div className="space-y-1.5">
+                                    <p className="text-xs font-medium text-muted-foreground">Ordenar</p>
+                                    <Select value={sort} onValueChange={(value) => onSortChange(value as SortFilter)}>
+                                        <SelectTrigger className="h-10">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SORT_OPTIONS.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
 
                             <div className="mt-6 flex items-center gap-2">
@@ -537,24 +563,20 @@ function CreditCardFilterSheet({
 }
 
 async function postTransaction(body: TransactionFormData) {
-    const res = await fetch('/api/transactions', {
+    const data = await apiJson<{ transaction: ITransaction }>('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Error al crear gasto con TC')
     return data.transaction as ITransaction
 }
 
 async function patchTransaction(id: string, body: TransactionFormData) {
-    const res = await fetch(`/api/transactions/${id}`, {
+    const data = await apiJson<{ transaction: ITransaction }>(`/api/transactions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Error al actualizar gasto con TC')
     return data.transaction as ITransaction
 }
 
@@ -563,6 +585,7 @@ export default function CreditCardExpensesPage() {
     const [filters, setFilters] = useState<PageFilters>(DEFAULT_FILTERS)
     const [draftFilters, setDraftFilters] = useState<PageFilters>(DEFAULT_FILTERS)
     const [sort, setSort] = useState<SortFilter>('date_desc')
+    const [draftSort, setDraftSort] = useState<SortFilter>('date_desc')
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
     const [sheetItem, setSheetItem] = useState<CCExpenseItem | null>(null)
     const [deleteItem, setDeleteItem] = useState<CCExpenseItem | null>(null)
@@ -582,7 +605,6 @@ export default function CreditCardExpensesPage() {
         allItems,
         loading,
         error,
-        fetchAll,
         deletePlan,
         deleteTransaction,
     } = useCreditCardExpenses(selectedMonth, preferences.monthStartDay)
@@ -626,19 +648,24 @@ export default function CreditCardExpensesPage() {
     const clearFilters = () => {
         setFilters(DEFAULT_FILTERS)
         setDraftFilters(DEFAULT_FILTERS)
+        setSort('date_desc')
+        setDraftSort('date_desc')
     }
 
     const clearDraftFilters = () => {
         setDraftFilters(DEFAULT_FILTERS)
+        setDraftSort('date_desc')
     }
 
     const openFilterSheet = () => {
         setDraftFilters(filters)
+        setDraftSort(sort)
         setFilterSheetOpen(true)
     }
 
     const applyDraftFilters = () => {
         setFilters(draftFilters)
+        setSort(draftSort)
         setFilterSheetOpen(false)
     }
 
@@ -801,7 +828,7 @@ export default function CreditCardExpensesPage() {
 
             setDialogOpen(false)
             setSelectedTransaction(null)
-            await fetchAll()
+            invalidateData(TRANSACTION_INVALIDATION_TAGS)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al guardar gasto con TC')
         }
@@ -816,7 +843,7 @@ export default function CreditCardExpensesPage() {
             success(items.length === 2 ? 'Pago dual registrado correctamente' : 'Transacciones registradas correctamente')
             setDialogOpen(false)
             setSelectedTransaction(null)
-            await fetchAll()
+            invalidateData(TRANSACTION_INVALIDATION_TAGS)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al guardar transacciones')
         }
@@ -834,7 +861,6 @@ export default function CreditCardExpensesPage() {
 
             setInstallmentDialogOpen(false)
             setSelectedPlan(null)
-            await fetchAll()
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al guardar plan de cuotas')
         }
@@ -895,8 +921,87 @@ export default function CreditCardExpensesPage() {
                     </p>
                 </div>
 
+                <MobileCardCarousel
+                    hint="Deslizá para recorrer el overview"
+                    ariaLabel="Resumen de gastos con tarjeta"
+                >
+                    <OverviewMetricCard
+                        title="Resumen mensual"
+                        totals={animatedMonthlyDue}
+                        hidden={hidden}
+                        accent="rgba(251, 191, 36, 0.7)"
+                        primaryColor="#FBBF24"
+                        secondaryColor="var(--muted-foreground)"
+                        supporting={
+                            <span>
+                                {filteredItems.length} compra{filteredItems.length === 1 ? '' : 's'} en vista
+                            </span>
+                        }
+                    />
+                    <OverviewMetricCard
+                        title="Deuda restante"
+                        totals={animatedRemainingDebt}
+                        hidden={hidden}
+                        accent="rgba(96, 184, 224, 0.7)"
+                        primaryColor="var(--sky-dark)"
+                        secondaryColor="var(--muted-foreground)"
+                        supporting={
+                            <span>
+                                {overviewTotals.activeCount} activa{overviewTotals.activeCount === 1 ? '' : 's'} este mes
+                            </span>
+                        }
+                    />
+                    <motion.div
+                        variants={staggerItem}
+                        className="relative rounded-2xl border p-4 md:p-5"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <div className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-80">
+                            <div className="h-full w-full rounded-full bg-emerald-400/70" />
+                        </div>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground md:text-xs">
+                            Tarjetas activas
+                        </p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                            {activeCardsCount}
+                        </p>
+                        <p className="mt-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
+                            {filters.cardFilter === 'all' ? 'Con deuda o impacto en la vista actual' : 'Tarjeta filtrada'}
+                        </p>
+                    </motion.div>
+                    <motion.div
+                        variants={staggerItem}
+                        className="relative rounded-2xl border p-4 md:p-5"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <div className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-80">
+                            <div className="h-full w-full rounded-full bg-violet-400/70" />
+                        </div>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground md:text-xs">
+                            Mix de cuotas
+                        </p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                            {filteredItems.filter((item) => item.kind === 'plan').length}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            en cuotas
+                        </p>
+                        <p className="mt-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
+                            {filteredItems.filter((item) => item.kind === 'single').length} compra{filteredItems.filter((item) => item.kind === 'single').length === 1 ? '' : 's'} en 1 cuota
+                        </p>
+                    </motion.div>
+                </MobileCardCarousel>
+
                 <motion.section
-                    className="grid gap-3 md:grid-cols-2"
+                    className="hidden md:grid gap-3 md:grid-cols-2 xl:grid-cols-4"
                     variants={staggerContainer}
                     initial="initial"
                     animate="animate"
@@ -998,7 +1103,12 @@ export default function CreditCardExpensesPage() {
                             No hay tarjetas con gastos para los filtros seleccionados.
                         </div>
                     ) : (
-                        <div className="flex gap-2.5 overflow-x-auto pb-1">
+                        <>
+                        <MobileCardCarousel
+                            className="space-y-0"
+                            hint="Deslizá para comparar tarjetas"
+                            ariaLabel="Resumen por tarjeta"
+                        >
                             {cardSummaries.map((card) => {
                                 const selected = filters.cardFilter === card.cardId
 
@@ -1082,7 +1192,84 @@ export default function CreditCardExpensesPage() {
                                     </button>
                                 )
                             })}
+                        </MobileCardCarousel>
+                        <div className="hidden md:flex gap-2.5 overflow-x-auto pb-1">
+                            {cardSummaries.map((card) => {
+                                const selected = filters.cardFilter === card.cardId
+
+                                return (
+                                    <button
+                                        key={card.cardId}
+                                        type="button"
+                                        onClick={() =>
+                                            setFilter('cardFilter', selected ? DEFAULT_FILTERS.cardFilter : card.cardId)
+                                        }
+                                        className="min-w-[248px] rounded-2xl border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
+                                        style={{
+                                            background: card.color
+                                                ? `linear-gradient(180deg, ${card.color}12 0%, color-mix(in srgb, var(--card) 94%, transparent) 34%)`
+                                                : 'color-mix(in srgb, var(--card) 92%, transparent)',
+                                            borderColor: selected ? (card.color ?? 'var(--sky)') : 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                            boxShadow: selected
+                                                ? `0 0 0 1px ${card.color ?? 'rgba(96,184,224,0.32)'}22 inset, var(--card-shadow)`
+                                                : 'var(--card-shadow)',
+                                        }}
+                                    >
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                {card.color && (
+                                                    <span
+                                                        className="h-2.5 w-2.5 shrink-0 rounded-full opacity-90"
+                                                        style={{ backgroundColor: card.color }}
+                                                    />
+                                                )}
+                                                <p className="truncate text-sm font-medium">{card.name}</p>
+                                            </div>
+                                            {selected && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="shrink-0 text-sky-600"
+                                                    style={{
+                                                        borderColor: card.color ? `${card.color}55` : undefined,
+                                                        color: card.color ?? undefined,
+                                                    }}
+                                                >
+                                                    Filtrada
+                                                </Badge>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 border-t border-foreground/[0.07] pt-3">
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] text-muted-foreground">Deuda restante</p>
+                                                <div className="mt-1">
+                                                    <CurrencyBreakdownAmount
+                                                        totals={card.remainingDebt}
+                                                        hidden={hidden}
+                                                        primaryColor="var(--foreground)"
+                                                        secondaryColor="var(--muted-foreground)"
+                                                        className="text-sm font-semibold"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] text-muted-foreground">Resumen mensual</p>
+                                                <div className="mt-1">
+                                                    <CurrencyBreakdownAmount
+                                                        totals={card.monthlyDue}
+                                                        hidden={hidden}
+                                                        primaryColor="var(--foreground)"
+                                                        secondaryColor="var(--muted-foreground)"
+                                                        className="text-sm font-semibold"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                )
+                            })}
                         </div>
+                        </>
                     )}
                 </section>
 
@@ -1189,14 +1376,6 @@ export default function CreditCardExpensesPage() {
                             <SlidersHorizontal size={13} />
                             Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                         </button>
-
-                        <FilterChip
-                            label="Ordenar"
-                            active={sort !== 'date_desc'}
-                            options={SORT_OPTIONS}
-                            value={sort}
-                            onChange={(value) => setSort((value || 'date_desc') as SortFilter)}
-                        />
 
                         {activeFilterCount > 0 && (
                             <button
@@ -1435,7 +1614,9 @@ export default function CreditCardExpensesPage() {
                 open={filterSheetOpen}
                 onClose={() => setFilterSheetOpen(false)}
                 draftFilters={draftFilters}
+                sort={draftSort}
                 onChange={setDraftFilter}
+                onSortChange={setDraftSort}
                 onApply={applyDraftFilters}
                 onClear={clearDraftFilters}
                 cardOptions={cardOptions}
