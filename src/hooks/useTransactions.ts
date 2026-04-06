@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { ITransaction } from '@/types'
 import type { TransactionFormData } from '@/lib/validations'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    invalidateData,
+    TRANSACTION_INVALIDATION_TAGS,
+} from '@/lib/client/data-sync'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 
 interface TransactionFilters {
     month?: string
@@ -82,9 +88,12 @@ export function useTransactions(filters: TransactionFilters = {}) {
             else setRefreshing(true)
 
             const query = buildQuery(1)
-            const res = await fetch(`/api/transactions?${query}`)
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || 'Error al cargar transacciones')
+            const data = await apiJson<{
+                transactions: ITransaction[]
+                hasMore: boolean
+                total: number
+                summary?: TransactionSummary
+            }>(`/api/transactions?${query}`)
 
             setTransactions(data.transactions)
             setHasMore(data.hasMore)
@@ -106,9 +115,10 @@ export function useTransactions(filters: TransactionFilters = {}) {
             setLoadingMore(true)
             const nextPage = page + 1
             const query = buildQuery(nextPage)
-            const res = await fetch(`/api/transactions?${query}`)
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error)
+            const data = await apiJson<{
+                transactions: ITransaction[]
+                hasMore: boolean
+            }>(`/api/transactions?${query}`)
             setTransactions((prev) => [...prev, ...data.transactions])
             setHasMore(data.hasMore)
             setPage(nextPage)
@@ -120,40 +130,38 @@ export function useTransactions(filters: TransactionFilters = {}) {
     }
 
     const createTransaction = async (body: TransactionFormData) => {
-        const res = await fetch('/api/transactions', {
+        const data = await apiJson<{ transaction: ITransaction }>('/api/transactions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al crear transacción')
-        await fetchTransactions(true)
+        invalidateData(TRANSACTION_INVALIDATION_TAGS)
         return data.transaction
     }
 
     const updateTransaction = async (id: string, body: TransactionFormData) => {
-        const res = await fetch(`/api/transactions/${id}`, {
+        const data = await apiJson<{ transaction: ITransaction }>(`/api/transactions/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al actualizar transacción')
-        await fetchTransactions(true)
+        invalidateData(TRANSACTION_INVALIDATION_TAGS)
         return data.transaction
     }
 
     const deleteTransaction = async (id: string) => {
-        const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al eliminar transacción')
-        await fetchTransactions(true)
+        await apiJson(`/api/transactions/${id}`, { method: 'DELETE' })
+        invalidateData(TRANSACTION_INVALIDATION_TAGS)
     }
 
     useEffect(() => {
         isFirstLoad.current = true
         fetchTransactions()
     }, [fetchTransactions])
+
+    useDataInvalidation(['transactions'], () => {
+        void fetchTransactions(true)
+    })
 
     return {
         transactions,

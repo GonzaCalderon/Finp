@@ -41,11 +41,6 @@ interface ApplyCommitmentDialogProps {
 
 type AccountWithColor = IAccount & { color?: string }
 
-const getCurrentMonth = () => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
 export function ApplyCommitmentDialog({
                                           open,
                                           onOpenChange,
@@ -102,20 +97,22 @@ export function ApplyCommitmentDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-sm">
-                <DialogHeader>
+            <DialogContent variant="fullscreen-mobile" className="max-w-sm p-0 overflow-hidden">
+                <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>Aplicar compromiso</DialogTitle>
                     <DialogDescription>
                         {commitment.description} · {formatAmount(commitment.amount, commitment.currency)}
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmit(handleFormSubmit)} className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">
+                    <div className="overflow-y-auto px-5 py-4 space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="amount">Monto</Label>
                         <Input
                             id="amount"
                             type="number"
+                            inputMode="decimal"
                             min="0"
                             step="0.01"
                             autoFocus
@@ -173,8 +170,12 @@ export function ApplyCommitmentDialog({
                             {...register('notes')}
                         />
                     </div>
+                    </div>
 
-                    <div className="flex justify-end gap-2 pt-2">
+                    <div
+                        className="sticky bottom-0 border-t bg-background px-5 py-4 safe-area-pb flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+                        style={{ borderColor: 'var(--border)' }}
+                    >
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
@@ -185,7 +186,7 @@ export function ApplyCommitmentDialog({
                                 <span className="flex items-center gap-2">
       <Spinner /> Guardando...
     </span>
-                            ) : commitment ? 'Guardar cambios' : 'Crear cuenta'}
+                            ) : 'Aplicar compromiso'}
                         </Button>
                     </div>
                 </form>

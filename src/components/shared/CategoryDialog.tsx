@@ -63,12 +63,13 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-sm">
-                <DialogHeader>
+            <DialogContent variant="fullscreen-mobile" className="max-w-sm p-0 overflow-hidden">
+                <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{category ? 'Editar categoría' : 'Nueva categoría'}</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">
+                    <div className="overflow-y-auto px-5 py-4 space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Nombre</Label>
                         <Input id="name" placeholder="Ej: Supermercado" {...register('name')} autoFocus />
@@ -91,7 +92,12 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
 
                     <ColorPicker label="Color" value={color} onChange={(c) => setValue('color', c)} />
 
-                    <div className="flex justify-end gap-2 pt-2">
+                    </div>
+
+                    <div
+                        className="sticky bottom-0 border-t bg-background px-5 py-4 safe-area-pb flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+                        style={{ borderColor: 'var(--border)' }}
+                    >
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancelar
                         </Button>
@@ -102,7 +108,7 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
                                 <span className="flex items-center gap-2">
       <Spinner /> Guardando...
     </span>
-                            ) : category ? 'Guardar cambios' : 'Crear cuenta'}
+                            ) : category ? 'Guardar cambios' : 'Crear categoría'}
                         </Button>
                     </div>
                 </form>

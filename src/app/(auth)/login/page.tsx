@@ -47,6 +47,7 @@ function LoginForm() {
     const searchParams = useSearchParams()
     const [showPassword, setShowPassword] = useState(false)
     const registeredBanner = searchParams.get('registered') === 'true'
+    const sessionExpiredBanner = searchParams.get('reason') === 'session-expired'
     const emailRef = useRef<HTMLInputElement | null>(null)
 
     const {
@@ -113,6 +114,24 @@ function LoginForm() {
                         <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                         <p className="text-sm text-emerald-700 dark:text-emerald-300">
                             ¡Cuenta creada! Ya podés iniciar sesión.
+                        </p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {sessionExpiredBanner && (
+                    <motion.div
+                        key="session-expired-banner"
+                        initial={fadeIn.initial}
+                        animate={fadeIn.animate}
+                        exit={fadeIn.exit}
+                        transition={fadeIn.transition}
+                        className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/50 dark:bg-amber-950/30"
+                    >
+                        <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                            Tu sesión venció. Volvé a ingresar para seguir usando Finp.
                         </p>
                     </motion.div>
                 )}

@@ -18,6 +18,7 @@ import { useCategories } from '@/hooks/useCategories'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { apiJson } from '@/lib/client/auth-client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -34,11 +35,16 @@ import {
 import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
 import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
 import { cn } from '@/lib/utils'
+import {
+    COMMITMENT_INVALIDATION_TAGS,
+    invalidateData,
+} from '@/lib/client/data-sync'
 
 const RECURRENCE_LABELS: Record<string, string> = {
     monthly: 'Mensual',
@@ -83,7 +89,11 @@ function SummaryCard({
     return (
         <div
             className="min-w-[190px] shrink-0 snap-start rounded-xl p-3 md:min-w-0 md:rounded-2xl md:p-4"
-            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+            style={{
+                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                boxShadow: 'var(--card-shadow)',
+            }}
         >
             <p className="text-xs font-medium text-muted-foreground">{title}</p>
             <p className="mt-1.5 text-lg font-semibold tracking-tight md:mt-2 md:text-2xl">{value}</p>
@@ -190,7 +200,7 @@ function CommitmentRow({
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between gap-2 md:justify-end md:gap-3">
+                            <div className="flex items-center justify-between gap-2 md:justify-end md:gap-3 md:border-l md:border-foreground/[0.06] md:pl-4">
                                 <div className="text-left md:text-right">
                                     <p className="hidden text-[11px] uppercase tracking-[0.08em] text-muted-foreground md:block">
                                         Monto
@@ -281,7 +291,11 @@ function CommitmentSection({
 
             <motion.div
                 className="overflow-hidden rounded-2xl"
-                style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                style={{
+                    background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                    border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                    boxShadow: 'var(--card-shadow)',
+                }}
                 variants={staggerContainer}
                 initial="initial"
                 animate="animate"
@@ -400,17 +414,16 @@ export default function CommitmentsPage() {
 
     const handleApplySubmit = async (commitmentId: string, data: Record<string, unknown>) => {
         try {
-            const res = await fetch(`/api/commitments/${commitmentId}/apply`, {
+            await apiJson(`/api/commitments/${commitmentId}/apply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
             success('Compromiso aplicado correctamente')
             setApplyDialogOpen(false)
             setAppliedId(commitmentId)
-            setTimeout(() => setAppliedId(null), 1800)
+            invalidateData(COMMITMENT_INVALIDATION_TAGS)
+            window.setTimeout(() => setAppliedId(null), 1800)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al aplicar compromiso')
         }
@@ -457,7 +470,27 @@ export default function CommitmentsPage() {
                 </div>
             ) : (
                 <>
-                    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-3 md:overflow-visible">
+                    <MobileCardCarousel
+                        hint="Deslizá para recorrer el resumen"
+                        ariaLabel="Resumen de compromisos"
+                    >
+                        <SummaryCard
+                            title="Compromisos activos"
+                            value={String(commitments.length)}
+                            hint="Todo lo que sigue vigente y aparece en tu planificación"
+                        />
+                        <SummaryCard
+                            title="Pendientes este mes"
+                            value={String(outstandingCount)}
+                            hint="Incluye manuales y automáticos que todavía no impactaron"
+                        />
+                        <SummaryCard
+                            title="Automáticos"
+                            value={String(automaticCommitments.length)}
+                            hint="Se aplican solos al inicio del período configurado"
+                        />
+                    </MobileCardCarousel>
+                    <div className="hidden md:grid md:grid-cols-3 md:gap-3">
                         <SummaryCard
                             title="Compromisos activos"
                             value={String(commitments.length)}
@@ -480,7 +513,12 @@ export default function CommitmentsPage() {
                             type="button"
                             onClick={() => document.getElementById('commitments-pending')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '0.5px solid var(--border)' }}
+                            style={{
+                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
+                                color: 'var(--foreground)',
+                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                boxShadow: 'var(--card-shadow)',
+                            }}
                         >
                             <Clock3 className="h-3.5 w-3.5 text-[var(--sky)]" />
                             Pendientes
@@ -490,7 +528,12 @@ export default function CommitmentsPage() {
                             type="button"
                             onClick={() => document.getElementById('commitments-applied')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '0.5px solid var(--border)' }}
+                            style={{
+                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
+                                color: 'var(--foreground)',
+                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                boxShadow: 'var(--card-shadow)',
+                            }}
                         >
                             <CheckCircle className="h-3.5 w-3.5 text-[#10B981]" />
                             Aplicados
@@ -500,7 +543,12 @@ export default function CommitmentsPage() {
                             type="button"
                             onClick={() => document.getElementById('commitments-automatic')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '0.5px solid var(--border)' }}
+                            style={{
+                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
+                                color: 'var(--foreground)',
+                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                boxShadow: 'var(--card-shadow)',
+                            }}
                         >
                             <Sparkles className="h-3.5 w-3.5 text-[#D97706]" />
                             Automáticos
@@ -575,7 +623,7 @@ export default function CommitmentsPage() {
             />
 
             <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl">
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Desactivar este compromiso?</AlertDialogTitle>
                         <AlertDialogDescription>

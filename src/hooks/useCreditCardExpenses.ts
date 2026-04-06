@@ -5,6 +5,13 @@ import {
     getRemainingDebtForMonth,
     getSingleCreditCardExpenseStatusForMonth,
 } from '@/lib/utils/credit-card'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    INSTALLMENT_INVALIDATION_TAGS,
+    invalidateData,
+    TRANSACTION_INVALIDATION_TAGS,
+} from '@/lib/client/data-sync'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 
 export type InstallmentPlanWithTransaction = IInstallmentPlan & {
     parentTransaction?: ITransaction | null
@@ -44,47 +51,48 @@ export function useCreditCardExpenses(selectedMonth: string, monthStartDay = 1) 
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    const fetchAll = useCallback(async () => {
+    const fetchAll = useCallback(async (options?: { silent?: boolean }) => {
         try {
-            setLoading(true)
+            if (!options?.silent) {
+                setLoading(true)
+            }
             setError(null)
 
-            const [plansRes, txRes] = await Promise.all([
-                fetch('/api/installments'),
-                fetch('/api/transactions?type=credit_card_expense&noInstallmentPlan=true&limit=200'),
+            const [plansData, txData] = await Promise.all([
+                apiJson<{ plans?: InstallmentPlanWithTransaction[] }>('/api/installments'),
+                apiJson<{ transactions?: ITransaction[] }>(
+                    '/api/transactions?type=credit_card_expense&noInstallmentPlan=true&limit=200'
+                ),
             ])
-
-            const [plansData, txData] = await Promise.all([plansRes.json(), txRes.json()])
-
-            if (!plansRes.ok) throw new Error(plansData.error || 'Error al cargar planes')
-            if (!txRes.ok) throw new Error(txData.error || 'Error al cargar gastos con TC')
 
             setPlans(plansData.plans ?? [])
             setSingleExpenses(txData.transactions ?? [])
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar gastos con TC')
         } finally {
-            setLoading(false)
+            if (!options?.silent) {
+                setLoading(false)
+            }
         }
     }, [])
 
     const deletePlan = async (id: string) => {
-        const res = await fetch(`/api/installments/${id}`, { method: 'DELETE' })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al eliminar plan')
-        await fetchAll()
+        await apiJson(`/api/installments/${id}`, { method: 'DELETE' })
+        invalidateData(INSTALLMENT_INVALIDATION_TAGS)
     }
 
     const deleteTransaction = async (id: string) => {
-        const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al eliminar transacción')
-        await fetchAll()
+        await apiJson(`/api/transactions/${id}`, { method: 'DELETE' })
+        invalidateData(TRANSACTION_INVALIDATION_TAGS)
     }
 
     useEffect(() => {
         fetchAll()
     }, [fetchAll])
+
+    useDataInvalidation(['credit-card-expenses'], () => {
+        void fetchAll({ silent: true })
+    })
 
     // Build unified list
     const allItems: CCExpenseItem[] = [

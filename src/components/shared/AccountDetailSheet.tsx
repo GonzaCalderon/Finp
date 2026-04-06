@@ -17,6 +17,8 @@ import {
     getPrimaryCurrency,
     isDualCurrencyAccount,
 } from '@/lib/utils/accounts'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
+import { apiJson } from '@/lib/client/auth-client'
 
 type AccountWithColor = IAccount & { color?: string; balance?: number }
 
@@ -87,9 +89,7 @@ export function AccountDetailSheet({ open, onOpenChange, accountId }: AccountDet
             try {
                 setLoading(true)
                 setError(null)
-                const res = await fetch(`/api/accounts/${accountId}/detail`)
-                const data = await res.json()
-                if (!res.ok) throw new Error(data.error)
+                const data = await apiJson<AccountDetail>(`/api/accounts/${accountId}/detail`)
                 setDetail(data)
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Error al cargar detalle')
@@ -99,6 +99,22 @@ export function AccountDetailSheet({ open, onOpenChange, accountId }: AccountDet
         }
         fetchDetail()
     }, [open, accountId])
+
+    useDataInvalidation(
+        ['account-detail', 'accounts', 'transactions', 'credit-card-expenses'],
+        () => {
+            if (!open || !accountId) return
+
+            void apiJson<AccountDetail>(`/api/accounts/${accountId}/detail`)
+                .then((data) => {
+                    setDetail(data)
+                    setError(null)
+                })
+                .catch((err) => {
+                    setError(err instanceof Error ? err.message : 'Error al cargar detalle')
+                })
+        }
+    )
 
     const fmt = (amount: number, currency = 'ARS') =>
         new Intl.NumberFormat('es-AR', {

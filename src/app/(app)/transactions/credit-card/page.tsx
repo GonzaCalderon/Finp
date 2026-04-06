@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, ChevronDown, CreditCard, Pencil, SlidersHorizontal, Trash2, X } from 'lucide-react'
 
@@ -22,6 +22,7 @@ import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { CreditCardExpenseSheet } from '@/components/shared/CreditCardExpenseSheet'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { InstallmentDialog } from '@/components/shared/InstallmentDialog'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
@@ -39,11 +40,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { DURATION, easeSmooth, fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { InstallmentFormData, TransactionFormData } from '@/lib/validations'
 import type { ITransaction } from '@/types'
 import type { InstallmentPlanWithTransaction } from '@/hooks/useCreditCardExpenses'
 import { getSingleCreditCardExpenseStatusForMonth } from '@/lib/utils/credit-card'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    invalidateData,
+    TRANSACTION_INVALIDATION_TAGS,
+} from '@/lib/client/data-sync'
 
 type StatusFilter = 'active' | 'finished' | 'all'
 type InstallmentFilter = 'all' | 'single' | 'multi'
@@ -57,6 +63,11 @@ type PageFilters = {
 type BasicOption = {
     value: string
     label: string
+}
+
+type CurrencyTotals = {
+    ars: number
+    usd: number
 }
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
@@ -88,6 +99,94 @@ const DEFAULT_FILTERS: PageFilters = {
 function getCurrentMonth() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function easeOutCubic(value: number) {
+    return 1 - Math.pow(1 - value, 3)
+}
+
+function useAnimatedTotals(totals: CurrencyTotals) {
+    const [animated, setAnimated] = useState(totals)
+
+    useEffect(() => {
+        let frame = 0
+        const previous = animated
+        const startedAt = performance.now()
+        const duration = 550
+
+        const tick = (now: number) => {
+            const progress = Math.min((now - startedAt) / duration, 1)
+            const eased = easeOutCubic(progress)
+
+            setAnimated({
+                ars: previous.ars + (totals.ars - previous.ars) * eased,
+                usd: previous.usd + (totals.usd - previous.usd) * eased,
+            })
+
+            if (progress < 1) {
+                frame = requestAnimationFrame(tick)
+            }
+        }
+
+        frame = requestAnimationFrame(tick)
+        return () => cancelAnimationFrame(frame)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [totals.ars, totals.usd])
+
+    return animated
+}
+
+function OverviewMetricCard({
+    title,
+    totals,
+    hidden,
+    accent,
+    primaryColor,
+    secondaryColor,
+    supporting,
+}: {
+    title: string
+    totals: CurrencyTotals
+    hidden: boolean
+    accent: string
+    primaryColor: string
+    secondaryColor: string
+    supporting?: React.ReactNode
+}) {
+    return (
+        <motion.div
+            variants={staggerItem}
+            className="relative rounded-2xl border p-4 md:p-5"
+            style={{
+                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                boxShadow: 'var(--card-shadow)',
+            }}
+        >
+            <div className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-80">
+                <div className="h-full w-full rounded-full" style={{ background: accent }} />
+            </div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground md:text-xs">
+                {title}
+            </p>
+            <div className="mt-3">
+                <CurrencyBreakdownAmount
+                    totals={totals}
+                    hidden={hidden}
+                    primaryColor={primaryColor}
+                    secondaryColor={secondaryColor}
+                    hideZeroSecondary
+                    preserveSecondarySpace
+                    className="text-lg font-semibold tracking-tight md:text-[1.8rem]"
+                />
+            </div>
+            {supporting && (
+                <div className="mt-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
+                    {supporting}
+                </div>
+            )}
+        </motion.div>
+    )
 }
 
 const MONTHS = Array.from({ length: 25 }, (_, index) => {
@@ -210,15 +309,22 @@ function FilterChip({
             <button
                 type="button"
                 onClick={() => setOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
                 style={{
-                    background: active ? 'var(--sky)' : 'var(--secondary)',
-                    color: active ? '#fff' : 'var(--muted-foreground)',
-                    border: `0.5px solid ${active ? 'var(--sky)' : 'var(--border)'}`,
+                    background: active ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
+                    color: active ? 'var(--sky-dark)' : 'var(--muted-foreground)',
+                    border: `0.5px solid ${open || active ? 'rgba(96,184,224,0.32)' : 'var(--border)'}`,
+                    boxShadow: open ? '0 10px 24px rgba(0,0,0,0.12)' : undefined,
                 }}
             >
                 {active ? selectedLabel : label}
-                <ChevronDown className="w-3.5 h-3.5" />
+                <motion.span
+                    animate={{ rotate: open ? 180 : 0 }}
+                    transition={{ duration: DURATION.fast, ease: easeSmooth }}
+                    className="inline-flex"
+                >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                </motion.span>
             </button>
 
             {open && (
@@ -231,10 +337,11 @@ function FilterChip({
                     />
 
                     <div
-                        className="absolute top-full mt-2 right-0 z-40 min-w-44 rounded-xl border shadow-lg p-1.5"
+                        className="absolute top-full mt-2 right-0 z-40 min-w-44 rounded-2xl border p-1.5 backdrop-blur-md"
                         style={{
-                            background: 'var(--card)',
-                            borderColor: 'var(--border)',
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
                         }}
                     >
                         <button
@@ -279,7 +386,9 @@ function CreditCardFilterSheet({
     open,
     onClose,
     draftFilters,
+    sort,
     onChange,
+    onSortChange,
     onApply,
     onClear,
     cardOptions,
@@ -288,7 +397,9 @@ function CreditCardFilterSheet({
     open: boolean
     onClose: () => void
     draftFilters: PageFilters
+    sort: SortFilter
     onChange: (key: keyof PageFilters, value: string) => void
+    onSortChange: (value: SortFilter) => void
     onApply: () => void
     onClear: () => void
     cardOptions: BasicOption[]
@@ -309,7 +420,7 @@ function CreditCardFilterSheet({
                     />
 
                     <motion.div
-                        className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl"
+                        className="fixed inset-x-0 bottom-0 z-50 md:hidden rounded-t-3xl border-t shadow-2xl safe-area-pb"
                         style={{
                             background: 'var(--background)',
                             borderColor: 'var(--border)',
@@ -417,6 +528,22 @@ function CreditCardFilterSheet({
                                         </Select>
                                     </div>
                                 </div>
+
+                                <div className="space-y-1.5">
+                                    <p className="text-xs font-medium text-muted-foreground">Ordenar</p>
+                                    <Select value={sort} onValueChange={(value) => onSortChange(value as SortFilter)}>
+                                        <SelectTrigger className="h-10">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SORT_OPTIONS.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
 
                             <div className="mt-6 flex items-center gap-2">
@@ -436,24 +563,20 @@ function CreditCardFilterSheet({
 }
 
 async function postTransaction(body: TransactionFormData) {
-    const res = await fetch('/api/transactions', {
+    const data = await apiJson<{ transaction: ITransaction }>('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Error al crear gasto con TC')
     return data.transaction as ITransaction
 }
 
 async function patchTransaction(id: string, body: TransactionFormData) {
-    const res = await fetch(`/api/transactions/${id}`, {
+    const data = await apiJson<{ transaction: ITransaction }>(`/api/transactions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Error al actualizar gasto con TC')
     return data.transaction as ITransaction
 }
 
@@ -462,6 +585,7 @@ export default function CreditCardExpensesPage() {
     const [filters, setFilters] = useState<PageFilters>(DEFAULT_FILTERS)
     const [draftFilters, setDraftFilters] = useState<PageFilters>(DEFAULT_FILTERS)
     const [sort, setSort] = useState<SortFilter>('date_desc')
+    const [draftSort, setDraftSort] = useState<SortFilter>('date_desc')
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
     const [sheetItem, setSheetItem] = useState<CCExpenseItem | null>(null)
     const [deleteItem, setDeleteItem] = useState<CCExpenseItem | null>(null)
@@ -481,7 +605,6 @@ export default function CreditCardExpensesPage() {
         allItems,
         loading,
         error,
-        fetchAll,
         deletePlan,
         deleteTransaction,
     } = useCreditCardExpenses(selectedMonth, preferences.monthStartDay)
@@ -525,19 +648,24 @@ export default function CreditCardExpensesPage() {
     const clearFilters = () => {
         setFilters(DEFAULT_FILTERS)
         setDraftFilters(DEFAULT_FILTERS)
+        setSort('date_desc')
+        setDraftSort('date_desc')
     }
 
     const clearDraftFilters = () => {
         setDraftFilters(DEFAULT_FILTERS)
+        setDraftSort('date_desc')
     }
 
     const openFilterSheet = () => {
         setDraftFilters(filters)
+        setDraftSort(sort)
         setFilterSheetOpen(true)
     }
 
     const applyDraftFilters = () => {
         setFilters(draftFilters)
+        setSort(draftSort)
         setFilterSheetOpen(false)
     }
 
@@ -580,6 +708,56 @@ export default function CreditCardExpensesPage() {
             return bDate - aDate
         })
     }, [filters.cardFilter, sort, summaryItems])
+
+    const overviewTotals = useMemo(() => {
+        const activeCards = new Set<string>()
+        const totals = filteredItems.reduce<{
+            monthlyDue: CurrencyTotals
+            remainingDebt: CurrencyTotals
+            activeCount: number
+        }>(
+            (acc, item) => {
+                const currency = item.kind === 'plan' ? item.plan.currency : item.transaction.currency
+                const monthlyImpact = getMonthlyImpact(item, selectedMonth, preferences.monthStartDay)
+                const remainingDebt = getRemainingForItem(item, selectedMonth, preferences.monthStartDay)
+                const status = getItemStatus(item, selectedMonth, preferences.monthStartDay)
+                const cardRef = item.kind === 'plan' ? item.plan.accountId : item.transaction.sourceAccountId
+                const cardId = getRefId(cardRef)
+
+                if (currency === 'USD') {
+                    acc.monthlyDue.usd += monthlyImpact
+                    acc.remainingDebt.usd += remainingDebt
+                } else {
+                    acc.monthlyDue.ars += monthlyImpact
+                    acc.remainingDebt.ars += remainingDebt
+                }
+
+                if (status.state !== 'finished') {
+                    acc.activeCount += 1
+                }
+
+                if (cardId) {
+                    activeCards.add(cardId)
+                }
+
+                return acc
+            },
+            {
+                monthlyDue: { ars: 0, usd: 0 },
+                remainingDebt: { ars: 0, usd: 0 },
+                activeCount: 0,
+            }
+        )
+
+        return {
+            ...totals,
+            activeCardsCount: activeCards.size,
+        }
+    }, [filteredItems, preferences.monthStartDay, selectedMonth])
+
+    const activeCardsCount = overviewTotals.activeCardsCount
+    const animatedMonthlyDue = useAnimatedTotals(overviewTotals.monthlyDue)
+    const animatedRemainingDebt = useAnimatedTotals(overviewTotals.remainingDebt)
 
     const cardSummaries = useMemo(() => {
         const summaries = new Map<string, {
@@ -650,7 +828,7 @@ export default function CreditCardExpensesPage() {
 
             setDialogOpen(false)
             setSelectedTransaction(null)
-            await fetchAll()
+            invalidateData(TRANSACTION_INVALIDATION_TAGS)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al guardar gasto con TC')
         }
@@ -665,7 +843,7 @@ export default function CreditCardExpensesPage() {
             success(items.length === 2 ? 'Pago dual registrado correctamente' : 'Transacciones registradas correctamente')
             setDialogOpen(false)
             setSelectedTransaction(null)
-            await fetchAll()
+            invalidateData(TRANSACTION_INVALIDATION_TAGS)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al guardar transacciones')
         }
@@ -683,7 +861,6 @@ export default function CreditCardExpensesPage() {
 
             setInstallmentDialogOpen(false)
             setSelectedPlan(null)
-            await fetchAll()
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al guardar plan de cuotas')
         }
@@ -710,20 +887,20 @@ export default function CreditCardExpensesPage() {
 
     if (loading) {
         return (
-            <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
+            <div className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6">
                 <div className="flex items-center justify-between">
                     <Skeleton className="h-8 w-40" />
                     <Skeleton className="h-8 w-32" />
                 </div>
-                <div className="flex gap-2 overflow-hidden">
-                    {[...Array(3)].map((_, index) => (
-                        <Skeleton key={index} className="h-24 min-w-[220px] flex-1 rounded-xl" />
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {[...Array(4)].map((_, index) => (
+                        <Skeleton key={index} className="h-28 rounded-2xl" />
                     ))}
                 </div>
-                <Skeleton className="h-24 rounded-xl" />
+                <Skeleton className="h-32 rounded-2xl" />
                 <div className="space-y-2">
                     {[...Array(4)].map((_, index) => (
-                        <Skeleton key={index} className="h-24 rounded-xl" />
+                        <Skeleton key={index} className="h-28 rounded-2xl" />
                     ))}
                 </div>
             </div>
@@ -736,30 +913,202 @@ export default function CreditCardExpensesPage() {
 
     return (
         <>
-            <motion.div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6" {...fadeIn}>
-                <div className="flex flex-col gap-1">
-                    <h1 className="text-xl font-semibold tracking-tight">Gastos con TC</h1>
+            <motion.div className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6" {...fadeIn}>
+                <div className="flex flex-col gap-1.5">
+                    <h1 className="text-xl font-semibold tracking-tight md:text-[2rem]">Gastos con TC</h1>
                     <p className="text-sm text-muted-foreground">
                         Seguimiento de consumos con tarjeta y su impacto mensual.
                     </p>
                 </div>
 
+                <MobileCardCarousel
+                    hint="Deslizá para recorrer el overview"
+                    ariaLabel="Resumen de gastos con tarjeta"
+                >
+                    <OverviewMetricCard
+                        title="Resumen mensual"
+                        totals={animatedMonthlyDue}
+                        hidden={hidden}
+                        accent="rgba(251, 191, 36, 0.7)"
+                        primaryColor="#FBBF24"
+                        secondaryColor="var(--muted-foreground)"
+                        supporting={
+                            <span>
+                                {filteredItems.length} compra{filteredItems.length === 1 ? '' : 's'} en vista
+                            </span>
+                        }
+                    />
+                    <OverviewMetricCard
+                        title="Deuda restante"
+                        totals={animatedRemainingDebt}
+                        hidden={hidden}
+                        accent="rgba(96, 184, 224, 0.7)"
+                        primaryColor="var(--sky-dark)"
+                        secondaryColor="var(--muted-foreground)"
+                        supporting={
+                            <span>
+                                {overviewTotals.activeCount} activa{overviewTotals.activeCount === 1 ? '' : 's'} este mes
+                            </span>
+                        }
+                    />
+                    <motion.div
+                        variants={staggerItem}
+                        className="relative rounded-2xl border p-4 md:p-5"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <div className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-80">
+                            <div className="h-full w-full rounded-full bg-emerald-400/70" />
+                        </div>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground md:text-xs">
+                            Tarjetas activas
+                        </p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                            {activeCardsCount}
+                        </p>
+                        <p className="mt-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
+                            {filters.cardFilter === 'all' ? 'Con deuda o impacto en la vista actual' : 'Tarjeta filtrada'}
+                        </p>
+                    </motion.div>
+                    <motion.div
+                        variants={staggerItem}
+                        className="relative rounded-2xl border p-4 md:p-5"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <div className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-80">
+                            <div className="h-full w-full rounded-full bg-violet-400/70" />
+                        </div>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground md:text-xs">
+                            Mix de cuotas
+                        </p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                            {filteredItems.filter((item) => item.kind === 'plan').length}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            en cuotas
+                        </p>
+                        <p className="mt-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
+                            {filteredItems.filter((item) => item.kind === 'single').length} compra{filteredItems.filter((item) => item.kind === 'single').length === 1 ? '' : 's'} en 1 cuota
+                        </p>
+                    </motion.div>
+                </MobileCardCarousel>
+
+                <motion.section
+                    className="hidden md:grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+                    variants={staggerContainer}
+                    initial="initial"
+                    animate="animate"
+                >
+                    <OverviewMetricCard
+                        title="Resumen mensual"
+                        totals={animatedMonthlyDue}
+                        hidden={hidden}
+                        accent="rgba(251, 191, 36, 0.7)"
+                        primaryColor="#FBBF24"
+                        secondaryColor="var(--muted-foreground)"
+                        supporting={
+                            <span>
+                                {filteredItems.length} compra{filteredItems.length === 1 ? '' : 's'} en vista
+                            </span>
+                        }
+                    />
+                    <OverviewMetricCard
+                        title="Deuda restante"
+                        totals={animatedRemainingDebt}
+                        hidden={hidden}
+                        accent="rgba(96, 184, 224, 0.7)"
+                        primaryColor="var(--sky-dark)"
+                        secondaryColor="var(--muted-foreground)"
+                        supporting={
+                            <span>
+                                {overviewTotals.activeCount} activa{overviewTotals.activeCount === 1 ? '' : 's'} este mes
+                            </span>
+                        }
+                    />
+                    <motion.div
+                        variants={staggerItem}
+                        className="relative rounded-2xl border p-4 md:p-5"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <div className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-80">
+                            <div className="h-full w-full rounded-full bg-emerald-400/70" />
+                        </div>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground md:text-xs">
+                            Tarjetas activas
+                        </p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                            {activeCardsCount}
+                        </p>
+                        <p className="mt-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
+                            {filters.cardFilter === 'all' ? 'Con deuda o impacto en la vista actual' : 'Tarjeta filtrada'}
+                        </p>
+                    </motion.div>
+                    <motion.div
+                        variants={staggerItem}
+                        className="relative rounded-2xl border p-4 md:p-5"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <div className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-80">
+                            <div className="h-full w-full rounded-full bg-violet-400/70" />
+                        </div>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground md:text-xs">
+                            Mix de cuotas
+                        </p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                            {filteredItems.filter((item) => item.kind === 'plan').length}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            en cuotas
+                        </p>
+                        <p className="mt-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
+                            {filteredItems.filter((item) => item.kind === 'single').length} compra{filteredItems.filter((item) => item.kind === 'single').length === 1 ? '' : 's'} en 1 cuota
+                        </p>
+                    </motion.div>
+                </motion.section>
+
                 <section className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                             Resumen por tarjeta
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                            {cardSummaries.length} tarjeta{cardSummaries.length === 1 ? '' : 's'}
                         </p>
                     </div>
 
                     {cardSummaries.length === 0 ? (
                         <div
-                            className="rounded-xl px-4 py-3 text-sm text-muted-foreground"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                            className="rounded-2xl px-4 py-3 text-sm text-muted-foreground"
+                            style={{
+                                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                boxShadow: 'var(--card-shadow)',
+                            }}
                         >
                             No hay tarjetas con gastos para los filtros seleccionados.
                         </div>
                     ) : (
-                        <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-2 xl:grid-cols-3 md:overflow-visible">
+                        <>
+                        <MobileCardCarousel
+                            className="space-y-0"
+                            hint="Deslizá para comparar tarjetas"
+                            ariaLabel="Resumen por tarjeta"
+                        >
                             {cardSummaries.map((card) => {
                                 const selected = filters.cardFilter === card.cardId
 
@@ -770,39 +1119,31 @@ export default function CreditCardExpensesPage() {
                                         onClick={() =>
                                             setFilter('cardFilter', selected ? DEFAULT_FILTERS.cardFilter : card.cardId)
                                         }
-                                        className="min-w-[220px] rounded-xl px-4 py-3 text-left transition-colors md:min-w-0"
+                                        className="min-w-[248px] rounded-2xl border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
                                         style={{
                                             background: card.color
-                                                ? `linear-gradient(180deg, ${card.color}14 0%, var(--card) 32%)`
-                                                : 'var(--card)',
-                                            border: `0.5px solid ${selected ? (card.color ?? 'var(--sky)') : 'var(--border)'}`,
-                                            boxShadow: selected && card.color ? `0 0 0 1px ${card.color}22 inset` : undefined,
+                                                ? `linear-gradient(180deg, ${card.color}12 0%, color-mix(in srgb, var(--card) 94%, transparent) 34%)`
+                                                : 'color-mix(in srgb, var(--card) 92%, transparent)',
+                                            borderColor: selected ? (card.color ?? 'var(--sky)') : 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                            boxShadow: selected
+                                                ? `0 0 0 1px ${card.color ?? 'rgba(96,184,224,0.32)'}22 inset, var(--card-shadow)`
+                                                : 'var(--card-shadow)',
                                         }}
                                     >
-                                        <div
-                                            className="mb-3 h-1.5 w-16 rounded-full"
-                                            style={{ background: card.color ?? 'var(--sky)' }}
-                                        />
-
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    {card.color && (
-                                                        <span
-                                                            className="h-2.5 w-2.5 rounded-full shrink-0"
-                                                            style={{ backgroundColor: card.color }}
-                                                        />
-                                                    )}
-                                                    <p className="truncate text-sm font-medium">{card.name}</p>
-                                                </div>
-                                                <p className="mt-1 text-[11px] text-muted-foreground">
-                                                    {card.itemCount} gasto{card.itemCount === 1 ? '' : 's'}
-                                                </p>
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                {card.color && (
+                                                    <span
+                                                        className="h-2.5 w-2.5 shrink-0 rounded-full opacity-90"
+                                                        style={{ backgroundColor: card.color }}
+                                                    />
+                                                )}
+                                                <p className="truncate text-sm font-medium">{card.name}</p>
                                             </div>
                                             {selected && (
                                                 <Badge
                                                     variant="outline"
-                                                    className="text-sky-600"
+                                                    className="shrink-0 text-sky-600"
                                                     style={{
                                                         borderColor: card.color ? `${card.color}55` : undefined,
                                                         color: card.color ?? undefined,
@@ -813,8 +1154,8 @@ export default function CreditCardExpensesPage() {
                                             )}
                                         </div>
 
-                                        <div className="mt-3 grid grid-cols-2 gap-3">
-                                            <div>
+                                        <div className="grid grid-cols-2 gap-4 border-t border-foreground/[0.07] pt-3">
+                                            <div className="min-w-0">
                                                 <p className="text-[11px] text-muted-foreground">Deuda restante</p>
                                                 <div className="mt-1">
                                                     <CurrencyBreakdownAmount
@@ -826,7 +1167,7 @@ export default function CreditCardExpensesPage() {
                                                     />
                                                 </div>
                                             </div>
-                                            <div>
+                                            <div className="min-w-0">
                                                 <p className="text-[11px] text-muted-foreground">Resumen mensual</p>
                                                 <div className="mt-1">
                                                     <CurrencyBreakdownAmount
@@ -844,10 +1185,91 @@ export default function CreditCardExpensesPage() {
                                                 </p>
                                             </div>
                                         </div>
+
+                                        <p className="mt-3 text-[11px] text-muted-foreground">
+                                            {card.itemCount} gasto{card.itemCount === 1 ? '' : 's'} en la vista actual
+                                        </p>
+                                    </button>
+                                )
+                            })}
+                        </MobileCardCarousel>
+                        <div className="hidden md:flex gap-2.5 overflow-x-auto pb-1">
+                            {cardSummaries.map((card) => {
+                                const selected = filters.cardFilter === card.cardId
+
+                                return (
+                                    <button
+                                        key={card.cardId}
+                                        type="button"
+                                        onClick={() =>
+                                            setFilter('cardFilter', selected ? DEFAULT_FILTERS.cardFilter : card.cardId)
+                                        }
+                                        className="min-w-[248px] rounded-2xl border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
+                                        style={{
+                                            background: card.color
+                                                ? `linear-gradient(180deg, ${card.color}12 0%, color-mix(in srgb, var(--card) 94%, transparent) 34%)`
+                                                : 'color-mix(in srgb, var(--card) 92%, transparent)',
+                                            borderColor: selected ? (card.color ?? 'var(--sky)') : 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                            boxShadow: selected
+                                                ? `0 0 0 1px ${card.color ?? 'rgba(96,184,224,0.32)'}22 inset, var(--card-shadow)`
+                                                : 'var(--card-shadow)',
+                                        }}
+                                    >
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                {card.color && (
+                                                    <span
+                                                        className="h-2.5 w-2.5 shrink-0 rounded-full opacity-90"
+                                                        style={{ backgroundColor: card.color }}
+                                                    />
+                                                )}
+                                                <p className="truncate text-sm font-medium">{card.name}</p>
+                                            </div>
+                                            {selected && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="shrink-0 text-sky-600"
+                                                    style={{
+                                                        borderColor: card.color ? `${card.color}55` : undefined,
+                                                        color: card.color ?? undefined,
+                                                    }}
+                                                >
+                                                    Filtrada
+                                                </Badge>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 border-t border-foreground/[0.07] pt-3">
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] text-muted-foreground">Deuda restante</p>
+                                                <div className="mt-1">
+                                                    <CurrencyBreakdownAmount
+                                                        totals={card.remainingDebt}
+                                                        hidden={hidden}
+                                                        primaryColor="var(--foreground)"
+                                                        secondaryColor="var(--muted-foreground)"
+                                                        className="text-sm font-semibold"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] text-muted-foreground">Resumen mensual</p>
+                                                <div className="mt-1">
+                                                    <CurrencyBreakdownAmount
+                                                        totals={card.monthlyDue}
+                                                        hidden={hidden}
+                                                        primaryColor="var(--foreground)"
+                                                        secondaryColor="var(--muted-foreground)"
+                                                        className="text-sm font-semibold"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </button>
                                 )
                             })}
                         </div>
+                        </>
                     )}
                 </section>
 
@@ -860,8 +1282,12 @@ export default function CreditCardExpensesPage() {
                 </div>
 
                 <section
-                    className="rounded-xl px-4 py-3 space-y-3"
-                    style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                    className="rounded-2xl border px-4 py-4 space-y-4"
+                    style={{
+                        background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                        borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                        boxShadow: 'var(--card-shadow)',
+                    }}
                 >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div className="space-y-1">
@@ -880,7 +1306,7 @@ export default function CreditCardExpensesPage() {
                             </Select>
                         </div>
 
-                        <div className="hidden md:flex items-center gap-2 flex-wrap">
+                        <div className="hidden md:flex items-center gap-2.5 flex-wrap">
                             <FilterChip
                                 label="Tarjeta"
                                 active={filters.cardFilter !== DEFAULT_FILTERS.cardFilter}
@@ -923,8 +1349,12 @@ export default function CreditCardExpensesPage() {
                                 <button
                                     type="button"
                                     onClick={clearFilters}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs"
-                                    style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
+                                    className="flex items-center gap-1 rounded-xl px-3.5 py-2 text-xs font-medium"
+                                    style={{
+                                        color: 'var(--muted-foreground)',
+                                        background: 'var(--secondary)',
+                                        border: '0.5px solid var(--border)',
+                                    }}
                                 >
                                     <X size={12} /> Limpiar
                                 </button>
@@ -947,14 +1377,6 @@ export default function CreditCardExpensesPage() {
                             Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                         </button>
 
-                        <FilterChip
-                            label="Ordenar"
-                            active={sort !== 'date_desc'}
-                            options={SORT_OPTIONS}
-                            value={sort}
-                            onChange={(value) => setSort((value || 'date_desc') as SortFilter)}
-                        />
-
                         {activeFilterCount > 0 && (
                             <button
                                 type="button"
@@ -976,8 +1398,12 @@ export default function CreditCardExpensesPage() {
 
                 {filteredItems.length === 0 ? (
                     <div
-                        className="rounded-xl"
-                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        className="rounded-2xl"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
                     >
                         <EmptyState
                             icon={CreditCard}
@@ -989,7 +1415,7 @@ export default function CreditCardExpensesPage() {
                     </div>
                 ) : (
                     <motion.div
-                        className="space-y-2"
+                        className="space-y-2.5"
                         variants={staggerContainer}
                         initial="initial"
                         animate="animate"
@@ -1022,10 +1448,18 @@ export default function CreditCardExpensesPage() {
                                 <motion.div
                                     key={`${item.kind}-${isPlan ? item.plan._id.toString() : item.transaction._id.toString()}`}
                                     variants={staggerItem}
-                                    className="rounded-xl"
-                                    style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                                    className="relative overflow-hidden rounded-2xl border"
+                                    style={{
+                                        background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                                        borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                        boxShadow: 'var(--card-shadow)',
+                                    }}
                                 >
-                                    <div className="py-3 px-4 flex items-start gap-3">
+                                    <div
+                                        className="absolute left-4 right-4 top-0 h-px overflow-hidden rounded-full opacity-55"
+                                        style={{ background: accountColor ?? categoryColor ?? 'rgba(96, 184, 224, 0.28)' }}
+                                    />
+                                    <div className="flex items-start gap-3 px-4 py-3 md:px-5 md:py-3.5">
                                         <button
                                             type="button"
                                             className="min-w-0 flex-1 text-left"
@@ -1033,10 +1467,10 @@ export default function CreditCardExpensesPage() {
                                         >
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="text-sm font-medium truncate">
+                                                    <p className="truncate text-sm font-medium md:text-[15px]">
                                                         {transaction?.description ?? plan?.description}
                                                     </p>
-                                                    <div className="mt-1 flex items-center gap-1 flex-wrap text-xs text-muted-foreground">
+                                                    <div className="mt-0.5 flex items-center gap-1 flex-wrap text-[11px] text-muted-foreground md:text-xs">
                                                         <span>{purchaseDateLabel}</span>
                                                         {(transaction?.merchant || plan?.merchant) && (
                                                             <span>· {transaction?.merchant ?? plan?.merchant}</span>
@@ -1045,7 +1479,7 @@ export default function CreditCardExpensesPage() {
                                                 </div>
 
                                                 <div className="shrink-0 text-right">
-                                                    <p className="text-sm font-semibold tabular-nums">
+                                                    <p className="text-sm font-semibold tabular-nums md:text-base">
                                                         <ResponsiveAmount amount={totalAmount} currency={currency} hidden={hidden} />
                                                     </p>
                                                     <p className="text-[11px] text-muted-foreground">total</p>
@@ -1053,12 +1487,12 @@ export default function CreditCardExpensesPage() {
                                             </div>
 
                                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                                <Badge variant="secondary" className="text-[11px] font-medium">
+                                                <Badge variant="secondary" className="h-5 px-2 text-[10px] font-medium">
                                                     {installmentMeta}
                                                 </Badge>
                                                 <Badge
                                                     variant="outline"
-                                                    className={`text-[11px] ${
+                                                    className={`h-5 px-2 text-[10px] ${
                                                         statusLabel === 'Finalizado'
                                                             ? 'text-muted-foreground'
                                                             : statusLabel.startsWith('Primera cuota') || statusLabel.startsWith('Impacta en')
@@ -1070,7 +1504,7 @@ export default function CreditCardExpensesPage() {
                                                 </Badge>
                                             </div>
 
-                                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground md:text-xs">
                                                 {accountName && (
                                                     <span className="flex items-center gap-1">
                                                         {accountColor && (
@@ -1102,10 +1536,11 @@ export default function CreditCardExpensesPage() {
                                             </div>
                                         </button>
 
-                                        <div className="flex items-center gap-1 shrink-0">
+                                        <div className="flex shrink-0 items-center gap-1 border-l border-foreground/[0.06] pl-2 md:pl-3">
                                             <Button
                                                 variant="ghost"
                                                 size="icon-sm"
+                                                className="opacity-80 hover:opacity-100"
                                                 onClick={(event) => {
                                                     event.stopPropagation()
                                                     handleEditItem(item)
@@ -1117,7 +1552,7 @@ export default function CreditCardExpensesPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="icon-sm"
-                                                className="text-destructive hover:text-destructive"
+                                                className="text-destructive opacity-80 hover:text-destructive hover:opacity-100"
                                                 onClick={(event) => {
                                                     event.stopPropagation()
                                                     setDeleteItem(item)
@@ -1179,7 +1614,9 @@ export default function CreditCardExpensesPage() {
                 open={filterSheetOpen}
                 onClose={() => setFilterSheetOpen(false)}
                 draftFilters={draftFilters}
+                sort={draftSort}
                 onChange={setDraftFilter}
+                onSortChange={setDraftSort}
                 onApply={applyDraftFilters}
                 onClear={clearDraftFilters}
                 cardOptions={cardOptions}
@@ -1187,7 +1624,9 @@ export default function CreditCardExpensesPage() {
             />
 
             <AlertDialog open={Boolean(deleteItem)} onOpenChange={(open) => !open && setDeleteItem(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent
+                    className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl"
+                >
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 text-destructive" />

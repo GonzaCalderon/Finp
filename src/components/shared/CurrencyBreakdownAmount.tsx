@@ -12,7 +12,7 @@ interface CurrencyBreakdownAmountProps {
     hidden: boolean
     primaryColor?: string
     secondaryColor?: string
-    align?: 'left' | 'right'
+    align?: 'left' | 'center' | 'right'
     className?: string
     hideZeroSecondary?: boolean
     preserveSecondarySpace?: boolean
@@ -38,7 +38,7 @@ export function CurrencyBreakdownAmount({
 
     return (
         <div className={className}>
-            <div className={align === 'right' ? 'text-right' : 'text-left'}>
+            <div className={align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}>
                 <ResponsiveAmount
                     amount={totals.ars}
                     currency="ARS"
@@ -48,7 +48,7 @@ export function CurrencyBreakdownAmount({
             </div>
             {(showSecondary || preserveSecondarySpace) && (
                 <div
-                    className={`mt-1 text-[11px] md:text-xs ${align === 'right' ? 'text-right' : 'text-left'}`}
+                    className={`mt-1 text-[11px] md:text-xs ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
                     style={{
                         color: secondaryColor,
                         visibility: showSecondary ? 'visible' : 'hidden',
@@ -65,7 +65,7 @@ export function CurrencyBreakdownAmount({
             )}
             {consolidated && (
                 <div
-                    className={`mt-1.5 text-[10px] md:text-[11px] ${align === 'right' ? 'text-right' : 'text-left'}`}
+                    className={`mt-1.5 text-[10px] md:text-[11px] ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
                     style={{ color: 'var(--muted-foreground)' }}
                 >
                     <span className="mr-1">Consolidado</span>

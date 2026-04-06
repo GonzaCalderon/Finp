@@ -34,6 +34,7 @@ import {
 import { AccountDialog } from '@/components/shared/AccountDialog'
 import { AccountDetailSheet } from '@/components/shared/AccountDetailSheet'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { AccountFormData } from '@/lib/validations'
@@ -178,7 +179,11 @@ function SummaryCard({
     return (
         <div
             className="min-w-[190px] shrink-0 snap-start rounded-xl p-3 md:min-w-0 md:rounded-2xl md:p-4"
-            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+            style={{
+                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                boxShadow: 'var(--card-shadow)',
+            }}
         >
             <p className="text-xs font-medium text-muted-foreground">{title}</p>
             <p className="mt-1.5 text-lg font-semibold tracking-tight md:mt-2 md:text-2xl">{value}</p>
@@ -283,7 +288,7 @@ function AccountRow({
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between gap-2.5 md:justify-end md:gap-3">
+                            <div className="flex items-center justify-between gap-2.5 md:justify-end md:gap-3 md:border-l md:border-foreground/[0.06] md:pl-4">
                                 <div className="text-left md:text-right">
                                     <p className="hidden text-[11px] uppercase tracking-[0.08em] text-muted-foreground md:block">
                                         Saldo actual
@@ -456,7 +461,11 @@ function AccountTypeSection({
 
             <motion.div
                 className="overflow-hidden rounded-2xl"
-                style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                style={{
+                    background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                    border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                    boxShadow: 'var(--card-shadow)',
+                }}
                 variants={staggerContainer}
                 initial="initial"
                 animate="animate"
@@ -614,7 +623,27 @@ export default function AccountsPage() {
                 </div>
             ) : (
                 <>
-                    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-3 md:overflow-visible">
+                    <MobileCardCarousel
+                        hint="Deslizá para ver los indicadores"
+                        ariaLabel="Resumen de cuentas"
+                    >
+                        <SummaryCard
+                            title="Cuentas activas"
+                            value={String(summary.totalAccounts)}
+                            hint={`${summary.activeTypes} tipos visibles en esta página`}
+                        />
+                        <SummaryCard
+                            title="Tarjetas de crédito"
+                            value={String(summary.creditCards)}
+                            hint="Acceso rápido al detalle y a cuotas activas"
+                        />
+                        <SummaryCard
+                            title="Con saldo en rojo"
+                            value={String(summary.negativeCount)}
+                            hint="Incluye cuentas con balance negativo o deuda visible"
+                        />
+                    </MobileCardCarousel>
+                    <div className="hidden md:grid md:grid-cols-3 md:gap-3">
                         <SummaryCard
                             title="Cuentas activas"
                             value={String(summary.totalAccounts)}
@@ -646,9 +675,10 @@ export default function AccountsPage() {
                                     }}
                                     className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
                                     style={{
-                                        background: 'var(--secondary)',
+                                        background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
                                         color: 'var(--foreground)',
-                                        border: '0.5px solid var(--border)',
+                                        border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
+                                        boxShadow: 'var(--card-shadow)',
                                     }}
                                 >
                                     <Icon className="h-3.5 w-3.5" style={{ color: meta.accent }} />
@@ -694,7 +724,7 @@ export default function AccountsPage() {
             />
 
             <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-                <AlertDialogContent>
+                <AlertDialogContent className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl">
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Desactivar esta cuenta?</AlertDialogTitle>
                         <AlertDialogDescription>

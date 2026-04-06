@@ -9,12 +9,18 @@ import {
     useState,
 } from 'react'
 import type { IAccount } from '@/types'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    ACCOUNT_INVALIDATION_TAGS,
+    invalidateData,
+} from '@/lib/client/data-sync'
 
 type AccountsContextValue = {
     accounts: IAccount[]
     loading: boolean
     error: string | null
-    fetchAccounts: () => Promise<void>
+    fetchAccounts: (options?: { silent?: boolean }) => Promise<void>
     createAccount: (body: Partial<IAccount>) => Promise<IAccount>
     updateAccount: (id: string, body: Partial<IAccount>) => Promise<IAccount>
     deleteAccount: (id: string) => Promise<void>
@@ -33,38 +39,30 @@ export function AccountsProvider({
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    const fetchAccounts = useCallback(async () => {
+    const fetchAccounts = useCallback(async (options?: { silent?: boolean }) => {
         try {
-            setLoading(true)
+            if (!options?.silent) {
+                setLoading(true)
+            }
             setError(null)
 
-            const res = await fetch('/api/accounts')
-            const data = await res.json()
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Error al cargar cuentas')
-            }
-
+            const data = await apiJson<{ accounts?: IAccount[] }>('/api/accounts')
             setAccounts(data.accounts ?? [])
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar cuentas')
         } finally {
-            setLoading(false)
+            if (!options?.silent) {
+                setLoading(false)
+            }
         }
     }, [])
 
     const createAccount = useCallback(async (body: Partial<IAccount>) => {
-        const res = await fetch('/api/accounts', {
+        const data = await apiJson<{ account: IAccount }>('/api/accounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         })
-
-        const data = await res.json()
-
-        if (!res.ok) {
-            throw new Error(data.error || 'Error al crear cuenta')
-        }
 
         const newAccount = data.account as IAccount
         const newDefaultPaymentMethods = newAccount.defaultPaymentMethods ?? []
@@ -87,22 +85,17 @@ export function AccountsProvider({
             return [...nextAccounts, newAccount]
         })
 
+        invalidateData(ACCOUNT_INVALIDATION_TAGS)
         return newAccount
     }, [])
 
     const updateAccount = useCallback(
         async (id: string, body: Partial<IAccount>) => {
-            const res = await fetch(`/api/accounts/${id}`, {
+            const data = await apiJson<{ account: IAccount }>(`/api/accounts/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             })
-
-            const data = await res.json()
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Error al actualizar cuenta')
-            }
 
             const updatedAccount = data.account as IAccount
             const updatedDefaultPaymentMethods = updatedAccount.defaultPaymentMethods ?? []
@@ -122,26 +115,26 @@ export function AccountsProvider({
                 })
             )
 
+            invalidateData(ACCOUNT_INVALIDATION_TAGS)
             return updatedAccount
         },
         []
     )
 
     const deleteAccount = useCallback(async (id: string) => {
-        const res = await fetch(`/api/accounts/${id}`, {
+        await apiJson(`/api/accounts/${id}`, {
             method: 'DELETE',
         })
-
-        const data = await res.json()
-
-        if (!res.ok) {
-            throw new Error(data.error || 'Error al eliminar cuenta')
-        }
 
         setAccounts((prev) =>
             prev.filter((account) => account._id.toString() !== id)
         )
+        invalidateData(ACCOUNT_INVALIDATION_TAGS)
     }, [])
+
+    useDataInvalidation(['accounts'], () => {
+        void fetchAccounts({ silent: true })
+    })
 
     useEffect(() => {
         void fetchAccounts()

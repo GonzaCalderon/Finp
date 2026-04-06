@@ -45,6 +45,12 @@
 
 :root {
   --radius: 0.625rem;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 2px 10px rgba(0,0,0,0.04);
 
   --background: #FAFAFA;
   --foreground: #111827;
@@ -89,6 +95,8 @@
 }
 
 .dark {
+  --card-shadow: 0 1px 4px rgba(0,0,0,0.3), 0 2px 12px rgba(0,0,0,0.2);
+
   --background: #0F0F10;
   --foreground: #F9FAFB;
   --card: #1A1A1F;
@@ -136,6 +144,22 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.safe-area-pb {
+  padding-bottom: calc(var(--safe-area-bottom) + 0.75rem);
+}
+
+.safe-area-pt {
+  padding-top: calc(var(--safe-area-top) + 0.75rem);
+}
+
+.safe-area-bottom-offset {
+  bottom: calc(var(--safe-area-bottom) + 0.75rem);
+}
+
+.safe-area-bottom-bar {
+  padding-bottom: calc(var(--safe-area-bottom) + 0.25rem);
+}
+
 /* Scrollbar sutil */
 ::-webkit-scrollbar {
   width: 4px;
@@ -154,7 +178,7 @@ body {
 
 /* Transiciones globales */
 button {
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 a {
@@ -171,18 +195,43 @@ main {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Dialog — aumentar duración de animación */
+/* Dialog */
 [data-slot="dialog-content"] {
-  animation-duration: 220ms !important;
-  transition-duration: 220ms !important;
+  animation-duration: 200ms !important;
+  transition-duration: 200ms !important;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
 [data-slot="dialog-overlay"] {
   animation-duration: 180ms !important;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 /* Sheet */
 [data-slot="sheet-content"] {
-  animation-duration: 250ms !important;
-  transition-duration: 250ms !important;
+  animation-duration: 260ms !important;
+  transition-duration: 260ms !important;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+[data-slot="sheet-overlay"] {
+  animation-duration: 200ms !important;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Popover / Select content */
+[data-slot="popover-content"],
+[data-slot="select-content"] {
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+/* Reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

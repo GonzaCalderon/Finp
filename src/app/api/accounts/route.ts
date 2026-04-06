@@ -32,7 +32,7 @@ export async function GET() {
         const operationalStart = parseOperationalStartDate(userDoc?.preferences?.operationalStartDate)
         const monthStartDay = userDoc?.preferences?.monthStartDay ?? 1
 
-        const accounts = await Account.find({ userId: session.user.id })
+        const accounts = await Account.find({ userId: session.user.id, isActive: true })
             .sort({ createdAt: 1 })
             .lean<IAccount[]>()
 

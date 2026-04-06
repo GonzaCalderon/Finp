@@ -7,6 +7,7 @@ import { fadeIn } from '@/lib/utils/animations'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import {
     Bar,
     BarChart,
@@ -16,6 +17,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts'
+import { apiJson } from '@/lib/client/auth-client'
 
 type CurrencyTotals = {
     ars: number
@@ -370,9 +372,7 @@ export default function ProjectionPage() {
                 if (mode === 'annual') params.set('year', year.toString())
                 else params.set('months', months.toString())
 
-                const response = await fetch(`/api/projection?${params}`)
-                const data = await response.json()
-                if (!response.ok) throw new Error(data.error)
+                const data = await apiJson<{ projection: MonthProjection[] }>(`/api/projection?${params}`)
                 setProjection(data.projection)
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Error al cargar proyección')
@@ -383,6 +383,21 @@ export default function ProjectionPage() {
 
         void fetchProjection()
     }, [mode, months, year])
+
+    useDataInvalidation(['projection'], () => {
+        const params = new URLSearchParams({ mode })
+        if (mode === 'annual') params.set('year', year.toString())
+        else params.set('months', months.toString())
+
+        void apiJson<{ projection: MonthProjection[] }>(`/api/projection?${params}`)
+            .then((data) => {
+                setProjection(data.projection)
+                setError(null)
+            })
+            .catch((err) => {
+                setError(err instanceof Error ? err.message : 'Error al cargar proyección')
+            })
+    })
 
     if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
 
@@ -425,6 +440,30 @@ export default function ProjectionPage() {
                 </div>
             ) : (
                 <>
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                        <div
+                            className="rounded-xl p-3 md:p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        >
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Compromisos</p>
+                            <InlineTotals totals={totals.commitments} align="left" />
+                        </div>
+                        <div
+                            className="rounded-xl p-3 md:p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+                        >
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cuotas</p>
+                            <InlineTotals totals={totals.installments} align="left" />
+                        </div>
+                        <div
+                            className="col-span-2 rounded-xl p-3 md:col-span-1 md:p-4"
+                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--amber)' }}
+                        >
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
+                            <InlineTotals totals={totals.total} align="left" />
+                        </div>
+                    </div>
+
                     <div
                         className="rounded-xl p-4"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
@@ -501,8 +540,120 @@ export default function ProjectionPage() {
                         </div>
                     </div>
 
+                    <div className="space-y-3 md:hidden">
+                        {projection.map((row) => (
+                            <div
+                                key={row.month}
+                                className="rounded-xl overflow-hidden"
+                                style={{ background: 'var(--card)', border: '0.5px solid var(--border)', boxShadow: 'var(--card-shadow)' }}
+                            >
+                                <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-semibold">{formatMonth(row.month, isMultiYear)}</p>
+                                                {row.isCurrentMonth && (
+                                                    <span
+                                                        className="text-xs px-1.5 py-0.5 rounded"
+                                                        style={{ background: 'var(--sky-light)', color: 'var(--sky-dark)' }}
+                                                    >
+                                                        hoy
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-muted-foreground">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] uppercase tracking-[0.12em]">Compromisos</span>
+                                                    <InlineTotals totals={row.totalCommitments} align="left" />
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] uppercase tracking-[0.12em]">Cuotas</span>
+                                                    <InlineTotals totals={row.totalInstallments} align="left" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Total</p>
+                                            <InlineTotals totals={row.total} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="px-4 py-3">
+                                    <div>
+                                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--secondary)' }}>
+                                            <div
+                                                className="h-full rounded-full transition-all"
+                                                style={{
+                                                    width: `${(totalForCurrency(row.total, chartCurrency) / maxTotal) * 100}%`,
+                                                    background: 'var(--sky)',
+                                                    opacity: row.isPast ? 0.4 : 1,
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 space-y-0.5">
+                                        {row.commitments.length > 0 && (
+                                            <ExpandableRow label="Compromisos" totals={row.totalCommitments} level={0}>
+                                                {row.commitments.map((commitment) => (
+                                                    <div
+                                                        key={commitment._id}
+                                                        className="flex items-center justify-between py-1.5 text-xs"
+                                                        style={{ paddingLeft: 32, paddingRight: 8, color: 'var(--muted-foreground)' }}
+                                                    >
+                                                        <span>
+                                                            {commitment.description}
+                                                            {commitment.dayOfMonth && (
+                                                                <span className="opacity-60 ml-1">· día {commitment.dayOfMonth}</span>
+                                                            )}
+                                                        </span>
+                                                        <span className="tabular-nums">
+                                                            {fmt(commitment.amount, commitment.currency as 'ARS' | 'USD')}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </ExpandableRow>
+                                        )}
+
+                                        {row.installmentsByAccount.length > 0 && (
+                                            <ExpandableRow label="Cuotas" totals={row.totalInstallments} level={0}>
+                                                {row.installmentsByAccount.map((account) => (
+                                                    <ExpandableRow
+                                                        key={account.accountId}
+                                                        label={account.accountName}
+                                                        totals={account.total}
+                                                        level={1}
+                                                    >
+                                                        {account.items.map((item, index) => (
+                                                            <div
+                                                                key={`${account.accountId}-${index}`}
+                                                                className="flex items-center justify-between py-1.5 text-xs"
+                                                                style={{ paddingLeft: 48, paddingRight: 8, color: 'var(--muted-foreground)' }}
+                                                            >
+                                                                <span>
+                                                                    {item.description}
+                                                                    <span className="opacity-60 ml-1">
+                                                                        {item.currentInstallment}/{item.installmentCount}
+                                                                    </span>
+                                                                </span>
+                                                                <span className="tabular-nums">
+                                                                    {fmt(item.installmentAmount, item.currency as 'ARS' | 'USD')}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </ExpandableRow>
+                                                ))}
+                                            </ExpandableRow>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
                     <div
-                        className="rounded-xl overflow-hidden"
+                        className="hidden md:block rounded-xl overflow-hidden"
                         style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
                     >
                         <div
@@ -612,30 +763,6 @@ export default function ProjectionPage() {
                                 </div>
                             </div>
                         ))}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Compromisos</p>
-                            <InlineTotals totals={totals.commitments} align="left" />
-                        </div>
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cuotas</p>
-                            <InlineTotals totals={totals.installments} align="left" />
-                        </div>
-                        <div
-                            className="rounded-xl p-3 md:p-4"
-                            style={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderTop: '2px solid var(--amber)' }}
-                        >
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
-                            <InlineTotals totals={totals.total} align="left" />
-                        </div>
                     </div>
                 </>
             )}
