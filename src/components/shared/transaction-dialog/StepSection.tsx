@@ -4,14 +4,7 @@ import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { fadeIn } from '@/lib/utils/animations'
 
-export function StepSection({
-    children,
-}: {
-    eyebrow?: string
-    title?: string
-    subtitle?: string
-    children: ReactNode
-}) {
+export function StepSection({ children }: { children: ReactNode }) {
     return (
         <motion.section
             {...fadeIn}

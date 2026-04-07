@@ -70,8 +70,6 @@ type TransactionStepId = 'type' | 'main' | 'details' | 'classification' | 'revie
 
 type TransactionStep = {
     id: TransactionStepId
-    title: string
-    subtitle: string
 }
 
 type CurrencyOption = TransactionFormInput['currency']
@@ -205,49 +203,21 @@ function buildSteps(params: {
     isEditing: boolean
 }): TransactionStep[] {
     const { type, isExpense, showClassification, isEditing } = params
-    const steps: TransactionStep[] = [
-        {
-            id: 'type',
-            title: 'Tipo de transaccion',
-            subtitle: isEditing
-                ? 'El tipo queda visible pero fijo para no alterar el historial.'
-                : 'Primero elegis el tipo y despues el formulario se acomoda solo.',
-        },
-    ]
+    const steps: TransactionStep[] = [{ id: 'type' }]
 
     if (type !== 'income' && type !== 'credit_card_payment' && type !== 'exchange' && type !== 'transfer' && type !== 'adjustment') {
-        steps.push({
-            id: 'main',
-            title: 'Datos base',
-            subtitle: isEditing
-                ? 'Revisamos el corazon de la transaccion antes de seguir.'
-                : 'Monto, fecha y descripcion cuando aplique.',
-        })
+        steps.push({ id: 'main' })
     }
 
-    if (type === 'income') {
-        steps.push({ id: 'details', title: 'Donde entra', subtitle: 'Elegi la cuenta que recibe este ingreso.' })
-    } else if (isExpense) {
-        steps.push({ id: 'details', title: 'Como lo pagaste', subtitle: 'Te mostramos solo lo necesario para ese medio de pago.' })
-    } else if (type === 'transfer') {
-        steps.push({ id: 'details', title: 'Entre que cuentas', subtitle: 'Elegi origen y destino para registrar el pase.' })
-    } else if (type === 'exchange') {
-        steps.push({ id: 'details', title: 'Como fue el cambio', subtitle: 'Guardamos origen, destino y cotizacion para que quede claro.' })
-    } else if (type === 'credit_card_payment') {
-        steps.push({ id: 'details', title: 'Que tarjeta pagaste', subtitle: 'Vas a elegir la tarjeta y el origen del pago.' })
-    } else if (type === 'adjustment') {
-        steps.push({ id: 'details', title: 'Donde impacta', subtitle: 'Elegis la cuenta y el impacto del ajuste.' })
+    if (type === 'income' || isExpense || type === 'transfer' || type === 'exchange' || type === 'credit_card_payment' || type === 'adjustment') {
+        steps.push({ id: 'details' })
     }
 
     if (showClassification) {
-        steps.push({ id: 'classification', title: 'Categoria', subtitle: 'Elegi la categoria con sugerencias y busqueda simple.' })
+        steps.push({ id: 'classification' })
     }
 
-    steps.push({
-        id: 'review',
-        title: isEditing ? 'Revisar cambios' : 'Revisar',
-        subtitle: 'Un ultimo vistazo antes de guardar.',
-    })
+    steps.push({ id: 'review' })
 
     return steps
 }
@@ -1856,7 +1826,6 @@ export function TransactionDialog({
 
     const renderReviewStep = () => (
         <TransactionReviewStep
-            stepLabel={`Paso ${steps.length}`}
             type={type}
             primaryFlowType={primaryFlowType}
             isExpense={isExpense}

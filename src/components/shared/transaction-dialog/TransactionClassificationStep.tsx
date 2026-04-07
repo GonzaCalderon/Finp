@@ -7,7 +7,7 @@ import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@
 import type { TransactionFormInput } from '@/lib/validations'
 import type { ICategory } from '@/types'
 import { StepSection } from './StepSection'
-import { CategoryChip, subtlePanelStyle } from './shared-ui'
+import { CategoryChip, SURFACE } from './shared-ui'
 
 interface TransactionClassificationStepProps {
     type: TransactionFormInput['type']
@@ -45,11 +45,7 @@ export function TransactionClassificationStep({
     onToggleShowAllCategories,
 }: TransactionClassificationStepProps) {
     return (
-        <StepSection
-            eyebrow="Paso 4"
-            title="Elegi la categoria"
-            subtitle="Resolve esto rapido: una sugerida, una frecuente o una busqueda corta."
-        >
+        <StepSection>
             <motion.div
                 className="space-y-5"
                 variants={staggerContainer}
@@ -76,7 +72,7 @@ export function TransactionClassificationStep({
                         </div>
 
                         {appliedRuleName && selectedCategory && normalizedCategoryQuery.length === 0 && (
-                            <motion.div variants={staggerItem} className="rounded-3xl border px-4 py-3 text-sm" style={subtlePanelStyle}>
+                            <motion.div variants={staggerItem} className="rounded-[1.6rem] border px-4 py-3 text-sm" style={SURFACE.panel}>
                                 <p className="font-medium">Sugerida por regla: {appliedRuleName}</p>
                                 <p className="mt-1 text-xs text-muted-foreground">La dejamos preseleccionada, pero podes cambiarla sin friccion.</p>
                             </motion.div>
@@ -152,8 +148,8 @@ export function TransactionClassificationStep({
                                             initial={{ opacity: 0, height: 0 }}
                                             animate={{ opacity: 1, height: 'auto', transition: { duration: DURATION.normal, ease: easeSmooth } }}
                                             exit={{ opacity: 0, height: 0, transition: { duration: DURATION.fast, ease: easeSoft } }}
-                                            className="flex flex-wrap gap-2 overflow-hidden rounded-3xl border p-4"
-                                            style={subtlePanelStyle}
+                                            className="flex flex-wrap gap-2 overflow-hidden rounded-[1.6rem] border p-4"
+                                            style={SURFACE.panel}
                                         >
                                             {extraCategories.map((category) => (
                                                 <CategoryChip

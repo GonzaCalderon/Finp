@@ -19,7 +19,9 @@ import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount } from '@/types'
 import type { PaymentMethod } from '@/components/shared/transaction-dialog-prefs'
 import { StepSection } from './StepSection'
-import { subtlePanelStyle, getSubtleSelectedStyle } from './shared-ui'
+import { SURFACE, getSubtleSelectedStyle, getTypeSurface } from './shared-ui'
+
+const EXPENSE_SURFACE = getTypeSurface('expense', true)
 
 const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string; icon: ReactNode }> = [
     { value: 'cash', label: 'Efectivo', icon: <Banknote className="h-4 w-4" /> },
@@ -77,18 +79,16 @@ export function TransactionExpenseDetailsStep({
     onApplyInstallmentQuoteAmount,
 }: TransactionExpenseDetailsStepProps) {
     return (
-        <StepSection
-            eyebrow="Paso 3"
-            title="Como lo pagaste"
-            subtitle="Primero elegi el medio de pago. Despues aparece solo lo que hace falta para ese caso."
-        >
+        <StepSection>
             <motion.div
                 className="space-y-4"
                 variants={staggerContainer}
                 initial="initial"
                 animate="animate"
             >
-                <motion.div variants={staggerItem} className="grid grid-cols-3 gap-2">
+                <motion.div variants={staggerItem} className="space-y-3 rounded-[1.85rem] border p-3.5 md:p-4" style={{ borderColor: EXPENSE_SURFACE.borderColor, background: EXPENSE_SURFACE.background }}>
+                    <p className="text-[0.82rem] font-semibold uppercase tracking-[0.1em]" style={{ color: EXPENSE_SURFACE.color }}>Gasto</p>
+                    <div className="grid grid-cols-3 gap-2">
                     {PAYMENT_METHODS.map((method) => {
                         const selected = paymentMethod === method.value
                         return (
@@ -96,7 +96,7 @@ export function TransactionExpenseDetailsStep({
                                 key={method.value}
                                 type="button"
                                 onClick={() => onPaymentMethodChange(method.value)}
-                                className="rounded-2xl border px-3 py-3 text-left transition-colors"
+                                className="rounded-[1.4rem] border px-3 py-3 text-left transition-colors"
                                 data-testid={`transaction-payment-${method.value}`}
                                 style={{
                                     ...getSubtleSelectedStyle(selected),
@@ -110,18 +110,134 @@ export function TransactionExpenseDetailsStep({
                             </button>
                         )
                     })}
-                </motion.div>
+                    </div>
 
-                {isCardExpense ? (
-                    <motion.div variants={staggerItem} className="space-y-4 rounded-[2rem] border p-4" style={subtlePanelStyle}>
-                        <div className="space-y-2">
-                            <Label>Tarjeta</Label>
+                    {isCardExpense ? (
+                        <div className="space-y-4 rounded-[1.6rem] border p-4" style={SURFACE.inner}>
+                            <div className="space-y-2">
+                                <Label>Tarjeta</Label>
+                                <Select
+                                    value={sourceAccountId}
+                                    onValueChange={(value) => onSourceAccountChange(value || undefined)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona tarjeta" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {expenseAccounts.map((account) => (
+                                            <SelectItem key={account._id.toString()} value={account._id.toString()}>
+                                                {account.name} · {getAccountCurrencyLabel(account)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {sourceAccountIdError && <p className="text-sm text-destructive">{sourceAccountIdError}</p>}
+                            </div>
+                            {!isEditing && (
+                                <>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label>Cuotas</Label>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onInstallmentCountChange(Math.max(1, installmentCount - 1))}
+                                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-colors hover:bg-background"
+                                                    style={{ borderColor: 'var(--border)' }}
+                                                    aria-label="Reducir cuotas"
+                                                >
+                                                    <Minus className="h-4 w-4" />
+                                                </button>
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    value={installmentCount}
+                                                    onChange={(event) =>
+                                                        onInstallmentCountChange(Math.max(1, parseInt(event.target.value, 10) || 1))
+                                                    }
+                                                    className="text-center text-xl font-semibold"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onInstallmentCountChange(installmentCount + 1)}
+                                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-colors hover:bg-background"
+                                                    style={{ borderColor: 'var(--border)' }}
+                                                    aria-label="Aumentar cuotas"
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Primera cuota</Label>
+                                            <Select
+                                                value={firstClosingMonth}
+                                                onValueChange={onFirstClosingMonthChange}
+                                            >
+                                                <SelectTrigger style={{ borderColor: firstMonthError ? 'var(--destructive)' : undefined }}>
+                                                    <SelectValue placeholder="Selecciona mes" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {monthOptions.map((option) => (
+                                                        <SelectItem key={option.value} value={option.value}>
+                                                            {option.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {firstMonthError && <p className="text-sm text-destructive">{firstMonthError}</p>}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                        <div className="space-y-1">
+                                            <FormattedAmountInput
+                                                id="installmentQuoteAmount"
+                                                label="Valor de cuota"
+                                                value={installmentQuoteAmount}
+                                                currency={currency}
+                                                placeholder="Ej. valor del resumen"
+                                                onValueChangeAction={onInstallmentQuoteAmountChange}
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Ingresa el valor de una cuota y calculamos el total automaticamente.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="h-11 self-end"
+                                            onClick={onApplyInstallmentQuoteAmount}
+                                            disabled={installmentQuoteAmount <= 0}
+                                        >
+                                            <Wand2 className="mr-2 h-4 w-4" />
+                                            {installmentCount > 1 ? 'Calcular total' : 'Usar como monto'}
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="rounded-[1.6rem] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--background)' }}>
+                                <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Resumen del plan</p>
+                                <p className="mt-1 text-lg font-semibold">{installmentPlanSummary}</p>
+                                {installmentAmount > 0 && (
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        {installmentCount} x {fmtCurrency(installmentAmount)}
+                                    </p>
+                                )}
+                                {planMonthsLabel && <p className="mt-1 text-xs text-muted-foreground">{planMonthsLabel}</p>}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2 rounded-[1.6rem] border p-4" style={SURFACE.inner}>
+                            <Label>{paymentMethod === 'cash' ? 'Cuenta de efectivo' : 'Cuenta'}</Label>
                             <Select
                                 value={sourceAccountId}
                                 onValueChange={(value) => onSourceAccountChange(value || undefined)}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona tarjeta" />
+                                    <SelectValue placeholder={paymentMethod === 'cash' ? 'Selecciona cuenta de efectivo' : 'Selecciona cuenta'} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {expenseAccounts.map((account) => (
@@ -133,123 +249,8 @@ export function TransactionExpenseDetailsStep({
                             </Select>
                             {sourceAccountIdError && <p className="text-sm text-destructive">{sourceAccountIdError}</p>}
                         </div>
-                        {!isEditing && (
-                            <>
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <Label>Cuotas</Label>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => onInstallmentCountChange(Math.max(1, installmentCount - 1))}
-                                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-colors hover:bg-background"
-                                                style={{ borderColor: 'var(--border)' }}
-                                                aria-label="Reducir cuotas"
-                                            >
-                                                <Minus className="h-4 w-4" />
-                                            </button>
-                                            <Input
-                                                type="number"
-                                                min={1}
-                                                value={installmentCount}
-                                                onChange={(event) =>
-                                                    onInstallmentCountChange(Math.max(1, parseInt(event.target.value, 10) || 1))
-                                                }
-                                                className="text-center text-xl font-semibold"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => onInstallmentCountChange(installmentCount + 1)}
-                                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-colors hover:bg-background"
-                                                style={{ borderColor: 'var(--border)' }}
-                                                aria-label="Aumentar cuotas"
-                                            >
-                                                <Plus className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Primera cuota</Label>
-                                        <Select
-                                            value={firstClosingMonth}
-                                            onValueChange={onFirstClosingMonthChange}
-                                        >
-                                            <SelectTrigger style={{ borderColor: firstMonthError ? 'var(--destructive)' : undefined }}>
-                                                <SelectValue placeholder="Selecciona mes" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {monthOptions.map((option) => (
-                                                    <SelectItem key={option.value} value={option.value}>
-                                                        {option.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {firstMonthError && <p className="text-sm text-destructive">{firstMonthError}</p>}
-                                    </div>
-                                </div>
-
-                                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                                    <div className="space-y-1">
-                                        <FormattedAmountInput
-                                            id="installmentQuoteAmount"
-                                            label="Valor de cuota"
-                                            value={installmentQuoteAmount}
-                                            currency={currency}
-                                            placeholder="Ej. valor del resumen"
-                                            onValueChangeAction={onInstallmentQuoteAmountChange}
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Ingresa el valor de una cuota y calculamos el total automaticamente.
-                                        </p>
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-11 self-end"
-                                        onClick={onApplyInstallmentQuoteAmount}
-                                        disabled={installmentQuoteAmount <= 0}
-                                    >
-                                        <Wand2 className="mr-2 h-4 w-4" />
-                                        {installmentCount > 1 ? 'Calcular total' : 'Usar como monto'}
-                                    </Button>
-                                </div>
-                            </>
-                        )}
-
-                        <motion.div variants={staggerItem} className="rounded-3xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--background)' }}>
-                            <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Resumen del plan</p>
-                            <p className="mt-1 text-lg font-semibold">{installmentPlanSummary}</p>
-                            {installmentAmount > 0 && (
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    {installmentCount} x {fmtCurrency(installmentAmount)}
-                                </p>
-                            )}
-                            {planMonthsLabel && <p className="mt-1 text-xs text-muted-foreground">{planMonthsLabel}</p>}
-                        </motion.div>
-                    </motion.div>
-                ) : (
-                    <motion.div variants={staggerItem} className="space-y-2 rounded-[2rem] border p-4" style={subtlePanelStyle}>
-                        <Label>{paymentMethod === 'cash' ? 'Cuenta de efectivo' : 'Cuenta'}</Label>
-                        <Select
-                            value={sourceAccountId}
-                            onValueChange={(value) => onSourceAccountChange(value || undefined)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder={paymentMethod === 'cash' ? 'Selecciona cuenta de efectivo' : 'Selecciona cuenta'} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {expenseAccounts.map((account) => (
-                                    <SelectItem key={account._id.toString()} value={account._id.toString()}>
-                                        {account.name} · {getAccountCurrencyLabel(account)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {sourceAccountIdError && <p className="text-sm text-destructive">{sourceAccountIdError}</p>}
-                    </motion.div>
-                )}
+                    )}
+                </motion.div>
             </motion.div>
         </StepSection>
     )

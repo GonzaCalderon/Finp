@@ -29,7 +29,6 @@ interface PaymentSummaryData {
 }
 
 interface TransactionReviewStepProps {
-    stepLabel: string
     type: TransactionFormInput['type']
     primaryFlowType: TransactionFormInput['type']
     isExpense: boolean
@@ -81,7 +80,6 @@ interface TransactionReviewStepProps {
 }
 
 export function TransactionReviewStep({
-    stepLabel,
     type,
     primaryFlowType,
     isExpense,
@@ -161,11 +159,7 @@ export function TransactionReviewStep({
         transferDestinationResultingBalance !== null
 
     return (
-        <StepSection
-            eyebrow={stepLabel}
-            title={isEditing ? 'Resumen de la edicion' : 'Resumen antes de guardar'}
-            subtitle="Un vistazo corto, claro y suficiente para confirmar con confianza."
-        >
+        <StepSection>
             <motion.div
                 className="grid gap-4 lg:grid-cols-2"
                 variants={staggerContainer}
