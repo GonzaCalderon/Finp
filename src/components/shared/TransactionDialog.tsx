@@ -1711,7 +1711,6 @@ export function TransactionDialog({
             isExchange={isExchange}
             descriptionIsOptional={descriptionIsOptional}
             allowedCurrencies={allowedCurrencies}
-            headerSurface={headerSurface}
             appliedRuleName={appliedRuleName}
             transaction={transaction}
             rules={rules}

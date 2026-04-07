@@ -13,7 +13,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
-import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
+import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { ITransaction, ITransactionRule } from '@/types'
 import { StepSection } from './StepSection'
@@ -28,7 +28,6 @@ interface TransactionMainStepProps {
     isExchange: boolean
     descriptionIsOptional: boolean
     allowedCurrencies: TransactionFormInput['currency'][]
-    headerSurface: { background: string; borderColor: string; color: string }
     appliedRuleName: string | null
     transaction: ITransaction | null
     rules: ITransactionRule[]
@@ -51,7 +50,6 @@ export function TransactionMainStep({
     isExchange,
     descriptionIsOptional,
     allowedCurrencies,
-    headerSurface,
     appliedRuleName,
     transaction,
     rules,
@@ -75,9 +73,14 @@ export function TransactionMainStep({
             title={title}
             subtitle={subtitle}
         >
-            <div className="space-y-4">
+            <motion.div
+                className="space-y-4"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
                 {!descriptionIsOptional && (
-                    <div className="space-y-2 rounded-3xl border p-4" style={subtlePanelStyle}>
+                    <motion.div variants={staggerItem} className="space-y-2 rounded-3xl border p-4" style={subtlePanelStyle}>
                         <div className="flex items-center justify-between gap-2">
                             <div>
                                 <Label htmlFor="description">Descripcion</Label>
@@ -112,58 +115,62 @@ export function TransactionMainStep({
                                 Regla aplicada: {appliedRuleName}
                             </p>
                         ) : null}
-                    </div>
+                    </motion.div>
                 )}
 
-                <div
-                    className="rounded-[2rem] border p-5"
+                <motion.div
+                    variants={staggerItem}
+                    className="space-y-3 rounded-[1.35rem] border p-3.5 md:p-4"
                     style={{
-                        borderColor: headerSurface.borderColor,
-                        background: 'color-mix(in srgb, var(--card) 86%, transparent)',
-                        boxShadow: 'var(--card-shadow)',
+                        borderColor: 'color-mix(in srgb, var(--border) 88%, transparent)',
+                        background: 'color-mix(in srgb, var(--background) 82%, var(--card) 18%)',
                     }}
                 >
-                    <FormattedAmountInput
-                        id="amount"
-                        label={isExchange ? 'Monto origen' : 'Monto'}
-                        value={amount}
-                        currency={currency}
-                        error={amountError}
-                        autoFocus
-                        inputClassName="text-4xl font-semibold tracking-tight sm:text-3xl"
-                        onValueChangeAction={onAmountChange}
-                    />
-                </div>
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_176px] md:items-start">
+                        <FormattedAmountInput
+                            id="amount"
+                            label={isExchange ? 'Monto origen' : 'Monto'}
+                            value={amount}
+                            currency={currency}
+                            error={undefined}
+                            autoFocus
+                            wrapperClassName="space-y-1.5"
+                            inputClassName="h-10 rounded-[1rem] text-[1.1rem] font-semibold tracking-tight"
+                            prefixClassName="text-[14px]"
+                            onValueChangeAction={onAmountChange}
+                        />
 
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,160px)_minmax(0,1fr)]">
-                    <div className="space-y-2">
-                        <Label>{isExchange ? 'Moneda origen' : 'Moneda'}</Label>
-                        <Select
-                            value={currency}
-                            onValueChange={(value) => onCurrencyChange(value as TransactionFormInput['currency'])}
-                            disabled={allowedCurrencies.length === 1}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {allowedCurrencies.map((allowedCurrency) => (
-                                    <SelectItem key={allowedCurrency} value={allowedCurrency}>
-                                        {allowedCurrency}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {allowedCurrencies.length === 1 && (
-                            <p className="text-xs text-muted-foreground">Se fija automaticamente segun la cuenta elegida.</p>
-                        )}
+                        <div className="space-y-1.5 md:self-start">
+                            <Label>{isExchange ? 'Moneda origen' : 'Moneda'}</Label>
+                            <Select
+                                value={currency}
+                                onValueChange={(value) => onCurrencyChange(value as TransactionFormInput['currency'])}
+                                disabled={allowedCurrencies.length === 1}
+                            >
+                                <SelectTrigger className="h-10 rounded-[1rem]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {allowedCurrencies.map((allowedCurrency) => (
+                                        <SelectItem key={allowedCurrency} value={allowedCurrency}>
+                                            {allowedCurrency}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {allowedCurrencies.length === 1 && (
+                                <p className="text-xs text-muted-foreground">Se fija automaticamente segun la cuenta elegida.</p>
+                            )}
+                        </div>
                     </div>
+
+                    {amountError ? <p className="text-sm text-destructive">{amountError}</p> : null}
 
                     <div className="space-y-2">
                         <Label>Fecha</Label>
                         <Popover open={isDatePopoverOpen} onOpenChange={onDatePopoverOpenChange}>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full justify-start text-left font-medium">
+                                <Button variant="outline" className="h-10 w-full justify-start rounded-[1rem] text-left font-medium">
                                     <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                                     {date instanceof Date ? date.toLocaleDateString('es-AR') : 'Selecciona fecha'}
                                 </Button>
@@ -183,8 +190,8 @@ export function TransactionMainStep({
                             </PopoverContent>
                         </Popover>
                     </div>
-                </div>
-            </div>
+                </motion.div>
+            </motion.div>
         </StepSection>
     )
 }

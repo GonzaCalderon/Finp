@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeftRight, CalendarIcon, Check, Wand2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { getAccountCurrencyLabel } from '@/lib/utils/accounts'
+import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount } from '@/types'
 import { StepSection } from './StepSection'
@@ -252,9 +254,14 @@ export function TransactionOtherDetailsStep({
     ].filter((option): option is { id: CardPaymentSelection; title: string; value: string; note: string; wide: boolean } => Boolean(option))
     return (
         <StepSection eyebrow="Paso 3" title={title} subtitle={subtitle}>
-            <div className="space-y-4">
+            <motion.div
+                className="space-y-4"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
                 {showSource && type !== 'credit_card_payment' && type !== 'exchange' && type !== 'transfer' && type !== 'adjustment' && (
-                    <div className="space-y-2">
+                    <motion.div variants={staggerItem} className="space-y-2">
                         <Label>Cuenta de origen</Label>
                         <Select
                             value={sourceAccountId}
@@ -272,11 +279,12 @@ export function TransactionOtherDetailsStep({
                             </SelectContent>
                         </Select>
                         {showErrors && sourceAccountIdError && <p className="text-sm text-destructive">{sourceAccountIdError}</p>}
-                    </div>
+                    </motion.div>
                 )}
 
                 {type === 'income' && (
-                    <div
+                    <motion.div
+                        variants={staggerItem}
                         className="space-y-3.5 rounded-[1.85rem] border p-3.5 md:space-y-4 md:p-5"
                         style={{
                             ...subtlePanelStyle,
@@ -343,41 +351,25 @@ export function TransactionOtherDetailsStep({
 
                                 <div className="space-y-1.5 md:self-start">
                                     <Label>Moneda</Label>
-                                    {allowedCurrencies.length > 1 ? (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {allowedCurrencies.map((allowedCurrency) => {
-                                                const selected = currency === allowedCurrency
-                                                return (
-                                                    <button
-                                                        key={allowedCurrency}
-                                                        type="button"
-                                                        className="h-10 rounded-[1rem] border px-3 text-sm font-medium transition-colors"
-                                                        style={{
-                                                            borderColor: selected
-                                                                ? 'color-mix(in srgb, var(--border) 72%, var(--foreground) 16%)'
-                                                                : 'color-mix(in srgb, var(--border) 88%, transparent)',
-                                                            background: selected
-                                                                ? 'color-mix(in srgb, var(--card) 94%, var(--foreground) 6%)'
-                                                                : 'transparent',
-                                                        }}
-                                                        onClick={() => onCurrencyChange(allowedCurrency)}
-                                                    >
-                                                        {allowedCurrency}
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
-                                    ) : (
-                                        <div
-                                            className="flex h-10 items-center rounded-[1rem] border px-3 text-sm font-medium"
-                                            style={{
-                                                borderColor: 'color-mix(in srgb, var(--border) 88%, transparent)',
-                                                background: 'color-mix(in srgb, var(--background) 88%, var(--card) 12%)',
-                                            }}
-                                        >
-                                            {allowedCurrencies[0] ?? currency}
-                                        </div>
-                                    )}
+                                    <Select
+                                        value={currency}
+                                        onValueChange={(value) => onCurrencyChange(value as TransactionFormInput['currency'])}
+                                        disabled={allowedCurrencies.length === 1}
+                                    >
+                                        <SelectTrigger className="h-10 rounded-[1rem]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {allowedCurrencies.map((allowedCurrency) => (
+                                                <SelectItem key={allowedCurrency} value={allowedCurrency}>
+                                                    {allowedCurrency}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {allowedCurrencies.length === 1 ? (
+                                        <p className="text-xs text-muted-foreground">Se fija automaticamente segun la cuenta elegida.</p>
+                                    ) : null}
                                 </div>
                             </div>
 
@@ -419,11 +411,11 @@ export function TransactionOtherDetailsStep({
                                 ) : null}
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 )}
 
                 {showDestination && type !== 'income' && type !== 'credit_card_payment' && type !== 'exchange' && type !== 'transfer' && (
-                    <div className="space-y-2">
+                    <motion.div variants={staggerItem} className="space-y-2">
                         <Label>Cuenta destino</Label>
                         <Select
                             value={destinationAccountId}
@@ -441,11 +433,12 @@ export function TransactionOtherDetailsStep({
                             </SelectContent>
                         </Select>
                         {showErrors && destinationAccountIdError && <p className="text-sm text-destructive">{destinationAccountIdError}</p>}
-                    </div>
+                    </motion.div>
                 )}
 
                 {type === 'transfer' && (
-                    <div
+                    <motion.div
+                        variants={staggerItem}
                         className="space-y-3.5 rounded-[1.85rem] border p-3.5 md:space-y-4 md:p-5"
                         style={{
                             ...subtlePanelStyle,
@@ -646,11 +639,12 @@ export function TransactionOtherDetailsStep({
                                 ) : null}
                             </div>
                         )}
-                    </div>
+                    </motion.div>
                 )}
 
                 {type === 'exchange' && (
-                    <div
+                    <motion.div
+                        variants={staggerItem}
                         className="space-y-3.5 rounded-[1.85rem] border p-3.5 md:space-y-4 md:p-5"
                         style={{
                             ...subtlePanelStyle,
@@ -804,11 +798,12 @@ export function TransactionOtherDetailsStep({
                                 </div>
                             ) : null}
                         </div>
-                    </div>
+                    </motion.div>
                 )}
 
                 {type === 'credit_card_payment' && (
-                    <div
+                    <motion.div
+                        variants={staggerItem}
                         className="space-y-3.5 rounded-[1.85rem] border p-3.5 md:space-y-4 md:p-5"
                         style={{
                             ...subtlePanelStyle,
@@ -916,143 +911,159 @@ export function TransactionOtherDetailsStep({
                                 )}
                             </div>
 
-                            {allowCardPaymentFullMode && cardPaymentMode === 'full' ? (
-                                fullPaymentOptions.length > 0 ? (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {fullPaymentOptions.map((option) => {
-                                            const selected = cardPaymentSelection === option.id
-                                            return (
-                                                <button
-                                                    key={option.id}
-                                                    type="button"
-                                                    className={`rounded-[1rem] border p-3 text-left transition-colors ${option.wide ? 'col-span-2' : ''}`}
-                                                    style={{
-                                                        borderColor: selected
-                                                            ? 'color-mix(in srgb, var(--border) 72%, var(--foreground) 16%)'
-                                                            : 'color-mix(in srgb, var(--border) 88%, transparent)',
-                                                        background: selected
-                                                            ? 'color-mix(in srgb, var(--card) 94%, var(--foreground) 6%)'
-                                                            : 'color-mix(in srgb, var(--background) 86%, var(--card) 14%)',
-                                                    }}
-                                                    onClick={() => onCardPaymentSelectionChange(option.id)}
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-semibold">{option.title}</p>
-                                                            <p className="mt-1 text-sm font-semibold tabular-nums">{option.value}</p>
-                                                        </div>
-                                                        {selected && (
-                                                            <span
-                                                                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border"
-                                                                style={{
-                                                                    borderColor: 'color-mix(in srgb, var(--border) 84%, transparent)',
-                                                                    background: 'color-mix(in srgb, var(--background) 88%, var(--card) 12%)',
-                                                                }}
-                                                            >
-                                                                <Check className="h-3 w-3" />
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="mt-2 text-[11px] text-muted-foreground">{option.note}</p>
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
+                            <AnimatePresence mode="wait" initial={false}>
+                                {allowCardPaymentFullMode && cardPaymentMode === 'full' ? (
+                                    <motion.div
+                                        key="card-payment-full"
+                                        initial={{ opacity: 0, y: 6 }}
+                                        animate={{ opacity: 1, y: 0, transition: { duration: DURATION.normal, ease: easeSmooth } }}
+                                        exit={{ opacity: 0, y: -4, transition: { duration: DURATION.fast, ease: easeSoft } }}
+                                    >
+                                        {fullPaymentOptions.length > 0 ? (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {fullPaymentOptions.map((option) => {
+                                                    const selected = cardPaymentSelection === option.id
+                                                    return (
+                                                        <button
+                                                            key={option.id}
+                                                            type="button"
+                                                            className={`rounded-[1rem] border p-3 text-left transition-colors ${option.wide ? 'col-span-2' : ''}`}
+                                                            style={{
+                                                                borderColor: selected
+                                                                    ? 'color-mix(in srgb, var(--border) 72%, var(--foreground) 16%)'
+                                                                    : 'color-mix(in srgb, var(--border) 88%, transparent)',
+                                                                background: selected
+                                                                    ? 'color-mix(in srgb, var(--card) 94%, var(--foreground) 6%)'
+                                                                    : 'color-mix(in srgb, var(--background) 86%, var(--card) 14%)',
+                                                            }}
+                                                            onClick={() => onCardPaymentSelectionChange(option.id)}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-semibold">{option.title}</p>
+                                                                    <p className="mt-1 text-sm font-semibold tabular-nums">{option.value}</p>
+                                                                </div>
+                                                                {selected && (
+                                                                    <span
+                                                                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border"
+                                                                        style={{
+                                                                            borderColor: 'color-mix(in srgb, var(--border) 84%, transparent)',
+                                                                            background: 'color-mix(in srgb, var(--background) 88%, var(--card) 12%)',
+                                                                        }}
+                                                                    >
+                                                                        <Check className="h-3 w-3" />
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="mt-2 text-[11px] text-muted-foreground">{option.note}</p>
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground">
+                                                No queda saldo pendiente para un pago total. Si hace falta, podes registrar un pago parcial.
+                                            </p>
+                                        )}
+                                    </motion.div>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground">
-                                        No queda saldo pendiente para un pago total. Si hace falta, podes registrar un pago parcial.
-                                    </p>
-                                )
-                            ) : (
-                                <div className="space-y-3">
-                                    {canUseDualCardPayment && dualPartialInputs.length > 1 ? (
-                                        <div className="grid gap-2 sm:grid-cols-2">
-                                            {dualPartialInputs.map((option) => (
-                                                <div
-                                                    key={option.currency}
-                                                    className="min-w-0 space-y-1.5 rounded-[0.9rem] border p-2.5 sm:space-y-2 sm:rounded-[1rem] sm:p-3"
-                                                    style={{
-                                                        borderColor: 'color-mix(in srgb, var(--border) 88%, transparent)',
-                                                        background: 'color-mix(in srgb, var(--background) 86%, var(--card) 14%)',
-                                                    }}
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <p className="pt-0.5 text-[0.95rem] font-semibold leading-none sm:text-sm">{option.currency}</p>
-                                                        <p className="min-w-0 text-right text-[10px] leading-tight text-muted-foreground sm:text-[11px]">
-                                                            <span className="sm:hidden">{fmtCurrency(option.pending, option.currency)}</span>
-                                                            <span className="hidden sm:inline">Pendiente {fmtCurrency(option.pending, option.currency)}</span>
-                                                        </p>
+                                    <motion.div
+                                        key="card-payment-partial"
+                                        className="space-y-3"
+                                        initial={{ opacity: 0, y: 6 }}
+                                        animate={{ opacity: 1, y: 0, transition: { duration: DURATION.normal, ease: easeSmooth } }}
+                                        exit={{ opacity: 0, y: -4, transition: { duration: DURATION.fast, ease: easeSoft } }}
+                                    >
+                                        {canUseDualCardPayment && dualPartialInputs.length > 1 ? (
+                                            <div className="grid gap-2 sm:grid-cols-2">
+                                                {dualPartialInputs.map((option) => (
+                                                    <div
+                                                        key={option.currency}
+                                                        className="min-w-0 space-y-1.5 rounded-[0.9rem] border p-2.5 sm:space-y-2 sm:rounded-[1rem] sm:p-3"
+                                                        style={{
+                                                            borderColor: 'color-mix(in srgb, var(--border) 88%, transparent)',
+                                                            background: 'color-mix(in srgb, var(--background) 86%, var(--card) 14%)',
+                                                        }}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p className="pt-0.5 text-[0.95rem] font-semibold leading-none sm:text-sm">{option.currency}</p>
+                                                            <p className="min-w-0 text-right text-[10px] leading-tight text-muted-foreground sm:text-[11px]">
+                                                                <span className="sm:hidden">{fmtCurrency(option.pending, option.currency)}</span>
+                                                                <span className="hidden sm:inline">Pendiente {fmtCurrency(option.pending, option.currency)}</span>
+                                                            </p>
+                                                        </div>
+
+                                                        <FormattedAmountInput
+                                                            id={`creditCardPaymentAmount${option.currency}`}
+                                                            label={`Monto parcial ${option.currency}`}
+                                                            value={option.value}
+                                                            currency={option.currency}
+                                                            placeholder="0"
+                                                            labelClassName="sr-only"
+                                                            wrapperClassName="min-w-0 space-y-0"
+                                                            inputClassName="h-9 rounded-[0.85rem] pl-8 text-[1rem] font-semibold tracking-tight sm:h-10 sm:rounded-[0.95rem] sm:pl-9 sm:text-[1.05rem]"
+                                                            prefixClassName="left-2.5 text-[11px] sm:left-3 sm:text-[13px]"
+                                                            onValueChangeAction={(nextAmount) => onPartialCardPaymentAmountChange(option.currency, nextAmount)}
+                                                        />
                                                     </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {allowedCurrencies.length > 1 && (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {allowedCurrencies.map((allowedCurrency) => {
+                                                            const selected = currency === allowedCurrency
+                                                            return (
+                                                                <button
+                                                                    key={allowedCurrency}
+                                                                    type="button"
+                                                                    className="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+                                                                    style={{
+                                                                        borderColor: selected
+                                                                            ? 'color-mix(in srgb, var(--border) 72%, var(--foreground) 16%)'
+                                                                            : 'color-mix(in srgb, var(--border) 88%, transparent)',
+                                                                        background: selected
+                                                                            ? 'color-mix(in srgb, var(--card) 94%, var(--foreground) 6%)'
+                                                                            : 'transparent',
+                                                                    }}
+                                                                    onClick={() => onCurrencyChange(allowedCurrency)}
+                                                                >
+                                                                    {allowedCurrency}
+                                                                </button>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                )}
 
-                                                    <FormattedAmountInput
-                                                        id={`creditCardPaymentAmount${option.currency}`}
-                                                        label={`Monto parcial ${option.currency}`}
-                                                        value={option.value}
-                                                        currency={option.currency}
-                                                        placeholder="0"
-                                                        labelClassName="sr-only"
-                                                        wrapperClassName="min-w-0 space-y-0"
-                                                        inputClassName="h-9 rounded-[0.85rem] pl-8 text-[1rem] font-semibold tracking-tight sm:h-10 sm:rounded-[0.95rem] sm:pl-9 sm:text-[1.05rem]"
-                                                        prefixClassName="left-2.5 text-[11px] sm:left-3 sm:text-[13px]"
-                                                        onValueChangeAction={(nextAmount) => onPartialCardPaymentAmountChange(option.currency, nextAmount)}
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {allowedCurrencies.length > 1 && (
-                                                <div className="flex flex-wrap gap-2">
-                                                    {allowedCurrencies.map((allowedCurrency) => {
-                                                        const selected = currency === allowedCurrency
-                                                        return (
-                                                            <button
-                                                                key={allowedCurrency}
-                                                                type="button"
-                                                                className="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
-                                                                style={{
-                                                                    borderColor: selected
-                                                                        ? 'color-mix(in srgb, var(--border) 72%, var(--foreground) 16%)'
-                                                                        : 'color-mix(in srgb, var(--border) 88%, transparent)',
-                                                                    background: selected
-                                                                        ? 'color-mix(in srgb, var(--card) 94%, var(--foreground) 6%)'
-                                                                        : 'transparent',
-                                                                }}
-                                                                onClick={() => onCurrencyChange(allowedCurrency)}
-                                                            >
-                                                                {allowedCurrency}
-                                                            </button>
-                                                        )
-                                                    })}
-                                                </div>
-                                            )}
-
-                                            <FormattedAmountInput
-                                                id="creditCardPaymentAmount"
-                                                label="Monto parcial"
-                                                value={amount}
-                                                currency={currency}
-                                                error={showErrors ? amountError : undefined}
-                                                wrapperClassName="space-y-1.5"
-                                                inputClassName="h-10 rounded-[1rem] text-[1.2rem] font-semibold tracking-tight md:text-[1.1rem]"
-                                                prefixClassName="text-[14px]"
-                                                helperText={
-                                                    selectedSummaryItem
-                                                        ? `Pendiente ${selectedSummaryItem.currency}: ${fmtCurrency(selectedSummaryItem.pending, selectedSummaryItem.currency as TransactionFormInput['currency'])}`
-                                                        : undefined
-                                                }
-                                                onValueChangeAction={onAmountChange}
-                                            />
-                                        </>
-                                    )}
-                                </div>
-                            )}
+                                                <FormattedAmountInput
+                                                    id="creditCardPaymentAmount"
+                                                    label="Monto parcial"
+                                                    value={amount}
+                                                    currency={currency}
+                                                    error={showErrors ? amountError : undefined}
+                                                    wrapperClassName="space-y-1.5"
+                                                    inputClassName="h-10 rounded-[1rem] text-[1.2rem] font-semibold tracking-tight md:text-[1.1rem]"
+                                                    prefixClassName="text-[14px]"
+                                                    helperText={
+                                                        selectedSummaryItem
+                                                            ? `Pendiente ${selectedSummaryItem.currency}: ${fmtCurrency(selectedSummaryItem.pending, selectedSummaryItem.currency as TransactionFormInput['currency'])}`
+                                                            : undefined
+                                                    }
+                                                    onValueChangeAction={onAmountChange}
+                                                />
+                                            </>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
-                    </div>
+                    </motion.div>
                 )}
 
                 {type === 'adjustment' && (
-                    <div
+                    <motion.div
+                        variants={staggerItem}
                         className="space-y-3.5 rounded-[1.85rem] border p-3.5 md:space-y-4 md:p-5"
                         style={{
                             ...subtlePanelStyle,
@@ -1193,9 +1204,9 @@ export function TransactionOtherDetailsStep({
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 )}
-            </div>
+            </motion.div>
         </StepSection>
     )
 }

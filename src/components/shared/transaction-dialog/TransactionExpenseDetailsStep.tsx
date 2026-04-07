@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { motion } from 'framer-motion'
 import { Banknote, Building2, CreditCard, Minus, Plus, Wand2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { getAccountCurrencyLabel } from '@/lib/utils/accounts'
+import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount } from '@/types'
 import type { PaymentMethod } from '@/components/shared/transaction-dialog-prefs'
@@ -80,8 +82,13 @@ export function TransactionExpenseDetailsStep({
             title="Como lo pagaste"
             subtitle="Primero elegi el medio de pago. Despues aparece solo lo que hace falta para ese caso."
         >
-            <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
+            <motion.div
+                className="space-y-4"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
+                <motion.div variants={staggerItem} className="grid grid-cols-3 gap-2">
                     {PAYMENT_METHODS.map((method) => {
                         const selected = paymentMethod === method.value
                         return (
@@ -103,10 +110,10 @@ export function TransactionExpenseDetailsStep({
                             </button>
                         )
                     })}
-                </div>
+                </motion.div>
 
                 {isCardExpense ? (
-                    <div className="space-y-4 rounded-[2rem] border p-4" style={subtlePanelStyle}>
+                    <motion.div variants={staggerItem} className="space-y-4 rounded-[2rem] border p-4" style={subtlePanelStyle}>
                         <div className="space-y-2">
                             <Label>Tarjeta</Label>
                             <Select
@@ -211,7 +218,7 @@ export function TransactionExpenseDetailsStep({
                             </>
                         )}
 
-                        <div className="rounded-3xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--background)' }}>
+                        <motion.div variants={staggerItem} className="rounded-3xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--background)' }}>
                             <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Resumen del plan</p>
                             <p className="mt-1 text-lg font-semibold">{installmentPlanSummary}</p>
                             {installmentAmount > 0 && (
@@ -220,10 +227,10 @@ export function TransactionExpenseDetailsStep({
                                 </p>
                             )}
                             {planMonthsLabel && <p className="mt-1 text-xs text-muted-foreground">{planMonthsLabel}</p>}
-                        </div>
-                    </div>
+                        </motion.div>
+                    </motion.div>
                 ) : (
-                    <div className="space-y-2 rounded-[2rem] border p-4" style={subtlePanelStyle}>
+                    <motion.div variants={staggerItem} className="space-y-2 rounded-[2rem] border p-4" style={subtlePanelStyle}>
                         <Label>{paymentMethod === 'cash' ? 'Cuenta de efectivo' : 'Cuenta'}</Label>
                         <Select
                             value={sourceAccountId}
@@ -241,9 +248,9 @@ export function TransactionExpenseDetailsStep({
                             </SelectContent>
                         </Select>
                         {sourceAccountIdError && <p className="text-sm text-destructive">{sourceAccountIdError}</p>}
-                    </div>
+                    </motion.div>
                 )}
-            </div>
+            </motion.div>
         </StepSection>
     )
 }

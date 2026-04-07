@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
+import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { ICategory } from '@/types'
 import { StepSection } from './StepSection'
@@ -50,9 +50,14 @@ export function TransactionClassificationStep({
             title="Elegi la categoria"
             subtitle="Resolve esto rapido: una sugerida, una frecuente o una busqueda corta."
         >
-            <div className="space-y-5">
+            <motion.div
+                className="space-y-5"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
                 {showCategory && (
-                    <div className="space-y-3">
+                    <motion.div variants={staggerItem} className="space-y-3">
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <Label>Categorias</Label>
@@ -71,14 +76,14 @@ export function TransactionClassificationStep({
                         </div>
 
                         {appliedRuleName && selectedCategory && normalizedCategoryQuery.length === 0 && (
-                            <div className="rounded-3xl border px-4 py-3 text-sm" style={subtlePanelStyle}>
+                            <motion.div variants={staggerItem} className="rounded-3xl border px-4 py-3 text-sm" style={subtlePanelStyle}>
                                 <p className="font-medium">Sugerida por regla: {appliedRuleName}</p>
                                 <p className="mt-1 text-xs text-muted-foreground">La dejamos preseleccionada, pero podes cambiarla sin friccion.</p>
-                            </div>
+                            </motion.div>
                         )}
 
                         {filteredCategories.length > 0 && (
-                            <div className="relative">
+                            <motion.div variants={staggerItem} className="relative">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                                 <Input
                                     value={categoryQuery}
@@ -86,11 +91,11 @@ export function TransactionClassificationStep({
                                     placeholder="Buscar categoria"
                                     className="pl-9"
                                 />
-                            </div>
+                            </motion.div>
                         )}
 
                         {recentCategories.length > 0 && normalizedCategoryQuery.length === 0 && (
-                            <div className="space-y-2">
+                            <motion.div variants={staggerItem} className="space-y-2">
                                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Frecuentes</p>
                                 <div className="flex flex-wrap gap-2">
                                     {recentCategories.map((category) => (
@@ -102,10 +107,10 @@ export function TransactionClassificationStep({
                                         />
                                     ))}
                                 </div>
-                            </div>
+                            </motion.div>
                         )}
 
-                        <div className="space-y-2">
+                        <motion.div variants={staggerItem} className="space-y-2">
                             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                                 {normalizedCategoryQuery.length > 0 ? 'Resultados' : 'Sugeridas'}
                             </p>
@@ -127,10 +132,10 @@ export function TransactionClassificationStep({
                                         : 'No hay categorias para este tipo.'}
                                 </p>
                             )}
-                        </div>
+                        </motion.div>
 
                         {extraCategories.length > 0 && normalizedCategoryQuery.length === 0 && (
-                            <div className="space-y-3">
+                            <motion.div variants={staggerItem} className="space-y-3">
                                 <button
                                     type="button"
                                     onClick={onToggleShowAllCategories}
@@ -161,11 +166,11 @@ export function TransactionClassificationStep({
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
-                            </div>
+                            </motion.div>
                         )}
-                    </div>
+                    </motion.div>
                 )}
-            </div>
+            </motion.div>
         </StepSection>
     )
 }

@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
+import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount, ICategory } from '@/types'
 import { StepSection } from './StepSection'
@@ -166,8 +166,13 @@ export function TransactionReviewStep({
             title={isEditing ? 'Resumen de la edicion' : 'Resumen antes de guardar'}
             subtitle="Un vistazo corto, claro y suficiente para confirmar con confianza."
         >
-            <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-4 rounded-[2rem] border p-4" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--card) 88%, transparent)', boxShadow: 'var(--card-shadow)' }}>
+            <motion.div
+                className="grid gap-4 lg:grid-cols-2"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
+                <motion.div variants={staggerItem} className="space-y-4 rounded-[2rem] border p-4" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--card) 88%, transparent)', boxShadow: 'var(--card-shadow)' }}>
                     <div className="flex flex-wrap items-center gap-2">
                         <span
                             className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
@@ -210,7 +215,7 @@ export function TransactionReviewStep({
                     </div>
 
                     {showTransferResultPreview && (
-                        <div className="rounded-[1.5rem] border p-4" style={subtlePanelStyle}>
+                        <motion.div variants={staggerItem} className="rounded-[1.5rem] border p-4" style={subtlePanelStyle}>
                             <p className="text-sm font-semibold">Saldos resultantes</p>
                             <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                 {[
@@ -236,12 +241,12 @@ export function TransactionReviewStep({
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </motion.div>
                     )}
-                </div>
+                </motion.div>
 
-                <div className="space-y-4">
-                    <div className="min-h-[80px] rounded-[2rem] border p-4" style={subtlePanelStyle}>
+                <motion.div variants={staggerItem} className="space-y-4">
+                    <motion.div variants={staggerItem} className="min-h-[80px] rounded-[2rem] border p-4" style={subtlePanelStyle}>
                         <button
                             type="button"
                             onClick={onToggleMoreOptions}
@@ -296,18 +301,18 @@ export function TransactionReviewStep({
                                 </motion.div>
                             )}
                         </AnimatePresence>
-                    </div>
+                    </motion.div>
 
                     {usesCardExpensePlanFlow && (
-                        <div className="rounded-[2rem] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+                        <motion.div variants={staggerItem} className="rounded-[2rem] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
                             <p className="text-sm font-semibold">Plan de cuotas</p>
                             <p className="mt-1 text-sm text-muted-foreground">{installmentPlanSummary}</p>
                             {installmentAmount > 0 && <p className="mt-2 text-sm">{installmentCount} x {fmtCurrency(installmentAmount)}</p>}
                             {planMonthsLabel && <p className="mt-1 text-xs text-muted-foreground">{planMonthsLabel}</p>}
-                        </div>
+                        </motion.div>
                     )}
-                </div>
-            </div>
+                </motion.div>
+            </motion.div>
         </StepSection>
     )
 }

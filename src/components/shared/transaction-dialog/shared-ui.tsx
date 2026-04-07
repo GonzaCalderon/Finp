@@ -1,6 +1,10 @@
+'use client'
+
+import { motion } from 'framer-motion'
 import { Check } from 'lucide-react'
 import type { ICategory } from '@/types'
 import type { TransactionFormInput } from '@/lib/validations'
+import { DURATION, easeSmooth, springButton, staggerItem } from '@/lib/utils/animations'
 
 export const subtlePanelStyle = {
     borderColor: 'color-mix(in srgb, var(--border) 88%, transparent)',
@@ -47,11 +51,15 @@ export function ChoiceCard({
     surface: { background: string; borderColor: string; color: string }
 }) {
     return (
-        <button
+        <motion.button
             type="button"
             onClick={onClick}
             data-testid={dataTestId}
             className="rounded-[1.6rem] border px-4 py-4 text-left transition-all duration-200"
+            variants={staggerItem}
+            whileHover={{ scale: 1.01, y: -1 }}
+            whileTap={{ scale: 0.992 }}
+            transition={springButton}
             style={{
                 borderColor: selected ? surface.borderColor : 'var(--border)',
                 background: selected ? surface.background : 'var(--card)',
@@ -69,16 +77,20 @@ export function ChoiceCard({
                     </span>
                 )}
             </div>
-        </button>
+        </motion.button>
     )
 }
 
 export function CategoryChip({ category, selected, onClick }: { category: ICategory; selected: boolean; onClick: () => void }) {
     return (
-        <button
+        <motion.button
             type="button"
             onClick={onClick}
             className="rounded-full border px-3 py-2 text-sm font-medium transition-colors"
+            variants={staggerItem}
+            whileHover={{ scale: 1.015 }}
+            whileTap={{ scale: 0.99 }}
+            transition={springButton}
             style={{
                 background: selected ? category.color || 'var(--sky)' : category.type === 'income' ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',
                 color: selected ? '#fff' : category.type === 'income' ? '#059669' : '#DC2626',
@@ -88,16 +100,22 @@ export function CategoryChip({ category, selected, onClick }: { category: ICateg
             }}
         >
             {category.name}
-        </button>
+        </motion.button>
     )
 }
 
 export function SummaryCard({ title, value }: { title: string; value: string }) {
     return (
-        <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--background)' }}>
+        <motion.div
+            variants={staggerItem}
+            whileHover={{ y: -1 }}
+            transition={{ duration: DURATION.fast, ease: easeSmooth }}
+            className="rounded-2xl border p-3"
+            style={{ borderColor: 'var(--border)', background: 'var(--background)' }}
+        >
             <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{title}</p>
             <p className="mt-1 text-sm font-semibold">{value}</p>
-        </div>
+        </motion.div>
     )
 }
 

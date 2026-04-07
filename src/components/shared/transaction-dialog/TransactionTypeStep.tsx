@@ -1,5 +1,7 @@
+import { motion } from 'framer-motion'
 import { Check } from 'lucide-react'
 import type { TransactionFormInput } from '@/lib/validations'
+import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { StepSection } from './StepSection'
 import { ChoiceCard, subtlePanelStyle, getSubtleSelectedStyle, getTypeSurface } from './shared-ui'
 
@@ -51,7 +53,8 @@ export function TransactionTypeStep({
                 title={primaryFlowType === 'expense' ? 'Gasto' : TRANSACTION_TYPE_LABELS[type]}
                 subtitle="En la edicion mantenemos este tipo fijo para no romper el historial."
             >
-                <div
+                <motion.div
+                    variants={staggerItem}
                     className="rounded-3xl border p-5"
                     style={{ background: headerSurface.background, borderColor: headerSurface.borderColor }}
                 >
@@ -73,7 +76,7 @@ export function TransactionTypeStep({
                             </span>
                         )}
                     </div>
-                </div>
+                </motion.div>
             </StepSection>
         )
     }
@@ -84,8 +87,13 @@ export function TransactionTypeStep({
                 title="Elegi el tipo de transaccion"
                 subtitle="Arrancamos por la decision principal para que el resto del flujo se adapte solo."
         >
-            <div className="space-y-3.5">
-                <div className="grid grid-cols-2 gap-3">
+            <motion.div
+                className="space-y-3.5"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
+                <motion.div variants={staggerItem} className="grid grid-cols-2 gap-3">
                     {QUICK_TYPES.map((option) => {
                         const selected = primaryFlowType === option
                         const surface = getTypeSurface(option, option === 'expense')
@@ -106,9 +114,9 @@ export function TransactionTypeStep({
                             />
                         )
                     })}
-                </div>
+                </motion.div>
 
-                <div className="grid grid-cols-2 gap-2" data-testid="transaction-more-types">
+                <motion.div variants={staggerItem} className="grid grid-cols-2 gap-2" data-testid="transaction-more-types">
                     {SECONDARY_TYPES.map((option) => {
                         const selected = type === option
                         return (
@@ -148,8 +156,8 @@ export function TransactionTypeStep({
                             </button>
                         )
                     })}
-                </div>
-            </div>
+                </motion.div>
+            </motion.div>
         </StepSection>
     )
 }
