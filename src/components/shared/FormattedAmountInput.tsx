@@ -13,6 +13,7 @@ type FormattedAmountInputProps = {
     placeholder?: string
     autoFocus?: boolean
     allowNegative?: boolean
+    inputClassName?: string
     onNegativeInputDetectedAction?: () => void
     onValueChangeAction: (value: number) => void
 }
@@ -81,6 +82,7 @@ export function FormattedAmountInput({
                                          placeholder = '0',
                                          autoFocus,
                                          allowNegative = false,
+                                         inputClassName,
                                          onNegativeInputDetectedAction,
                                          onValueChangeAction,
                                      }: FormattedAmountInputProps) {
@@ -128,7 +130,7 @@ export function FormattedAmountInput({
                         if (isNegative) onNegativeInputDetectedAction?.()
                         onValueChangeAction(parseDisplayToNumber(signedDisplay))
                     }}
-                    className="pl-9 text-base md:text-sm"
+                    className={`pl-9 text-base md:text-sm${inputClassName ? ` ${inputClassName}` : ''}`}
                 />
             </div>
 

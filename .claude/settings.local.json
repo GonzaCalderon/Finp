@@ -59,7 +59,8 @@
       "Bash(node -e \":*)",
       "Bash(node -e \"const fs=require\\(''fs''\\);const c=fs.readFileSync\\(''src/components/shared/Navbar.tsx'',''utf8''\\);const i=c.indexOf\\(''borderLeft''\\);console.log\\(JSON.stringify\\(c.slice\\(i,i+100\\)\\)\\);const j=c.indexOf\\(''shadow-sky-500''\\);console.log\\(''fab glow:'', j > -1\\)\")",
       "Bash(wc -l /c/Users/gonza/WebstormProjects/Finp/finm/src/components/shared/*.tsx)",
-      "Bash(ls -la \"C:\\\\Users\\\\gonza\\\\WebstormProjects\\\\Finp\\\\finm\\\\src\\\\app\\\\\\(app\\)\\\\transactions\"\")"
+      "Bash(ls -la \"C:\\\\Users\\\\gonza\\\\WebstormProjects\\\\Finp\\\\finm\\\\src\\\\app\\\\\\(app\\)\\\\transactions\"\")",
+      "Bash(grep -v \"^[0-9]*:[[:space:]]*//\")"
     ]
   }
 }
