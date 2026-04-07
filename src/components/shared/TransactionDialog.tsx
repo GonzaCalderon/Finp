@@ -35,7 +35,7 @@ import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 import {
     getDefaultAccountForPaymentMethod,
-    getAccountCurrencyLabel,
+    getAccountBalancesByCurrency,
     getCommonSupportedCurrencies,
     getSupportedCurrencies,
     supportsCurrency,
@@ -75,6 +75,14 @@ type TransactionStep = {
 }
 
 type CurrencyOption = TransactionFormInput['currency']
+type CardPaymentMode = 'full' | 'partial'
+type CardPaymentSelection = 'ars' | 'usd' | 'ars_usd'
+type CardPaymentDraft = {
+    currency: CurrencyOption
+    amount: number
+    additionalEnabled: boolean
+    secondaryAmount: number
+}
 
 const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
     income: 'Ingreso',
@@ -84,15 +92,6 @@ const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
     exchange: 'Cambio',
     credit_card_payment: 'Pago de tarjeta',
     debt_payment: 'Pago de tarjeta',
-    adjustment: 'Ajuste',
-}
-
-const QUICK_TYPES: TransactionFormInput['type'][] = ['expense', 'income']
-const SECONDARY_TYPES: TransactionFormInput['type'][] = ['transfer', 'exchange', 'credit_card_payment', 'adjustment']
-const SECONDARY_TYPE_LABELS: Partial<Record<TransactionFormInput['type'], string>> = {
-    transfer: 'Transferencia',
-    exchange: 'Cambio',
-    credit_card_payment: 'Pago de tarjeta',
     adjustment: 'Ajuste',
 }
 
@@ -208,20 +207,23 @@ function buildSteps(params: {
     const { type, isExpense, showClassification, isEditing } = params
     const steps: TransactionStep[] = [
         {
-            id: 'main',
-            title: 'Descripcion, monto y fecha',
-            subtitle: isEditing
-                ? 'Los datos principales van primero para revisar mas rapido.'
-                : 'Arrancamos con el dato principal para ayudar a las reglas.',
-        },
-        {
             id: 'type',
-            title: 'Que queres registrar',
+            title: 'Tipo de transaccion',
             subtitle: isEditing
                 ? 'El tipo queda visible pero fijo para no alterar el historial.'
-                : 'Despues elegis el tipo del movimiento.',
+                : 'Primero elegis el tipo y despues el formulario se acomoda solo.',
         },
     ]
+
+    if (type !== 'income' && type !== 'credit_card_payment' && type !== 'exchange' && type !== 'transfer' && type !== 'adjustment') {
+        steps.push({
+            id: 'main',
+            title: 'Datos base',
+            subtitle: isEditing
+                ? 'Revisamos el corazon de la transaccion antes de seguir.'
+                : 'Monto, fecha y descripcion cuando aplique.',
+        })
+    }
 
     if (type === 'income') {
         steps.push({ id: 'details', title: 'Donde entra', subtitle: 'Elegi la cuenta que recibe este ingreso.' })
@@ -330,6 +332,8 @@ export function TransactionDialog({
 
     const [showMoreOptions, setShowMoreOptions] = useState(false)
     const [categoryManuallySet, setCategoryManuallySet] = useState(false)
+    const [autoSelectedCategoryId, setAutoSelectedCategoryId] = useState<string | null>(null)
+    const [categoryRuleLocked, setCategoryRuleLocked] = useState(false)
     const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
     const [categoryQuery, setCategoryQuery] = useState('')
     const [showAllCategories, setShowAllCategories] = useState(false)
@@ -348,6 +352,8 @@ export function TransactionDialog({
     } | null>(null)
     const [additionalCardPaymentEnabled, setAdditionalCardPaymentEnabled] = useState(false)
     const [secondaryCardPaymentAmount, setSecondaryCardPaymentAmount] = useState(0)
+    const [cardPaymentMode, setCardPaymentMode] = useState<CardPaymentMode>('full')
+    const [cardPaymentSelection, setCardPaymentSelection] = useState<CardPaymentSelection>('ars')
     const [exchangeDestinationAmount, setExchangeDestinationAmount] = useState(0)
     const [exchangeDestinationCurrency, setExchangeDestinationCurrency] = useState<TransactionFormInput['currency']>('USD')
     const [exchangeRate, setExchangeRate] = useState(0)
@@ -355,8 +361,10 @@ export function TransactionDialog({
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [navigationDirection, setNavigationDirection] = useState(1)
     const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false)
+    const [stepErrorsVisible, setStepErrorsVisible] = useState<Partial<Record<TransactionStepId, boolean>>>({})
 
     const scrollRef = useRef<HTMLDivElement>(null)
+    const cardPaymentPartialDraftRef = useRef<CardPaymentDraft | null>(null)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const watchedValues = useWatch({ control })
@@ -389,7 +397,9 @@ export function TransactionDialog({
         [type, isExpense, showClassificationStep, isEditing]
     )
     const detailsStepIndex = useMemo(() => steps.findIndex((step) => step.id === 'details'), [steps])
+    const classificationStepIndex = useMemo(() => steps.findIndex((step) => step.id === 'classification'), [steps])
     const hasReachedDetailsStep = detailsStepIndex >= 0 && currentStepIndex >= detailsStepIndex
+    const hasReachedClassificationStep = classificationStepIndex >= 0 && currentStepIndex >= classificationStepIndex
     const currentStep = steps[currentStepIndex] ?? steps[0]
     const isLastStep = currentStepIndex === steps.length - 1
     const canGoBack = currentStepIndex > 0
@@ -461,13 +471,73 @@ export function TransactionDialog({
         return ['ARS', 'USD'] as const
     }, [hasReachedDetailsStep, isEditing, selectedDestinationAccount, selectedSourceAccount, showSource, type])
 
-    const allowedExchangeDestinationCurrencies = useMemo(() => {
-        return (['ARS', 'USD'] as const).filter((candidate) => {
-            if (candidate === currency) return false
-            if (!selectedDestinationAccount) return true
-            return supportsCurrency(selectedDestinationAccount, candidate)
-        })
-    }, [currency, selectedDestinationAccount])
+    const exchangeSupportedDirections = useMemo<Array<{ source: CurrencyOption; destination: CurrencyOption }>>(() => {
+        if (type !== 'exchange' || !selectedSourceAccount || !selectedDestinationAccount) return []
+
+        const directions: Array<{ source: CurrencyOption; destination: CurrencyOption }> = []
+        if (supportsCurrency(selectedSourceAccount, 'ARS') && supportsCurrency(selectedDestinationAccount, 'USD')) {
+            directions.push({ source: 'ARS', destination: 'USD' })
+        }
+        if (supportsCurrency(selectedSourceAccount, 'USD') && supportsCurrency(selectedDestinationAccount, 'ARS')) {
+            directions.push({ source: 'USD', destination: 'ARS' })
+        }
+        return directions
+    }, [selectedDestinationAccount, selectedSourceAccount, type])
+
+    const currentExchangeDirectionSupported = useMemo(() => {
+        if (type !== 'exchange' || !selectedSourceAccount || !selectedDestinationAccount) return true
+        return exchangeSupportedDirections.some(
+            (direction) => direction.source === currency && direction.destination === exchangeDestinationCurrency
+        )
+    }, [
+        currency,
+        exchangeDestinationCurrency,
+        exchangeSupportedDirections,
+        selectedDestinationAccount,
+        selectedSourceAccount,
+        type,
+    ])
+
+    const canSwapExchangeDirection = useMemo(() => {
+        if (type !== 'exchange' || !selectedSourceAccount || !selectedDestinationAccount) return false
+        return exchangeSupportedDirections.some(
+            (direction) => direction.source === exchangeDestinationCurrency && direction.destination === currency
+        )
+    }, [
+        currency,
+        exchangeDestinationCurrency,
+        exchangeSupportedDirections,
+        selectedDestinationAccount,
+        selectedSourceAccount,
+        type,
+    ])
+
+    const exchangeConfigurationError = useMemo(() => {
+        if (type !== 'exchange' || !selectedSourceAccount || !selectedDestinationAccount) return null
+        if (currentExchangeDirectionSupported) return null
+
+        if (exchangeSupportedDirections.length === 0) {
+            return 'Estas cuentas no permiten un cambio entre ARS y USD. Elegi una cuenta origen que pueda debitar una moneda y una destino que pueda recibir la otra.'
+        }
+
+        const problems: string[] = []
+        if (!supportsCurrency(selectedSourceAccount, currency)) {
+            problems.push(`La cuenta origen no puede debitar ${currency}`)
+        }
+        if (!supportsCurrency(selectedDestinationAccount, exchangeDestinationCurrency)) {
+            problems.push(`La cuenta destino no puede recibir ${exchangeDestinationCurrency}`)
+        }
+
+        return `${problems.join('. ')}. Usa la doble flecha o cambia una cuenta.`
+    }, [
+        currency,
+        currentExchangeDirectionSupported,
+        exchangeDestinationCurrency,
+        exchangeSupportedDirections.length,
+        selectedDestinationAccount,
+        selectedSourceAccount,
+        type,
+    ])
 
     const hasCrossCurrencyTransferConflict =
         type === 'transfer' &&
@@ -482,14 +552,45 @@ export function TransactionDialog({
         )
     }, [allowedCurrencies, currency, type])
 
-    const secondaryCardPaymentSummary = secondaryCardPaymentCurrency
-        ? paymentSummary?.byCurrency?.[secondaryCardPaymentCurrency] ?? null
-        : null
+    const arsCardPaymentSummary = useMemo(
+        () => paymentSummary?.byCurrency?.ARS ?? (paymentSummary?.currency === 'ARS' ? paymentSummary : null),
+        [paymentSummary]
+    )
+    const usdCardPaymentSummary = useMemo(
+        () => paymentSummary?.byCurrency?.USD ?? (paymentSummary?.currency === 'USD' ? paymentSummary : null),
+        [paymentSummary]
+    )
+    const arsCardPaymentPending = arsCardPaymentSummary?.pending ?? 0
+    const usdCardPaymentPending = usdCardPaymentSummary?.pending ?? 0
 
     const canUseDualCardPayment =
         !isEditing &&
         type === 'credit_card_payment' &&
         Boolean(secondaryCardPaymentCurrency)
+
+    const cardPaymentAvailableSelections = useMemo<CardPaymentSelection[]>(() => {
+        if (type !== 'credit_card_payment') return []
+
+        const options: CardPaymentSelection[] = []
+        if (allowedCurrencies.includes('ARS') && arsCardPaymentPending > 0) options.push('ars')
+        if (allowedCurrencies.includes('USD') && usdCardPaymentPending > 0) options.push('usd')
+        if (
+            canUseDualCardPayment &&
+            allowedCurrencies.includes('ARS') &&
+            allowedCurrencies.includes('USD') &&
+            arsCardPaymentPending > 0 &&
+            usdCardPaymentPending > 0
+        ) {
+            options.push('ars_usd')
+        }
+        return options
+    }, [
+        allowedCurrencies,
+        arsCardPaymentPending,
+        canUseDualCardPayment,
+        type,
+        usdCardPaymentPending,
+    ])
 
     const installmentAmount =
         isCardExpense && installmentCount > 0 && amount > 0
@@ -585,6 +686,77 @@ export function TransactionDialog({
         [currency]
     )
 
+    const transferBalanceCurrency = useMemo<TransactionFormInput['currency'] | undefined>(() => {
+        if (type !== 'transfer') return undefined
+        if (!selectedSourceAccount || !selectedDestinationAccount) return undefined
+        if (!allowedCurrencies.includes(currency)) return undefined
+        return currency
+    }, [allowedCurrencies, currency, selectedDestinationAccount, selectedSourceAccount, type])
+
+    const canShowTransferBalances = useMemo(() => (
+        type === 'transfer' &&
+        !!selectedSourceAccount &&
+        !!selectedDestinationAccount &&
+        sourceAccountId !== destinationAccountId &&
+        !hasCrossCurrencyTransferConflict &&
+        !!transferBalanceCurrency
+    ), [
+        destinationAccountId,
+        hasCrossCurrencyTransferConflict,
+        selectedDestinationAccount,
+        selectedSourceAccount,
+        sourceAccountId,
+        transferBalanceCurrency,
+        type,
+    ])
+
+    const transferSourceBalance = useMemo(() => {
+        if (!canShowTransferBalances || !selectedSourceAccount || !transferBalanceCurrency) return null
+        return getAccountBalancesByCurrency(selectedSourceAccount)[transferBalanceCurrency]
+    }, [canShowTransferBalances, selectedSourceAccount, transferBalanceCurrency])
+
+    const transferDestinationBalance = useMemo(() => {
+        if (!canShowTransferBalances || !selectedDestinationAccount || !transferBalanceCurrency) return null
+        return getAccountBalancesByCurrency(selectedDestinationAccount)[transferBalanceCurrency]
+    }, [canShowTransferBalances, selectedDestinationAccount, transferBalanceCurrency])
+
+    const transferSourceResultingBalance = useMemo(() => {
+        if (transferSourceBalance === null) return null
+        return transferSourceBalance - amount
+    }, [amount, transferSourceBalance])
+
+    const transferDestinationResultingBalance = useMemo(() => {
+        if (transferDestinationBalance === null) return null
+        return transferDestinationBalance + amount
+    }, [amount, transferDestinationBalance])
+
+    const transferBalanceError = useMemo(() => {
+        if (
+            type !== 'transfer' ||
+            !selectedSourceAccount ||
+            !transferBalanceCurrency ||
+            transferSourceBalance === null ||
+            amount <= 0 ||
+            selectedSourceAccount.allowNegativeBalance !== false
+        ) {
+            return null
+        }
+
+        if (transferSourceResultingBalance !== null && transferSourceResultingBalance < 0) {
+            return `Saldo insuficiente en "${selectedSourceAccount.name}". Disponible: ${fmtCurrency(transferSourceBalance, transferBalanceCurrency)}`
+        }
+
+        return null
+    }, [
+        amount,
+        fmtCurrency,
+        selectedSourceAccount,
+        transferBalanceCurrency,
+        transferSourceBalance,
+        transferSourceResultingBalance,
+        type,
+    ])
+
     const submitLabel = transaction
         ? 'Guardar cambios'
         : usesCardExpensePlanFlow
@@ -597,6 +769,8 @@ export function TransactionDialog({
         if (!open) return
 
         setCategoryManuallySet(false)
+        setAutoSelectedCategoryId(null)
+        setCategoryRuleLocked(false)
         setAppliedRuleName(null)
         setCategoryQuery('')
         setShowAllCategories(false)
@@ -604,12 +778,16 @@ export function TransactionDialog({
         setInstallmentQuoteAmount(0)
         setAdditionalCardPaymentEnabled(false)
         setSecondaryCardPaymentAmount(0)
+        setCardPaymentMode('full')
+        setCardPaymentSelection('ars')
+        cardPaymentPartialDraftRef.current = null
         setExchangeDestinationAmount(0)
         setExchangeDestinationCurrency('USD')
         setExchangeRate(0)
         setExchangeRecalcMode('destinationAmount')
         setNavigationDirection(1)
         setCurrentStepIndex(0)
+        setStepErrorsVisible({})
 
         if (transaction) {
             const normalizedType =
@@ -638,6 +816,16 @@ export function TransactionDialog({
             setExchangeDestinationAmount(transaction.destinationAmount ?? 0)
             setExchangeDestinationCurrency(transaction.destinationCurrency ?? (transaction.currency === 'ARS' ? 'USD' : 'ARS'))
             setExchangeRate(transaction.exchangeRate ?? 0)
+            setCardPaymentMode(normalizedType === 'credit_card_payment' ? 'partial' : 'full')
+            setCardPaymentSelection('ars')
+            cardPaymentPartialDraftRef.current = normalizedType === 'credit_card_payment'
+                ? {
+                    currency: transaction.currency === 'USD' ? 'USD' : 'ARS',
+                    amount: Math.abs(transaction.amount),
+                    additionalEnabled: false,
+                    secondaryAmount: 0,
+                }
+                : null
             const isDescOptionalForType = ['transfer', 'exchange', 'credit_card_payment', 'adjustment'].includes(normalizedType)
             setShowMoreOptions(Boolean(transaction.notes || transaction.merchant || isDescOptionalForType))
 
@@ -676,6 +864,9 @@ export function TransactionDialog({
         setFirstClosingMonth('')
         setShowMoreOptions(false)
         setAdjustmentSign('+')
+        setCardPaymentMode('full')
+        setCardPaymentSelection('ars')
+        cardPaymentPartialDraftRef.current = null
     }, [
         accounts,
         existingInstallmentCount,
@@ -692,11 +883,28 @@ export function TransactionDialog({
     }, [currentStepIndex, steps.length])
 
     useEffect(() => {
+        if (!hasReachedClassificationStep || categoryRuleLocked) return
+        setCategoryRuleLocked(true)
+    }, [categoryRuleLocked, hasReachedClassificationStep])
+
+    useEffect(() => {
         if (!showCategory && categoryId) {
             setValue('categoryId', undefined, { shouldValidate: true })
             setCategoryManuallySet(false)
+            setAutoSelectedCategoryId(null)
         }
     }, [categoryId, setValue, showCategory])
+
+    useEffect(() => {
+        if (!showCategory || !categoryId) return
+        const categoryStillValid = filteredCategories.some((category) => category._id.toString() === categoryId)
+        if (categoryStillValid) return
+
+        setValue('categoryId', undefined, { shouldValidate: true })
+        setCategoryManuallySet(false)
+        setAutoSelectedCategoryId(null)
+        setAppliedRuleName(null)
+    }, [categoryId, filteredCategories, setValue, showCategory])
 
     useEffect(() => {
         if (type !== 'credit_card_payment' || !destinationAccountId || !paymentMonth) {
@@ -709,7 +917,8 @@ export function TransactionDialog({
         const fetchPaymentSummary = async () => {
             try {
                 const response = await fetch(
-                    `/api/credit-cards/payment-summary?cardId=${destinationAccountId}&month=${paymentMonth}&currency=${currency}`
+                    `/api/credit-cards/payment-summary?cardId=${destinationAccountId}&month=${paymentMonth}&currency=${currency}`,
+                    { cache: 'no-store' }
                 )
                 const data = await response.json()
                 if (!response.ok || cancelled) return
@@ -724,7 +933,7 @@ export function TransactionDialog({
         return () => {
             cancelled = true
         }
-    }, [currency, destinationAccountId, paymentMonth, type])
+    }, [currency, destinationAccountId, open, paymentMonth, type])
 
     useEffect(() => {
         if (!showSource) setValue('sourceAccountId', undefined, { shouldValidate: true })
@@ -813,12 +1022,12 @@ export function TransactionDialog({
     useEffect(() => {
         if (!isExchange) return
 
-        setValue('destinationCurrency', exchangeDestinationCurrency, { shouldValidate: true })
-        setValue('destinationAmount', exchangeDestinationAmount || undefined, { shouldValidate: true })
-        setValue('exchangeRate', exchangeRate || undefined, { shouldValidate: true })
+        setValue('destinationCurrency', exchangeDestinationCurrency)
+        setValue('destinationAmount', exchangeDestinationAmount || undefined)
+        setValue('exchangeRate', exchangeRate || undefined)
 
         if (!description.trim()) {
-            setValue('description', 'Cambio manual', { shouldValidate: true })
+            setValue('description', 'Cambio manual')
         }
     }, [
         description,
@@ -830,21 +1039,39 @@ export function TransactionDialog({
     ])
 
     useEffect(() => {
-        if (!isExchange) return
-
-        const nextDestinationCurrency =
-            allowedExchangeDestinationCurrencies.includes(exchangeDestinationCurrency)
-                ? exchangeDestinationCurrency
-                : allowedExchangeDestinationCurrencies[0]
-
-        if (nextDestinationCurrency && nextDestinationCurrency !== exchangeDestinationCurrency) {
-            setExchangeDestinationCurrency(nextDestinationCurrency)
-            setValue('destinationCurrency', nextDestinationCurrency, { shouldValidate: true, shouldDirty: true })
+        if (
+            !isExchange ||
+            !selectedSourceAccount ||
+            !selectedDestinationAccount ||
+            currentExchangeDirectionSupported
+        ) {
+            return
         }
+
+        const nextDirection =
+            exchangeSupportedDirections.find(
+                (direction) => direction.source === exchangeDestinationCurrency && direction.destination === currency
+            ) ?? exchangeSupportedDirections[0]
+
+        if (!nextDirection) return
+
+        setExchangeRecalcMode('destinationAmount')
+        setValue('currency', nextDirection.source, { shouldValidate: true, shouldDirty: true })
+        setValue('amount', exchangeDestinationAmount, { shouldValidate: true, shouldDirty: true })
+        setExchangeDestinationCurrency(nextDirection.destination)
+        setValue('destinationCurrency', nextDirection.destination, { shouldValidate: true, shouldDirty: true })
+        setExchangeDestinationAmount(amount)
+        setValue('destinationAmount', amount || undefined, { shouldValidate: true, shouldDirty: true })
     }, [
-        allowedExchangeDestinationCurrencies,
+        amount,
+        currency,
+        currentExchangeDirectionSupported,
+        exchangeDestinationAmount,
         exchangeDestinationCurrency,
+        exchangeSupportedDirections,
         isExchange,
+        selectedDestinationAccount,
+        selectedSourceAccount,
         setValue,
     ])
 
@@ -892,24 +1119,122 @@ export function TransactionDialog({
     }, [canUseDualCardPayment])
 
     useEffect(() => {
-        if (transaction || !isQuickFlow || categoryManuallySet) return
+        if (type !== 'credit_card_payment') {
+            setCardPaymentMode('full')
+            setCardPaymentSelection('ars')
+            cardPaymentPartialDraftRef.current = null
+        }
+    }, [type])
+
+    useEffect(() => {
+        if (type !== 'credit_card_payment' || cardPaymentMode !== 'partial') return
+
+        cardPaymentPartialDraftRef.current = {
+            currency,
+            amount,
+            additionalEnabled: additionalCardPaymentEnabled,
+            secondaryAmount: secondaryCardPaymentAmount,
+        }
+    }, [additionalCardPaymentEnabled, amount, cardPaymentMode, currency, secondaryCardPaymentAmount, type])
+
+    const applyCardPaymentSelection = useCallback((selection: CardPaymentSelection) => {
+        if (selection === 'ars' && arsCardPaymentPending > 0) {
+            setValue('currency', 'ARS', { shouldValidate: true, shouldDirty: true })
+            setValue('amount', arsCardPaymentPending, { shouldValidate: true, shouldDirty: true })
+            setAdditionalCardPaymentEnabled(false)
+            setSecondaryCardPaymentAmount(0)
+            return
+        }
+
+        if (selection === 'usd' && usdCardPaymentPending > 0) {
+            setValue('currency', 'USD', { shouldValidate: true, shouldDirty: true })
+            setValue('amount', usdCardPaymentPending, { shouldValidate: true, shouldDirty: true })
+            setAdditionalCardPaymentEnabled(false)
+            setSecondaryCardPaymentAmount(0)
+            return
+        }
+
+        if (selection === 'ars_usd' && arsCardPaymentPending > 0 && usdCardPaymentPending > 0) {
+            setValue('currency', 'ARS', { shouldValidate: true, shouldDirty: true })
+            setValue('amount', arsCardPaymentPending, { shouldValidate: true, shouldDirty: true })
+            setAdditionalCardPaymentEnabled(true)
+            setSecondaryCardPaymentAmount(usdCardPaymentPending)
+        }
+    }, [arsCardPaymentPending, setValue, usdCardPaymentPending])
+
+    useEffect(() => {
+        if (type !== 'credit_card_payment' || cardPaymentMode !== 'full' || !destinationAccountId || !paymentSummary) return
+
+        if (cardPaymentAvailableSelections.length === 0) {
+            setCardPaymentMode('partial')
+            return
+        }
+
+        const nextSelection = cardPaymentAvailableSelections.includes(cardPaymentSelection)
+            ? cardPaymentSelection
+            : cardPaymentAvailableSelections[0]
+
+        if (nextSelection !== cardPaymentSelection) {
+            setCardPaymentSelection(nextSelection)
+            return
+        }
+
+        applyCardPaymentSelection(nextSelection)
+    }, [
+        applyCardPaymentSelection,
+        cardPaymentAvailableSelections,
+        cardPaymentMode,
+        cardPaymentSelection,
+        destinationAccountId,
+        paymentSummary,
+        type,
+    ])
+
+    useEffect(() => {
+        if (transaction || !isQuickFlow || categoryManuallySet || categoryRuleLocked) return
 
         const activeRules = rules.filter((rule) => rule.isActive)
-        if (activeRules.length === 0) return
+        if (activeRules.length === 0) {
+            if (autoSelectedCategoryId && categoryId === autoSelectedCategoryId) {
+                setValue('categoryId', undefined, { shouldValidate: true })
+            }
+            setAutoSelectedCategoryId(null)
+            setAppliedRuleName(null)
+            return
+        }
 
         const { matched, rule } = evaluateRules(activeRules, { type: primaryFlowType, description, merchant })
         if (matched && rule) {
             const ruleCategoryId = resolveId(rule.categoryId)
-            if (ruleCategoryId) setValue('categoryId', ruleCategoryId, { shouldValidate: true })
-            if (!merchant && rule.normalizeMerchant) {
-                setValue('merchant', rule.normalizeMerchant, { shouldValidate: true })
+
+            if (!ruleCategoryId) {
+                if (autoSelectedCategoryId && categoryId === autoSelectedCategoryId) {
+                    setValue('categoryId', undefined, { shouldValidate: true })
+                }
+                setAutoSelectedCategoryId(null)
+                setAppliedRuleName(null)
+                return
             }
+
+            if (categoryId !== ruleCategoryId) {
+                setValue('categoryId', ruleCategoryId, { shouldValidate: true })
+            }
+
+            setAutoSelectedCategoryId(ruleCategoryId)
             setAppliedRuleName(rule.name)
-        } else {
-            setAppliedRuleName(null)
+            return
         }
+
+        if (autoSelectedCategoryId && categoryId === autoSelectedCategoryId) {
+            setValue('categoryId', undefined, { shouldValidate: true })
+        }
+        setAutoSelectedCategoryId(null)
+        setAppliedRuleName(null)
     }, [
+        autoSelectedCategoryId,
+        categoryId,
         categoryManuallySet,
+        categoryRuleLocked,
         description,
         isQuickFlow,
         merchant,
@@ -973,13 +1298,20 @@ export function TransactionDialog({
         if (nextType === 'expense' && !isEditing) {
             setPaymentMethod(getStoredExpensePaymentMethod() ?? paymentMethod)
         }
+        if (nextType === 'credit_card_payment') {
+            setCardPaymentMode(isEditing ? 'partial' : 'full')
+            setCardPaymentSelection('ars')
+            cardPaymentPartialDraftRef.current = null
+        }
         setCategoryManuallySet(false)
+        setAutoSelectedCategoryId(null)
         setAppliedRuleName(null)
     }, [isEditing, paymentMethod, setValue])
 
     const handleSelectCategory = useCallback((nextCategoryId: string) => {
         setValue('categoryId', nextCategoryId, { shouldValidate: true, shouldDirty: true })
         setCategoryManuallySet(true)
+        setAutoSelectedCategoryId(null)
         setAppliedRuleName(null)
     }, [setValue])
 
@@ -999,13 +1331,13 @@ export function TransactionDialog({
         setValue('amount', normalizedAmount, { shouldValidate: true, shouldDirty: true })
     }, [setValue, type])
 
-    const handleNegativeInputDetected = useCallback(() => {
-        if (type === 'adjustment') setAdjustmentSign('-')
-    }, [type])
-
     const handleCurrencyChange = useCallback((value: TransactionFormInput['currency']) => {
         setValue('currency', value, { shouldValidate: true, shouldDirty: true })
-    }, [setValue])
+        if (type === 'credit_card_payment' && additionalCardPaymentEnabled) {
+            setAdditionalCardPaymentEnabled(false)
+            setSecondaryCardPaymentAmount(0)
+        }
+    }, [additionalCardPaymentEnabled, setValue, type])
 
     const handleSourceAccountChange = useCallback((value: string | undefined) => {
         setValue('sourceAccountId', value || undefined, { shouldValidate: true, shouldDirty: true })
@@ -1037,12 +1369,6 @@ export function TransactionDialog({
         }
     }, [amount, currency, exchangeDestinationCurrency, setValue])
 
-    const handleExchangeDestinationCurrencyChange = useCallback((nextCurrency: TransactionFormInput['currency']) => {
-        setExchangeRecalcMode('destinationAmount')
-        setExchangeDestinationCurrency(nextCurrency)
-        setValue('destinationCurrency', nextCurrency, { shouldValidate: true, shouldDirty: true })
-    }, [setValue])
-
     const handleExchangeRateChange = useCallback((nextRate: number) => {
         setExchangeRecalcMode('destinationAmount')
         setExchangeRate(nextRate)
@@ -1055,14 +1381,130 @@ export function TransactionDialog({
         }
     }, [amount, currency, exchangeDestinationCurrency, setValue])
 
-    const handleUseAmountFromSummary = useCallback((pendingAmount: number, summaryItemCurrency: string) => {
-        if (summaryItemCurrency === currency) {
-            setValue('amount', pendingAmount, { shouldValidate: true, shouldDirty: true })
+    const handleSwapExchangeDirection = useCallback(() => {
+        if (!canSwapExchangeDirection) return
+
+        const nextSourceCurrency = exchangeDestinationCurrency
+        const nextSourceAmount = exchangeDestinationAmount
+        const nextDestinationCurrency = currency
+        const nextDestinationAmount = amount
+
+        setExchangeRecalcMode('destinationAmount')
+        setValue('currency', nextSourceCurrency, { shouldValidate: true, shouldDirty: true })
+        setValue('amount', nextSourceAmount, { shouldValidate: true, shouldDirty: true })
+        setExchangeDestinationCurrency(nextDestinationCurrency)
+        setValue('destinationCurrency', nextDestinationCurrency, { shouldValidate: true, shouldDirty: true })
+        setExchangeDestinationAmount(nextDestinationAmount)
+        setValue('destinationAmount', nextDestinationAmount || undefined, { shouldValidate: true, shouldDirty: true })
+        setValue('exchangeRate', exchangeRate || undefined, { shouldValidate: true, shouldDirty: true })
+    }, [
+        amount,
+        canSwapExchangeDirection,
+        currency,
+        exchangeDestinationAmount,
+        exchangeDestinationCurrency,
+        exchangeRate,
+        setValue,
+    ])
+
+    const handleCardPaymentModeChange = useCallback((nextMode: CardPaymentMode) => {
+        if (nextMode === cardPaymentMode) return
+
+        if (nextMode === 'partial') {
+            const draft = cardPaymentPartialDraftRef.current ?? {
+                currency,
+                amount,
+                additionalEnabled: additionalCardPaymentEnabled,
+                secondaryAmount: secondaryCardPaymentAmount,
+            }
+
+            setCardPaymentMode('partial')
+            setValue('currency', draft.currency, { shouldValidate: true, shouldDirty: true })
+            setValue('amount', draft.amount, { shouldValidate: true, shouldDirty: true })
+            setAdditionalCardPaymentEnabled(draft.additionalEnabled)
+            setSecondaryCardPaymentAmount(draft.secondaryAmount)
             return
         }
-        setAdditionalCardPaymentEnabled(true)
-        setSecondaryCardPaymentAmount(pendingAmount)
-    }, [currency, setValue])
+
+        setCardPaymentMode('full')
+        if (cardPaymentAvailableSelections.length > 0) {
+            setCardPaymentSelection((currentSelection) =>
+                cardPaymentAvailableSelections.includes(currentSelection)
+                    ? currentSelection
+                    : cardPaymentAvailableSelections[0]
+            )
+        }
+    }, [
+        additionalCardPaymentEnabled,
+        amount,
+        cardPaymentAvailableSelections,
+        cardPaymentMode,
+        currency,
+        secondaryCardPaymentAmount,
+        setValue,
+    ])
+
+    const handleCardPaymentSelectionChange = useCallback((nextSelection: CardPaymentSelection) => {
+        setCardPaymentMode('full')
+        setCardPaymentSelection(nextSelection)
+    }, [])
+
+    const handlePartialCardPaymentAmountChange = useCallback((targetCurrency: TransactionFormInput['currency'], nextAmount: number) => {
+        const currentArsAmount =
+            currency === 'ARS'
+                ? amount
+                : additionalCardPaymentEnabled && secondaryCardPaymentCurrency === 'ARS'
+                    ? secondaryCardPaymentAmount
+                    : 0
+        const currentUsdAmount =
+            currency === 'USD'
+                ? amount
+                : additionalCardPaymentEnabled && secondaryCardPaymentCurrency === 'USD'
+                    ? secondaryCardPaymentAmount
+                    : 0
+
+        const nextArsAmount = targetCurrency === 'ARS' ? nextAmount : currentArsAmount
+        const nextUsdAmount = targetCurrency === 'USD' ? nextAmount : currentUsdAmount
+        const hasArsAmount = nextArsAmount > 0
+        const hasUsdAmount = nextUsdAmount > 0
+
+        if (hasArsAmount && hasUsdAmount && canUseDualCardPayment) {
+            setValue('currency', 'ARS', { shouldValidate: true, shouldDirty: true })
+            setValue('amount', nextArsAmount, { shouldValidate: true, shouldDirty: true })
+            setAdditionalCardPaymentEnabled(true)
+            setSecondaryCardPaymentAmount(nextUsdAmount)
+            return
+        }
+
+        if (hasArsAmount) {
+            setValue('currency', 'ARS', { shouldValidate: true, shouldDirty: true })
+            setValue('amount', nextArsAmount, { shouldValidate: true, shouldDirty: true })
+            setAdditionalCardPaymentEnabled(false)
+            setSecondaryCardPaymentAmount(0)
+            return
+        }
+
+        if (hasUsdAmount) {
+            setValue('currency', 'USD', { shouldValidate: true, shouldDirty: true })
+            setValue('amount', nextUsdAmount, { shouldValidate: true, shouldDirty: true })
+            setAdditionalCardPaymentEnabled(false)
+            setSecondaryCardPaymentAmount(0)
+            return
+        }
+
+        setValue('currency', targetCurrency, { shouldValidate: true, shouldDirty: true })
+        setValue('amount', 0, { shouldValidate: true, shouldDirty: true })
+        setAdditionalCardPaymentEnabled(false)
+        setSecondaryCardPaymentAmount(0)
+    }, [
+        additionalCardPaymentEnabled,
+        amount,
+        canUseDualCardPayment,
+        currency,
+        secondaryCardPaymentAmount,
+        secondaryCardPaymentCurrency,
+        setValue,
+    ])
 
     const handleMerchantChange = useCallback((value: string) => {
         setValue('merchant', value, { shouldValidate: true, shouldDirty: true })
@@ -1090,7 +1532,13 @@ export function TransactionDialog({
         }
 
         if (currentStep.id === 'details') {
-            if (type === 'income') return trigger(['destinationAccountId'])
+            if (type === 'income') {
+                const isValid = await trigger(['amount', 'currency', 'date', 'description', 'destinationAccountId'])
+                if (!isValid && !description.trim()) {
+                    focusDescriptionField()
+                }
+                return isValid
+            }
             if (isExpense) {
                 const valid = await trigger(['sourceAccountId'])
                 if (!valid) return false
@@ -1101,12 +1549,19 @@ export function TransactionDialog({
                 setFirstMonthError(null)
                 return true
             }
-            if (type === 'transfer') return trigger(['sourceAccountId', 'destinationAccountId'])
-            if (type === 'exchange') {
-                return trigger(['sourceAccountId', 'destinationAccountId', 'destinationAmount', 'destinationCurrency', 'exchangeRate'])
+            if (type === 'transfer') {
+                const isValid = await trigger(['amount', 'currency', 'date', 'sourceAccountId', 'destinationAccountId'])
+                if (!isValid) return false
+                if (hasCrossCurrencyTransferConflict) return false
+                return !transferBalanceError
             }
-            if (type === 'credit_card_payment') return trigger(['sourceAccountId', 'destinationAccountId'])
-            if (type === 'adjustment') return trigger(['sourceAccountId'])
+            if (type === 'exchange') {
+                const isValid = await trigger(['amount', 'currency', 'date', 'sourceAccountId', 'destinationAccountId', 'destinationAmount', 'destinationCurrency', 'exchangeRate'])
+                if (!isValid) return false
+                return !exchangeConfigurationError
+            }
+            if (type === 'credit_card_payment') return trigger(['amount', 'currency', 'date', 'sourceAccountId', 'destinationAccountId'])
+            if (type === 'adjustment') return trigger(['amount', 'currency', 'date', 'sourceAccountId'])
         }
 
         if (currentStep.id === 'classification') return true
@@ -1115,9 +1570,12 @@ export function TransactionDialog({
         currentStep,
         description,
         descriptionIsOptional,
+        exchangeConfigurationError,
         focusDescriptionField,
         firstClosingMonth,
+        hasCrossCurrencyTransferConflict,
         isExpense,
+        transferBalanceError,
         trigger,
         type,
         usesCardExpensePlanFlow,
@@ -1125,10 +1583,16 @@ export function TransactionDialog({
 
     const handleNextStep = useCallback(async () => {
         const isValid = await validateCurrentStep()
-        if (!isValid || isLastStep) return
+        if (!isValid) {
+            if (currentStep) {
+                setStepErrorsVisible((previous) => ({ ...previous, [currentStep.id]: true }))
+            }
+            return
+        }
+        if (isLastStep) return
         setNavigationDirection(1)
         setCurrentStepIndex((previous) => Math.min(previous + 1, steps.length - 1))
-    }, [isLastStep, steps.length, validateCurrentStep])
+    }, [currentStep, isLastStep, steps.length, validateCurrentStep])
 
     const handleBackStep = useCallback(() => {
         if (!canGoBack) {
@@ -1247,7 +1711,6 @@ export function TransactionDialog({
             isExchange={isExchange}
             descriptionIsOptional={descriptionIsOptional}
             allowedCurrencies={allowedCurrencies}
-            adjustmentSign={adjustmentSign}
             headerSurface={headerSurface}
             appliedRuleName={appliedRuleName}
             transaction={transaction}
@@ -1257,11 +1720,9 @@ export function TransactionDialog({
             amountError={errors.amount?.message}
             onDescriptionChange={handleDescriptionChange}
             onAmountChange={handleAmountChange}
-            onNegativeInputDetected={handleNegativeInputDetected}
             onCurrencyChange={handleCurrencyChange}
             onDateChange={handleDateChange}
             onDatePopoverOpenChange={setIsDatePopoverOpen}
-            onAdjustmentSignChange={setAdjustmentSign}
         />
     )
 
@@ -1318,31 +1779,59 @@ export function TransactionDialog({
             sourceAccountIdError={errors.sourceAccountId?.message}
             destinationAccountIdError={errors.destinationAccountId?.message}
             hasCrossCurrencyTransferConflict={hasCrossCurrencyTransferConflict}
+            description={description}
+            descriptionError={stepErrorsVisible.details || submitCount > 0 ? errors.description?.message : undefined}
+            appliedRuleName={appliedRuleName}
+            hasCategoryRules={rules.length > 0}
             exchangeDestinationAmount={exchangeDestinationAmount}
             exchangeDestinationCurrency={exchangeDestinationCurrency}
             exchangeRate={exchangeRate}
-            exchangeRecalcMode={exchangeRecalcMode}
-            allowedExchangeDestinationCurrencies={allowedExchangeDestinationCurrencies}
             currency={currency}
             destinationAmountError={errors.destinationAmount?.message}
             exchangeRateError={errors.exchangeRate?.message}
             paymentSummary={paymentSummary}
+            allowCardPaymentFullMode={!isEditing}
             canUseDualCardPayment={canUseDualCardPayment}
             secondaryCardPaymentCurrency={secondaryCardPaymentCurrency}
             additionalCardPaymentEnabled={additionalCardPaymentEnabled}
             secondaryCardPaymentAmount={secondaryCardPaymentAmount}
-            secondaryCardPaymentSummary={secondaryCardPaymentSummary}
+            cardPaymentMode={cardPaymentMode}
+            cardPaymentSelection={cardPaymentSelection}
+            isEditing={isEditing}
+            amount={amount}
+            date={date}
+            isDatePopoverOpen={isDatePopoverOpen}
+            amountError={stepErrorsVisible.details || submitCount > 0 ? errors.amount?.message : undefined}
+            dateError={stepErrorsVisible.details || submitCount > 0 ? errors.date?.message : undefined}
+            exchangeConfigurationError={exchangeConfigurationError}
+            canSwapExchangeDirection={canSwapExchangeDirection}
+            transferSourceLabel={selectedSourceAccount?.name}
+            transferDestinationLabel={selectedDestinationAccount?.name}
+            transferBalanceCurrency={transferBalanceCurrency}
+            transferSourceBalance={transferSourceBalance}
+            transferDestinationBalance={transferDestinationBalance}
+            transferSourceResultingBalance={transferSourceResultingBalance}
+            transferDestinationResultingBalance={transferDestinationResultingBalance}
+            transferBalanceError={transferBalanceError}
+            allowedCurrencies={allowedCurrencies}
+            adjustmentSign={adjustmentSign}
+            showErrors={stepErrorsVisible.details || submitCount > 0}
             fmtCurrency={fmtCurrency}
+            onAmountChange={handleAmountChange}
+            onCurrencyChange={handleCurrencyChange}
+            onDateChange={handleDateChange}
+            onDatePopoverOpenChange={setIsDatePopoverOpen}
+            onDescriptionChange={handleDescriptionChange}
+            onCardPaymentModeChange={handleCardPaymentModeChange}
+            onCardPaymentSelectionChange={handleCardPaymentSelectionChange}
+            onPartialCardPaymentAmountChange={handlePartialCardPaymentAmountChange}
             onSourceAccountChange={handleSourceAccountChange}
             onDestinationAccountChange={handleDestinationAccountChange}
             onSwitchToExchange={() => handleTypeSelection('exchange')}
             onDestinationAmountChange={handleDestinationAmountChange}
-            onExchangeDestinationCurrencyChange={handleExchangeDestinationCurrencyChange}
             onExchangeRateChange={handleExchangeRateChange}
-            onRecalcModeChange={setExchangeRecalcMode}
-            onUseAmountFromSummary={handleUseAmountFromSummary}
-            onAdditionalCardPaymentToggle={setAdditionalCardPaymentEnabled}
-            onSecondaryCardPaymentAmountChange={setSecondaryCardPaymentAmount}
+            onSwapExchangeDirection={handleSwapExchangeDirection}
+            onAdjustmentSignChange={setAdjustmentSign}
         />
     )
 
@@ -1351,6 +1840,7 @@ export function TransactionDialog({
             type={type}
             showCategory={showCategory}
             categoryId={categoryId}
+            appliedRuleName={appliedRuleName}
             categoryQuery={categoryQuery}
             showAllCategories={showAllCategories}
             normalizedCategoryQuery={normalizedCategoryQuery}
@@ -1367,6 +1857,7 @@ export function TransactionDialog({
 
     const renderReviewStep = () => (
         <TransactionReviewStep
+            stepLabel={`Paso ${steps.length}`}
             type={type}
             primaryFlowType={primaryFlowType}
             isExpense={isExpense}
@@ -1385,7 +1876,17 @@ export function TransactionDialog({
             exchangeDestinationAmount={exchangeDestinationAmount}
             exchangeDestinationCurrency={exchangeDestinationCurrency}
             exchangeRate={exchangeRate}
+            transferBalanceCurrency={transferBalanceCurrency}
+            transferSourceBalance={transferSourceBalance}
+            transferDestinationBalance={transferDestinationBalance}
+            transferSourceResultingBalance={transferSourceResultingBalance}
+            transferDestinationResultingBalance={transferDestinationResultingBalance}
             paymentSummary={paymentSummary}
+            cardPaymentMode={cardPaymentMode}
+            cardPaymentSelection={cardPaymentSelection}
+            secondaryCardPaymentCurrency={secondaryCardPaymentCurrency}
+            additionalCardPaymentEnabled={additionalCardPaymentEnabled}
+            secondaryCardPaymentAmount={secondaryCardPaymentAmount}
             adjustmentSign={adjustmentSign}
             usesCardExpensePlanFlow={usesCardExpensePlanFlow}
             existingInstallmentCount={existingInstallmentCount}
@@ -1396,6 +1897,7 @@ export function TransactionDialog({
             merchant={merchant}
             notes={notes}
             showMoreOptions={showMoreOptions}
+            showOptionalDescriptionField={descriptionIsOptional && isEditing}
             headerSurface={headerSurface}
             paymentMethodLabel={paymentMethodLabel}
             descriptionError={errors.description?.message}
@@ -1410,8 +1912,8 @@ export function TransactionDialog({
 
     const renderCurrentStep = () => {
         if (!currentStep) return null
-        if (currentStep.id === 'main') return renderAmountStep()
         if (currentStep.id === 'type') return renderTypeStep()
+        if (currentStep.id === 'main') return renderAmountStep()
         if (currentStep.id === 'details') return isExpense ? renderExpenseDetails() : renderOtherDetails()
         if (currentStep.id === 'classification') return renderClassificationStep()
         return renderReviewStep()
@@ -1419,9 +1921,9 @@ export function TransactionDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent variant="fullscreen-mobile" showCloseButton={false} className="overflow-hidden p-0 sm:max-w-4xl sm:h-[min(92vh,860px)]">
+            <DialogContent variant="fullscreen-mobile" showCloseButton={false} className="overflow-hidden p-0 sm:h-[min(92vh,860px)] sm:max-w-[72rem]">
                 <DialogHeader
-                    className="shrink-0 border-b px-4 pb-4 pt-5 md:px-6"
+                    className="shrink-0 border-b px-4 py-2 md:px-6 md:py-3"
                     style={{
                         borderColor: 'var(--border)',
                         background: 'color-mix(in srgb, var(--background) 92%, transparent)',
@@ -1429,31 +1931,41 @@ export function TransactionDialog({
                     }}
                 >
                     <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-2">
-                            <DialogTitle className="text-[1.12rem] tracking-tight">{transaction ? 'Editar transaccion' : 'Nueva transaccion'}</DialogTitle>
+                        <div className="min-w-0 space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <DialogTitle className="text-[1.02rem] tracking-tight">{transaction ? 'Editar transaccion' : 'Nueva transaccion'}</DialogTitle>
+                                <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                                    {currentStepIndex + 1} / {steps.length}
+                                </span>
+                            </div>
                             <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                                <span className="inline-flex items-center rounded-full px-2.5 py-1 font-medium" style={{ background: headerSurface.background, color: headerSurface.color }}>
+                                <span
+                                    className="inline-flex items-center rounded-full border px-2.5 py-1 font-medium"
+                                    style={{
+                                        borderColor: 'color-mix(in srgb, var(--border) 78%, transparent)',
+                                        background: 'color-mix(in srgb, var(--secondary) 80%, transparent)',
+                                        color: headerSurface.color,
+                                    }}
+                                >
                                     {primaryFlowType === 'expense' ? 'Gasto' : TRANSACTION_TYPE_LABELS[type]}
                                 </span>
-                                {showHeaderPaymentMethod && <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-muted-foreground">{paymentMethodLabel}</span>}
-                                {showHeaderInstallmentSummary && <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-muted-foreground">{installmentPlanSummary}</span>}
+                                {showHeaderPaymentMethod && <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/45 px-2.5 py-1 text-muted-foreground">{paymentMethodLabel}</span>}
+                                {showHeaderInstallmentSummary && <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/45 px-2.5 py-1 text-muted-foreground">{installmentPlanSummary}</span>}
                             </div>
                         </div>
 
-                        <div className="space-y-2 text-right">
+                        <div className="text-right">
                             <button
                                 type="button"
                                 onClick={() => onOpenChange(false)}
                                 className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                             >
-                                Cancelar
+                                Cerrar
                             </button>
-                            <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Paso {currentStepIndex + 1} de {steps.length}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{currentStep?.title}</p>
                         </div>
                     </div>
 
-                    <div className="mt-4 flex gap-2">
+                    <div className="mt-2 flex gap-1">
                         {steps.map((step, index) => {
                             const completed = index < currentStepIndex
                             const active = index === currentStepIndex
@@ -1461,9 +1973,13 @@ export function TransactionDialog({
                             return (
                                 <div
                                     key={step.id}
-                                    className="h-2 flex-1 rounded-full transition-all"
+                                    className="h-1.5 flex-1 rounded-full transition-all"
                                     style={{
-                                        background: completed ? 'var(--sky)' : active ? 'color-mix(in srgb, var(--sky) 48%, var(--border))' : 'var(--border)',
+                                        background: active
+                                            ? 'var(--sky)'
+                                            : completed
+                                                ? 'color-mix(in srgb, var(--sky) 42%, var(--border))'
+                                                : 'color-mix(in srgb, var(--border) 88%, transparent)',
                                     }}
                                 />
                             )
@@ -1472,7 +1988,7 @@ export function TransactionDialog({
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(handleFormSubmit)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4 md:px-6 md:pb-32">
+                    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-20 pt-3 md:px-6 md:pb-24 md:pt-4">
                         <AnimatePresence custom={navigationDirection} initial={false} mode="wait">
                             <motion.div
                                 key={currentStep?.id}
@@ -1489,16 +2005,22 @@ export function TransactionDialog({
                         </AnimatePresence>
                     </div>
 
-                    <div className="shrink-0 border-t bg-background/95 px-4 pb-4 pt-3 backdrop-blur md:px-6 md:pb-5" style={{ borderColor: 'var(--border)', boxShadow: '0 -14px 34px rgba(0,0,0,0.12)' }}>
+                    <div className="shrink-0 border-t bg-background/95 px-4 pb-3.5 pt-2.5 backdrop-blur md:px-6 md:pb-4" style={{ borderColor: 'var(--border)', boxShadow: '0 -12px 28px rgba(0,0,0,0.10)' }}>
                         <div className="flex gap-2">
-                            <Button type="button" variant="outline" className="h-11 flex-1" onClick={handleBackStep} data-testid="transaction-step-back">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-10 flex-1 rounded-[1rem] border-border/80 bg-[color-mix(in_srgb,var(--background)_88%,var(--card)_12%)] font-medium"
+                                onClick={handleBackStep}
+                                data-testid="transaction-step-back"
+                            >
                                 {canGoBack ? 'Atras' : 'Cancelar'}
                             </Button>
 
                             {isLastStep ? (
                                 <Button
                                     type="button"
-                                    className="h-11 flex-[1.3]"
+                                    className="h-10 flex-[1.25] rounded-[1rem] font-semibold shadow-[0_8px_20px_rgba(74,158,204,0.14)]"
                                     disabled={isSubmitting}
                                     data-testid="transaction-step-submit"
                                     onClick={() => { void handleSubmit(handleFormSubmit)() }}
@@ -1506,7 +2028,12 @@ export function TransactionDialog({
                                     {isSubmitting ? <><Spinner className="mr-2" />Guardando...</> : submitLabel}
                                 </Button>
                             ) : (
-                                <Button type="button" className="h-11 flex-[1.3]" onClick={() => { void handleNextStep() }} data-testid="transaction-step-next">
+                                <Button
+                                    type="button"
+                                    className="h-10 flex-[1.25] rounded-[1rem] font-semibold shadow-[0_8px_20px_rgba(74,158,204,0.14)]"
+                                    onClick={() => { void handleNextStep() }}
+                                    data-testid="transaction-step-next"
+                                >
                                     {currentStepIndex === steps.length - 2 ? 'Ver resumen' : 'Continuar'}
                                 </Button>
                             )}
@@ -1517,4 +2044,3 @@ export function TransactionDialog({
         </Dialog>
     )
 }
-

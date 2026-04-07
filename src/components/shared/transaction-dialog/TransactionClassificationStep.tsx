@@ -13,6 +13,7 @@ interface TransactionClassificationStepProps {
     type: TransactionFormInput['type']
     showCategory: boolean
     categoryId: string | undefined
+    appliedRuleName: string | null
     categoryQuery: string
     showAllCategories: boolean
     normalizedCategoryQuery: string
@@ -30,6 +31,7 @@ export function TransactionClassificationStep({
     type,
     showCategory,
     categoryId,
+    appliedRuleName,
     categoryQuery,
     showAllCategories,
     normalizedCategoryQuery,
@@ -46,7 +48,7 @@ export function TransactionClassificationStep({
         <StepSection
             eyebrow="Paso 4"
             title="Elegi la categoria"
-            subtitle="Primero ves las mas probables y, si hace falta, abris el resto sin ruido."
+            subtitle="Resolve esto rapido: una sugerida, una frecuente o una busqueda corta."
         >
             <div className="space-y-5">
                 {showCategory && (
@@ -68,7 +70,14 @@ export function TransactionClassificationStep({
                             )}
                         </div>
 
-                        {filteredCategories.length > 6 && (
+                        {appliedRuleName && selectedCategory && normalizedCategoryQuery.length === 0 && (
+                            <div className="rounded-3xl border px-4 py-3 text-sm" style={subtlePanelStyle}>
+                                <p className="font-medium">Sugerida por regla: {appliedRuleName}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">La dejamos preseleccionada, pero podes cambiarla sin friccion.</p>
+                            </div>
+                        )}
+
+                        {filteredCategories.length > 0 && (
                             <div className="relative">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                                 <Input
@@ -82,7 +91,7 @@ export function TransactionClassificationStep({
 
                         {recentCategories.length > 0 && normalizedCategoryQuery.length === 0 && (
                             <div className="space-y-2">
-                                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Recientes</p>
+                                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Frecuentes</p>
                                 <div className="flex flex-wrap gap-2">
                                     {recentCategories.map((category) => (
                                         <CategoryChip
@@ -128,7 +137,7 @@ export function TransactionClassificationStep({
                                     className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                                     data-testid="transaction-toggle-all-categories"
                                 >
-                                    <span>{showAllCategories ? 'Ver menos' : `Ver mas (${extraCategories.length})`}</span>
+                                    <span>{showAllCategories ? 'Ver menos' : `Ver todas (${extraCategories.length})`}</span>
                                     {showAllCategories ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                                 </button>
 

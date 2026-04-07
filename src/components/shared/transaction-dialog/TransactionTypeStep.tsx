@@ -79,45 +79,36 @@ export function TransactionTypeStep({
     }
 
     return (
-        <StepSection
-            eyebrow="Paso 2"
-            title="Que queres registrar"
-            subtitle="Ahora elegi el tipo del movimiento."
+            <StepSection
+                eyebrow="Paso 1"
+                title="Elegi el tipo de transaccion"
+                subtitle="Arrancamos por la decision principal para que el resto del flujo se adapte solo."
         >
-            <div className="grid gap-3 sm:grid-cols-2">
-                {QUICK_TYPES.map((option) => {
-                    const selected = primaryFlowType === option
-                    const surface = getTypeSurface(option, option === 'expense')
+            <div className="space-y-3.5">
+                <div className="grid grid-cols-2 gap-3">
+                    {QUICK_TYPES.map((option) => {
+                        const selected = primaryFlowType === option
+                        const surface = getTypeSurface(option, option === 'expense')
 
-                    return (
-                        <ChoiceCard
-                            key={option}
-                            title={TRANSACTION_TYPE_LABELS[option]}
-                            description={
-                                option === 'expense'
-                                    ? 'Compra, pago o salida habitual.'
-                                    : 'Entrada de dinero a una cuenta.'
-                            }
-                            selected={selected}
-                            onClick={() => onTypeSelect(option)}
-                            dataTestId={`transaction-type-${option}`}
-                            surface={surface}
-                        />
-                    )
-                })}
-            </div>
-
-            <div
-                className="space-y-3 rounded-3xl border p-4"
-                data-testid="transaction-more-types"
-                style={subtlePanelStyle}
-            >
-                <div className="border-b pb-3" style={{ borderColor: 'var(--border)' }}>
-                    <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Otros movimientos</p>
-                    <p className="mt-1 text-sm text-muted-foreground">Siguen disponibles, solo con menos protagonismo visual.</p>
+                        return (
+                            <ChoiceCard
+                                key={option}
+                                title={TRANSACTION_TYPE_LABELS[option]}
+                                description={
+                                    option === 'expense'
+                                        ? 'Compra, pago o salida habitual.'
+                                        : 'Entrada de dinero a una cuenta.'
+                                }
+                                selected={selected}
+                                onClick={() => onTypeSelect(option)}
+                                dataTestId={`transaction-type-${option}`}
+                                surface={surface}
+                            />
+                        )
+                    })}
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-2 gap-2" data-testid="transaction-more-types">
                     {SECONDARY_TYPES.map((option) => {
                         const selected = type === option
                         return (
@@ -126,30 +117,31 @@ export function TransactionTypeStep({
                                 type="button"
                                 onClick={() => onTypeSelect(option)}
                                 aria-pressed={selected}
-                                className="rounded-2xl border px-4 py-3 text-left transition-colors"
+                                className="rounded-[1rem] border px-3 py-2.5 text-left transition-colors"
                                 data-testid={`transaction-type-${option}`}
                                 style={{
                                     ...getSubtleSelectedStyle(selected),
-                                    outline: selected ? '2px solid var(--sky)' : 'none',
-                                    outlineOffset: '2px',
+                                    borderColor: selected
+                                        ? 'color-mix(in srgb, var(--border) 72%, var(--foreground) 16%)'
+                                        : subtlePanelStyle.borderColor,
+                                    background: selected
+                                        ? 'color-mix(in srgb, var(--card) 94%, var(--foreground) 6%)'
+                                        : subtlePanelStyle.background,
                                 }}
                             >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p className="text-sm font-medium">{SECONDARY_TYPE_LABELS[option]}</p>
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            {option === 'transfer' && 'Mover entre cuentas propias.'}
-                                            {option === 'exchange' && 'Registrar ARS/USD con cotizacion.'}
-                                            {option === 'credit_card_payment' && 'Pagar resumen o deuda asociada.'}
-                                            {option === 'adjustment' && 'Corregir un saldo puntual.'}
-                                        </p>
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <p className="text-[0.94rem] font-medium leading-tight">{SECONDARY_TYPE_LABELS[option]}</p>
                                     </div>
                                     {selected && (
                                         <span
-                                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border"
-                                            style={{ borderColor: 'var(--border)', background: 'var(--background)' }}
+                                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border"
+                                            style={{
+                                                borderColor: 'color-mix(in srgb, var(--border) 84%, transparent)',
+                                                background: 'color-mix(in srgb, var(--background) 88%, var(--card) 12%)',
+                                            }}
                                         >
-                                            <Check className="h-3.5 w-3.5" />
+                                            <Check className="h-3 w-3" />
                                         </span>
                                     )}
                                 </div>

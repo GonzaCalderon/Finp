@@ -7,7 +7,10 @@ import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount, ICategory } from '@/types'
 import { StepSection } from './StepSection'
-import { SummaryCard, subtlePanelStyle } from './shared-ui'
+import { SummaryCard, SummaryLine, subtlePanelStyle } from './shared-ui'
+
+type CardPaymentMode = 'full' | 'partial'
+type CardPaymentSelection = 'ars' | 'usd' | 'ars_usd'
 
 const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
     income: 'Ingreso',
@@ -26,6 +29,7 @@ interface PaymentSummaryData {
 }
 
 interface TransactionReviewStepProps {
+    stepLabel: string
     type: TransactionFormInput['type']
     primaryFlowType: TransactionFormInput['type']
     isExpense: boolean
@@ -44,7 +48,17 @@ interface TransactionReviewStepProps {
     exchangeDestinationAmount: number
     exchangeDestinationCurrency: TransactionFormInput['currency']
     exchangeRate: number
+    transferBalanceCurrency: TransactionFormInput['currency'] | undefined
+    transferSourceBalance: number | null
+    transferDestinationBalance: number | null
+    transferSourceResultingBalance: number | null
+    transferDestinationResultingBalance: number | null
     paymentSummary: PaymentSummaryData | null
+    cardPaymentMode: CardPaymentMode
+    cardPaymentSelection: CardPaymentSelection
+    secondaryCardPaymentCurrency: TransactionFormInput['currency'] | undefined
+    additionalCardPaymentEnabled: boolean
+    secondaryCardPaymentAmount: number
     adjustmentSign: '+' | '-'
     usesCardExpensePlanFlow: boolean
     existingInstallmentCount: number | undefined
@@ -55,6 +69,7 @@ interface TransactionReviewStepProps {
     merchant: string
     notes: string
     showMoreOptions: boolean
+    showOptionalDescriptionField: boolean
     headerSurface: { background: string; borderColor: string; color: string }
     paymentMethodLabel: string
     descriptionError: string | undefined
@@ -66,6 +81,7 @@ interface TransactionReviewStepProps {
 }
 
 export function TransactionReviewStep({
+    stepLabel,
     type,
     primaryFlowType,
     isExpense,
@@ -84,7 +100,17 @@ export function TransactionReviewStep({
     exchangeDestinationAmount,
     exchangeDestinationCurrency,
     exchangeRate,
+    transferBalanceCurrency,
+    transferSourceBalance,
+    transferDestinationBalance,
+    transferSourceResultingBalance,
+    transferDestinationResultingBalance,
     paymentSummary,
+    cardPaymentMode,
+    cardPaymentSelection,
+    secondaryCardPaymentCurrency,
+    additionalCardPaymentEnabled,
+    secondaryCardPaymentAmount,
     adjustmentSign,
     usesCardExpensePlanFlow,
     existingInstallmentCount,
@@ -95,6 +121,7 @@ export function TransactionReviewStep({
     merchant,
     notes,
     showMoreOptions,
+    showOptionalDescriptionField,
     headerSurface,
     paymentMethodLabel,
     descriptionError,
@@ -104,11 +131,40 @@ export function TransactionReviewStep({
     onMerchantChange,
     onNotesChange,
 }: TransactionReviewStepProps) {
+    const hasAdditionalCardPayment =
+        type === 'credit_card_payment' &&
+        additionalCardPaymentEnabled &&
+        !!secondaryCardPaymentCurrency &&
+        secondaryCardPaymentAmount > 0
+
+    const cardPaymentLabel = type === 'credit_card_payment'
+        ? (
+            cardPaymentMode === 'full'
+                ? cardPaymentSelection === 'ars'
+                    ? 'Pago total ARS'
+                    : cardPaymentSelection === 'usd'
+                        ? 'Pago total USD'
+                        : 'Pago total ARS + USD'
+                : hasAdditionalCardPayment
+                    ? `Pago parcial ${currency} + ${secondaryCardPaymentCurrency}`
+                    : `Pago parcial ${currency}`
+        )
+        : ''
+
+    const showTransferResultPreview =
+        type === 'transfer' &&
+        !isEditing &&
+        !!transferBalanceCurrency &&
+        transferSourceBalance !== null &&
+        transferDestinationBalance !== null &&
+        transferSourceResultingBalance !== null &&
+        transferDestinationResultingBalance !== null
+
     return (
         <StepSection
-            eyebrow={isEditing ? 'Ultimo paso' : 'Antes de guardar'}
-            title={isEditing ? 'Revisa el cambio antes de confirmar' : 'Revisa antes de guardar'}
-            subtitle="Chequea lo importante y, si queres, completa las opciones extra abajo."
+            eyebrow={stepLabel}
+            title={isEditing ? 'Resumen de la edicion' : 'Resumen antes de guardar'}
+            subtitle="Un vistazo corto, claro y suficiente para confirmar con confianza."
         >
             <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-4 rounded-[2rem] border p-4" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--card) 88%, transparent)', boxShadow: 'var(--card-shadow)' }}>
@@ -126,22 +182,62 @@ export function TransactionReviewStep({
                     <div className="grid gap-3 sm:grid-cols-2">
                         <SummaryCard title="Monto" value={fmtCurrency(type === 'adjustment' ? Math.abs(amount) : amount)} />
                         <SummaryCard title="Fecha" value={date ? date.toLocaleDateString('es-AR') : '-'} />
-                        {showSource && <SummaryCard title="Origen" value={selectedSourceAccount?.name ?? 'Sin definir'} />}
+                        {showSource && <SummaryCard title={type === 'adjustment' ? 'Cuenta' : 'Origen'} value={selectedSourceAccount?.name ?? 'Sin definir'} />}
                         {showDestination && <SummaryCard title={type === 'credit_card_payment' ? 'Tarjeta' : 'Destino'} value={selectedDestinationAccount?.name ?? 'Sin definir'} />}
+                        {type === 'credit_card_payment' && <SummaryCard title="Pago" value={cardPaymentLabel} />}
+                        {hasAdditionalCardPayment && secondaryCardPaymentCurrency && (
+                            <SummaryCard
+                                title={`Monto ${secondaryCardPaymentCurrency}`}
+                                value={fmtCurrency(secondaryCardPaymentAmount, secondaryCardPaymentCurrency)}
+                            />
+                        )}
                         {showCategory && <SummaryCard title="Categoria" value={selectedCategory?.name ?? 'Sin categoria'} />}
                         {!descriptionIsOptional && <SummaryCard title="Descripcion" value={description || 'Sin descripcion'} />}
+                        {usesCardExpensePlanFlow && <SummaryCard title="Plan" value={installmentPlanSummary} />}
                         {type === 'exchange' && (
                             <>
                                 <SummaryCard title="Monto destino" value={fmtCurrency(exchangeDestinationAmount, exchangeDestinationCurrency)} />
                                 <SummaryCard title="Cotizacion" value={exchangeRate > 0 ? String(exchangeRate) : 'Sin definir'} />
                             </>
                         )}
-                        {type === 'credit_card_payment' && paymentSummary && <SummaryCard title="Pendiente del mes" value={fmtCurrency(paymentSummary.pending, currency)} />}
+                        {type === 'credit_card_payment' && paymentSummary && !hasAdditionalCardPayment && cardPaymentSelection !== 'ars_usd' && (
+                            <SummaryCard title="Pendiente de la moneda elegida" value={fmtCurrency(paymentSummary.pending, currency)} />
+                        )}
                         {type === 'adjustment' && <SummaryCard title="Impacto" value={adjustmentSign === '+' ? 'Suma saldo' : 'Descuenta saldo'} />}
                         {type === 'credit_card_expense' && existingInstallmentCount && (
                             <SummaryCard title="Plan actual" value={`${existingInstallmentCount} cuota${existingInstallmentCount === 1 ? '' : 's'}`} />
                         )}
                     </div>
+
+                    {showTransferResultPreview && (
+                        <div className="rounded-[1.5rem] border p-4" style={subtlePanelStyle}>
+                            <p className="text-sm font-semibold">Saldos resultantes</p>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {[
+                                    {
+                                        label: selectedSourceAccount?.name ?? 'Cuenta origen',
+                                        current: transferSourceBalance,
+                                        next: transferSourceResultingBalance,
+                                    },
+                                    {
+                                        label: selectedDestinationAccount?.name ?? 'Cuenta destino',
+                                        current: transferDestinationBalance,
+                                        next: transferDestinationResultingBalance,
+                                    },
+                                ].map((item) => (
+                                    <div
+                                        key={item.label}
+                                        className="rounded-2xl border p-3"
+                                        style={{ borderColor: 'var(--border)', background: 'var(--background)' }}
+                                    >
+                                        <p className="text-sm font-semibold">{item.label}</p>
+                                        <SummaryLine label="Saldo actual" value={fmtCurrency(item.current, transferBalanceCurrency)} />
+                                        <SummaryLine label="Luego" value={fmtCurrency(item.next, transferBalanceCurrency)} />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-4">
@@ -153,8 +249,8 @@ export function TransactionReviewStep({
                             data-testid="transaction-more-options"
                         >
                             <div>
-                                <p className="text-sm font-semibold">Mas opciones</p>
-                                <p className="text-xs text-muted-foreground">Comercio, notas y descripcion opcional viven aca para no distraer antes.</p>
+                                <p className="text-sm font-semibold">Opciones extra</p>
+                                <p className="text-xs text-muted-foreground">Comercio, notas y otros ajustes menores viven aca para no ensuciar el flujo principal.</p>
                             </div>
                             {showMoreOptions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </button>
@@ -167,9 +263,9 @@ export function TransactionReviewStep({
                                     exit={{ opacity: 0, height: 0, transition: { duration: DURATION.fast, ease: easeSoft } }}
                                     className="mt-4 space-y-4 overflow-hidden"
                                 >
-                                    {descriptionIsOptional && (
+                                    {showOptionalDescriptionField && (
                                         <div className="space-y-2">
-                                            <Label htmlFor="descriptionOptional">Descripcion (opcional)</Label>
+                                            <Label htmlFor="descriptionOptional">Descripcion</Label>
                                             <Input
                                                 id="descriptionOptional"
                                                 value={description}

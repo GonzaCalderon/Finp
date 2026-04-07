@@ -78,10 +78,10 @@ export function TransactionExpenseDetailsStep({
         <StepSection
             eyebrow="Paso 3"
             title="Como lo pagaste"
-            subtitle="Elegi el medio de pago y te mostramos solo lo necesario para ese caso."
+            subtitle="Primero elegi el medio de pago. Despues aparece solo lo que hace falta para ese caso."
         >
             <div className="space-y-4">
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid grid-cols-3 gap-2">
                     {PAYMENT_METHODS.map((method) => {
                         const selected = paymentMethod === method.value
                         return (
@@ -89,16 +89,16 @@ export function TransactionExpenseDetailsStep({
                                 key={method.value}
                                 type="button"
                                 onClick={() => onPaymentMethodChange(method.value)}
-                                className="rounded-2xl border px-4 py-3 text-left transition-colors"
+                                className="rounded-2xl border px-3 py-3 text-left transition-colors"
                                 data-testid={`transaction-payment-${method.value}`}
                                 style={{
                                     ...getSubtleSelectedStyle(selected),
                                     background: selected ? 'color-mix(in srgb, var(--card) 94%, var(--foreground) 6%)' : 'var(--background)',
                                 }}
                             >
-                                <div className="flex items-center gap-2 text-sm font-medium">
+                                <div className="flex flex-col items-start gap-2 text-sm font-medium sm:flex-row sm:items-center">
                                     {method.icon}
-                                    <span>{method.label}</span>
+                                    <span className="leading-tight">{method.label}</span>
                                 </div>
                             </button>
                         )

@@ -12,7 +12,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
@@ -29,7 +28,6 @@ interface TransactionMainStepProps {
     isExchange: boolean
     descriptionIsOptional: boolean
     allowedCurrencies: TransactionFormInput['currency'][]
-    adjustmentSign: '+' | '-'
     headerSurface: { background: string; borderColor: string; color: string }
     appliedRuleName: string | null
     transaction: ITransaction | null
@@ -39,11 +37,9 @@ interface TransactionMainStepProps {
     amountError: string | undefined
     onDescriptionChange: (value: string) => void
     onAmountChange: (nextAmount: number) => void
-    onNegativeInputDetected: () => void
     onCurrencyChange: (value: TransactionFormInput['currency']) => void
     onDateChange: (date: Date | undefined) => void
     onDatePopoverOpenChange: (open: boolean) => void
-    onAdjustmentSignChange: (sign: '+' | '-') => void
 }
 
 export function TransactionMainStep({
@@ -55,7 +51,6 @@ export function TransactionMainStep({
     isExchange,
     descriptionIsOptional,
     allowedCurrencies,
-    adjustmentSign,
     headerSurface,
     appliedRuleName,
     transaction,
@@ -65,17 +60,20 @@ export function TransactionMainStep({
     amountError,
     onDescriptionChange,
     onAmountChange,
-    onNegativeInputDetected,
     onCurrencyChange,
     onDateChange,
     onDatePopoverOpenChange,
-    onAdjustmentSignChange,
 }: TransactionMainStepProps) {
+    const title = descriptionIsOptional ? 'Cuanto fue y cuando paso' : 'Cuanto fue, que fue y cuando'
+    const subtitle = descriptionIsOptional
+        ? 'Este tipo no necesita descripcion. Solo completa monto, moneda y fecha.'
+        : 'Esta es la pantalla central de la carga: monto, descripcion y fecha en un solo lugar.'
+
     return (
         <StepSection
-            eyebrow="Paso 1"
-            title="Descripcion, monto y fecha"
-            subtitle="Arrancamos con el dato principal para que las reglas lleguen antes."
+            eyebrow="Paso 2"
+            title={title}
+            subtitle={subtitle}
         >
             <div className="space-y-4">
                 {!descriptionIsOptional && (
@@ -84,7 +82,7 @@ export function TransactionMainStep({
                             <div>
                                 <Label htmlFor="description">Descripcion</Label>
                                 <p className="text-xs text-muted-foreground">
-                                    Es obligatoria. Una frase corta alcanza y nos ayuda a sugerir mejor la categoria.
+                                    Una frase corta alcanza y nos ayuda a sugerir mejor la categoria.
                                 </p>
                             </div>
                             {rules.length > 0 && !transaction && (
@@ -121,25 +119,23 @@ export function TransactionMainStep({
                     className="rounded-[2rem] border p-5"
                     style={{
                         borderColor: headerSurface.borderColor,
-                        background: 'color-mix(in srgb, var(--card) 88%, transparent)',
+                        background: 'color-mix(in srgb, var(--card) 86%, transparent)',
                         boxShadow: 'var(--card-shadow)',
                     }}
                 >
                     <FormattedAmountInput
                         id="amount"
                         label={isExchange ? 'Monto origen' : 'Monto'}
-                        value={type === 'adjustment' && adjustmentSign === '-' ? -amount : amount}
+                        value={amount}
                         currency={currency}
                         error={amountError}
                         autoFocus
-                        allowNegative={type === 'adjustment'}
-                        inputClassName="text-3xl font-semibold tracking-tight"
-                        onNegativeInputDetectedAction={onNegativeInputDetected}
+                        inputClassName="text-4xl font-semibold tracking-tight sm:text-3xl"
                         onValueChangeAction={onAmountChange}
                     />
                 </div>
 
-                <div className={`grid gap-3 ${type === 'adjustment' ? 'sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : 'sm:grid-cols-[minmax(0,160px)_minmax(0,1fr)]'}`}>
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,160px)_minmax(0,1fr)]">
                     <div className="space-y-2">
                         <Label>{isExchange ? 'Moneda origen' : 'Moneda'}</Label>
                         <Select
@@ -188,30 +184,6 @@ export function TransactionMainStep({
                         </Popover>
                     </div>
                 </div>
-
-                {type === 'adjustment' && (
-                    <div className="rounded-3xl border p-4" style={subtlePanelStyle}>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <p className="text-sm font-semibold">Impacto del ajuste</p>
-                                <p className="text-xs text-muted-foreground">Positivo suma saldo. Negativo descuenta saldo.</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium" style={{ color: adjustmentSign === '-' ? 'var(--destructive)' : 'var(--muted-foreground)' }}>
-                                    Negativo
-                                </span>
-                                <Switch
-                                    checked={adjustmentSign === '+'}
-                                    onCheckedChange={(checked) => onAdjustmentSignChange(checked ? '+' : '-')}
-                                    aria-label="Cambiar impacto del ajuste"
-                                />
-                                <span className="text-xs font-medium" style={{ color: adjustmentSign === '+' ? '#059669' : 'var(--muted-foreground)' }}>
-                                    Positivo
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </StepSection>
     )

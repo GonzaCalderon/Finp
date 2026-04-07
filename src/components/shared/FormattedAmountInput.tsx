@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 type FormattedAmountInputProps = {
     id: string
@@ -14,6 +15,12 @@ type FormattedAmountInputProps = {
     autoFocus?: boolean
     allowNegative?: boolean
     inputClassName?: string
+    wrapperClassName?: string
+    labelClassName?: string
+    labelAction?: ReactNode
+    inputWrapperClassName?: string
+    prefixClassName?: string
+    helperText?: ReactNode
     onNegativeInputDetectedAction?: () => void
     onValueChangeAction: (value: number) => void
 }
@@ -83,6 +90,12 @@ export function FormattedAmountInput({
                                          autoFocus,
                                          allowNegative = false,
                                          inputClassName,
+                                         wrapperClassName,
+                                         labelClassName,
+                                         labelAction,
+                                         inputWrapperClassName,
+                                         prefixClassName,
+                                         helperText,
                                          onNegativeInputDetectedAction,
                                          onValueChangeAction,
                                      }: FormattedAmountInputProps) {
@@ -93,13 +106,16 @@ export function FormattedAmountInput({
     const renderedValue = isFocused ? displayValue : displayFromNumber(value)
 
     return (
-        <div className="space-y-2">
-            <Label htmlFor={id}>{label}</Label>
+        <div className={cn('space-y-2', wrapperClassName)}>
+            <div className="flex items-center justify-between gap-2">
+                <Label htmlFor={id} className={cn('min-w-0', labelClassName)}>{label}</Label>
+                {labelAction ? <div className="shrink-0">{labelAction}</div> : null}
+            </div>
 
-            <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-          {currencyLabel}
-        </span>
+            <div className={cn('relative', inputWrapperClassName)}>
+                <span className={cn('absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground', prefixClassName)}>
+                    {currencyLabel}
+                </span>
 
                 <Input
                     id={id}
@@ -130,10 +146,11 @@ export function FormattedAmountInput({
                         if (isNegative) onNegativeInputDetectedAction?.()
                         onValueChangeAction(parseDisplayToNumber(signedDisplay))
                     }}
-                    className={`pl-9 text-base md:text-sm${inputClassName ? ` ${inputClassName}` : ''}`}
+                    className={cn('pl-9 text-base md:text-sm', inputClassName)}
                 />
             </div>
 
+            {helperText ? <div className="text-xs text-muted-foreground">{helperText}</div> : null}
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>
     )

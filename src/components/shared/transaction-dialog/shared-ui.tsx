@@ -3,8 +3,8 @@ import type { ICategory } from '@/types'
 import type { TransactionFormInput } from '@/lib/validations'
 
 export const subtlePanelStyle = {
-    borderColor: 'var(--border)',
-    background: 'color-mix(in srgb, var(--card) 82%, transparent)',
+    borderColor: 'color-mix(in srgb, var(--border) 88%, transparent)',
+    background: 'color-mix(in srgb, var(--card) 86%, transparent)',
 }
 
 export function getSubtleSelectedStyle(selected: boolean) {
@@ -21,7 +21,14 @@ export function getTypeSurface(type: TransactionFormInput['type'], isExpense: bo
     if (type === 'income') {
         return { background: 'rgba(16,185,129,0.10)', borderColor: 'rgba(16,185,129,0.24)', color: '#059669' }
     }
-    return { background: 'rgba(74,158,204,0.10)', borderColor: 'rgba(74,158,204,0.24)', color: 'var(--sky)' }
+    if (type === 'exchange') {
+        return { background: 'rgba(217,119,6,0.10)', borderColor: 'rgba(217,119,6,0.24)', color: '#D97706' }
+    }
+    return {
+        background: 'color-mix(in srgb, var(--secondary) 82%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--border) 86%, transparent)',
+        color: 'var(--foreground)',
+    }
 }
 
 export function ChoiceCard({
@@ -44,7 +51,7 @@ export function ChoiceCard({
             type="button"
             onClick={onClick}
             data-testid={dataTestId}
-            className="rounded-[1.75rem] border px-5 py-5 text-left transition-all duration-200"
+            className="rounded-[1.6rem] border px-4 py-4 text-left transition-all duration-200"
             style={{
                 borderColor: selected ? surface.borderColor : 'var(--border)',
                 background: selected ? surface.background : 'var(--card)',
@@ -53,11 +60,11 @@ export function ChoiceCard({
         >
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <p className="text-base font-semibold" style={{ color: selected ? surface.color : 'var(--foreground)' }}>{title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+                    <p className="text-[1.08rem] font-semibold" style={{ color: selected ? surface.color : 'var(--foreground)' }}>{title}</p>
+                    <p className="mt-1 text-[0.95rem] text-muted-foreground">{description}</p>
                 </div>
                 {selected && (
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ background: 'var(--background)', color: surface.color }}>
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full" style={{ background: 'var(--background)', color: surface.color }}>
                         <Check className="h-4 w-4" />
                     </span>
                 )}
@@ -98,7 +105,7 @@ export function SummaryLine({ label, value }: { label: string; value: string }) 
     return (
         <div className="mt-2 flex items-center justify-between gap-3 text-xs">
             <span className="text-muted-foreground">{label}</span>
-            <span className="font-medium">{value}</span>
+            <span className="font-semibold tabular-nums">{value}</span>
         </div>
     )
 }

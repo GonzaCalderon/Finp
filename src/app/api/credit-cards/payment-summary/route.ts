@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, InstallmentPlan, Transaction, User } from '@/lib/models'
-import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
+import { buildMonthlyCardPaymentSummary, getRefId } from '@/lib/utils/credit-card'
 import { getCurrentFinancialPeriod, parseFinancialPeriod } from '@/lib/utils/period'
 import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
@@ -62,7 +64,7 @@ export async function GET(request: Request) {
                 .reduce((sum, item) => sum + item.amount, 0) ?? 0
             const paid = transactions
                 .filter((transaction) =>
-                    transaction.destinationAccountId?.toString() === cardId &&
+                    getRefId(transaction.destinationAccountId) === cardId &&
                     transaction.currency === targetCurrency &&
                     ['credit_card_payment', 'debt_payment'].includes(transaction.type)
                 )
