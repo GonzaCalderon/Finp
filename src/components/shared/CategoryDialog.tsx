@@ -68,8 +68,8 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
                     <DialogTitle>{category ? 'Editar categoría' : 'Nueva categoría'}</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">
-                    <div className="overflow-y-auto px-5 py-4 space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col sm:max-h-[85vh]">
+                    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Nombre</Label>
                         <Input id="name" placeholder="Ej: Supermercado" {...register('name')} autoFocus />

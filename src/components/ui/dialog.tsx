@@ -57,7 +57,7 @@ function DialogContent({
                 className={cn(
                     variant === 'fullscreen-mobile'
                         ? [
-                            "fixed inset-0 z-50 flex flex-col w-full h-[100dvh] bg-background text-sm outline-none",
+                            "fixed inset-0 z-50 flex flex-col w-full bg-background text-sm outline-none",
                             "border border-foreground/[0.07] shadow-2xl shadow-black/20 dark:shadow-black/50",
                             "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:w-full sm:rounded-xl",
                             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-200",
