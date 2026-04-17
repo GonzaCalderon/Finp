@@ -54,7 +54,8 @@ import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAm
 
 import { DURATION, easeSmooth, fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
-import { buildMonthOptions } from '@/lib/utils/period'
+import { buildMonthOptions, getCurrentFinancialPeriod } from '@/lib/utils/period'
+import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-start'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -94,12 +95,7 @@ const SORT_OPTIONS = [
 
 const DEFAULT_SORT = 'date_desc'
 
-const getCurrentMonth = () => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
-const MONTHS = buildMonthOptions({ pastMonths: 8, futureMonths: 1 })
+const getCurrentMonth = (monthStartDay = 1) => getCurrentFinancialPeriod(new Date(), monthStartDay)
 
 type BasicOption = {
     value: string
@@ -781,7 +777,7 @@ function FilterSheet({
 }
 
 export default function TransactionsPage() {
-    const [month, setMonth] = useState(getCurrentMonth())
+    const [month, setMonth] = useState(() => getCurrentMonth())
     const [appliedFilters, setAppliedFilters] = useState<Filters>(DEFAULT_FILTERS)
     const [draftFilters, setDraftFilters] = useState<Filters>(DEFAULT_FILTERS)
     const [sort, setSort] = useState(DEFAULT_SORT)
@@ -834,6 +830,31 @@ export default function TransactionsPage() {
     const { hidden } = useHideAmounts()
 
     usePageTitle('Transacciones')
+
+    const firstOperationalMonth = useMemo(
+        () => getOperationalStartFinancialPeriod(preferences.operationalStartDate, preferences.monthStartDay),
+        [preferences.operationalStartDate, preferences.monthStartDay]
+    )
+
+    const monthOptions = useMemo(() => {
+        const options = buildMonthOptions({ pastMonths: 8, futureMonths: 1, from: new Date() })
+        if (!firstOperationalMonth) return options
+        return options.filter((option) => option.value >= firstOperationalMonth)
+    }, [firstOperationalMonth])
+
+    useEffect(() => {
+        const currentMonth = getCurrentMonth(preferences.monthStartDay)
+        const minimumMonth =
+            firstOperationalMonth && firstOperationalMonth > currentMonth
+                ? firstOperationalMonth
+                : currentMonth
+
+        setMonth((prev) =>
+            prev >= minimumMonth && (!firstOperationalMonth || prev >= firstOperationalMonth)
+                ? prev
+                : minimumMonth
+        )
+    }, [firstOperationalMonth, preferences.monthStartDay])
 
     const handleNewTransaction = useCallback(() => {
         setSelectedTransaction(null)
@@ -976,10 +997,7 @@ export default function TransactionsPage() {
     const totalIncome = summary.income
     const totalExpense = summary.expense
     const totalCreditCardExpense = summary.creditCardExpense
-    const totalBalance = {
-        ars: totalIncome.ars - totalExpense.ars,
-        usd: totalIncome.usd - totalExpense.usd,
-    }
+    const totalBalance = summary.balance
     const animatedIncome = useAnimatedTotals(totalIncome)
     const animatedExpense = useAnimatedTotals(totalExpense)
     const animatedCreditCardExpense = useAnimatedTotals(totalCreditCardExpense)
@@ -1025,7 +1043,7 @@ export default function TransactionsPage() {
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
-                            {MONTHS.map((monthOption) => (
+                            {monthOptions.map((monthOption) => (
                                 <SelectItem key={monthOption.value} value={monthOption.value}>
                                     {monthOption.label}
                                 </SelectItem>

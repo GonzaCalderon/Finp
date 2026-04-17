@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account, User, TransactionRule } from '@/lib/models'
+import { Transaction, Account, User, TransactionRule, InstallmentPlan } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { parseFinancialPeriod } from '@/lib/utils/period'
@@ -11,7 +11,10 @@ import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib
 import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
 import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
+import { buildTransactionPeriodSummary } from '@/lib/utils/transaction-summary'
+import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
 import type { Currency } from '@/lib/constants'
+import type { IInstallmentPlan, ITransaction } from '@/types'
 
 const PAGE_LIMIT = 30
 
@@ -55,40 +58,84 @@ export async function GET(request: Request) {
         // ── Base filter (shared by list and summary) ──────────────────────────
         const baseFilter: Record<string, unknown> = { userId: session.user.id }
 
+        const userDoc = await User.findById(session.user.id, {
+            'preferences.monthStartDay': 1,
+            'preferences.operationalStartDate': 1,
+        })
+        const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+        const operationalStartDate = userDoc?.preferences?.operationalStartDate
+        let summary: {
+            income: CurrencySummary
+            expense: CurrencySummary
+            creditCardExpense: CurrencySummary
+            balance: CurrencySummary
+        } | undefined
+
         if (month) {
             const [year, m] = month.split('-').map(Number)
             if (!Number.isNaN(year) && !Number.isNaN(m)) {
-                const userDoc = await User.findById(session.user.id, { 'preferences.monthStartDay': 1 })
-                const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
                 const { start, end } = parseFinancialPeriod(month, monthStartDay)
                 baseFilter.date = { $gte: start, $lt: end }
+
+                const [summaryTransactions, installmentPlans] = await Promise.all([
+                    Transaction.find({
+                        userId: session.user.id,
+                        date: {
+                            $gte: clampRangeStartToOperationalStart(start, operationalStartDate),
+                            $lt: end,
+                        },
+                    })
+                        .populate('categoryId', 'name color type')
+                        .populate('sourceAccountId', 'name type currency color')
+                        .populate('destinationAccountId', 'name type currency color'),
+                    InstallmentPlan.find({ userId: session.user.id })
+                        .populate('accountId', 'name type currency color')
+                        .populate('categoryId', 'name color type'),
+                ])
+
+                summary = buildTransactionPeriodSummary({
+                    month,
+                    monthStartDay,
+                    transactions: summaryTransactions as unknown as ITransaction[],
+                    plans: installmentPlans as unknown as IInstallmentPlan[],
+                    operationalStartDate,
+                })
             }
         }
 
-        // ── Summary: computed from full month, no user-applied filters ────────
-        const summaryFilter = {
-            ...baseFilter,
-            userId: new Types.ObjectId(session.user.id),
-        }
-        const [incomeAgg, expenseAgg, ccExpenseAgg] = await Promise.all([
-            Transaction.aggregate([
-                { $match: { ...summaryFilter, type: 'income' } },
-                { $group: { _id: '$currency', total: { $sum: '$amount' } } },
-            ]),
-            Transaction.aggregate([
-                { $match: { ...summaryFilter, type: 'expense' } },
-                { $group: { _id: '$currency', total: { $sum: '$amount' } } },
-            ]),
-            Transaction.aggregate([
-                { $match: { ...summaryFilter, type: 'credit_card_expense' } },
-                { $group: { _id: '$currency', total: { $sum: '$amount' } } },
-            ]),
-        ])
+        // ── Summary: computed from full period, no user-applied filters ───────
+        if (!summary) {
+            const summaryFilter = {
+                ...baseFilter,
+                userId: new Types.ObjectId(session.user.id),
+            }
+            const [incomeAgg, expenseAgg, ccExpenseAgg] = await Promise.all([
+                Transaction.aggregate([
+                    { $match: { ...summaryFilter, type: 'income' } },
+                    { $group: { _id: '$currency', total: { $sum: '$amount' } } },
+                ]),
+                Transaction.aggregate([
+                    { $match: { ...summaryFilter, type: 'expense' } },
+                    { $group: { _id: '$currency', total: { $sum: '$amount' } } },
+                ]),
+                Transaction.aggregate([
+                    { $match: { ...summaryFilter, type: 'credit_card_expense' } },
+                    { $group: { _id: '$currency', total: { $sum: '$amount' } } },
+                ]),
+            ])
 
-        const summary = {
-            income: toCurrencySummary(incomeAgg),
-            expense: toCurrencySummary(expenseAgg),
-            creditCardExpense: toCurrencySummary(ccExpenseAgg),
+            const income = toCurrencySummary(incomeAgg)
+            const expense = toCurrencySummary(expenseAgg)
+
+            summary = {
+                income,
+                expense,
+                creditCardExpense: toCurrencySummary(ccExpenseAgg),
+                balance: {
+                    ars: income.ars - expense.ars,
+                    usd: income.usd - expense.usd,
+                },
+            }
         }
 
         // ── List filter: base + user-applied filters ───────────────────────────
