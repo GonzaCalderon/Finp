@@ -40,6 +40,35 @@ function subtractCurrencyTotals(income: CurrencyTotals, expense: CurrencyTotals)
     }
 }
 
+function addCurrencyTotals(left: CurrencyTotals, right: CurrencyTotals): CurrencyTotals {
+    return {
+        ars: left.ars + right.ars,
+        usd: left.usd + right.usd,
+    }
+}
+
+function getExchangeNet(
+    transactions: Array<{
+        type?: string
+        currency: string
+        amount: number
+        destinationCurrency?: string
+        destinationAmount?: number
+    }>
+): CurrencyTotals {
+    return transactions
+        .filter((transaction) => transaction.type === 'exchange')
+        .reduce((totals, transaction) => {
+            addCurrencyAmount(totals, transaction.currency, -transaction.amount)
+
+            if (transaction.destinationCurrency && typeof transaction.destinationAmount === 'number') {
+                addCurrencyAmount(totals, transaction.destinationCurrency, transaction.destinationAmount)
+            }
+
+            return totals
+        }, emptyCurrencyTotals())
+}
+
 function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
     if (!value || typeof value !== 'object' || typeof (value as { name?: unknown }).name !== 'string') {
         return null
@@ -204,8 +233,14 @@ export async function GET(request: Request) {
             ars: prevRegularExpense.ars + prevCardPayments.ars,
             usd: prevRegularExpense.usd + prevCardPayments.usd,
         }
-        const currentBalance = subtractCurrencyTotals(totalIncome, totalExpense)
-        const prevBalance = subtractCurrencyTotals(prevIncome, prevExpense)
+        const currentBalance = addCurrencyTotals(
+            subtractCurrencyTotals(totalIncome, totalExpense),
+            getExchangeNet(transactions)
+        )
+        const prevBalance = addCurrencyTotals(
+            subtractCurrencyTotals(prevIncome, prevExpense),
+            getExchangeNet(prevTransactions)
+        )
 
         // Calcular tendencias (% de cambio)
         const calcTrend = (current: number, previous: number) => {
