@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
     installClientFetchAuthInterceptor,
     notifyAuthExpired,
@@ -11,7 +11,6 @@ import {
 const SESSION_CHECK_MIN_INTERVAL_MS = 20_000
 
 export function SessionGuard() {
-    const router = useRouter()
     const pathname = usePathname()
     const lastCheckRef = useRef(0)
     const redirectingRef = useRef(false)
@@ -20,8 +19,8 @@ export function SessionGuard() {
         if (redirectingRef.current) return
 
         redirectingRef.current = true
-        router.replace('/login?reason=session-expired')
-    }, [router])
+        window.location.replace('/login?reason=session-expired')
+    }, [])
 
     const checkSession = useCallback(async () => {
         if (typeof document === 'undefined' || document.visibilityState !== 'visible') {

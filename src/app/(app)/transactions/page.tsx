@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeftRight,
@@ -47,6 +49,7 @@ import {
 } from '@/components/ui/alert-dialog'
 
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
+import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
@@ -88,6 +91,8 @@ const TRANSACTION_TYPE_COLORS: Record<
 const SORT_OPTIONS = [
     { value: 'date_desc', label: 'Más reciente' },
     { value: 'date_asc', label: 'Más antigua' },
+    { value: 'created_desc', label: 'Creación más reciente' },
+    { value: 'created_asc', label: 'Creación más antigua' },
     { value: 'amount_desc', label: 'Mayor monto' },
     { value: 'amount_asc', label: 'Menor monto' },
     { value: 'description_asc', label: 'A → Z' },
@@ -776,19 +781,31 @@ function FilterSheet({
     )
 }
 
-export default function TransactionsPage() {
-    const [month, setMonth] = useState(() => getCurrentMonth())
-    const [appliedFilters, setAppliedFilters] = useState<Filters>(DEFAULT_FILTERS)
-    const [draftFilters, setDraftFilters] = useState<Filters>(DEFAULT_FILTERS)
-    const [sort, setSort] = useState(DEFAULT_SORT)
-    const [draftSort, setDraftSort] = useState(DEFAULT_SORT)
+function TransactionsPageInner() {
+    const searchParams = useSearchParams()
+    const initialMonth = searchParams.get('month') ?? getCurrentMonth()
+    const initialFilters: Filters = {
+        type: searchParams.get('type') ?? DEFAULT_FILTERS.type,
+        categoryId: searchParams.get('categoryId') ?? DEFAULT_FILTERS.categoryId,
+        accountId: searchParams.get('accountId') ?? DEFAULT_FILTERS.accountId,
+        currency: searchParams.get('currency') ?? DEFAULT_FILTERS.currency,
+    }
+    const initialSort = SORT_OPTIONS.some((option) => option.value === searchParams.get('sort'))
+        ? (searchParams.get('sort') as typeof SORT_OPTIONS[number]['value'])
+        : DEFAULT_SORT
+
+    const [month, setMonth] = useState(() => initialMonth)
+    const [appliedFilters, setAppliedFilters] = useState<Filters>(initialFilters)
+    const [draftFilters, setDraftFilters] = useState<Filters>(initialFilters)
+    const [sort, setSort] = useState(initialSort)
+    const [draftSort, setDraftSort] = useState(initialSort)
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-    const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
+    const [transactionDialogOpen, setTransactionDialogOpen] = useState(searchParams.get('new') === '1')
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
 
-    const { accounts } = useAccounts()
-    const { categories } = useCategories()
+    const { accounts, loading: accountsLoading } = useAccounts()
+    const { categories, loading: categoriesLoading } = useCategories()
     const { rules } = useTransactionRules()
     const { preferences } = usePreferences()
 
@@ -1003,6 +1020,8 @@ export default function TransactionsPage() {
     const animatedCreditCardExpense = useAnimatedTotals(totalCreditCardExpense)
     const animatedBalance = useAnimatedTotals(totalBalance)
 
+    useAppStartupReady(!loading && !accountsLoading && !categoriesLoading)
+
     if (loading) {
         return (
             <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
@@ -1027,35 +1046,15 @@ export default function TransactionsPage() {
 
     return (
         <motion.div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4 md:space-y-5" {...fadeIn}>
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="flex flex-col gap-1.5">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
                         <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Transacciones</h1>
                         {refreshing && <Spinner className="text-muted-foreground" />}
                     </div>
-                    <p className="text-xs text-muted-foreground md:text-sm">
+                    <p className="text-sm text-muted-foreground">
                         Movimientos del mes con filtros rápidos y edición directa.
                     </p>
-                </div>
-                <div className="flex items-center gap-2 self-start md:self-auto">
-                    <Select value={month} onValueChange={setMonth}>
-                        <SelectTrigger className="w-40 sm:w-44 h-9 text-sm rounded-xl bg-card/75 backdrop-blur-sm">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-72">
-                            {monthOptions.map((monthOption) => (
-                                <SelectItem key={monthOption.value} value={monthOption.value}>
-                                    {monthOption.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Button variant="outline" size="sm" className="hidden sm:flex h-9 rounded-xl bg-card/70 backdrop-blur-sm" asChild>
-                        <Link href="/transactions/import">
-                            <Upload className="w-3.5 h-3.5 mr-1.5" />
-                            Importar
-                        </Link>
-                    </Button>
                 </div>
             </div>
 
@@ -1141,130 +1140,129 @@ export default function TransactionsPage() {
                 </div>
             </motion.div>
 
-            <div
-                className="hidden md:flex items-center justify-between gap-3 rounded-2xl border px-3 py-3"
+            <section
+                className="rounded-2xl border px-4 py-4 space-y-4"
                 style={{
-                    background: 'color-mix(in srgb, var(--card) 88%, transparent)',
-                    borderColor: 'var(--border)',
+                    background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                    borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
                     boxShadow: 'var(--card-shadow)',
                 }}
             >
-                <div className="flex items-center gap-2 flex-wrap">
-                <TypeFilterChip
-                    value={appliedFilters.type}
-                    onChange={(value) => setAppliedFilter('type', value)}
-                    activeCategoryType={selectedAppliedCategoryType}
-                />
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mes</p>
+                        <Select value={month} onValueChange={setMonth}>
+                            <SelectTrigger className="h-8 w-full text-sm md:w-48">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                                {monthOptions.map((monthOption) => (
+                                    <SelectItem key={monthOption.value} value={monthOption.value}>
+                                        {monthOption.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                <CategoryFilterChip
-                    value={appliedFilters.categoryId}
-                    onChange={(value) => setAppliedFilter('categoryId', value)}
-                    options={categoryOptions}
-                    selectedType={appliedFilters.type}
-                />
+                    <div className="hidden md:flex items-center gap-2.5 flex-wrap">
+                        <TypeFilterChip
+                            value={appliedFilters.type}
+                            onChange={(value) => setAppliedFilter('type', value)}
+                            activeCategoryType={selectedAppliedCategoryType}
+                        />
 
-                <BasicFilterChip
-                    label="Cuenta"
-                    active={Boolean(appliedFilters.accountId)}
-                    options={accountOptions}
-                    value={appliedFilters.accountId}
-                    onChange={(value) => setAppliedFilter('accountId', value)}
-                />
+                        <CategoryFilterChip
+                            value={appliedFilters.categoryId}
+                            onChange={(value) => setAppliedFilter('categoryId', value)}
+                            options={categoryOptions}
+                            selectedType={appliedFilters.type}
+                        />
 
-                <BasicFilterChip
-                    label="Moneda"
-                    active={Boolean(appliedFilters.currency)}
-                    options={[
-                        { value: 'ARS', label: 'ARS' },
-                        { value: 'USD', label: 'USD' },
-                    ]}
-                    value={appliedFilters.currency ?? ''}
-                    onChange={(value) => setAppliedFilter('currency', value)}
-                />
+                        <BasicFilterChip
+                            label="Cuenta"
+                            active={Boolean(appliedFilters.accountId)}
+                            options={accountOptions}
+                            value={appliedFilters.accountId}
+                            onChange={(value) => setAppliedFilter('accountId', value)}
+                        />
 
-                <BasicFilterChip
-                    label="Ordenar"
-                    active={sort !== DEFAULT_SORT}
-                    options={SORT_OPTIONS.map((option) => ({
-                        value: option.value,
-                        label: option.label,
-                    }))}
-                    value={sort}
-                    onChange={(value) => setSort(value || DEFAULT_SORT)}
-                />
+                        <BasicFilterChip
+                            label="Moneda"
+                            active={Boolean(appliedFilters.currency)}
+                            options={[
+                                { value: 'ARS', label: 'ARS' },
+                                { value: 'USD', label: 'USD' },
+                            ]}
+                            value={appliedFilters.currency ?? ''}
+                            onChange={(value) => setAppliedFilter('currency', value)}
+                        />
 
-                {activeFilterCount > 0 && (
+                        <BasicFilterChip
+                            label="Ordenar"
+                            active={sort !== DEFAULT_SORT}
+                            options={SORT_OPTIONS.map((option) => ({
+                                value: option.value,
+                                label: option.label,
+                            }))}
+                            value={sort}
+                            onChange={(value) => setSort((value || DEFAULT_SORT) as typeof SORT_OPTIONS[number]['value'])}
+                        />
+
+                        {activeFilterCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={clearAppliedFilters}
+                                className="flex items-center gap-1 rounded-xl px-3.5 py-2 text-xs font-medium"
+                                style={{
+                                    color: 'var(--muted-foreground)',
+                                    background: 'var(--secondary)',
+                                    border: '0.5px solid var(--border)',
+                                }}
+                            >
+                                <X size={12} /> Limpiar
+                            </button>
+                        )}
+
+                        <Button variant="outline" size="sm" className="h-8 rounded-xl bg-background/60" asChild>
+                            <Link href="/transactions/import">
+                                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                                Importar
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="flex md:hidden items-center gap-2 w-full">
                     <button
                         type="button"
-                        onClick={clearAppliedFilters}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors"
-                        style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
-                    >
-                        <X size={12} /> Limpiar
-                    </button>
-                )}
-                </div>
-                <p className="text-xs text-muted-foreground shrink-0">
-                    {total > 0 ? `${transactions.length} de ${total} transacciones` : 'Sin movimientos'}
-                </p>
-            </div>
-
-            <div
-                className="grid md:hidden grid-cols-3 gap-2 w-full rounded-2xl border px-3 py-3"
-                style={{
-                    background: 'color-mix(in srgb, var(--card) 88%, transparent)',
-                    borderColor: 'var(--border)',
-                    boxShadow: 'var(--card-shadow)',
-                }}
-            >
-                <button
-                    type="button"
-                    onClick={openFilterSheet}
-                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium"
-                    style={{
-                        background: activeFilterCount > 0 ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
-                        color: activeFilterCount > 0 ? 'var(--sky-dark)' : 'var(--muted-foreground)',
-                        border: `0.5px solid ${activeFilterCount > 0 ? 'rgba(96,184,224,0.32)' : 'var(--border)'}`,
-                    }}
-                >
-                    <SlidersHorizontal size={13} />
-                    Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-                </button>
-
-                <Select value={sort} onValueChange={(value) => setSort(value || DEFAULT_SORT)}>
-                    <SelectTrigger
-                        className="h-[38px] w-full rounded-xl border text-xs"
+                        onClick={openFilterSheet}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
                         style={{
-                            background: sort !== DEFAULT_SORT ? 'rgba(96,184,224,0.16)' : 'var(--secondary)',
-                            color: sort !== DEFAULT_SORT ? 'var(--sky-dark)' : 'var(--muted-foreground)',
-                            borderColor: sort !== DEFAULT_SORT ? 'rgba(96,184,224,0.32)' : 'var(--border)',
+                            background: activeFilterCount > 0 ? 'var(--sky)' : 'var(--secondary)',
+                            color: activeFilterCount > 0 ? '#fff' : 'var(--muted-foreground)',
+                            border: `0.5px solid ${activeFilterCount > 0 ? 'var(--sky)' : 'var(--border)'}`,
                         }}
                     >
-                        <SelectValue placeholder="Ordenar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {SORT_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                        <SlidersHorizontal size={13} />
+                        Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                    </button>
 
-                {activeFilterCount > 0 && (
-                    <button
-                    type="button"
-                    onClick={clearAppliedFilters}
-                    className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl text-xs"
-                    style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
-                >
-                    <X size={12} /> Limpiar
-                </button>
-                )}
+                    {activeFilterCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={clearAppliedFilters}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs"
+                            style={{ color: 'var(--muted-foreground)', background: 'var(--secondary)' }}
+                        >
+                            <X size={12} /> Limpiar
+                        </button>
+                    )}
+                </div>
 
                 <Link
                     href="/transactions/import"
-                    className={`${activeFilterCount > 0 ? 'col-span-3' : ''} flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium`}
+                    className="flex md:hidden items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium"
                     style={{
                         background: 'var(--secondary)',
                         color: 'var(--muted-foreground)',
@@ -1274,13 +1272,11 @@ export default function TransactionsPage() {
                     <Upload size={13} />
                     Importar
                 </Link>
-            </div>
 
-            {total > 0 && (
                 <p className="text-xs text-muted-foreground">
-                    {transactions.length} de {total} transacciones
+                    {total > 0 ? `${transactions.length} de ${total} transacciones` : 'Sin movimientos'}
                 </p>
-            )}
+            </section>
 
             <AnimatePresence mode="wait">
                 <motion.div
@@ -1549,7 +1545,7 @@ export default function TransactionsPage() {
                 filters={draftFilters}
                 sort={draftSort}
                 onChange={setDraftFilter}
-                onSortChange={(value) => setDraftSort(value || DEFAULT_SORT)}
+                onSortChange={(value) => setDraftSort((value || DEFAULT_SORT) as typeof SORT_OPTIONS[number]['value'])}
                 onApply={applyDraftFilters}
                 onClear={clearDraftFilters}
                 typeOptions={typeOptions}
@@ -1593,6 +1589,14 @@ export default function TransactionsPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </motion.div>
+    )
+}
+
+export default function TransactionsPage() {
+    return (
+        <Suspense>
+            <TransactionsPageInner />
+        </Suspense>
     )
 }
 

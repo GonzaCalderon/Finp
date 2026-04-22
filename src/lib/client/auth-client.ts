@@ -8,6 +8,15 @@ const authExpiredListeners = new Set<AuthExpiredListener>()
 
 let authExpired = false
 
+function didRedirectToLogin(response: Response) {
+    try {
+        const responseUrl = new URL(response.url, window.location.origin)
+        return response.redirected && responseUrl.pathname.startsWith('/login')
+    } catch {
+        return false
+    }
+}
+
 function shouldIgnoreAuthStatus(input: RequestInfo | URL) {
     const requestUrl =
         typeof input === 'string'
@@ -42,6 +51,10 @@ export function notifyAuthExpired() {
     })
 }
 
+export function resetAuthExpired() {
+    authExpired = false
+}
+
 export function installClientFetchAuthInterceptor() {
     if (typeof window === 'undefined') return () => {}
 
@@ -63,8 +76,12 @@ export function installClientFetchAuthInterceptor() {
         const response = await originalFetch(input, init)
 
         if (
-            (response.status === 401 || response.status === 403) &&
-            !shouldIgnoreAuthStatus(input)
+            !shouldIgnoreAuthStatus(input) &&
+            (
+                response.status === 401 ||
+                response.status === 403 ||
+                didRedirectToLogin(response)
+            )
         ) {
             notifyAuthExpired()
         }

@@ -4,7 +4,15 @@ import { connectDB } from '@/lib/db'
 import { Transaction, Account, ScheduledCommitment, CommitmentApplication, InstallmentPlan, User } from '@/lib/models'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { parseFinancialPeriod, getCurrentFinancialPeriod } from '@/lib/utils/period'
-import { buildMonthlyCardPaymentSummary, getInstallmentStatusForMonth, isCreditCardPaymentType } from '@/lib/utils/credit-card'
+import {
+    buildMonthlyCardPaymentSummary,
+    getInstallmentStatusForMonth,
+    getRefColor,
+    getRefId,
+    getRefName,
+    isCreditCardPaymentType,
+    normalizeLegacyTransactionType,
+} from '@/lib/utils/credit-card'
 import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
 import {
     clampRangeStartToOperationalStart,
@@ -22,6 +30,23 @@ type PopulatedCategoryRef = {
 type CurrencyTotals = {
     ars: number
     usd: number
+}
+
+type CreditCardOverview = {
+    accountId: string
+    name: string
+    institution?: string
+    processor?: string
+    color?: string
+    currency: string
+    supportedCurrencies?: string[]
+    balancesByCurrency: { ARS: number; USD: number }
+    monthlyDue: CurrencyTotals
+    monthlyPaid: CurrencyTotals
+    monthlyPending: CurrencyTotals
+    activeInstallments: number
+    activeCharges: number
+    latestPurchaseDate?: string
 }
 
 function emptyCurrencyTotals(): CurrencyTotals {
@@ -45,6 +70,10 @@ function addCurrencyTotals(left: CurrencyTotals, right: CurrencyTotals): Currenc
         ars: left.ars + right.ars,
         usd: left.usd + right.usd,
     }
+}
+
+function compareCurrencyTotals(left: CurrencyTotals, right: CurrencyTotals): number {
+    return right.ars + right.usd - (left.ars + left.usd)
 }
 
 function getExchangeNet(
@@ -89,6 +118,105 @@ function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
         name: candidate.name,
         color: typeof candidate.color === 'string' ? candidate.color : undefined,
     }
+}
+
+type PopulatedRef = string | { _id?: { toString(): string }; name?: string; color?: string; currency?: string } | null | undefined
+
+function buildRecentTransactionContext(transaction: {
+    type?: string
+    amount: number
+    description: string
+    currency: string
+    date: Date | string
+    merchant?: string
+    installmentPlanId?: unknown
+    categoryId?: PopulatedRef
+    sourceAccountId?: PopulatedRef
+    destinationAccountId?: PopulatedRef
+}) {
+    const normalizedType = normalizeLegacyTransactionType(transaction.type)
+    const sourceId = getRefId(transaction.sourceAccountId)
+    const destinationId = getRefId(transaction.destinationAccountId)
+
+    const categoryRef = getPopulatedCategoryRef(transaction.categoryId)
+    const sourceAccountName = getRefName(transaction.sourceAccountId)
+    const sourceAccountColor = getRefColor(transaction.sourceAccountId)
+    const destinationAccountName = getRefName(transaction.destinationAccountId)
+    const destinationAccountColor = getRefColor(transaction.destinationAccountId)
+    const installmentPlan =
+        transaction.installmentPlanId &&
+        typeof transaction.installmentPlanId === 'object' &&
+        'installmentCount' in (transaction.installmentPlanId as Record<string, unknown>)
+            ? (transaction.installmentPlanId as { installmentCount?: number })
+            : null
+
+    const impact =
+        normalizedType === 'income'
+            ? 'positive'
+            : normalizedType === 'transfer' || normalizedType === 'exchange'
+                ? 'neutral'
+                : normalizedType === 'adjustment'
+                    ? transaction.amount >= 0
+                        ? 'positive'
+                        : 'negative'
+                    : 'negative'
+
+    const primaryAccount =
+        normalizedType === 'income'
+            ? {
+                _id: destinationId,
+                name: destinationAccountName,
+                color: destinationAccountColor,
+            }
+            : {
+                _id: sourceId,
+                name: sourceAccountName,
+                color: sourceAccountColor,
+            }
+
+    return {
+        impact,
+        category: categoryRef
+            ? {
+                key: categoryRef._id.toString(),
+                name: categoryRef.name,
+                color: categoryRef.color,
+            }
+            : null,
+        sourceAccount: sourceId
+            ? {
+                _id: sourceId,
+                name: sourceAccountName ?? 'Cuenta',
+                color: sourceAccountColor,
+            }
+            : null,
+        destinationAccount: destinationId
+            ? {
+                _id: destinationId,
+                name: destinationAccountName ?? 'Cuenta',
+                color: destinationAccountColor,
+            }
+            : null,
+        primaryAccount: primaryAccount._id
+            ? {
+                _id: primaryAccount._id,
+                name: primaryAccount.name ?? 'Cuenta',
+                color: primaryAccount.color,
+            }
+            : null,
+        installmentCount: installmentPlan?.installmentCount,
+        merchant: typeof transaction.merchant === 'string' ? transaction.merchant : undefined,
+    }
+}
+
+function inferCardProcessor(name?: string, institution?: string) {
+    const haystack = `${name ?? ''} ${institution ?? ''}`.toLowerCase()
+    if (haystack.includes('visa')) return 'visa'
+    if (haystack.includes('master')) return 'mastercard'
+    if (haystack.includes('amex') || haystack.includes('american express')) return 'amex'
+    if (haystack.includes('cabal')) return 'cabal'
+    if (haystack.includes('diners')) return 'diners'
+    return 'generic'
 }
 
 export async function GET(request: Request) {
@@ -139,6 +267,7 @@ export async function GET(request: Request) {
             .populate('categoryId', 'name color type')
             .populate('sourceAccountId', 'name type currency color')
             .populate('destinationAccountId', 'name type currency color')
+            .populate('installmentPlanId', 'installmentCount')
 
         // Transacciones del mes anterior
         const prevTransactions = await Transaction.find({
@@ -192,8 +321,23 @@ export async function GET(request: Request) {
             usd: Math.max(0, totalCreditCardExpense.usd - totalCardPayments.usd),
         }
 
-        const totalIncome = transactions
+        const isLoanIncome = (t: { type?: string; destinationAccountId?: unknown }) => {
+            if (t.type !== 'income') return false
+            const dest = t.destinationAccountId as { type?: string } | null
+            return dest?.type === 'debt'
+        }
+
+        // Para el balance: todos los ingresos (incluye préstamos recibidos = dinero real)
+        const allIncome = transactions
             .filter((t) => t.type === 'income')
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        // Para el KPI de Ingresos: excluye préstamos (no son ingreso genuino)
+        const totalIncome = transactions
+            .filter((t) => !isLoanIncome(t) && t.type === 'income')
             .reduce((totals, transaction) => {
                 addCurrencyAmount(totals, transaction.currency, transaction.amount)
                 return totals
@@ -210,8 +354,15 @@ export async function GET(request: Request) {
             usd: regularExpense.usd + totalCardPayments.usd,
         }
 
-        const prevIncome = prevTransactions
+        const prevAllIncome = prevTransactions
             .filter((t) => t.type === 'income')
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        const prevIncome = prevTransactions
+            .filter((t) => !isLoanIncome(t) && t.type === 'income')
             .reduce((totals, transaction) => {
                 addCurrencyAmount(totals, transaction.currency, transaction.amount)
                 return totals
@@ -233,12 +384,64 @@ export async function GET(request: Request) {
             ars: prevRegularExpense.ars + prevCardPayments.ars,
             usd: prevRegularExpense.usd + prevCardPayments.usd,
         }
+        // Desembolsos de préstamos: transfers desde cuenta Deuda → suma al balance (dinero que entra)
+        const loanDisbursements = transactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const source = t.sourceAccountId as { type?: string } | null
+                return source?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        // Pagos de préstamos: transfers hacia cuenta Deuda → resta al balance (dinero que sale)
+        const loanRepayments = transactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const dest = t.destinationAccountId as { type?: string } | null
+                return dest?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        const prevLoanDisbursements = prevTransactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const source = t.sourceAccountId as { type?: string } | null
+                return source?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        const prevLoanRepayments = prevTransactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const dest = t.destinationAccountId as { type?: string } | null
+                return dest?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
         const currentBalance = addCurrencyTotals(
-            subtractCurrencyTotals(totalIncome, totalExpense),
+            addCurrencyTotals(
+                subtractCurrencyTotals(allIncome, totalExpense),
+                subtractCurrencyTotals(loanDisbursements, loanRepayments),
+            ),
             getExchangeNet(transactions)
         )
         const prevBalance = addCurrencyTotals(
-            subtractCurrencyTotals(prevIncome, prevExpense),
+            addCurrencyTotals(
+                subtractCurrencyTotals(prevAllIncome, prevExpense),
+                subtractCurrencyTotals(prevLoanDisbursements, prevLoanRepayments),
+            ),
             getExchangeNet(prevTransactions)
         )
 
@@ -318,11 +521,13 @@ export async function GET(request: Request) {
                 return {
                     _id: account._id,
                     name: account.name,
+                    institution: account.institution,
                     type: account.type,
                     currency: primaryCurrency,
                     supportedCurrencies,
                     color: account.color,
                     includeInNetWorth: account.includeInNetWorth,
+                    creditCardConfig: account.creditCardConfig,
                     balancesByCurrency,
                     balance: balancesByCurrency[primaryCurrency],
                 }
@@ -361,6 +566,14 @@ export async function GET(request: Request) {
                 dayOfMonth: c.dayOfMonth,
             }))
 
+        // Total de compromisos mensuales fijos (aplicados o pendientes)
+        const totalMonthlyCommitments = activeCommitments
+            .filter((c) => c.recurrence === 'monthly')
+            .reduce((totals, c) => {
+                addCurrencyAmount(totals, c.currency, c.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
         const installmentsThisMonth = (currentPeriodHasCoverage ? allPlans : [])
             .filter((plan) => plan.installmentCount > 1)
             .map((plan) => {
@@ -380,6 +593,105 @@ export async function GET(request: Request) {
             .filter(Boolean)
             .sort((a, b) => (b?.installmentAmount ?? 0) - (a?.installmentAmount ?? 0))
 
+        const creditCards = accountsWithBalance
+            .filter((account) => account.type === 'credit_card')
+            .map<CreditCardOverview>((account) => {
+                const summary = currentCardSummary.find((item) => item.cardId === account._id.toString())
+                const monthlyDue = (summary?.items ?? []).reduce((totals, item) => {
+                    addCurrencyAmount(totals, item.currency, item.amount)
+                    return totals
+                }, emptyCurrencyTotals())
+                const monthlyPaid = transactions
+                    .filter(
+                        (transaction) =>
+                            isCreditCardPaymentType(transaction.type) &&
+                            getRefId(transaction.destinationAccountId) === account._id.toString()
+                    )
+                    .reduce((totals, transaction) => {
+                        addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                        return totals
+                    }, emptyCurrencyTotals())
+
+                const monthlyPending = {
+                    ars: Math.max(0, monthlyDue.ars - monthlyPaid.ars),
+                    usd: Math.max(0, monthlyDue.usd - monthlyPaid.usd),
+                }
+
+                const latestTransactionDate = transactions.reduce<string | undefined>((latest, transaction) => {
+                    const normalizedType = normalizeLegacyTransactionType(transaction.type)
+                    if (normalizedType !== 'credit_card_expense') return latest
+                    if (getRefId(transaction.sourceAccountId) !== account._id.toString()) return latest
+
+                    const current = transaction.date instanceof Date
+                        ? transaction.date.toISOString()
+                        : new Date(transaction.date).toISOString()
+
+                    if (!latest) return current
+                    return new Date(current).getTime() > new Date(latest).getTime() ? current : latest
+                }, undefined)
+
+                const latestSummaryDate = summary?.items.reduce<string | undefined>((latest, item) => {
+                    const current = item.purchaseDate instanceof Date
+                        ? item.purchaseDate.toISOString()
+                        : new Date(item.purchaseDate).toISOString()
+
+                    if (!latest) return current
+                    return new Date(current).getTime() > new Date(latest).getTime() ? current : latest
+                }, undefined)
+
+                const latestPurchaseDate = latestTransactionDate ?? latestSummaryDate
+
+                return {
+                    accountId: account._id.toString(),
+                    name: account.name,
+                    institution: account.institution,
+                    processor: inferCardProcessor(account.name, account.institution),
+                    color: account.color,
+                    currency: account.currency,
+                    supportedCurrencies: account.supportedCurrencies,
+                    balancesByCurrency: account.balancesByCurrency,
+                    monthlyDue,
+                    monthlyPaid,
+                    monthlyPending,
+                    activeInstallments:
+                        summary?.items.filter((item) => item.kind === 'installment').length ?? 0,
+                    activeCharges: summary?.items.length ?? 0,
+                    latestPurchaseDate,
+                }
+            })
+            .sort((a, b) => {
+                const pendingDiff = compareCurrencyTotals(a.monthlyPending, b.monthlyPending)
+                if (pendingDiff !== 0) return pendingDiff
+                const dueDiff = compareCurrencyTotals(a.monthlyDue, b.monthlyDue)
+                if (dueDiff !== 0) return dueDiff
+                return b.activeInstallments - a.activeInstallments
+            })
+
+        const recentTransactions = [...transactions]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 6)
+            .map((transaction) => {
+                const context = buildRecentTransactionContext(transaction)
+
+                return {
+                    _id: transaction._id.toString(),
+                    type: normalizeLegacyTransactionType(transaction.type) ?? transaction.type,
+                    description: transaction.description,
+                    amount: transaction.amount,
+                    currency: transaction.currency,
+                    date: transaction.date instanceof Date
+                        ? transaction.date.toISOString()
+                        : new Date(transaction.date).toISOString(),
+                    impact: context.impact,
+                    merchant: context.merchant,
+                    category: context.category,
+                    primaryAccount: context.primaryAccount,
+                    sourceAccount: context.sourceAccount,
+                    destinationAccount: context.destinationAccount,
+                    installmentCount: context.installmentCount,
+                }
+            })
+
         return NextResponse.json({
             month,
             summary: {
@@ -388,6 +700,7 @@ export async function GET(request: Request) {
                 balance: currentBalance,
                 totalCreditCardExpense,
                 totalDebt: totalRemainingDebt,
+                totalMonthlyCommitments,
                 operationalStartDate,
             },
             trends,
@@ -400,6 +713,8 @@ export async function GET(request: Request) {
             },
             pendingCommitments,
             installmentsThisMonth,
+            creditCards,
+            recentTransactions,
             creditCardMonthly: currentCardSummary,
         })
     } catch (error) {

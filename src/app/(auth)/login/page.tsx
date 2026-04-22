@@ -11,6 +11,8 @@ import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { markAppStartupPending } from '@/components/shared/AppStartupGate'
+import { resetAuthExpired } from '@/lib/client/auth-client'
 import { loginSchema, type LoginFormData } from '@/lib/validations/auth'
 import { staggerContainer, staggerItem, fadeIn } from '@/lib/utils/animations'
 import type { DefaultView } from '@/hooks/usePreferences'
@@ -66,6 +68,10 @@ function LoginForm() {
         emailRef.current?.focus()
     }, [])
 
+    useEffect(() => {
+        resetAuthExpired()
+    }, [])
+
     const onSubmit = async (data: LoginFormData) => {
         const result = await signIn('credentials', {
             email: data.email,
@@ -80,6 +86,7 @@ function LoginForm() {
             return
         }
 
+        markAppStartupPending()
         router.push(await getDefaultRoute())
     }
 

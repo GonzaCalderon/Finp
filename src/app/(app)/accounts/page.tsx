@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { AccountDialog } from '@/components/shared/AccountDialog'
 import { AccountDetailSheet } from '@/components/shared/AccountDetailSheet'
+import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
@@ -530,6 +531,8 @@ export default function AccountsPage() {
             activeTypes,
         }
     }, [accounts, groupedAccounts])
+
+    useAppStartupReady(!loading)
 
     const handleCreate = () => {
         setSelectedAccount(null)

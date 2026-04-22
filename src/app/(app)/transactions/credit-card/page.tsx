@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, ChevronDown, CreditCard, Pencil, SlidersHorizontal, Trash2, X } from 'lucide-react'
 
@@ -15,6 +16,7 @@ import {
 import { useInstallments } from '@/hooks/useInstallments'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { usePreferences } from '@/hooks/usePreferences'
+import { useSkipRouteTransitionAnimations } from '@/hooks/useSkipRouteTransitionAnimations'
 import { useToast } from '@/hooks/useToast'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
@@ -580,12 +582,32 @@ async function patchTransaction(id: string, body: TransactionFormData) {
     return data.transaction as ITransaction
 }
 
-export default function CreditCardExpensesPage() {
-    const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
-    const [filters, setFilters] = useState<PageFilters>(DEFAULT_FILTERS)
-    const [draftFilters, setDraftFilters] = useState<PageFilters>(DEFAULT_FILTERS)
-    const [sort, setSort] = useState<SortFilter>('date_desc')
-    const [draftSort, setDraftSort] = useState<SortFilter>('date_desc')
+function CreditCardExpensesPageInner() {
+    const searchParams = useSearchParams()
+    const initialMonth = searchParams.get('month') ?? getCurrentMonth()
+    const initialFilters: PageFilters = {
+        cardFilter: searchParams.get('cardId') ?? DEFAULT_FILTERS.cardFilter,
+        categoryFilter: searchParams.get('categoryId') ?? DEFAULT_FILTERS.categoryFilter,
+        statusFilter:
+            searchParams.get('statusFilter') && STATUS_OPTIONS.some((option) => option.value === searchParams.get('statusFilter'))
+                ? (searchParams.get('statusFilter') as StatusFilter)
+                : DEFAULT_FILTERS.statusFilter,
+        installmentFilter:
+            searchParams.get('installmentFilter') &&
+            INSTALLMENT_OPTIONS.some((option) => option.value === searchParams.get('installmentFilter'))
+                ? (searchParams.get('installmentFilter') as InstallmentFilter)
+                : DEFAULT_FILTERS.installmentFilter,
+    }
+    const initialSort =
+        searchParams.get('sort') && SORT_OPTIONS.some((option) => option.value === searchParams.get('sort'))
+            ? (searchParams.get('sort') as SortFilter)
+            : 'date_desc'
+
+    const [selectedMonth, setSelectedMonth] = useState(initialMonth)
+    const [filters, setFilters] = useState<PageFilters>(initialFilters)
+    const [draftFilters, setDraftFilters] = useState<PageFilters>(initialFilters)
+    const [sort, setSort] = useState<SortFilter>(initialSort)
+    const [draftSort, setDraftSort] = useState<SortFilter>(initialSort)
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
     const [sheetItem, setSheetItem] = useState<CCExpenseItem | null>(null)
     const [deleteItem, setDeleteItem] = useState<CCExpenseItem | null>(null)
@@ -598,6 +620,7 @@ export default function CreditCardExpensesPage() {
     const { categories } = useCategories()
     const { rules } = useTransactionRules()
     const { preferences } = usePreferences()
+    const skipRouteTransitionAnimations = useSkipRouteTransitionAnimations()
     const { hidden } = useHideAmounts()
     const { success, error: toastError } = useToast()
     const { createPlan, updatePlan } = useInstallments()
@@ -911,9 +934,17 @@ export default function CreditCardExpensesPage() {
         return <div className="p-8 text-center text-sm text-destructive">{error}</div>
     }
 
+    const pageMotionProps = skipRouteTransitionAnimations
+        ? {
+            initial: false as const,
+            animate: { opacity: 1, y: 0 },
+            transition: { duration: 0 },
+        }
+        : fadeIn
+
     return (
         <>
-            <motion.div className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6" {...fadeIn}>
+            <motion.div className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6" {...pageMotionProps}>
                 <div className="flex flex-col gap-1.5">
                     <h1 className="text-xl font-semibold tracking-tight md:text-[2rem]">Gastos con TC</h1>
                     <p className="text-sm text-muted-foreground">
@@ -1003,7 +1034,7 @@ export default function CreditCardExpensesPage() {
                 <motion.section
                     className="hidden md:grid gap-3 md:grid-cols-2 xl:grid-cols-4"
                     variants={staggerContainer}
-                    initial="initial"
+                    initial={skipRouteTransitionAnimations ? false : 'initial'}
                     animate="animate"
                 >
                     <OverviewMetricCard
@@ -1417,7 +1448,7 @@ export default function CreditCardExpensesPage() {
                     <motion.div
                         className="space-y-2.5"
                         variants={staggerContainer}
-                        initial="initial"
+                        initial={skipRouteTransitionAnimations ? false : 'initial'}
                         animate="animate"
                     >
                         {filteredItems.map((item) => {
@@ -1645,5 +1676,13 @@ export default function CreditCardExpensesPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </>
+    )
+}
+
+export default function CreditCardExpensesPage() {
+    return (
+        <Suspense>
+            <CreditCardExpensesPageInner />
+        </Suspense>
     )
 }

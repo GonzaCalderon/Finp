@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { fadeIn } from '@/lib/utils/animations'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
@@ -398,6 +399,8 @@ export default function ProjectionPage() {
                 setError(err instanceof Error ? err.message : 'Error al cargar proyección')
             })
     })
+
+    useAppStartupReady(!loading)
 
     if (error) return <div className="p-8 text-center text-destructive text-sm">{error}</div>
 

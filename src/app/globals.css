@@ -190,9 +190,55 @@ main {
   animation: fadeIn 0.2s ease;
 }
 
+html[data-route-transition] main {
+  animation: none;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@supports (view-transition-name: root) {
+  ::view-transition-group(root) {
+    animation-duration: 260ms;
+  }
+
+  html[data-route-transition="forward"]::view-transition-old(root) {
+    animation: route-slide-out-left 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  html[data-route-transition="forward"]::view-transition-new(root) {
+    animation: route-slide-in-right 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  html[data-route-transition="back"]::view-transition-old(root) {
+    animation: route-slide-out-right 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  html[data-route-transition="back"]::view-transition-new(root) {
+    animation: route-slide-in-left 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes route-slide-out-left {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0.75; transform: translateX(-44px); }
+}
+
+@keyframes route-slide-in-right {
+  from { opacity: 0.55; transform: translateX(52px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes route-slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0.75; transform: translateX(44px); }
+}
+
+@keyframes route-slide-in-left {
+  from { opacity: 0.55; transform: translateX(-52px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 /* Dialog */
