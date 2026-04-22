@@ -15,6 +15,7 @@ import {
 import { useInstallments } from '@/hooks/useInstallments'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { usePreferences } from '@/hooks/usePreferences'
+import { useSkipRouteTransitionAnimations } from '@/hooks/useSkipRouteTransitionAnimations'
 import { useToast } from '@/hooks/useToast'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
@@ -598,6 +599,7 @@ export default function CreditCardExpensesPage() {
     const { categories } = useCategories()
     const { rules } = useTransactionRules()
     const { preferences } = usePreferences()
+    const skipRouteTransitionAnimations = useSkipRouteTransitionAnimations()
     const { hidden } = useHideAmounts()
     const { success, error: toastError } = useToast()
     const { createPlan, updatePlan } = useInstallments()
@@ -911,9 +913,17 @@ export default function CreditCardExpensesPage() {
         return <div className="p-8 text-center text-sm text-destructive">{error}</div>
     }
 
+    const pageMotionProps = skipRouteTransitionAnimations
+        ? {
+            initial: false as const,
+            animate: { opacity: 1, y: 0 },
+            transition: { duration: 0 },
+        }
+        : fadeIn
+
     return (
         <>
-            <motion.div className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6" {...fadeIn}>
+            <motion.div className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6" {...pageMotionProps}>
                 <div className="flex flex-col gap-1.5">
                     <h1 className="text-xl font-semibold tracking-tight md:text-[2rem]">Gastos con TC</h1>
                     <p className="text-sm text-muted-foreground">
@@ -1003,7 +1013,7 @@ export default function CreditCardExpensesPage() {
                 <motion.section
                     className="hidden md:grid gap-3 md:grid-cols-2 xl:grid-cols-4"
                     variants={staggerContainer}
-                    initial="initial"
+                    initial={skipRouteTransitionAnimations ? false : 'initial'}
                     animate="animate"
                 >
                     <OverviewMetricCard
@@ -1417,7 +1427,7 @@ export default function CreditCardExpensesPage() {
                     <motion.div
                         className="space-y-2.5"
                         variants={staggerContainer}
-                        initial="initial"
+                        initial={skipRouteTransitionAnimations ? false : 'initial'}
                         animate="animate"
                     >
                         {filteredItems.map((item) => {

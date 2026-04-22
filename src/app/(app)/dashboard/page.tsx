@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
+import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { SankeyChart } from '@/components/shared/SankeyChart'
 import { Spinner } from '@/components/shared/Spinner'
@@ -217,7 +218,7 @@ export default function DashboardPage() {
     const sankeyMobileCardRef = useRef<HTMLDivElement | null>(null)
     const mobileCategoryCardRef = useRef<HTMLDivElement | null>(null)
 
-    const { accounts } = useAccounts()
+    const { accounts, loading: accountsLoading } = useAccounts()
     const { success, error: toastError } = useToast()
     const { hidden } = useHideAmounts()
     const { preferences } = usePreferences()
@@ -308,6 +309,8 @@ export default function DashboardPage() {
     useDataInvalidation(['dashboard'], () => {
         void fetchDashboard(true)
     })
+
+    useAppStartupReady(!loading && !accountsLoading)
 
     const handleApplyCommitment = (commitment: CommitmentItem) => {
         setSelectedCommitment(commitment)
