@@ -319,13 +319,23 @@ export async function GET(request: Request) {
             usd: Math.max(0, totalCreditCardExpense.usd - totalCardPayments.usd),
         }
 
+        const isLoanIncome = (t: { type?: string; destinationAccountId?: unknown }) => {
+            if (t.type !== 'income') return false
+            const dest = t.destinationAccountId as { type?: string } | null
+            return dest?.type === 'debt'
+        }
+
+        // Para el balance: todos los ingresos (incluye préstamos recibidos = dinero real)
+        const allIncome = transactions
+            .filter((t) => t.type === 'income')
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        // Para el KPI de Ingresos: excluye préstamos (no son ingreso genuino)
         const totalIncome = transactions
-            .filter((t) => {
-                if (t.type !== 'income') return false
-                // Excluir préstamos: ingresos cuyo destino es una cuenta de tipo Deuda
-                const dest = t.destinationAccountId as { type?: string } | null
-                return dest?.type !== 'debt'
-            })
+            .filter((t) => !isLoanIncome(t) && t.type === 'income')
             .reduce((totals, transaction) => {
                 addCurrencyAmount(totals, transaction.currency, transaction.amount)
                 return totals
@@ -342,12 +352,15 @@ export async function GET(request: Request) {
             usd: regularExpense.usd + totalCardPayments.usd,
         }
 
+        const prevAllIncome = prevTransactions
+            .filter((t) => t.type === 'income')
+            .reduce((totals, transaction) => {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
         const prevIncome = prevTransactions
-            .filter((t) => {
-                if (t.type !== 'income') return false
-                const dest = t.destinationAccountId as { type?: string } | null
-                return dest?.type !== 'debt'
-            })
+            .filter((t) => !isLoanIncome(t) && t.type === 'income')
             .reduce((totals, transaction) => {
                 addCurrencyAmount(totals, transaction.currency, transaction.amount)
                 return totals
@@ -370,11 +383,11 @@ export async function GET(request: Request) {
             usd: prevRegularExpense.usd + prevCardPayments.usd,
         }
         const currentBalance = addCurrencyTotals(
-            subtractCurrencyTotals(totalIncome, totalExpense),
+            subtractCurrencyTotals(allIncome, totalExpense),
             getExchangeNet(transactions)
         )
         const prevBalance = addCurrencyTotals(
-            subtractCurrencyTotals(prevIncome, prevExpense),
+            subtractCurrencyTotals(prevAllIncome, prevExpense),
             getExchangeNet(prevTransactions)
         )
 
