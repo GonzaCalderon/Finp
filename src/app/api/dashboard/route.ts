@@ -382,12 +382,64 @@ export async function GET(request: Request) {
             ars: prevRegularExpense.ars + prevCardPayments.ars,
             usd: prevRegularExpense.usd + prevCardPayments.usd,
         }
+        // Desembolsos de préstamos: transfers desde cuenta Deuda → suma al balance (dinero que entra)
+        const loanDisbursements = transactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const source = t.sourceAccountId as { type?: string } | null
+                return source?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        // Pagos de préstamos: transfers hacia cuenta Deuda → resta al balance (dinero que sale)
+        const loanRepayments = transactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const dest = t.destinationAccountId as { type?: string } | null
+                return dest?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        const prevLoanDisbursements = prevTransactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const source = t.sourceAccountId as { type?: string } | null
+                return source?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
+        const prevLoanRepayments = prevTransactions
+            .filter((t) => {
+                if (t.type !== 'transfer') return false
+                const dest = t.destinationAccountId as { type?: string } | null
+                return dest?.type === 'debt'
+            })
+            .reduce((totals, t) => {
+                addCurrencyAmount(totals, t.currency, t.amount)
+                return totals
+            }, emptyCurrencyTotals())
+
         const currentBalance = addCurrencyTotals(
-            subtractCurrencyTotals(allIncome, totalExpense),
+            addCurrencyTotals(
+                subtractCurrencyTotals(allIncome, totalExpense),
+                subtractCurrencyTotals(loanDisbursements, loanRepayments),
+            ),
             getExchangeNet(transactions)
         )
         const prevBalance = addCurrencyTotals(
-            subtractCurrencyTotals(prevAllIncome, prevExpense),
+            addCurrencyTotals(
+                subtractCurrencyTotals(prevAllIncome, prevExpense),
+                subtractCurrencyTotals(prevLoanDisbursements, prevLoanRepayments),
+            ),
             getExchangeNet(prevTransactions)
         )
 
