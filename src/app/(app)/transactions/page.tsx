@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -780,7 +781,7 @@ function FilterSheet({
     )
 }
 
-export default function TransactionsPage() {
+function TransactionsPageInner() {
     const searchParams = useSearchParams()
     const initialMonth = searchParams.get('month') ?? getCurrentMonth()
     const initialFilters: Filters = {
@@ -790,7 +791,7 @@ export default function TransactionsPage() {
         currency: searchParams.get('currency') ?? DEFAULT_FILTERS.currency,
     }
     const initialSort = SORT_OPTIONS.some((option) => option.value === searchParams.get('sort'))
-        ? (searchParams.get('sort') as typeof DEFAULT_SORT)
+        ? (searchParams.get('sort') as typeof SORT_OPTIONS[number]['value'])
         : DEFAULT_SORT
 
     const [month, setMonth] = useState(() => initialMonth)
@@ -1205,7 +1206,7 @@ export default function TransactionsPage() {
                                 label: option.label,
                             }))}
                             value={sort}
-                            onChange={(value) => setSort(value || DEFAULT_SORT)}
+                            onChange={(value) => setSort((value || DEFAULT_SORT) as typeof SORT_OPTIONS[number]['value'])}
                         />
 
                         {activeFilterCount > 0 && (
@@ -1544,7 +1545,7 @@ export default function TransactionsPage() {
                 filters={draftFilters}
                 sort={draftSort}
                 onChange={setDraftFilter}
-                onSortChange={(value) => setDraftSort(value || DEFAULT_SORT)}
+                onSortChange={(value) => setDraftSort((value || DEFAULT_SORT) as typeof SORT_OPTIONS[number]['value'])}
                 onApply={applyDraftFilters}
                 onClear={clearDraftFilters}
                 typeOptions={typeOptions}
@@ -1588,6 +1589,14 @@ export default function TransactionsPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </motion.div>
+    )
+}
+
+export default function TransactionsPage() {
+    return (
+        <Suspense>
+            <TransactionsPageInner />
+        </Suspense>
     )
 }
 

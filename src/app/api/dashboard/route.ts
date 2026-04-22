@@ -120,6 +120,8 @@ function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
     }
 }
 
+type PopulatedRef = string | { _id?: { toString(): string }; name?: string; color?: string; currency?: string } | null | undefined
+
 function buildRecentTransactionContext(transaction: {
     type?: string
     amount: number
@@ -128,9 +130,9 @@ function buildRecentTransactionContext(transaction: {
     date: Date | string
     merchant?: string
     installmentPlanId?: unknown
-    categoryId?: unknown
-    sourceAccountId?: unknown
-    destinationAccountId?: unknown
+    categoryId?: PopulatedRef
+    sourceAccountId?: PopulatedRef
+    destinationAccountId?: PopulatedRef
 }) {
     const normalizedType = normalizeLegacyTransactionType(transaction.type)
     const sourceId = getRefId(transaction.sourceAccountId)

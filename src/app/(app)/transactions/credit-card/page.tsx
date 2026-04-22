@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, ChevronDown, CreditCard, Pencil, SlidersHorizontal, Trash2, X } from 'lucide-react'
@@ -582,7 +582,7 @@ async function patchTransaction(id: string, body: TransactionFormData) {
     return data.transaction as ITransaction
 }
 
-export default function CreditCardExpensesPage() {
+function CreditCardExpensesPageInner() {
     const searchParams = useSearchParams()
     const initialMonth = searchParams.get('month') ?? getCurrentMonth()
     const initialFilters: PageFilters = {
@@ -1676,5 +1676,13 @@ export default function CreditCardExpensesPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </>
+    )
+}
+
+export default function CreditCardExpensesPage() {
+    return (
+        <Suspense>
+            <CreditCardExpensesPageInner />
+        </Suspense>
     )
 }
