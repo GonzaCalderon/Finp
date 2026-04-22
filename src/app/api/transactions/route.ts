@@ -157,13 +157,15 @@ export async function GET(request: Request) {
         }
 
         const sortMap: Record<string, Record<string, 1 | -1>> = {
-            date_desc: { date: -1 },
-            date_asc: { date: 1 },
-            amount_desc: { amount: -1 },
-            amount_asc: { amount: 1 },
-            description_asc: { description: 1 },
+            date_desc: { date: -1, createdAt: -1, _id: -1 },
+            date_asc: { date: 1, createdAt: 1, _id: 1 },
+            created_desc: { createdAt: -1, _id: -1 },
+            created_asc: { createdAt: 1, _id: 1 },
+            amount_desc: { amount: -1, createdAt: -1, _id: -1 },
+            amount_asc: { amount: 1, createdAt: -1, _id: -1 },
+            description_asc: { description: 1, createdAt: -1, _id: -1 },
         }
-        const sortQuery = sortMap[sort] ?? { date: -1 }
+        const sortQuery = sortMap[sort] ?? { date: -1, createdAt: -1, _id: -1 }
 
         const total = await Transaction.countDocuments(filter)
         const skip = (page - 1) * limit

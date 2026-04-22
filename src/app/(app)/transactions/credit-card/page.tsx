@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, ChevronDown, CreditCard, Pencil, SlidersHorizontal, Trash2, X } from 'lucide-react'
 
@@ -582,11 +583,31 @@ async function patchTransaction(id: string, body: TransactionFormData) {
 }
 
 export default function CreditCardExpensesPage() {
-    const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
-    const [filters, setFilters] = useState<PageFilters>(DEFAULT_FILTERS)
-    const [draftFilters, setDraftFilters] = useState<PageFilters>(DEFAULT_FILTERS)
-    const [sort, setSort] = useState<SortFilter>('date_desc')
-    const [draftSort, setDraftSort] = useState<SortFilter>('date_desc')
+    const searchParams = useSearchParams()
+    const initialMonth = searchParams.get('month') ?? getCurrentMonth()
+    const initialFilters: PageFilters = {
+        cardFilter: searchParams.get('cardId') ?? DEFAULT_FILTERS.cardFilter,
+        categoryFilter: searchParams.get('categoryId') ?? DEFAULT_FILTERS.categoryFilter,
+        statusFilter:
+            searchParams.get('statusFilter') && STATUS_OPTIONS.some((option) => option.value === searchParams.get('statusFilter'))
+                ? (searchParams.get('statusFilter') as StatusFilter)
+                : DEFAULT_FILTERS.statusFilter,
+        installmentFilter:
+            searchParams.get('installmentFilter') &&
+            INSTALLMENT_OPTIONS.some((option) => option.value === searchParams.get('installmentFilter'))
+                ? (searchParams.get('installmentFilter') as InstallmentFilter)
+                : DEFAULT_FILTERS.installmentFilter,
+    }
+    const initialSort =
+        searchParams.get('sort') && SORT_OPTIONS.some((option) => option.value === searchParams.get('sort'))
+            ? (searchParams.get('sort') as SortFilter)
+            : 'date_desc'
+
+    const [selectedMonth, setSelectedMonth] = useState(initialMonth)
+    const [filters, setFilters] = useState<PageFilters>(initialFilters)
+    const [draftFilters, setDraftFilters] = useState<PageFilters>(initialFilters)
+    const [sort, setSort] = useState<SortFilter>(initialSort)
+    const [draftSort, setDraftSort] = useState<SortFilter>(initialSort)
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
     const [sheetItem, setSheetItem] = useState<CCExpenseItem | null>(null)
     const [deleteItem, setDeleteItem] = useState<CCExpenseItem | null>(null)

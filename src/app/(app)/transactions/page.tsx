@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeftRight,
@@ -89,6 +90,8 @@ const TRANSACTION_TYPE_COLORS: Record<
 const SORT_OPTIONS = [
     { value: 'date_desc', label: 'Más reciente' },
     { value: 'date_asc', label: 'Más antigua' },
+    { value: 'created_desc', label: 'Creación más reciente' },
+    { value: 'created_asc', label: 'Creación más antigua' },
     { value: 'amount_desc', label: 'Mayor monto' },
     { value: 'amount_asc', label: 'Menor monto' },
     { value: 'description_asc', label: 'A → Z' },
@@ -778,13 +781,25 @@ function FilterSheet({
 }
 
 export default function TransactionsPage() {
-    const [month, setMonth] = useState(() => getCurrentMonth())
-    const [appliedFilters, setAppliedFilters] = useState<Filters>(DEFAULT_FILTERS)
-    const [draftFilters, setDraftFilters] = useState<Filters>(DEFAULT_FILTERS)
-    const [sort, setSort] = useState(DEFAULT_SORT)
-    const [draftSort, setDraftSort] = useState(DEFAULT_SORT)
+    const searchParams = useSearchParams()
+    const initialMonth = searchParams.get('month') ?? getCurrentMonth()
+    const initialFilters: Filters = {
+        type: searchParams.get('type') ?? DEFAULT_FILTERS.type,
+        categoryId: searchParams.get('categoryId') ?? DEFAULT_FILTERS.categoryId,
+        accountId: searchParams.get('accountId') ?? DEFAULT_FILTERS.accountId,
+        currency: searchParams.get('currency') ?? DEFAULT_FILTERS.currency,
+    }
+    const initialSort = SORT_OPTIONS.some((option) => option.value === searchParams.get('sort'))
+        ? (searchParams.get('sort') as typeof DEFAULT_SORT)
+        : DEFAULT_SORT
+
+    const [month, setMonth] = useState(() => initialMonth)
+    const [appliedFilters, setAppliedFilters] = useState<Filters>(initialFilters)
+    const [draftFilters, setDraftFilters] = useState<Filters>(initialFilters)
+    const [sort, setSort] = useState(initialSort)
+    const [draftSort, setDraftSort] = useState(initialSort)
     const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-    const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
+    const [transactionDialogOpen, setTransactionDialogOpen] = useState(searchParams.get('new') === '1')
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
 
