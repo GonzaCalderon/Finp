@@ -87,13 +87,22 @@ export function AppStartupGate({ children }: { children: ReactNode }) {
         startedAtRef.current = Date.now()
         releasedRef.current = false
 
+        const previousOverflow = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+
         if (readyRequestedRef.current) {
             readyRequestedRef.current = false
             deferredReleaseTimerRef.current = window.setTimeout(() => {
                 deferredReleaseTimerRef.current = null
                 release()
             }, 0)
-            return
+            return () => {
+                document.body.style.overflow = previousOverflow
+                clearTimer(deferredReleaseTimerRef)
+                clearTimer(autoReleaseTimerRef)
+                clearTimer(fallbackTimerRef)
+                clearTimer(releaseTimerRef)
+            }
         }
 
         autoReleaseTimerRef.current = window.setTimeout(() => {
@@ -105,23 +114,13 @@ export function AppStartupGate({ children }: { children: ReactNode }) {
         }, STARTUP_MAX_DURATION_MS)
 
         return () => {
+            document.body.style.overflow = previousOverflow
             clearTimer(deferredReleaseTimerRef)
             clearTimer(autoReleaseTimerRef)
             clearTimer(fallbackTimerRef)
             clearTimer(releaseTimerRef)
         }
     }, [isActive, release])
-
-    useEffect(() => {
-        if (!isBlocking) return
-
-        const previousOverflow = document.body.style.overflow
-        document.body.style.overflow = 'hidden'
-
-        return () => {
-            document.body.style.overflow = previousOverflow
-        }
-    }, [isBlocking])
 
     const value = useMemo<AppStartupContextValue>(
         () => ({

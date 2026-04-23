@@ -404,12 +404,9 @@ function MobileBottomBar() {
     } = useTransactionLauncher()
 
     useEffect(() => {
-        if (moreOpen || actionSheetOpen) {
-            document.body.style.overflow = 'hidden'
-        } else {
-            document.body.style.overflow = ''
-        }
+        if (!moreOpen && !actionSheetOpen) return
 
+        document.body.style.overflow = 'hidden'
         return () => {
             document.body.style.overflow = ''
         }
