@@ -375,6 +375,8 @@ export async function POST(request: Request) {
             createdFrom: 'web',
             appliedRuleId,
             appliedRuleNameSnapshot,
+            spaceId: data.spaceId,
+            spaceEntryId: data.spaceEntryId,
         })
 
         const populated = await Transaction.findById(transaction._id)

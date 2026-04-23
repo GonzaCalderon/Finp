@@ -86,6 +86,68 @@ export const IMPORT_ROW_STATUS = {
     IMPORTED: 'imported',
 } as const
 
+export const SPACE_TYPES = {
+    COUPLE: 'couple',
+    HOME: 'home',
+    TRAVEL: 'travel',
+    PROJECT: 'project',
+    EVENT: 'event',
+    PERSONAL: 'personal',
+    OTHER: 'other',
+} as const
+
+export const SPACE_MODES = {
+    SOLO: 'solo',
+    MANAGED: 'managed',
+    SYNCHRONIZED: 'synchronized',
+} as const
+
+export const SPACE_STATUSES = {
+    ACTIVE: 'active',
+    PAUSED: 'paused',
+    CLOSED: 'closed',
+    ARCHIVED: 'archived',
+} as const
+
+export const SPACE_PARTICIPANT_KINDS = {
+    FINP_USER: 'finp_user',
+    EXTERNAL: 'external',
+} as const
+
+export const SPACE_PARTICIPANT_ROLES = {
+    OWNER: 'owner',
+    ADMIN: 'admin',
+    PARTICIPANT: 'participant',
+} as const
+
+export const SPACE_INVITE_STATUSES = {
+    PENDING: 'pending',
+    ACCEPTED: 'accepted',
+    DECLINED: 'declined',
+} as const
+
+export const SPACE_ENTRY_TYPES = {
+    EXPENSE: 'expense',
+    INCOME: 'income',
+    ADJUSTMENT: 'adjustment',
+    SETTLEMENT: 'settlement',
+} as const
+
+export const SPACE_ENTRY_STATUSES = {
+    RECORDED: 'recorded',
+    PENDING_CONFIRMATION: 'pending_confirmation',
+    CONFIRMED: 'confirmed',
+    LINKED: 'linked',
+    REJECTED: 'rejected',
+} as const
+
+export const SPACE_SPLIT_MODES = {
+    NONE: 'none',
+    EQUAL: 'equal',
+    PERCENTAGE: 'percentage',
+    FIXED: 'fixed',
+} as const
+
 // Tipos derivados
 export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
@@ -101,3 +163,16 @@ export type RuleCondition = typeof RULE_CONDITIONS[keyof typeof RULE_CONDITIONS]
 export type ImportSourceType = typeof IMPORT_SOURCE_TYPES[keyof typeof IMPORT_SOURCE_TYPES]
 export type ImportBatchStatus = typeof IMPORT_BATCH_STATUS[keyof typeof IMPORT_BATCH_STATUS]
 export type ImportRowStatus = typeof IMPORT_ROW_STATUS[keyof typeof IMPORT_ROW_STATUS]
+export type SpaceType = typeof SPACE_TYPES[keyof typeof SPACE_TYPES]
+export type SpaceMode = typeof SPACE_MODES[keyof typeof SPACE_MODES]
+export type SpaceStatus = typeof SPACE_STATUSES[keyof typeof SPACE_STATUSES]
+export type SpaceParticipantKind =
+    typeof SPACE_PARTICIPANT_KINDS[keyof typeof SPACE_PARTICIPANT_KINDS]
+export type SpaceParticipantRole =
+    typeof SPACE_PARTICIPANT_ROLES[keyof typeof SPACE_PARTICIPANT_ROLES]
+export type SpaceInviteStatus =
+    typeof SPACE_INVITE_STATUSES[keyof typeof SPACE_INVITE_STATUSES]
+export type SpaceEntryType = typeof SPACE_ENTRY_TYPES[keyof typeof SPACE_ENTRY_TYPES]
+export type SpaceEntryStatus =
+    typeof SPACE_ENTRY_STATUSES[keyof typeof SPACE_ENTRY_STATUSES]
+export type SpaceSplitMode = typeof SPACE_SPLIT_MODES[keyof typeof SPACE_SPLIT_MODES]

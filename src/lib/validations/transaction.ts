@@ -88,6 +88,8 @@ export const transactionSchema = z
         paymentGroupId: optionalTrimmedString,
         notes: optionalTrimmedString,
         merchant: optionalTrimmedString,
+        spaceId: optionalObjectIdString,
+        spaceEntryId: optionalObjectIdString,
     })
     .superRefine((data, ctx) => {
         if (['income', 'expense', 'credit_card_expense'].includes(data.type) && !data.description) {

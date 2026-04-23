@@ -7,3 +7,7 @@ export { ScheduledCommitment, CommitmentApplication } from './scheduled-commitme
 export { TransactionRule } from './transaction-rule.model'
 export { ImportBatch } from './import-batch.model'
 export { ImportRow } from './import-row.model'
+export { Space } from './space.model'
+export { SpaceParticipant } from './space-participant.model'
+export { SpaceEntry } from './space-entry.model'
+export { SpaceInvite } from './space-invite.model'

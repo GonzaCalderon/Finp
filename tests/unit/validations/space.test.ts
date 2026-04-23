@@ -1,0 +1,98 @@
+import { describe, expect, it } from 'vitest'
+import {
+    spaceEntrySchema,
+    spaceParticipantSchema,
+    spaceSchema,
+} from '@/lib/validations/space'
+
+const PARTICIPANT_A = '507f1f77bcf86cd799439011'
+const PARTICIPANT_B = '507f1f77bcf86cd799439012'
+
+describe('spaceSchema', () => {
+    it('rechaza un espacio solo con split por defecto distinto de none', () => {
+        const result = spaceSchema.safeParse({
+            name: 'Viaje solo',
+            type: 'travel',
+            mode: 'solo',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'equal',
+        })
+
+        expect(result.success).toBe(false)
+    })
+
+    it('acepta un espacio sincronizado multi-moneda con moneda de reporte incluida', () => {
+        const result = spaceSchema.safeParse({
+            name: 'Chile abril 2026',
+            type: 'travel',
+            mode: 'synchronized',
+            status: 'active',
+            currencies: ['ARS', 'USD'],
+            reportingCurrency: 'USD',
+            defaultSplitMode: 'equal',
+        })
+
+        expect(result.success).toBe(true)
+    })
+})
+
+describe('spaceParticipantSchema', () => {
+    it('requiere email cuando el participante es un usuario Finp', () => {
+        const result = spaceParticipantSchema.safeParse({
+            kind: 'finp_user',
+            displayName: 'Roro',
+            role: 'participant',
+        })
+
+        expect(result.success).toBe(false)
+    })
+
+    it('acepta participantes externos sin email', () => {
+        const result = spaceParticipantSchema.safeParse({
+            kind: 'external',
+            displayName: 'Proveedor',
+            role: 'participant',
+        })
+
+        expect(result.success).toBe(true)
+    })
+})
+
+describe('spaceEntrySchema', () => {
+    it('rechaza splits porcentuales que no suman 100%', () => {
+        const result = spaceEntrySchema.safeParse({
+            type: 'expense',
+            title: 'Cena',
+            amount: 100,
+            currency: 'ARS',
+            date: new Date('2026-04-10'),
+            paidByParticipantId: PARTICIPANT_A,
+            splitMode: 'percentage',
+            sharedWithParticipantIds: [PARTICIPANT_A, PARTICIPANT_B],
+            splitAllocations: [
+                { participantId: PARTICIPANT_A, percentage: 70 },
+                { participantId: PARTICIPANT_B, percentage: 20 },
+            ],
+        })
+
+        expect(result.success).toBe(false)
+    })
+
+    it('acepta liquidaciones con split fijo que suma el total', () => {
+        const result = spaceEntrySchema.safeParse({
+            type: 'settlement',
+            title: 'Liquidación abril',
+            amount: 50,
+            currency: 'ARS',
+            date: new Date('2026-04-15'),
+            paidByParticipantId: PARTICIPANT_B,
+            splitMode: 'fixed',
+            sharedWithParticipantIds: [PARTICIPANT_A],
+            splitAllocations: [{ participantId: PARTICIPANT_A, amount: 50 }],
+        })
+
+        expect(result.success).toBe(true)
+    })
+})

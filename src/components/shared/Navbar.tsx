@@ -21,6 +21,7 @@ import {
     X,
     Settings,
     Wand2,
+    BriefcaseBusiness,
 } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
@@ -58,6 +59,7 @@ const NAV_ITEMS: NavItemDef[] = [
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
     { href: '/rules', label: 'Reglas', icon: Wand2 },
+    { href: '/spaces', label: 'Espacios', icon: BriefcaseBusiness },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
@@ -67,7 +69,7 @@ const BOTTOM_NAV_LEFT = [
 ]
 
 const BOTTOM_NAV_RIGHT = [
-    { href: '/projection', label: 'Proyección', icon: TrendingUp },
+    { href: '/spaces', label: 'Espacios', icon: BriefcaseBusiness },
 ]
 
 type MoreItem =
@@ -86,6 +88,7 @@ const MORE_ITEMS: MoreItem[] = [
     },
     { href: '/accounts', label: 'Cuentas', icon: CreditCard },
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
+    { href: '/projection', label: 'Proyección', icon: TrendingUp },
     { href: '/rules', label: 'Reglas', icon: Wand2 },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
@@ -683,11 +686,11 @@ function MobileBottomBar() {
             >
                 <div className="grid grid-cols-5" style={{ height: BOTTOM_BAR_HEIGHT }}>
                     <div className="flex items-center justify-center">
-                        <MobileNavItem {...BOTTOM_NAV_LEFT[0]} active={pathname === BOTTOM_NAV_LEFT[0].href && !moreOpen} onClick={closeMore} />
+                        <MobileNavItem {...BOTTOM_NAV_LEFT[0]} active={(pathname === BOTTOM_NAV_LEFT[0].href || pathname.startsWith(BOTTOM_NAV_LEFT[0].href + '/')) && !moreOpen} onClick={closeMore} />
                     </div>
 
                     <div className="flex items-center justify-center">
-                        <MobileNavItem {...BOTTOM_NAV_LEFT[1]} active={pathname === BOTTOM_NAV_LEFT[1].href && !moreOpen} onClick={closeMore} />
+                        <MobileNavItem {...BOTTOM_NAV_LEFT[1]} active={(pathname === BOTTOM_NAV_LEFT[1].href || pathname.startsWith(BOTTOM_NAV_LEFT[1].href + '/')) && !moreOpen} onClick={closeMore} />
                     </div>
 
                     <div className="flex items-start justify-center">
@@ -706,7 +709,7 @@ function MobileBottomBar() {
                     </div>
 
                     <div className="flex items-center justify-center">
-                        <MobileNavItem {...BOTTOM_NAV_RIGHT[0]} active={pathname === BOTTOM_NAV_RIGHT[0].href && !moreOpen} onClick={closeMore} />
+                        <MobileNavItem {...BOTTOM_NAV_RIGHT[0]} active={(pathname === BOTTOM_NAV_RIGHT[0].href || pathname.startsWith(BOTTOM_NAV_RIGHT[0].href + '/')) && !moreOpen} onClick={closeMore} />
                     </div>
 
                     <div className="flex items-center justify-center">

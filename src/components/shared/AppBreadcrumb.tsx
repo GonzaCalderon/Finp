@@ -20,16 +20,20 @@ const ROUTE_LABELS: Record<string, string> = {
     commitments: 'Compromisos',
     projection: 'Proyección',
     rules: 'Reglas',
+    spaces: 'Espacios',
     settings: 'Configuración',
     import: 'Importar',
     history: 'Historial',
     'credit-card': 'Gastos con TC',
 }
 
-function segmentLabel(segment: string): string {
+function segmentLabel(segment: string, previousSegment?: string): string {
     if (ROUTE_LABELS[segment]) return ROUTE_LABELS[segment]
     // MongoDB ObjectId — 24-char hex string
-    if (/^[0-9a-f]{24}$/i.test(segment)) return 'Revisión'
+    if (/^[0-9a-f]{24}$/i.test(segment)) {
+        if (previousSegment === 'spaces') return 'Detalle'
+        return 'Revisión'
+    }
     return segment
 }
 
@@ -54,7 +58,7 @@ export function AppBreadcrumb() {
 
                     {segments.map((segment, index) => {
                         const href = '/' + segments.slice(0, index + 1).join('/')
-                        const label = segmentLabel(segment)
+                        const label = segmentLabel(segment, segments[index - 1])
                         const isLast = index === segments.length - 1
 
                         return (

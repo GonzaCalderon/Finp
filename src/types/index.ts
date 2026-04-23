@@ -108,6 +108,8 @@ export interface ITransaction {
     importBatchId?: Types.ObjectId
     importedAt?: Date
     importSourceType?: ImportSourceType
+    spaceId?: Types.ObjectId
+    spaceEntryId?: Types.ObjectId
     createdAt: Date
     updatedAt: Date
 }
@@ -236,3 +238,5 @@ export interface ICommitmentApplication {
     appliedAt: Date
     appliedBy: 'manual' | 'system'
 }
+
+export * from './space'
