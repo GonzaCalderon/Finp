@@ -40,16 +40,21 @@ export function SpaceKpiRow({
 
     return (
         <>
-            <div className="rounded-[22px] border border-foreground/[0.08] bg-background/72 p-3 md:hidden">
-                <div className="grid grid-cols-2 divide-x divide-y divide-border/70 overflow-hidden rounded-[16px]">
-                    {items.map((item, index) => (
+            {/* Mobile: horizontal scroll, 3 cards visible + 4th as scroll hint */}
+            <div className="md:hidden">
+                <div
+                    className="flex gap-3 overflow-x-auto pb-1"
+                    style={{ scrollSnapType: 'x mandatory', scrollPaddingLeft: '0px' }}
+                >
+                    {items.map((item) => (
                         <div
                             key={item.label}
-                            className={[
-                                'min-w-0 p-3',
-                                index < 2 ? 'border-t-0' : '',
-                                index % 2 === 0 ? 'border-l-0' : '',
-                            ].join(' ')}
+                            className="min-w-0 shrink-0 rounded-[20px] border border-foreground/[0.08] bg-background/72 p-3"
+                            style={{
+                                width: 'calc(33.33% - 8px)',
+                                minWidth: '104px',
+                                scrollSnapAlign: 'start',
+                            }}
                         >
                             <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                 {item.label}
@@ -59,7 +64,7 @@ export function SpaceKpiRow({
                                 currency={reportingCurrency}
                                 hidden={hidden}
                                 color={item.accent}
-                                className="mt-1 block text-xl font-semibold tracking-tight"
+                                className="mt-1 block text-lg font-semibold tracking-tight"
                             />
                             <p className="mt-1 truncate text-[11px] text-muted-foreground">
                                 {item.footer}
@@ -69,6 +74,7 @@ export function SpaceKpiRow({
                 </div>
             </div>
 
+            {/* Desktop: 4-card grid */}
             <div className="hidden gap-3 md:grid md:grid-cols-2 lg:grid-cols-4">
                 <SpaceMetricCard
                     label="Gastado total"

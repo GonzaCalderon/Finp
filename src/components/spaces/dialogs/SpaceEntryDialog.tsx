@@ -497,7 +497,7 @@ export function SpaceEntryDialog({
                             <div className="space-y-1">
                                 <DialogTitle className="text-2xl tracking-tight">Nuevo movimiento</DialogTitle>
                                 <DialogDescription>
-                                    Tipo, monto, pagador, split, comprobantes y notas en un solo flujo operativo.
+                                    Tipo, monto, pagador y reparto. Los comprobantes y notas son opcionales.
                                 </DialogDescription>
                             </div>
                         </DialogHeader>
@@ -845,11 +845,8 @@ export function SpaceEntryDialog({
                                                 </h3>
                                             </div>
                                             <p className="text-sm text-muted-foreground">
-                                                Podés guardar este formulario como borrador local y retomarlo después en este mismo espacio.
+                                                Guardá el formulario como borrador y retomalo después en este espacio. Los comprobantes adjuntados no se incluyen en el borrador.
                                             </p>
-                                            <div className="rounded-[22px] border border-foreground/[0.07] bg-background/72 px-3 py-3 text-xs text-muted-foreground">
-                                                Los adjuntos no se guardan dentro del borrador local todavía.
-                                            </div>
                                         </div>
                                     </SpaceDialogPanel>
                                 </div>

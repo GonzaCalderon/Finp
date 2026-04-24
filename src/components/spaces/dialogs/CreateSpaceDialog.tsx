@@ -68,6 +68,16 @@ const SPLIT_OPTIONS = [
     { key: 'none' as const, label: 'Sin split' },
 ]
 
+const NAME_PLACEHOLDER: Record<SpaceFormData['type'], string> = {
+    couple: 'Ej. Casa con Roro',
+    home: 'Ej. Departamento compartido',
+    travel: 'Ej. Semana en Bariloche',
+    project: 'Ej. Remodelación de la cocina',
+    event: 'Ej. Cumpleaños de Juli',
+    personal: 'Ej. Presupuesto personal',
+    other: 'Nombre del espacio',
+}
+
 function buildInitialForm(): SpaceFormData {
     return {
         name: '',
@@ -509,7 +519,7 @@ export function CreateSpaceDialog({
                                             <Input
                                                 value={form.name}
                                                 onChange={(e) => setField('name', e.target.value)}
-                                                placeholder="Ej. Casa con Roro"
+                                                placeholder={NAME_PLACEHOLDER[form.type]}
                                                 className={fieldErrors.name ? 'border-destructive' : ''}
                                             />
                                             {fieldErrors.name && (

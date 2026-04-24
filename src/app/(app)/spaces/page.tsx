@@ -237,27 +237,62 @@ export default function SpacesPage() {
                             compact
                         />
 
-                        <div className="rounded-[26px] border border-foreground/[0.08] bg-card/95 p-4 shadow-sm">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Lectura rápida
-                            </p>
-                            <div className="mt-4 space-y-3 text-sm">
-                                <div className="flex items-center justify-between gap-3">
-                                    <span className="text-muted-foreground">Mostrando</span>
-                                    <span className="font-semibold text-foreground">
-                                        {filteredSpaces.length} de {spaces.length}
-                                    </span>
+                        {(search || statusFilter !== 'all' || spaces.length > 0) ? (
+                            <div className="rounded-[26px] border border-foreground/[0.08] bg-card/95 p-4 shadow-sm">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                    Vista actual
+                                </p>
+                                <div className="mt-3 space-y-2.5 text-sm">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-muted-foreground">Resultado</span>
+                                        <span className="font-semibold text-foreground">
+                                            {filteredSpaces.length} de {spaces.length}
+                                        </span>
+                                    </div>
+                                    {statusFilter !== 'all' && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground">Filtro</span>
+                                            <span className="rounded-full border border-border/80 bg-background/80 px-2.5 py-0.5 text-[11px] font-medium capitalize text-foreground">
+                                                {statusFilter}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {search && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground">Búsqueda</span>
+                                            <span className="max-w-[120px] truncate text-right font-medium text-foreground">
+                                                &ldquo;{search}&rdquo;
+                                            </span>
+                                        </div>
+                                    )}
+                                    {pending.counts.invitations > 0 && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground">Invitaciones</span>
+                                            <span className="font-semibold" style={{ color: 'var(--warning-foreground)' }}>
+                                                {pending.counts.invitations}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {pending.counts.confirmations > 0 && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-muted-foreground">Confirmaciones</span>
+                                            <span className="font-semibold" style={{ color: 'var(--warning-foreground)' }}>
+                                                {pending.counts.confirmations}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="flex items-center justify-between gap-3">
-                                    <span className="text-muted-foreground">Activos</span>
-                                    <span className="font-semibold text-foreground">{activeSpaces}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-3">
-                                    <span className="text-muted-foreground">Acciones pendientes</span>
-                                    <span className="font-semibold text-foreground">{pending.counts.total}</span>
-                                </div>
+                                {spaces.length === 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setCreateDialogOpen(true)}
+                                        className="mt-3 w-full rounded-full border border-foreground/10 bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                                    >
+                                        Crear primer espacio
+                                    </button>
+                                )}
                             </div>
-                        </div>
+                        ) : null}
                     </aside>
                 </div>
             </div>

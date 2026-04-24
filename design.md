@@ -1070,3 +1070,233 @@ Antes de cerrar una nueva funcionalidad, verificar:
 ## Conclusión
 
 El diseño actual de Finp ya tiene una dirección clara: una app financiera personal sobria, densa en datos pero usable, con navegación mobile cuidada y una capa visual consistente basada en tokens. El próximo salto no debería ser cambiar la estética, sino formalizar más patrones, reducir complejidad en formularios grandes y preparar estados nuevos para mobile/offline si ese camino avanza.
+
+---
+
+## Módulo Espacios
+
+### Propósito y posición dentro de Finp
+
+Espacios es el módulo de referencia para la nueva etapa visual de Finp.
+Es el primer módulo completamente diseñado en clave mobile-first, con jerarquía clara entre resumen, movimientos y balance, y con una experiencia de configuración separada del detalle operativo.
+
+El objetivo de Espacios no es reemplazar la contabilidad personal de Finp, sino ser el lugar donde los gastos compartidos —en pareja, con compañeros de depto, en un viaje, en un proyecto— se registran, distribuyen y cierran de forma ordenada.
+
+---
+
+### Reglas fijas del producto
+
+Estas reglas no son configurables. No deben aparecer como toggles en ninguna pantalla.
+
+#### Comprobantes
+
+- Son **siempre opcionales**.
+- El usuario puede adjuntar imágenes o PDFs a un movimiento, pero no está obligado.
+- No existe un toggle de "solicitar comprobante" en los settings del espacio.
+- En el formulario de movimiento, la sección de comprobantes lleva el badge "Opcional" visible.
+
+#### Confirmación del pagador
+
+- Está **siempre activa**.
+- Cuando alguien registra un movimiento donde otra persona pagó, esa persona recibe una confirmación pendiente.
+- No existe un toggle de "activar/desactivar confirmación del pagador".
+- El flujo de confirmación siempre existe; lo que varía es si hay pendientes o no.
+
+#### Fotos de personas
+
+- **Prohibido usar fotos de perfil** en cualquier parte del módulo.
+- Los participantes se representan exclusivamente con iniciales en avatares circulares.
+- Esto aplica a cards, listas de participantes, settings, balance y cualquier componente que muestre una persona.
+
+#### Semántica de tipos: pareja vs. hogar
+
+- Un espacio como "Casa con Roro" (compartida con pareja) es tipo **Pareja** (`couple`), no Hogar (`home`).
+- `home`: departamento o casa compartida con no-pareja (compañeros, familia).
+- `couple`: convivencia o gastos compartidos con una pareja.
+- Los placeholders del wizard reflejan esto: el tipo `couple` sugiere "Ej. Casa con Roro".
+
+#### Ingresos
+
+- Los ingresos **no son el eje principal** del overview en la mayoría de los espacios.
+- Un espacio de tipo Pareja o Casa no asume que todos los ingresos pasan por ahí.
+- Los ingresos (`income`) son un tipo de movimiento disponible, pero no se muestran como métrica destacada por defecto.
+- Las KPIs del detalle priorizan: total gastado, tu parte, pendiente, saldo a favor.
+
+---
+
+### Arquitectura visual del módulo
+
+#### Home de Espacios (`/spaces`)
+
+**Desktop layout:** grid principal (1fr) + columna lateral sticky de 360px.
+
+Componentes:
+- `SpacesPageHeader`: hero con nombre del módulo, descripción contextual, métricas (Activos / Movimientos / Pendientes), alerta de pendientes cuando existe.
+- `SpacesFiltersBar`: buscador de texto libre + filtros por estado (Todos / Activo / Pausado / Cerrado / Archivado).
+- Grid de `SpaceOverviewCard`: responsive, compacto en mobile, card completa en desktop.
+- Columna lateral (`aside`, solo desktop):
+  - `RecentPendingPanel`: pendientes de acción (invitaciones + confirmaciones).
+  - "Vista actual": panel contextual que muestra resultado del filtro, búsqueda activa y breakdown de pendientes por tipo. Solo visible si hay espacios o filtros activos.
+
+**Mobile:** sin columna lateral. La barra de pendientes del header es el punto de entrada principal a las acciones.
+
+---
+
+#### Detalle del espacio (`/spaces/[id]`)
+
+**Principio:** detalle operativo separado de configuración.
+
+##### Mobile
+
+- Header fijo: `← | [icono + nombre ∨] | ⚙`
+  - ← vuelve a `/spaces`.
+  - Selector de espacio abre bottom sheet para cambiar sin volver al home.
+  - ⚙ abre `SpaceMobileSettingsSheet`.
+- Título compacto: `h1` con nombre + descripción + pills (tipo / modo / estado / participantes / monedas).
+- KPIs: scroll horizontal de 4 cards, 3 visibles + 4to parcialmente visible como hint.
+- Tabs: **3 tabs fijos** — Resumen | Movimientos | Balance.
+  - Configuración, participantes y cierre se acceden desde ⚙.
+
+##### Desktop
+
+- Back button + `SpaceHero` (presentación completa con badges, descripción, CTAs).
+- KPIs: grid de 4 cards (`SpaceMetricCard`).
+- Tabs: **6 tabs** — Resumen | Movimientos | Balance | Participantes | Configuración | Cierre.
+
+##### Contenido por tab
+
+| Tab | Contenido |
+|---|---|
+| Resumen | Settlement panel + Charts + Balance + Movimientos recientes + Adjuntos + Pendientes |
+| Movimientos | Filtros por tipo + lista completa |
+| Balance | Saldo por participante + highlight del saldo neto dominante |
+| Participantes | Lista con roles y estado de invitación (desktop) |
+| Configuración | Settings legibles + descripción (desktop) |
+| Cierre | Estado operativo + toggle abrir/cerrar (desktop) |
+
+---
+
+#### Configuración mobile (`SpaceMobileSettingsSheet`)
+
+Triggered by: ⚙ en el header del detalle.
+
+Diseño: bottom sheet de hasta 92dvh, con handle visual, scroll interno. Estructura settings estilo iOS.
+
+No es un resumen. Es una superficie de configuración real.
+
+Estructura:
+1. **Header**: eyebrow "Configuración del espacio" + nombre del espacio (h2, protagonista) + badges + botón ✎ (abre EditSpaceSettingsDialog) + botón ✕.
+2. **General**: filas Tipo / Estado / Modo. Descripción del espacio si existe.
+3. **Participantes**: lista con iniciales, nombre, email, rol, estado de invitación. Botón "Invitar" en el header de la sección.
+4. **Reparto y monedas**: filas Split por defecto / Moneda de reporte / Monedas operativas / Período.
+5. **Estado operativo**: estado actual + botón abrir/cerrar. Zona separada visualmente.
+
+---
+
+### Wizard de creación (`CreateSpaceDialog`)
+
+5 pasos:
+
+1. **Información**: tipo (grid con descripción) + nombre (placeholder dinámico por tipo) + descripción.
+2. **Modo**: Sincronizado / Administrado / Solo + participantes (oculto si Solo).
+3. **Monedas**: monedas activas + moneda de reporte + período.
+4. **Reparto**: split por defecto + editor visual de porcentajes.
+5. **Revisión**: resumen + botón de crear.
+
+Post-creación: pantalla de éxito con "Ir al espacio" / "Crear otro" / "Cerrar".
+
+Reglas del wizard:
+- Sin toggles de confirmación del pagador (siempre activa).
+- Sin solicitud de comprobantes (siempre opcionales).
+- Modo Solo → oculta participantes y fuerza split a `none`.
+
+---
+
+### Formulario de nuevo movimiento (`SpaceEntryDialog`)
+
+Modal fullscreen en mobile, modal ancho (max 1120px) en desktop.
+
+Secciones:
+- Tipo (Gasto / Ingreso / Ajuste / Liquidación).
+- Monto, moneda, fecha.
+- Descripción.
+- Pagó + Categoría.
+- Cotización (solo si moneda ≠ reporte).
+- Split configurator (si modo ≠ Solo).
+- Resumen rápido.
+- Impacto personal (solo si el usuario actual es el pagador).
+- **Comprobantes** — badge "Opcional". No obligatorio.
+- Borrador (sessionStorage, sin adjuntos).
+- Notas.
+
+Footer sticky: Guardar / Guardar borrador / Cancelar.
+
+---
+
+### Bottom bar contextual (`SpaceActionContext`)
+
+Al entrar a un espacio, el contexto registra una acción que reemplaza el botón central:
+- Icono Plus dentro del círculo azul.
+- Label "Movimiento" **debajo** del círculo (no dentro).
+- Al salir (unmount), la acción se limpia y el botón vuelve al comportamiento global.
+
+---
+
+### Componentes principales
+
+| Componente | Ubicación | Propósito |
+|---|---|---|
+| `SpaceUi.tsx` | `spaces/` | Primitivos: badges, avatars, metric cards, surface, icons |
+| `SpaceOverviewCard` | `index/` | Card del home |
+| `SpacesPageHeader` | `index/` | Hero del home con métricas y alerta |
+| `SpacesFiltersBar` | `index/` | Filtros de estado + búsqueda |
+| `SpaceDetailMobileHeader` | `detail/` | Header mobile (← / selector / ⚙) |
+| `SpaceHero` | `detail/` | Presentación completa (desktop) |
+| `SpaceKpiRow` | `detail/` | KPIs (scroll horizontal mobile / grid desktop) |
+| `SpaceMobileSettingsSheet` | `detail/` | Settings sheet mobile |
+| `SpaceSettlementPanel` | `detail/` | Banner de deuda/crédito con CTAs |
+| `SpaceBalanceSection` | `detail/` | Balance entre participantes |
+| `SpaceEvolutionChart` | `detail/` | Gráfico de evolución mensual (LineChart) |
+| `SpaceCategoryBreakdown` | `detail/` | Distribución por categoría |
+| `SpaceMovementsPanel` | `detail/` | Lista filtrada de movimientos |
+| `SpaceParticipantsPanel` | `detail/` | Lista de participantes (desktop) |
+| `SpaceSettingsPanel` | `detail/` | Settings legibles (desktop) |
+| `SpaceClosurePanel` | `detail/` | Estado operativo (desktop) |
+| `SpaceSummaryPanels` | `detail/` | Cards de resumen en tab Resumen |
+| `CreateSpaceDialog` | `dialogs/` | Wizard 5 pasos + éxito |
+| `EditSpaceSettingsDialog` | `dialogs/` | Edición de configuración existente |
+| `SpaceEntryDialog` | `dialogs/` | Formulario de movimiento |
+| `ConfirmSpaceEntryDialog` | `dialogs/` | Confirmación del pagador |
+| `SpaceParticipantDialog` | `dialogs/` | Invitar participante |
+| `SpaceAttachmentsUploader` | `dialogs/` | Uploader de comprobantes (siempre opcional) |
+| `SpaceSplitConfigurator` | `dialogs/` | Configurador de split |
+| `RecentPendingPanel` | `pending/` | Panel de acciones pendientes |
+
+---
+
+### Mobile vs desktop — tabla resumen
+
+| Aspecto | Mobile | Desktop |
+|---|---|---|
+| Header detalle | `SpaceDetailMobileHeader` | Back button + `SpaceHero` |
+| Título del espacio | h1 compacto + pills | Dentro de `SpaceHero` |
+| KPIs | Scroll horizontal 3+1 | Grid 4 columnas |
+| Tabs | 3 (Resumen / Mov. / Balance) | 6 (+ Participantes / Config. / Cierre) |
+| Configuración | `SpaceMobileSettingsSheet` desde ⚙ | Tab "Configuración" |
+| Participantes | En settings sheet | Tab "Participantes" |
+| Cierre | En settings sheet | Tab "Cierre" |
+| Charts | Visibles en Resumen (apilados) | Side by side |
+| Adjuntos recientes | Ocultos | Visibles en Resumen |
+| Bottom bar | Botón "Movimiento" con label bajo círculo | No aplica |
+
+---
+
+### Patrones de diseño del módulo
+
+- **Surfaces**: `SpaceSurface` con accent color en borde superior izquierdo.
+- **Section headings**: eyebrow uppercase + título + descripción + action opcional.
+- **Bottom sheets**: `AnimatePresence` + `motion.div` slide desde abajo, handle visual, fondo oscuro semitransparente, scroll interno.
+- **Avatars**: `SpaceInitialsAvatar` con iniciales. Nunca fotos de perfil.
+- **Tone pills**: `SpaceTonePill` verde (positivo) / rojo (negativo).
+- **Amount inline**: `SpaceAmountInline` respeta el contexto de ocultamiento de montos global.
+- **Charts**: `LineChart` de Recharts sin área rellena. `ResponsiveContainer` para respetar el ancho.

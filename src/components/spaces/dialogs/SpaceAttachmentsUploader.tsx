@@ -54,12 +54,17 @@ export function SpaceAttachmentsUploader({
         <SpaceDialogPanel>
             <div className="space-y-4">
                 <div className="space-y-1">
-                    <SpaceDialogSectionEyebrow>Comprobantes</SpaceDialogSectionEyebrow>
+                    <div className="flex items-center gap-2">
+                        <SpaceDialogSectionEyebrow>Comprobantes</SpaceDialogSectionEyebrow>
+                        <span className="rounded-full border border-border/80 bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            Opcional
+                        </span>
+                    </div>
                     <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                        Adjuntos del movimiento
+                        Adjuntá imágenes o PDF
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                        Prepará imágenes y PDFs con una UX clara. El backend de guardado todavía no persiste estos archivos al confirmar.
+                        Tickets, facturas o capturas como respaldo del movimiento. No es obligatorio adjuntar nada.
                     </p>
                 </div>
 
@@ -101,7 +106,7 @@ export function SpaceAttachmentsUploader({
                             Arrastrá imágenes o PDF acá
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            También podés seleccionar archivos manualmente.
+                            También podés seleccionar desde tus archivos.
                         </p>
                     </div>
                     <Button type="button" variant="outline" className="rounded-full">
@@ -145,9 +150,6 @@ export function SpaceAttachmentsUploader({
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                             {attachment.file.type || 'Archivo'} · {formatFileSize(attachment.file.size)}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            Preview local listo para la próxima etapa de upload.
                                         </p>
                                     </div>
 
