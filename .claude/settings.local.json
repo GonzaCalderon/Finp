@@ -71,7 +71,8 @@
       "Bash(ls \"Finp_ Espacios.zip\")",
       "Bash(mkdir -p finp_espacios_proto)",
       "Bash(unzip -o \"Finp_ Espacios.zip\" -d finp_espacios_proto/)",
-      "Bash(grep -i \"SpaceOverviewCard\\\\|spaces/index\\\\|spaces\\\\\\\\\\\\\\\\index\")"
+      "Bash(grep -i \"SpaceOverviewCard\\\\|spaces/index\\\\|spaces\\\\\\\\\\\\\\\\index\")",
+      "Bash(awk '{print $NF}')"
     ]
   }
 }

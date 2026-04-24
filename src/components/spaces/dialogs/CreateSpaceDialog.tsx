@@ -40,7 +40,7 @@ import type { ISpace } from '@/types'
 
 type InviteEntry = { email: string; role: 'participant' | 'admin' }
 
-const WIZARD_STEPS = ['Tipo', 'Modo', 'Monedas', 'Reparto', 'Listo'] as const
+const WIZARD_STEPS = ['Información', 'Modo', 'Monedas', 'Reparto', 'Revisión'] as const
 type WizardStep = (typeof WIZARD_STEPS)[number]
 
 const MODES_META = [
@@ -411,7 +411,7 @@ export function CreateSpaceDialog({
             }
 
             setCreatedSpace(spaceResult)
-            setStep(4)
+            setStep(5)
         } catch (err) {
             setGlobalError(err instanceof Error ? err.message : 'No pudimos guardar el espacio.')
         } finally {
@@ -419,8 +419,8 @@ export function CreateSpaceDialog({
         }
     }
 
-    const isSuccessStep = step === 4
-    const isLastDataStep = step === 3
+    const isSuccessStep = step === 5
+    const isLastDataStep = step === 4
     const canProceed = step === 0 ? !!form.type && form.name.trim().length >= 2 : true
 
     return (
@@ -811,10 +811,9 @@ export function CreateSpaceDialog({
                                     </div>
                                 </SpaceDialogPanel>
 
-                                {/* Mini review */}
                                 <div className="rounded-[20px] border border-foreground/[0.07] bg-secondary/50 p-4">
                                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                                        Revisión
+                                        Vista previa
                                     </p>
                                     <div className="flex items-center gap-3">
                                         <SpaceTypeIcon type={form.type} className="h-10 w-10 shrink-0 rounded-[14px]" />
@@ -837,8 +836,68 @@ export function CreateSpaceDialog({
                             </div>
                         )}
 
-                        {/* ── Step 4: Éxito ── */}
-                        {step === 4 && createdSpace && (
+                        {/* ── Step 4: Revisión final ── */}
+                        {step === 4 && (
+                            <div className="space-y-4">
+                                <SpaceDialogPanel>
+                                    <div className="space-y-4">
+                                        <SpaceDialogSectionEyebrow>Revisión final</SpaceDialogSectionEyebrow>
+                                        <div className="flex items-start gap-3">
+                                            <SpaceTypeIcon type={form.type} className="h-12 w-12 shrink-0 rounded-[16px]" />
+                                            <div className="min-w-0">
+                                                <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                                                    {form.name}
+                                                </h3>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {form.description || 'Sin descripción por ahora.'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            {[
+                                                ['Tipo', SPACE_TYPE_LABELS[form.type]],
+                                                ['Modo', SPACE_MODE_LABELS[form.mode]],
+                                                ['Monedas del espacio', form.currencies.join(' / ')],
+                                                ['Reporte', form.reportingCurrency],
+                                                ['Reparto', form.mode === 'solo' ? 'Sin split' : SPLIT_OPTIONS.find((item) => item.key === form.defaultSplitMode)?.label],
+                                                ['Participantes invitados', String(invites.length)],
+                                            ].map(([label, value]) => (
+                                                <div
+                                                    key={label}
+                                                    className="rounded-[18px] border border-foreground/[0.07] bg-background/72 px-3 py-3"
+                                                >
+                                                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                                        {label}
+                                                    </p>
+                                                    <p className="mt-1 text-sm font-semibold text-foreground">
+                                                        {value}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </SpaceDialogPanel>
+
+                                <SpaceDialogPanel>
+                                    <div className="space-y-2">
+                                        <SpaceDialogSectionEyebrow>Monedas</SpaceDialogSectionEyebrow>
+                                        <p className="text-sm leading-relaxed text-muted-foreground">
+                                            Las monedas adicionales como CLP, EUR o BRL aplican dentro de este espacio y son informativas para Espacios en esta etapa. No cambian el soporte multi-moneda global del core de Finp.
+                                        </p>
+                                    </div>
+                                </SpaceDialogPanel>
+
+                                {globalError && (
+                                    <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                                        {globalError}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ── Step 5: Éxito ── */}
+                        {step === 5 && createdSpace && (
                             <div className="flex flex-col items-center gap-6 py-8 text-center">
                                 <div
                                     className="flex h-20 w-20 items-center justify-center rounded-[28px]"
@@ -917,7 +976,7 @@ export function CreateSpaceDialog({
                                 )}
 
                                 <div className="flex flex-1 justify-center gap-1">
-                                    {WIZARD_STEPS.slice(0, -1).map((_, i) => (
+                                    {WIZARD_STEPS.map((_, i) => (
                                         <div
                                             key={i}
                                             className={cn(

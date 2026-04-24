@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { CalendarRange, Save, X } from 'lucide-react'
+import { CalendarRange, Save, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -36,6 +36,7 @@ import {
     SpaceDialogTextArea,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { cn } from '@/lib/utils'
+import type { ISpaceParticipant } from '@/types'
 
 const TYPE_OPTIONS = Object.entries(SPACE_TYPE_LABELS) as Array<[SpaceFormData['type'], string]>
 const MODE_OPTIONS = Object.entries(SPACE_MODE_LABELS) as Array<[SpaceFormData['mode'], string]>
@@ -73,9 +74,13 @@ export function EditSpaceSettingsDialog({
     open,
     onOpenChange,
     initialValues,
+    participants = [],
+    onInvite,
     onSubmit,
 }: DialogProps & {
     initialValues: SpaceFormData
+    participants?: ISpaceParticipant[]
+    onInvite?: () => void
     onSubmit: (data: SpaceFormData) => Promise<unknown>
 }) {
     const [form, setForm] = useState<SpaceFormData>(buildForm(initialValues))
@@ -173,16 +178,16 @@ export function EditSpaceSettingsDialog({
                 <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                     <div className="shrink-0 border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
                         <DialogHeader className="space-y-2">
-                            <DialogTitle className="text-2xl tracking-tight">Editar configuración</DialogTitle>
+                            <DialogTitle className="text-2xl tracking-tight">{initialValues.name}</DialogTitle>
                             <DialogDescription>
-                                Ajustes del espacio actual, sin pasar por el flujo de creación.
+                                Configuración del espacio separada de la operación diaria.
                             </DialogDescription>
                         </DialogHeader>
                     </div>
 
                     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
                         <div className="space-y-5">
-                            <SettingSection title="Identidad">
+                            <SettingSection title="General">
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <SpaceDialogField label="Nombre">
                                         <Input
@@ -219,8 +224,37 @@ export function EditSpaceSettingsDialog({
                                 </SpaceDialogField>
                             </SettingSection>
 
-                            <SettingSection title="Operación">
-                                <div className="grid gap-4 md:grid-cols-3">
+                            <SettingSection title="Participantes">
+                                <div className="rounded-[18px] border border-foreground/[0.07] bg-background/70 p-4">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <p className="font-semibold text-foreground">
+                                                {participants.length} participante{participants.length === 1 ? '' : 's'}
+                                            </p>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Las invitaciones y roles se administran dentro del espacio, sin mezclarlo con el historial.
+                                            </p>
+                                        </div>
+                                        {onInvite ? (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className="rounded-full"
+                                                onClick={() => {
+                                                    onOpenChange(false)
+                                                    onInvite()
+                                                }}
+                                            >
+                                                <UserPlus className="h-4 w-4" />
+                                                Invitar
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            </SettingSection>
+
+                            <SettingSection title="Funcionamiento">
+                                <div className="grid gap-4 md:grid-cols-2">
                                     <SpaceDialogField label="Modo">
                                         <Select
                                             value={form.mode}
@@ -255,27 +289,33 @@ export function EditSpaceSettingsDialog({
                                             </SelectContent>
                                         </Select>
                                     </SpaceDialogField>
-                                    <SpaceDialogField label="Split por defecto">
-                                        <Select
-                                            value={form.mode === 'solo' ? 'none' : form.defaultSplitMode}
-                                            onValueChange={(value) =>
-                                                setField('defaultSplitMode', value as SpaceFormData['defaultSplitMode'])
-                                            }
-                                            disabled={form.mode === 'solo'}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {SPLIT_OPTIONS.map(([value, label]) => (
-                                                    <SelectItem key={value} value={value}>
-                                                        {label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </SpaceDialogField>
                                 </div>
+                            </SettingSection>
+
+                            <SettingSection title="Reparto">
+                                <SpaceDialogField
+                                    label="Split por defecto"
+                                    hint="Esta regla se usa como punto de partida al crear movimientos nuevos."
+                                >
+                                    <Select
+                                        value={form.mode === 'solo' ? 'none' : form.defaultSplitMode}
+                                        onValueChange={(value) =>
+                                            setField('defaultSplitMode', value as SpaceFormData['defaultSplitMode'])
+                                        }
+                                        disabled={form.mode === 'solo'}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SPLIT_OPTIONS.map(([value, label]) => (
+                                                <SelectItem key={value} value={value}>
+                                                    {label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </SpaceDialogField>
                             </SettingSection>
 
                             <SettingSection title="Monedas">
@@ -339,7 +379,7 @@ export function EditSpaceSettingsDialog({
                                 </div>
                             </SettingSection>
 
-                            <SettingSection title="Período">
+                            <SettingSection title="Cierre">
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <DatePickerField
                                         label="Inicio"

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Layers3, Sparkles } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -41,6 +41,7 @@ export default function SpacesPage() {
     const { spaces, loading, error, createSpace } = useSpaces()
     const pending = useSpacePendingActions()
     const [statusFilter, setStatusFilter] = useState<SpaceStatusFilter>('all')
+    const [search, setSearch] = useState('')
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [pendingDialogOpen, setPendingDialogOpen] = useState(false)
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
@@ -50,9 +51,26 @@ export default function SpacesPage() {
     useAppStartupReady(!loading)
 
     const filteredSpaces = useMemo(() => {
+        const normalizedSearch = search.trim().toLowerCase()
         const filtered = spaces.filter((item) =>
             statusFilter === 'all' ? true : item.space.status === statusFilter
-        )
+        ).filter((item) => {
+            if (!normalizedSearch) return true
+
+            const haystack = [
+                item.space.name,
+                item.space.description,
+                item.space.type,
+                item.space.mode,
+                item.space.reportingCurrency,
+                item.space.currencies.join(' '),
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+
+            return haystack.includes(normalizedSearch)
+        })
         // Sort by most recent activity (most recently updated entry first)
         return [...filtered].sort((a, b) => {
             const aDate = a.recentEntries[0]?.date
@@ -63,7 +81,7 @@ export default function SpacesPage() {
                 : new Date(b.space.updatedAt ?? 0).getTime()
             return bDate - aDate
         })
-    }, [spaces, statusFilter])
+    }, [search, spaces, statusFilter])
 
     const filterCounts = useMemo(
         () => ({
@@ -73,6 +91,16 @@ export default function SpacesPage() {
             closed: spaces.filter((item) => item.space.status === 'closed').length,
             archived: spaces.filter((item) => item.space.status === 'archived').length,
         }),
+        [spaces]
+    )
+
+    const activeSpaces = useMemo(
+        () => spaces.filter((item) => item.space.status === 'active').length,
+        [spaces]
+    )
+
+    const totalMovements = useMemo(
+        () => spaces.reduce((sum, item) => sum + item.summary.totalEntryCount, 0),
         [spaces]
     )
 
@@ -139,9 +167,11 @@ export default function SpacesPage() {
 
     return (
         <>
-            <div className="mx-auto max-w-[1440px] space-y-6 px-4 py-4 md:px-6 md:py-6">
+            <div className="mx-auto max-w-[1440px] space-y-5 px-4 pb-28 pt-4 md:space-y-6 md:px-6 md:py-6">
                 <SpacesPageHeader
                     totalSpaces={spaces.length}
+                    activeSpaces={activeSpaces}
+                    totalMovements={totalMovements}
                     pendingCount={pending.counts.total}
                     pendingActions={pending.pendingActions}
                     onCreate={() => setCreateDialogOpen(true)}
@@ -151,50 +181,85 @@ export default function SpacesPage() {
                 <SpacesFiltersBar
                     selected={statusFilter}
                     counts={filterCounts}
+                    search={search}
+                    onSearchChange={setSearch}
                     onChange={setStatusFilter}
                 />
 
-                {loading ? (
-                    <div className="flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {Array.from({ length: 6 }).map((_, index) => (
-                            <SpaceCardSkeleton key={index} />
-                        ))}
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="min-w-0">
+                        {loading ? (
+                            <div className="flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                                {Array.from({ length: 6 }).map((_, index) => (
+                                    <SpaceCardSkeleton key={index} />
+                                ))}
+                            </div>
+                        ) : error ? (
+                            <div className="rounded-[28px] border border-destructive/15 bg-destructive/5 px-5 py-10 text-center text-sm text-destructive">
+                                {error}
+                            </div>
+                        ) : filteredSpaces.length === 0 ? (
+                            <div className="rounded-[30px] border border-foreground/[0.08] bg-card/94 px-4 py-6">
+                                <EmptyState
+                                    icon={search ? Layers3 : Sparkles}
+                                    title={search ? 'No encontramos espacios' : 'Todavía no tenés espacios cargados'}
+                                    description={
+                                        search
+                                            ? 'Probá con otro nombre, estado, tipo o moneda del espacio.'
+                                            : 'Creá tu primer espacio para separar viajes, hogar, pareja, proyectos o cualquier contexto compartido.'
+                                    }
+                                    actionLabel={search ? undefined : 'Crear espacio'}
+                                    onAction={search ? undefined : () => setCreateDialogOpen(true)}
+                                />
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                                {filteredSpaces.map((item) => (
+                                    <SpaceOverviewCard
+                                        key={extractId(item.space._id)}
+                                        item={item}
+                                        hidden={hidden}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
-                ) : error ? (
-                    <div className="rounded-[28px] border border-destructive/15 bg-destructive/5 px-5 py-10 text-center text-sm text-destructive">
-                        {error}
-                    </div>
-                ) : filteredSpaces.length === 0 ? (
-                    <div className="rounded-[32px] border border-foreground/[0.08] bg-card/94">
-                        <EmptyState
-                            icon={Sparkles}
-                            title="Todavía no tenés espacios cargados"
-                            description="Creá tu primer espacio para separar viajes, hogar, pareja, proyectos o cualquier contexto compartido."
-                            actionLabel="Crear espacio"
-                            onAction={() => setCreateDialogOpen(true)}
-                        />
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {filteredSpaces.map((item) => (
-                            <SpaceOverviewCard
-                                key={extractId(item.space._id)}
-                                item={item}
-                                hidden={hidden}
-                            />
-                        ))}
-                    </div>
-                )}
 
-                <RecentPendingPanel
-                    actions={pending.pendingActions}
-                    loading={pending.loading}
-                    onShowAll={() => setPendingDialogOpen(true)}
-                    onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
-                    onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
-                    onReviewConfirmation={handleReviewConfirmation}
-                    onRejectConfirmation={(action) => void handleRejectConfirmation(action)}
-                />
+                    <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+                        <RecentPendingPanel
+                            actions={pending.pendingActions}
+                            loading={pending.loading}
+                            onShowAll={() => setPendingDialogOpen(true)}
+                            onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
+                            onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
+                            onReviewConfirmation={handleReviewConfirmation}
+                            onRejectConfirmation={(action) => void handleRejectConfirmation(action)}
+                            compact
+                        />
+
+                        <div className="rounded-[26px] border border-foreground/[0.08] bg-card/95 p-4 shadow-sm">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Lectura rápida
+                            </p>
+                            <div className="mt-4 space-y-3 text-sm">
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">Mostrando</span>
+                                    <span className="font-semibold text-foreground">
+                                        {filteredSpaces.length} de {spaces.length}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">Activos</span>
+                                    <span className="font-semibold text-foreground">{activeSpaces}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">Acciones pendientes</span>
+                                    <span className="font-semibold text-foreground">{pending.counts.total}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
             </div>
 
             <CreateSpaceDialog

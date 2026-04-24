@@ -490,11 +490,16 @@ export function SpaceEntryDialog({
             >
                 <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                     <div className="border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
-                        <DialogHeader className="space-y-2">
-                            <DialogTitle className="text-2xl tracking-tight">Nuevo movimiento</DialogTitle>
-                            <DialogDescription>
-                                Cargá un gasto, ingreso, ajuste o liquidación con una experiencia más clara, táctil y enfocada en producto.
-                            </DialogDescription>
+                        <DialogHeader className="space-y-3">
+                            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-primary">
+                                Movimiento del espacio
+                            </div>
+                            <div className="space-y-1">
+                                <DialogTitle className="text-2xl tracking-tight">Nuevo movimiento</DialogTitle>
+                                <DialogDescription>
+                                    Tipo, monto, pagador, split, comprobantes y notas en un solo flujo operativo.
+                                </DialogDescription>
+                            </div>
                         </DialogHeader>
                     </div>
 
@@ -882,8 +887,8 @@ export function SpaceEntryDialog({
                     </div>
 
                     <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
-                        <Button variant="outline" className="rounded-full" onClick={() => onOpenChange(false)} disabled={submitting}>
-                            Cancelar
+                        <Button className="rounded-full" onClick={handleSubmit} disabled={submitting}>
+                            {submitting ? 'Guardando...' : 'Guardar movimiento'}
                         </Button>
                         <Button
                             variant="outline"
@@ -894,8 +899,8 @@ export function SpaceEntryDialog({
                             <Save className="h-4 w-4" />
                             Guardar borrador
                         </Button>
-                        <Button className="rounded-full" onClick={handleSubmit} disabled={submitting}>
-                            {submitting ? 'Guardando...' : 'Guardar movimiento'}
+                        <Button variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)} disabled={submitting}>
+                            Cancelar
                         </Button>
                     </DialogFooter>
                 </div>

@@ -129,9 +129,9 @@ function PendingInviteCard({
     compact?: boolean
 } & Pick<PendingActionHandlers, 'onAcceptInvite' | 'onRejectInvite'>) {
     return (
-        <div className="rounded-[28px] border border-foreground/[0.07] bg-background/72 p-4 backdrop-blur-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-3">
+        <div className={compact ? 'rounded-[20px] border border-foreground/[0.07] bg-background/72 p-3' : 'rounded-[28px] border border-foreground/[0.07] bg-background/72 p-4 backdrop-blur-sm'}>
+            <div className={compact ? 'space-y-3' : 'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'}>
+                <div className={compact ? 'space-y-2' : 'space-y-3'}>
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary">
                             <UserPlus className="h-3.5 w-3.5" />
@@ -142,10 +142,10 @@ function PendingInviteCard({
                     </div>
 
                     <div className="space-y-1.5">
-                        <p className="text-lg font-semibold tracking-tight">
+                        <p className={compact ? 'text-sm font-semibold tracking-tight' : 'text-lg font-semibold tracking-tight'}>
                             Sumarte a {action.space.name}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className={compact ? 'line-clamp-2 text-xs text-muted-foreground' : 'text-sm text-muted-foreground'}>
                             {action.invitedByName} te invitó a participar como{' '}
                             {SPACE_ROLE_LABELS[action.participant.role].toLowerCase()}.
                         </p>
@@ -161,11 +161,11 @@ function PendingInviteCard({
                     </div>
                 </div>
 
-                <div className={compact ? 'flex gap-2' : 'flex flex-col gap-2 sm:flex-row lg:min-w-[220px] lg:justify-end'}>
-                    <Button variant="outline" className="rounded-full" onClick={() => onRejectInvite(action)}>
+                <div className={compact ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2 sm:flex-row lg:min-w-[220px] lg:justify-end'}>
+                    <Button variant="outline" size={compact ? 'sm' : 'default'} className="rounded-full" onClick={() => onRejectInvite(action)}>
                         Rechazar
                     </Button>
-                    <Button className="rounded-full" onClick={() => onAcceptInvite(action)}>
+                    <Button size={compact ? 'sm' : 'default'} className="rounded-full" onClick={() => onAcceptInvite(action)}>
                         Aceptar
                     </Button>
                 </div>
@@ -187,9 +187,9 @@ function PendingConfirmationCard({
     const label = action.entry.type === 'settlement' ? 'Liquidación' : 'Confirmación'
 
     return (
-        <div className="rounded-[28px] border border-foreground/[0.07] bg-background/72 p-4 backdrop-blur-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-3">
+        <div className={compact ? 'rounded-[20px] border border-foreground/[0.07] bg-background/72 p-3' : 'rounded-[28px] border border-foreground/[0.07] bg-background/72 p-4 backdrop-blur-sm'}>
+            <div className={compact ? 'space-y-3' : 'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'}>
+                <div className={compact ? 'space-y-2' : 'space-y-3'}>
                     <div className="flex flex-wrap items-center gap-2">
                         <div
                             className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium"
@@ -213,10 +213,10 @@ function PendingConfirmationCard({
                     </div>
 
                     <div className="space-y-1.5">
-                        <p className="text-lg font-semibold tracking-tight">
+                        <p className={compact ? 'text-sm font-semibold tracking-tight' : 'text-lg font-semibold tracking-tight'}>
                             Revisá “{action.entry.title}”
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className={compact ? 'line-clamp-2 text-xs text-muted-foreground' : 'text-sm text-muted-foreground'}>
                             {action.requestedByParticipant?.displayName ?? 'Un participante'} te marcó como pagador dentro de {action.space.name}.
                         </p>
                     </div>
@@ -239,11 +239,11 @@ function PendingConfirmationCard({
                     </div>
                 </div>
 
-                <div className={compact ? 'flex gap-2' : 'flex flex-col gap-2 sm:flex-row lg:min-w-[220px] lg:justify-end'}>
-                    <Button variant="outline" className="rounded-full" onClick={() => onRejectConfirmation(action)}>
+                <div className={compact ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2 sm:flex-row lg:min-w-[220px] lg:justify-end'}>
+                    <Button variant="outline" size={compact ? 'sm' : 'default'} className="rounded-full" onClick={() => onRejectConfirmation(action)}>
                         Rechazar
                     </Button>
-                    <Button className="rounded-full" onClick={() => onReviewConfirmation(action)}>
+                    <Button size={compact ? 'sm' : 'default'} className="rounded-full" onClick={() => onReviewConfirmation(action)}>
                         Revisar
                     </Button>
                 </div>
@@ -277,36 +277,38 @@ function PendingActionCard(props: { action: ISpacePendingAction; compact?: boole
 export function RecentPendingPanel({
     actions,
     loading,
+    compact = false,
     onShowAll,
     ...handlers
 }: {
     actions: ISpacePendingAction[]
     loading: boolean
+    compact?: boolean
     onShowAll: () => void
 } & PendingActionHandlers) {
-    const recentActions = actions.slice(0, 4)
+    const recentActions = actions.slice(0, compact ? 3 : 4)
 
     return (
-        <SpaceSurface accent="var(--chart-2)">
+        <SpaceSurface accent="var(--chart-2)" padding={compact ? 'p-4' : 'p-5 md:p-6'}>
             <SpaceSectionHeading
                 eyebrow="Pendientes"
                 title="Pendientes recientes"
-                description="Invitaciones, confirmaciones y liquidaciones que hoy requieren una acción tuya."
+                description={compact ? undefined : 'Invitaciones, confirmaciones y liquidaciones que hoy requieren una acción tuya.'}
                 action={
-                    <Button variant="ghost" className="rounded-full" onClick={onShowAll}>
+                    <Button variant="ghost" size="sm" className="rounded-full" onClick={onShowAll}>
                         Ver todos
                     </Button>
                 }
             />
 
-            <div className="mt-5 space-y-3">
+            <div className={compact ? 'mt-4 space-y-2.5' : 'mt-5 space-y-3'}>
                 {loading ? (
                     <>
-                        <Skeleton className="h-32 rounded-[28px]" />
-                        <Skeleton className="h-32 rounded-[28px]" />
+                        <Skeleton className={compact ? 'h-24 rounded-[20px]' : 'h-32 rounded-[28px]'} />
+                        <Skeleton className={compact ? 'h-24 rounded-[20px]' : 'h-32 rounded-[28px]'} />
                     </>
                 ) : recentActions.length === 0 ? (
-                    <div className="rounded-[28px] border border-dashed border-border bg-background/60 px-4 py-12 text-center text-sm text-muted-foreground">
+                    <div className={compact ? 'rounded-[20px] border border-dashed border-border bg-background/60 px-4 py-5 text-center text-sm text-muted-foreground' : 'rounded-[28px] border border-dashed border-border bg-background/60 px-4 py-12 text-center text-sm text-muted-foreground'}>
                         No hay pendientes por resolver ahora mismo.
                     </div>
                 ) : (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { spaceParticipantSchema, type SpaceParticipantFormData } from '@/lib/validations'
 import { SPACE_ROLE_LABELS } from '@/lib/utils/spaces'
 import {
@@ -22,7 +23,6 @@ import {
 } from '@/components/ui/select'
 import {
     DialogProps,
-    SpaceDialogChoice,
     SpaceDialogField,
     SpaceDialogPanel,
     SpaceDialogSectionEyebrow,
@@ -100,29 +100,53 @@ export function SpaceParticipantDialog({
                                         </h3>
                                     </div>
 
-                                    <div className="flex flex-wrap gap-2">
-                                        <SpaceDialogChoice
-                                            active={form.kind === 'finp_user'}
-                                            onClick={() =>
-                                                setForm((previous) => ({
-                                                    ...previous,
-                                                    kind: 'finp_user',
-                                                }))
-                                            }
-                                        >
-                                            Usuario Finp
-                                        </SpaceDialogChoice>
-                                        <SpaceDialogChoice
-                                            active={form.kind === 'external'}
-                                            onClick={() =>
-                                                setForm((previous) => ({
-                                                    ...previous,
-                                                    kind: 'external',
-                                                }))
-                                            }
-                                        >
-                                            Externo
-                                        </SpaceDialogChoice>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {[
+                                            {
+                                                key: 'finp_user' as const,
+                                                title: 'Usuario Finp',
+                                                desc: 'Recibe invitación y puede operar dentro de la app.',
+                                                icon: UserRound,
+                                            },
+                                            {
+                                                key: 'external' as const,
+                                                title: 'Externo',
+                                                desc: 'Queda registrado para balances sin requerir cuenta.',
+                                                icon: UsersRound,
+                                            },
+                                        ].map((option) => {
+                                            const Icon = option.icon
+                                            const active = form.kind === option.key
+
+                                            return (
+                                                <button
+                                                    key={option.key}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setForm((previous) => ({
+                                                            ...previous,
+                                                            kind: option.key,
+                                                        }))
+                                                    }
+                                                    className={[
+                                                        'flex items-start gap-3 rounded-[18px] border p-3 text-left transition-colors',
+                                                        active
+                                                            ? 'border-primary/25 bg-primary/10 text-primary'
+                                                            : 'border-border bg-background/80 text-muted-foreground hover:text-foreground',
+                                                    ].join(' ')}
+                                                >
+                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-card">
+                                                        <Icon className="h-4 w-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold">{option.title}</p>
+                                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                                            {option.desc}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             </SpaceDialogPanel>
@@ -178,6 +202,17 @@ export function SpaceParticipantDialog({
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                        <div className="mt-2 rounded-[18px] border border-foreground/[0.07] bg-background/70 p-3 text-xs text-muted-foreground">
+                                            <div className="mb-1 flex items-center gap-2 font-medium text-foreground">
+                                                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                                                {SPACE_ROLE_LABELS[form.role]}
+                                            </div>
+                                            {form.role === 'admin'
+                                                ? 'Puede invitar participantes y cambiar configuración del espacio.'
+                                                : form.role === 'owner'
+                                                    ? 'Tiene control total del espacio.'
+                                                    : 'Puede participar en movimientos, splits y balances.'}
+                                        </div>
                                     </SpaceDialogField>
                                 </div>
                             </SpaceDialogPanel>

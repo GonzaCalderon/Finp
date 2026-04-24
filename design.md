@@ -280,16 +280,15 @@ Aplicar este patrón a:
 
 Cuando una pantalla tiene sub-vistas operativas, preferir una barra horizontal de opciones clara antes que tabs genéricos con mucha presencia visual.
 
-En espacios, la barra de referencia contiene:
+En espacios, la barra operativa de referencia contiene:
 
 - Resumen.
 - Movimientos, con badge de pendientes cuando aplique.
 - Balance.
-- Participantes.
-- Configuración.
-- Cierre.
 
-La barra debe sentirse como navegación de administración del contexto, no como otra card. Debe ser baja, escaneable, con estado activo claro y sin ocupar altura excesiva.
+Participantes, configuración y cierre no viven en esa barra operativa. Son administración del espacio y deben quedar en una zona separada en desktop o detrás del engranaje/context menu en mobile. Esta separación evita mezclar uso diario del espacio con mantenimiento del espacio.
+
+La barra debe sentirse como navegación operativa del contexto, no como otra card. Debe ser baja, escaneable, con estado activo claro y sin ocupar altura excesiva.
 
 En desktop, distribuir las opciones de forma pareja cuando el set es estable. Evitar que queden agrupadas a la izquierda con un vacío grande a la derecha, porque la barra pasa a leerse como un contenedor incompleto.
 
@@ -299,10 +298,44 @@ En mobile, no usar scroll horizontal para navegación estructural. Si hay muchas
 
 Espacios concentra resumen, movimientos, balance, participantes, configuración y cierre. En mobile no se intenta mostrar todo a la vez:
 
-- La barra de secciones debe ser compacta y sin scroll horizontal.
+- La barra principal muestra sólo Resumen, Movimientos y Balance.
 - Los KPI del espacio se agrupan como resumen financiero corto; no deben aparecer como cuatro cards verticales grandes.
 - Las secciones profundas deben quedar detrás de la navegación contextual, manteniendo una primera pantalla liviana.
 - Las acciones primarias pueden ocupar ancho completo, pero deben conservar separación clara respecto del borde inferior y de la bottom bar.
+- El header del detalle conserva back, selector de espacios, engranaje y menú contextual cuando aplique.
+- La configuración se abre desde el engranaje y debe sentirse como administración del espacio, no como un formulario suelto.
+
+#### Refactor de Espacios 2026
+
+La home de espacios tiene dos comportamientos principales:
+
+- Desktop: header fuerte con métricas, búsqueda, filtros compactos, grid de 2 o 3 columnas y rail lateral para pendientes/lectura rápida. Si hay uno o pocos espacios, el rail evita que la pantalla quede vacía.
+- Mobile: orden compacto de título, CTA, búsqueda/filtros, cards y pendientes. El contenedor debe dejar `pb-28` o equivalente para que nada quede tapado por la bottom bar.
+
+El detalle del espacio se divide en:
+
+- Uso operativo: Resumen, Movimientos y Balance.
+- Administración: General, Participantes, Reparto, Monedas, Funcionamiento y Cierre.
+
+En desktop, la administración puede mostrarse como zona propia debajo del uso operativo, con participantes, ficha de configuración y cierre. En mobile, se accede desde el engranaje del header y mantiene el nombre real del espacio como título.
+
+La bottom bar mobile es contextual:
+
+- Fuera de un espacio, el botón central conserva el significado global de `Nuevo`.
+- Dentro de `/spaces/[id]`, el botón central crea `Movimiento`.
+- La señal contextual debe ser clara y breve: label corto en el FAB y continuidad con el header del espacio.
+
+El wizard de nuevo espacio tiene cinco pasos más éxito:
+
+1. Información básica: nombre, descripción, tipo y preview.
+2. Modo y participantes: Solo, Administrado o Sincronizado, con invitaciones opcionales.
+3. Monedas y reporte del espacio.
+4. Reparto y funcionamiento.
+5. Revisión final.
+
+La pantalla de éxito ofrece ir al espacio, crear otro o cerrar. Las monedas del espacio pueden incluir CLP, EUR, BRL u otras monedas informativas para el módulo Espacios; esto no extiende todavía el soporte global multi-moneda del core de Finp.
+
+En claro y oscuro, Espacios usa los tokens de `globals.css`: fondo general claro/oscuro, cards sobre `--card`, bordes `--border`, acento primario `--primary`/`--sky` y verde sólo para estados positivos, confirmaciones o saldos a favor.
 
 ## Layout
 
