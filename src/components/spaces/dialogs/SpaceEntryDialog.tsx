@@ -135,7 +135,7 @@ function sanitizeDraft({
             ...defaults,
             ...parsed,
             amount: typeof parsed.amount === 'number' && Number.isFinite(parsed.amount) ? parsed.amount : defaults.amount,
-            currency: parsed.currency === 'USD' ? 'USD' : 'ARS',
+            currency: parsed.currency ?? defaults.currency,
             date: parsed.date ? new Date(parsed.date) : defaults.date,
             paidByParticipantId:
                 parsed.paidByParticipantId && activeParticipantIds.has(parsed.paidByParticipantId)

@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, Check, HandCoins } from 'lucide-react'
+import { ArrowLeft, Plus } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useSpace } from '@/hooks/useSpace'
 import { useSpaceEntries } from '@/hooks/useSpaceEntries'
@@ -32,8 +33,9 @@ import {
     SpaceSettingsPanel,
 } from '@/components/spaces/detail/SpaceDetailPanels'
 import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
+import { SpaceDetailMobileHeader } from '@/components/spaces/detail/SpaceDetailMobileHeader'
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
-import { SpaceAmountInline } from '@/components/spaces/SpaceUi'
+import { SpaceSettlementPanel } from '@/components/spaces/detail/SpaceSettlementPanel'
 import {
     RecentSpaceAttachmentsCard,
     RecentSpaceMovementsCard,
@@ -47,7 +49,6 @@ import {
 import { extractId } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
 import type {
-    SpaceBalanceItem,
     ISpaceEntry,
     ISpacePendingAction,
 } from '@/types'
@@ -123,100 +124,6 @@ function SpaceOptionsBar({
     )
 }
 
-function buildSettlementPreview(balances: SpaceBalanceItem[], currentUserId: string) {
-    const current = balances.find((balance) => balance.userId === currentUserId)
-    if (!current || current.balanceReporting === 0) return null
-
-    const isDebt = current.balanceReporting < 0
-    const counterpart = balances.find((balance) =>
-        isDebt ? balance.balanceReporting > 0 : balance.balanceReporting < 0
-    )
-    if (!counterpart) return null
-
-    return {
-        isDebt,
-        counterpart,
-        amount: Math.min(Math.abs(current.balanceReporting), Math.abs(counterpart.balanceReporting)),
-    }
-}
-
-function SpaceSettlementPanel({
-    balances,
-    currency,
-    currentUserId,
-    hidden,
-    onCreateEntry,
-}: {
-    balances: SpaceBalanceItem[]
-    currency: string
-    currentUserId: string
-    hidden: boolean
-    onCreateEntry: () => void
-}) {
-    const settlement = buildSettlementPreview(balances, currentUserId)
-    if (!settlement) return null
-
-    const accent = settlement.isDebt ? 'var(--destructive)' : 'var(--chart-3)'
-
-    return (
-        <section
-            className="rounded-[28px] border px-5 py-5 md:px-6"
-            style={{
-                background: settlement.isDebt
-                    ? 'color-mix(in srgb, var(--destructive) 7%, var(--card))'
-                    : 'color-mix(in srgb, var(--chart-3) 7%, var(--card))',
-                borderColor: settlement.isDebt
-                    ? 'color-mix(in srgb, var(--destructive) 24%, transparent)'
-                    : 'color-mix(in srgb, var(--chart-3) 24%, transparent)',
-            }}
-        >
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="space-y-2">
-                    <p
-                        className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-                        style={{ color: accent }}
-                    >
-                        {settlement.isDebt ? 'Deuda pendiente' : 'Saldo a cobrar'}
-                    </p>
-                    <div className="space-y-1">
-                        <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                            {settlement.isDebt
-                                ? `Le debés a ${settlement.counterpart.displayName}`
-                                : `${settlement.counterpart.displayName} te debe`}
-                        </h2>
-                        <SpaceAmountInline
-                            amount={settlement.amount}
-                            currency={currency}
-                            hidden={hidden}
-                            color={accent}
-                            className="text-3xl font-semibold tracking-tight"
-                        />
-                    </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                    {settlement.isDebt ? (
-                        <>
-                            <Button variant="outline" className="rounded-full" onClick={onCreateEntry}>
-                                <HandCoins className="h-4 w-4" />
-                                Pago parcial
-                            </Button>
-                            <Button className="rounded-full bg-[var(--chart-3)] text-white hover:bg-[var(--chart-3)]/90" onClick={onCreateEntry}>
-                                <Check className="h-4 w-4" />
-                                Saldar total
-                            </Button>
-                        </>
-                    ) : (
-                        <Button variant="outline" className="rounded-full" onClick={onCreateEntry}>
-                            <HandCoins className="h-4 w-4" />
-                            Registrar cobro
-                        </Button>
-                    )}
-                </div>
-            </div>
-        </section>
-    )
-}
 
 export default function SpaceDetailPage() {
     const params = useParams<{ id: string }>()
@@ -235,6 +142,16 @@ export default function SpaceDetailPage() {
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
 
     const currentUserId = data?.currentUserId ?? ''
+    const { setAction, clearAction } = useSpaceAction()
+
+    useEffect(() => {
+        setAction({
+            label: 'Movimiento',
+            icon: <Plus size={18} color="#fff" />,
+            onPress: () => setEntryDialogOpen(true),
+        })
+        return () => clearAction()
+    }, [setAction, clearAction])
 
     usePageTitle(data?.space.name ? `${data.space.name} · Espacios` : 'Espacios')
     useAppStartupReady(!loading)
@@ -346,7 +263,12 @@ export default function SpaceDetailPage() {
     return (
         <>
             <div className="mx-auto max-w-[1440px] space-y-6 px-4 py-4 md:px-6 md:py-6">
-                <div className="flex flex-wrap items-center gap-3">
+                <SpaceDetailMobileHeader
+                    space={data.space}
+                    onSettings={() => setEditDialogOpen(true)}
+                />
+
+                <div className="hidden flex-wrap items-center gap-3 md:flex">
                     <Button variant="outline" className="rounded-full" asChild>
                         <Link href="/spaces">
                             <ArrowLeft className="h-4 w-4" />

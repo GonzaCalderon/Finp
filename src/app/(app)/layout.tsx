@@ -6,10 +6,12 @@ import { SessionGuard } from '@/components/shared/SessionGuard'
 import { HideAmountsProvider } from '@/contexts/HideAmountsContext'
 import { CategoriesProvider } from '@/contexts/CategoriesContext'
 import { AccountsProvider } from '@/contexts/AccountsContext'
+import { SpaceActionProvider } from '@/contexts/SpaceActionContext'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <AppStartupGate>
+            <SpaceActionProvider>
             <HideAmountsProvider>
                 <CategoriesProvider>
                     <AccountsProvider>
@@ -31,6 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </AccountsProvider>
                 </CategoriesProvider>
             </HideAmountsProvider>
+            </SpaceActionProvider>
         </AppStartupGate>
     )
 }

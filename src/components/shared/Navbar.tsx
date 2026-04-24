@@ -31,6 +31,7 @@ import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { usePreferences } from '@/hooks/usePreferences'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
@@ -394,6 +395,7 @@ function MobileBottomBar() {
     }
 
     const { hidden, toggleHidden } = useHideAmounts()
+    const { action: spaceAction } = useSpaceAction()
     const {
         txDialogOpen,
         setTxDialogOpen,
@@ -694,18 +696,36 @@ function MobileBottomBar() {
                     </div>
 
                     <div className="flex items-start justify-center">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                closeMore()
-                                setActionSheetOpen(true)
-                            }}
-                            className="flex items-center justify-center w-14 h-14 rounded-full shadow-lg"
-                            style={{ background: 'var(--sky)', marginTop: '-24px' }}
-                            aria-label="Nueva operación"
-                        >
-                            <Plus size={22} color="#fff" />
-                        </button>
+                        {spaceAction ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    closeMore()
+                                    spaceAction.onPress()
+                                }}
+                                className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-full shadow-lg"
+                                style={{ background: 'var(--sky)', marginTop: '-24px' }}
+                                aria-label={spaceAction.label}
+                            >
+                                {spaceAction.icon ?? <Plus size={22} color="#fff" />}
+                                <span className="text-[9px] font-semibold text-white leading-none px-1 truncate max-w-[56px] text-center">
+                                    {spaceAction.label}
+                                </span>
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    closeMore()
+                                    setActionSheetOpen(true)
+                                }}
+                                className="flex items-center justify-center w-14 h-14 rounded-full shadow-lg"
+                                style={{ background: 'var(--sky)', marginTop: '-24px' }}
+                                aria-label="Nueva operación"
+                            >
+                                <Plus size={22} color="#fff" />
+                            </button>
+                        )}
                     </div>
 
                     <div className="flex items-center justify-center">

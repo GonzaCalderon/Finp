@@ -1,10 +1,10 @@
 'use client'
 
 import {
-    Area,
-    AreaChart,
     CartesianGrid,
     Cell,
+    Line,
+    LineChart,
     Pie,
     PieChart,
     ResponsiveContainer,
@@ -113,13 +113,7 @@ export function SpaceEvolutionChart({
                 {points.length > 0 ? (
                     <div className="h-full [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={points} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="space-evolution-fill" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.28} />
-                                        <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.02} />
-                                    </linearGradient>
-                                </defs>
+                            <LineChart data={points} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
                                 <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
                                 <XAxis
                                     dataKey="label"
@@ -138,12 +132,11 @@ export function SpaceEvolutionChart({
                                     content={<EvolutionTooltip currency={currency} hidden={hidden} />}
                                     cursor={{ stroke: 'var(--chart-1)', strokeOpacity: 0.18 }}
                                 />
-                                <Area
+                                <Line
                                     type="monotone"
                                     dataKey="amount"
                                     stroke="var(--chart-1)"
                                     strokeWidth={2.5}
-                                    fill="url(#space-evolution-fill)"
                                     dot={{ r: 0 }}
                                     activeDot={{
                                         r: 5,
@@ -152,7 +145,7 @@ export function SpaceEvolutionChart({
                                         strokeWidth: 2,
                                     }}
                                 />
-                            </AreaChart>
+                            </LineChart>
                         </ResponsiveContainer>
                     </div>
                 ) : (

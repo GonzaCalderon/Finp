@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Equal, Minus, Plus, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Check, ChevronLeft, ChevronRight, Equal, Minus, Plus, Sparkles, X } from 'lucide-react'
 import { spaceSchema, type SpaceFormData } from '@/lib/validations'
 import { SPACE_MODE_LABELS, SPACE_TYPE_LABELS } from '@/lib/utils/spaces'
 import { SPACE_TYPE_META, SpaceTypeIcon } from '@/components/spaces/SpaceUi'
@@ -39,8 +40,8 @@ import type { ISpace } from '@/types'
 
 type InviteEntry = { email: string; role: 'participant' | 'admin' }
 
-const WIZARD_STEPS_CREATE = ['Tipo', 'Configuración', 'Participantes'] as const
-const WIZARD_STEPS_EDIT = ['Tipo', 'Configuración'] as const
+const WIZARD_STEPS = ['Tipo', 'Modo', 'Monedas', 'Reparto', 'Listo'] as const
+type WizardStep = (typeof WIZARD_STEPS)[number]
 
 const MODES_META = [
     {
@@ -61,24 +62,24 @@ const MODES_META = [
 ]
 
 const SPLIT_OPTIONS = [
-    { key: 'equal' as const, label: 'Por partes iguales' },
+    { key: 'equal' as const, label: 'Partes iguales' },
     { key: 'percentage' as const, label: 'Porcentaje' },
     { key: 'fixed' as const, label: 'Montos fijos' },
     { key: 'none' as const, label: 'Sin split' },
 ]
 
-function buildInitialForm(initialValues?: Partial<SpaceFormData>): SpaceFormData {
+function buildInitialForm(): SpaceFormData {
     return {
-        name: initialValues?.name ?? '',
-        description: initialValues?.description ?? '',
-        type: initialValues?.type ?? 'home',
-        mode: initialValues?.mode ?? 'managed',
-        status: initialValues?.status ?? 'active',
-        startDate: normalizeDialogDate(initialValues?.startDate) ?? new Date(),
-        endDate: normalizeDialogDate(initialValues?.endDate),
-        currencies: initialValues?.currencies ?? ['ARS'],
-        reportingCurrency: initialValues?.reportingCurrency ?? 'ARS',
-        defaultSplitMode: initialValues?.defaultSplitMode ?? 'equal',
+        name: '',
+        description: '',
+        type: 'home',
+        mode: 'managed',
+        status: 'active',
+        startDate: new Date(),
+        endDate: undefined,
+        currencies: ['ARS'],
+        reportingCurrency: 'ARS',
+        defaultSplitMode: 'equal',
     }
 }
 
@@ -86,37 +87,35 @@ function StepIndicator({
     steps,
     current,
 }: {
-    steps: readonly string[]
+    steps: readonly WizardStep[]
     current: number
 }) {
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
             {steps.map((label, i) => (
-                <div key={i} className="flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                        <div
-                            className={cn(
-                                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
-                                i < current
-                                    ? 'bg-primary text-primary-foreground'
-                                    : i === current
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted text-muted-foreground'
-                            )}
-                        >
-                            {i < current ? <Check className="h-3 w-3" /> : i + 1}
-                        </div>
-                        <span
-                            className={cn(
-                                'text-sm font-medium',
-                                i === current ? 'text-foreground' : 'text-muted-foreground'
-                            )}
-                        >
-                            {label}
-                        </span>
+                <div key={i} className="flex items-center gap-1.5">
+                    <div
+                        className={cn(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors',
+                            i < current
+                                ? 'bg-primary text-primary-foreground'
+                                : i === current
+                                    ? 'bg-primary text-primary-foreground ring-2 ring-primary/20'
+                                    : 'bg-muted text-muted-foreground'
+                        )}
+                    >
+                        {i < current ? <Check className="h-2.5 w-2.5" /> : i + 1}
                     </div>
+                    <span
+                        className={cn(
+                            'hidden text-xs font-medium sm:inline',
+                            i === current ? 'text-foreground' : 'text-muted-foreground'
+                        )}
+                    >
+                        {label}
+                    </span>
                     {i < steps.length - 1 && (
-                        <div className="h-px w-5 shrink-0 bg-border" />
+                        <div className="h-px w-3 shrink-0 bg-border sm:w-4" />
                     )}
                 </div>
             ))}
@@ -141,17 +140,18 @@ function SplitPercentageEditor() {
 
     const addSlot = () => {
         if (slots.length >= 8) return
-        const base = Math.floor(100 / (slots.length + 1))
-        const remainder = 100 - base * (slots.length + 1)
-        setSlots([...Array.from({ length: slots.length + 1 }, (_, i) => (i === 0 ? base + remainder : base))])
+        const count = slots.length + 1
+        const base = Math.floor(100 / count)
+        const rem = 100 - base * count
+        setSlots(Array.from({ length: count }, (_, i) => (i === 0 ? base + rem : base)))
     }
 
     const removeSlot = () => {
         if (slots.length <= 2) return
         const newSlots = slots.slice(0, -1)
         const base = Math.floor(100 / newSlots.length)
-        const remainder = 100 - base * newSlots.length
-        setSlots(newSlots.map((_, i) => (i === 0 ? base + remainder : base)))
+        const rem = 100 - base * newSlots.length
+        setSlots(newSlots.map((_, i) => (i === 0 ? base + rem : base)))
     }
 
     const isValid = total === 100
@@ -159,9 +159,7 @@ function SplitPercentageEditor() {
     return (
         <div className="space-y-3 rounded-[20px] border border-foreground/[0.07] bg-background/60 p-3">
             <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                    Distribución predeterminada
-                </p>
+                <p className="text-xs text-muted-foreground">Distribución predeterminada</p>
                 <div className="flex items-center gap-1.5">
                     <button
                         type="button"
@@ -191,9 +189,7 @@ function SplitPercentageEditor() {
                         key={i}
                         className="flex items-center gap-2 rounded-[14px] border border-foreground/[0.06] bg-background px-3 py-2"
                     >
-                        <span className="w-20 text-xs text-muted-foreground">
-                            Parte {i + 1}
-                        </span>
+                        <span className="w-20 text-xs text-muted-foreground">Parte {i + 1}</span>
                         <div className="flex flex-1 items-center gap-1">
                             <div
                                 className="h-1.5 rounded-full transition-all"
@@ -229,11 +225,7 @@ function SplitPercentageEditor() {
                     <span
                         className={cn(
                             'text-xs font-medium',
-                            isValid
-                                ? 'text-[#10B981]'
-                                : total > 100
-                                    ? 'text-destructive'
-                                    : 'text-amber-600'
+                            isValid ? 'text-[#10B981]' : total > 100 ? 'text-destructive' : 'text-amber-600'
                         )}
                     >
                         Total: {total}%
@@ -261,36 +253,26 @@ export function CreateSpaceDialog({
     open,
     onOpenChange,
     onSubmit,
-    initialValues,
-    title = 'Nuevo espacio',
-    description = 'Creá un contexto financiero claro para ordenar movimientos, balances y participantes.',
-    hideParticipants = false,
 }: DialogProps & {
     onSubmit: (data: SpaceFormData) => Promise<ISpace | undefined | void>
-    initialValues?: Partial<SpaceFormData>
-    title?: string
-    description?: string
-    hideParticipants?: boolean
 }) {
-    const isEdit = hideParticipants || !!initialValues
-    const STEPS = isEdit ? WIZARD_STEPS_EDIT : WIZARD_STEPS_CREATE
-    const totalSteps = STEPS.length
-
+    const router = useRouter()
     const [step, setStep] = useState(0)
-    const [form, setForm] = useState<SpaceFormData>(buildInitialForm(initialValues))
+    const [form, setForm] = useState<SpaceFormData>(buildInitialForm())
     const [submitting, setSubmitting] = useState(false)
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [globalError, setGlobalError] = useState<string | null>(null)
+    const [createdSpace, setCreatedSpace] = useState<ISpace | null>(null)
 
-    // Currencies: common chips + custom input
+    // Currencies
     const [customCurrencyInput, setCustomCurrencyInput] = useState('')
     const customInputRef = useRef<HTMLInputElement>(null)
 
-    // Date pickers open state
+    // Date pickers
     const [startDateOpen, setStartDateOpen] = useState(false)
     const [endDateOpen, setEndDateOpen] = useState(false)
 
-    // Participants (create only)
+    // Participants
     const [inviteEmail, setInviteEmail] = useState('')
     const [inviteRole, setInviteRole] = useState<'participant' | 'admin'>('participant')
     const [invites, setInvites] = useState<InviteEntry[]>([])
@@ -298,19 +280,24 @@ export function CreateSpaceDialog({
     useEffect(() => {
         if (!open) return
         setStep(0)
-        setForm(buildInitialForm(initialValues))
+        setForm(buildInitialForm())
         setSubmitting(false)
         setFieldErrors({})
         setGlobalError(null)
         setCustomCurrencyInput('')
         setInvites([])
         setInviteEmail('')
-    }, [initialValues, open])
+        setCreatedSpace(null)
+    }, [open])
 
     const setField = <K extends keyof SpaceFormData>(key: K, value: SpaceFormData[K]) => {
         setForm((prev) => ({ ...prev, [key]: value }))
         if (fieldErrors[key]) {
-            setFieldErrors((prev) => { const next = { ...prev }; delete next[key]; return next })
+            setFieldErrors((prev) => {
+                const next = { ...prev }
+                delete next[key]
+                return next
+            })
         }
     }
 
@@ -323,9 +310,7 @@ export function CreateSpaceDialog({
             return {
                 ...prev,
                 currencies: safe,
-                reportingCurrency: safe.includes(prev.reportingCurrency)
-                    ? prev.reportingCurrency
-                    : safe[0],
+                reportingCurrency: safe.includes(prev.reportingCurrency) ? prev.reportingCurrency : safe[0],
             }
         })
     }
@@ -361,10 +346,10 @@ export function CreateSpaceDialog({
             }
         }
 
-        if (stepIndex === 1) {
+        if (stepIndex === 2) {
             if (form.currencies.length === 0) errors.currencies = 'Seleccioná al menos una moneda'
             if (!form.currencies.includes(form.reportingCurrency)) {
-                errors.reportingCurrency = 'La moneda de reporte debe estar incluida en las monedas del espacio'
+                errors.reportingCurrency = 'La moneda de reporte debe estar en la lista de monedas'
             }
             const startDate = normalizeDialogDate(form.startDate)
             const endDate = normalizeDialogDate(form.endDate)
@@ -404,10 +389,11 @@ export function CreateSpaceDialog({
         setGlobalError(null)
 
         try {
-            const createdSpace = await onSubmit(parsed.data)
+            const space = await onSubmit(parsed.data)
+            const spaceResult = space ?? null
 
-            if (invites.length > 0 && createdSpace?._id) {
-                const spaceId = String(createdSpace._id)
+            if (invites.length > 0 && spaceResult?._id) {
+                const spaceId = String(spaceResult._id)
                 await Promise.allSettled(
                     invites.map((invite) =>
                         apiJson(`/api/spaces/${spaceId}/participants`, {
@@ -424,7 +410,8 @@ export function CreateSpaceDialog({
                 )
             }
 
-            onOpenChange(false)
+            setCreatedSpace(spaceResult)
+            setStep(4)
         } catch (err) {
             setGlobalError(err instanceof Error ? err.message : 'No pudimos guardar el espacio.')
         } finally {
@@ -432,11 +419,12 @@ export function CreateSpaceDialog({
         }
     }
 
-    const isLastStep = step === totalSteps - 1
-    const canProceed = step === 0 ? !!form.type : true
+    const isSuccessStep = step === 4
+    const isLastDataStep = step === 3
+    const canProceed = step === 0 ? !!form.type && form.name.trim().length >= 2 : true
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={isSuccessStep ? undefined : onOpenChange}>
             <DialogContent
                 variant="fullscreen-mobile"
                 className="max-w-[680px] gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
@@ -445,16 +433,25 @@ export function CreateSpaceDialog({
                     {/* Header */}
                     <div className="shrink-0 border-b border-border/70 bg-background/92 px-5 py-4 backdrop-blur sm:px-6">
                         <DialogHeader className="space-y-1">
-                            <DialogTitle className="text-xl tracking-tight">{title}</DialogTitle>
-                            <DialogDescription className="text-sm">{description}</DialogDescription>
+                            <DialogTitle className="text-xl tracking-tight">
+                                {isSuccessStep ? '¡Espacio creado!' : 'Nuevo espacio'}
+                            </DialogTitle>
+                            {!isSuccessStep && (
+                                <DialogDescription className="text-sm">
+                                    Creá un contexto financiero claro para ordenar movimientos, balances y participantes.
+                                </DialogDescription>
+                            )}
                         </DialogHeader>
-                        <div className="mt-3">
-                            <StepIndicator steps={STEPS} current={step} />
-                        </div>
+                        {!isSuccessStep && (
+                            <div className="mt-3">
+                                <StepIndicator steps={WIZARD_STEPS} current={step} />
+                            </div>
+                        )}
                     </div>
 
                     {/* Content */}
                     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+
                         {/* ── Step 0: Tipo + Identidad ── */}
                         {step === 0 && (
                             <div className="space-y-4">
@@ -462,47 +459,22 @@ export function CreateSpaceDialog({
                                     <div className="space-y-3">
                                         <SpaceDialogSectionEyebrow>Tipo de espacio</SpaceDialogSectionEyebrow>
                                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                            {Object.entries(SPACE_TYPE_META).filter(([k]) => k !== 'other').map(
-                                                ([value, meta]) => {
-                                                    const active = form.type === value
-                                                    return (
-                                                        <button
-                                                            key={value}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setField('type', value as SpaceFormData['type'])
-                                                                if (fieldErrors.type) {
-                                                                    setFieldErrors((p) => { const n = { ...p }; delete n.type; return n })
-                                                                }
-                                                            }}
-                                                            className={cn(
-                                                                'flex min-h-[132px] flex-col items-center gap-2 rounded-[18px] border p-3 text-center transition-all',
-                                                                active
-                                                                    ? 'border-primary/30 bg-primary/8 ring-1 ring-primary/20'
-                                                                    : 'border-border bg-background/80 hover:bg-accent/20'
-                                                            )}
-                                                        >
-                                                            <SpaceTypeIcon
-                                                                type={value as SpaceFormData['type']}
-                                                                className="h-10 w-10 rounded-[14px]"
-                                                            />
-                                                            <span className="text-xs font-semibold text-foreground">
-                                                                {SPACE_TYPE_LABELS[value as SpaceFormData['type']]}
-                                                            </span>
-                                                            <span className="text-center text-[10px] leading-tight text-muted-foreground">
-                                                                {meta.description}
-                                                            </span>
-                                                        </button>
-                                                    )
-                                                }
-                                            )}
-                                            {/* "Other" type */}
-                                            {(() => {
-                                                const active = form.type === 'other'
+                                            {Object.entries(SPACE_TYPE_META).map(([value, meta]) => {
+                                                const active = form.type === value
                                                 return (
                                                     <button
+                                                        key={value}
                                                         type="button"
-                                                        onClick={() => setField('type', 'other')}
+                                                        onClick={() => {
+                                                            setField('type', value as SpaceFormData['type'])
+                                                            if (fieldErrors.type) {
+                                                                setFieldErrors((p) => {
+                                                                    const n = { ...p }
+                                                                    delete n.type
+                                                                    return n
+                                                                })
+                                                            }
+                                                        }}
                                                         className={cn(
                                                             'flex min-h-[132px] flex-col items-center gap-2 rounded-[18px] border p-3 text-center transition-all',
                                                             active
@@ -510,16 +482,19 @@ export function CreateSpaceDialog({
                                                                 : 'border-border bg-background/80 hover:bg-accent/20'
                                                         )}
                                                     >
-                                                        <SpaceTypeIcon type="other" className="h-10 w-10 rounded-[14px]" />
+                                                        <SpaceTypeIcon
+                                                            type={value as SpaceFormData['type']}
+                                                            className="h-10 w-10 rounded-[14px]"
+                                                        />
                                                         <span className="text-xs font-semibold text-foreground">
-                                                            {SPACE_TYPE_LABELS.other}
+                                                            {SPACE_TYPE_LABELS[value as SpaceFormData['type']]}
                                                         </span>
                                                         <span className="text-center text-[10px] leading-tight text-muted-foreground">
-                                                            {SPACE_TYPE_META.other.description}
+                                                            {meta.description}
                                                         </span>
                                                     </button>
                                                 )
-                                            })()}
+                                            })}
                                         </div>
                                         {fieldErrors.type && (
                                             <p className="text-xs text-destructive">{fieldErrors.type}</p>
@@ -558,10 +533,9 @@ export function CreateSpaceDialog({
                             </div>
                         )}
 
-                        {/* ── Step 1: Configuración ── */}
+                        {/* ── Step 1: Modo + Participantes ── */}
                         {step === 1 && (
                             <div className="space-y-4">
-                                {/* Modo */}
                                 <SpaceDialogPanel>
                                     <div className="space-y-3">
                                         <SpaceDialogSectionEyebrow>Modo de trabajo</SpaceDialogSectionEyebrow>
@@ -588,9 +562,7 @@ export function CreateSpaceDialog({
                                                     <div
                                                         className={cn(
                                                             'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                                                            form.mode === m.key
-                                                                ? 'border-primary'
-                                                                : 'border-border'
+                                                            form.mode === m.key ? 'border-primary' : 'border-border'
                                                         )}
                                                     >
                                                         {form.mode === m.key && (
@@ -598,9 +570,7 @@ export function CreateSpaceDialog({
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-semibold text-foreground">
-                                                            {m.label}
-                                                        </p>
+                                                        <p className="text-sm font-semibold text-foreground">{m.label}</p>
                                                         <p className="text-xs text-muted-foreground">{m.desc}</p>
                                                     </div>
                                                 </button>
@@ -609,181 +579,12 @@ export function CreateSpaceDialog({
                                     </div>
                                 </SpaceDialogPanel>
 
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    {/* Monedas */}
-                                    <SpaceDialogPanel>
-                                        <div className="space-y-3">
-                                            <SpaceDialogSectionEyebrow>Monedas</SpaceDialogSectionEyebrow>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {COMMON_CURRENCIES.map((c) => (
-                                                    <SpaceDialogChoice
-                                                        key={c}
-                                                        active={form.currencies.includes(c)}
-                                                        onClick={() => toggleCurrency(c)}
-                                                    >
-                                                        {c}
-                                                    </SpaceDialogChoice>
-                                                ))}
-                                                {form.currencies
-                                                    .filter((c) => !(COMMON_CURRENCIES as readonly string[]).includes(c))
-                                                    .map((c) => (
-                                                        <div key={c} className="flex items-center gap-0.5">
-                                                            <SpaceDialogChoice
-                                                                active
-                                                                onClick={() => toggleCurrency(c)}
-                                                            >
-                                                                {c}
-                                                            </SpaceDialogChoice>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => toggleCurrency(c)}
-                                                                className="text-muted-foreground hover:text-foreground"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                            </div>
-                                            {fieldErrors.currencies && (
-                                                <p className="text-xs text-destructive">{fieldErrors.currencies}</p>
-                                            )}
-                                            <div className="flex gap-1.5">
-                                                <Input
-                                                    ref={customInputRef}
-                                                    value={customCurrencyInput}
-                                                    onChange={(e) =>
-                                                        setCustomCurrencyInput(e.target.value.toUpperCase().slice(0, 6))
-                                                    }
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault()
-                                                            addCustomCurrency()
-                                                        }
-                                                    }}
-                                                    placeholder="EUR, BRL…"
-                                                    className="h-8 flex-1 text-xs uppercase"
-                                                    maxLength={6}
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={addCustomCurrency}
-                                                    className="h-8 px-2"
-                                                >
-                                                    <Plus className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </div>
-
-                                            <SpaceDialogField label="Moneda de reporte">
-                                                <Select
-                                                    value={form.reportingCurrency}
-                                                    onValueChange={(v) => setField('reportingCurrency', v)}
-                                                >
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {form.currencies.map((c) => (
-                                                            <SelectItem key={c} value={c}>
-                                                                {c}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                {fieldErrors.reportingCurrency && (
-                                                    <p className="text-xs text-destructive">
-                                                        {fieldErrors.reportingCurrency}
-                                                    </p>
-                                                )}
-                                            </SpaceDialogField>
-                                        </div>
-                                    </SpaceDialogPanel>
-
-                                    {/* Split + Fechas */}
-                                    <div className="space-y-4">
-                                        <SpaceDialogPanel>
-                                            <div className="space-y-3">
-                                                <SpaceDialogSectionEyebrow>Split por defecto</SpaceDialogSectionEyebrow>
-                                                <div className="grid grid-cols-2 gap-1.5">
-                                                    {SPLIT_OPTIONS.map((opt) => {
-                                                        const disabled = form.mode === 'solo' && opt.key !== 'none'
-                                                        const active =
-                                                            (form.mode === 'solo' && opt.key === 'none') ||
-                                                            (form.mode !== 'solo' && form.defaultSplitMode === opt.key)
-                                                        return (
-                                                            <SpaceDialogChoice
-                                                                key={opt.key}
-                                                                active={active}
-                                                                disabled={disabled}
-                                                                onClick={() =>
-                                                                    !disabled && setField('defaultSplitMode', opt.key)
-                                                                }
-                                                                className="justify-center text-center text-xs"
-                                                            >
-                                                                {opt.label}
-                                                            </SpaceDialogChoice>
-                                                        )
-                                                    })}
-                                                </div>
-                                                {form.defaultSplitMode === 'percentage' &&
-                                                    form.mode !== 'solo' && (
-                                                        <SplitPercentageEditor />
-                                                    )}
-                                            </div>
-                                        </SpaceDialogPanel>
-
-                                        <SpaceDialogPanel>
-                                            <div className="space-y-3">
-                                                <SpaceDialogSectionEyebrow>Período</SpaceDialogSectionEyebrow>
-                                                <DatePickerField
-                                                    label="Fecha de inicio"
-                                                    value={form.startDate}
-                                                    isOpen={startDateOpen}
-                                                    onOpenChange={setStartDateOpen}
-                                                    onChange={(d) => setField('startDate', d)}
-                                                />
-                                                <DatePickerField
-                                                    label="Fecha de fin (opcional)"
-                                                    value={form.endDate}
-                                                    isOpen={endDateOpen}
-                                                    onOpenChange={setEndDateOpen}
-                                                    onChange={(d) => setField('endDate', d)}
-                                                    error={fieldErrors.endDate}
-                                                    showErrors
-                                                />
-                                            </div>
-                                        </SpaceDialogPanel>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ── Step 2: Participantes ── */}
-                        {step === 2 && !isEdit && (
-                            <div className="space-y-4">
-                                {/* Summary */}
-                                <div className="flex items-center gap-3 rounded-[20px] border border-foreground/[0.07] bg-secondary/50 p-4">
-                                    <SpaceTypeIcon type={form.type} className="h-10 w-10 shrink-0" />
-                                    <div>
-                                        <p className="font-semibold text-foreground">
-                                            {form.name || 'Sin nombre'}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {SPACE_TYPE_LABELS[form.type]} ·{' '}
-                                            {SPACE_MODE_LABELS[form.mode]} ·{' '}
-                                            {form.currencies.join(' / ')}
-                                        </p>
-                                    </div>
-                                </div>
-
                                 {form.mode !== 'solo' ? (
                                     <SpaceDialogPanel>
                                         <div className="space-y-3">
                                             <SpaceDialogSectionEyebrow>Invitar participantes</SpaceDialogSectionEyebrow>
                                             <p className="text-xs text-muted-foreground">
-                                                Ingresá los emails de quienes vas a invitar. También podés hacerlo
-                                                más tarde desde el espacio.
+                                                Podés invitarlos ahora o hacerlo más tarde desde el espacio.
                                             </p>
                                             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]">
                                                 <Input
@@ -797,15 +598,12 @@ export function CreateSpaceDialog({
                                                         }
                                                     }}
                                                     placeholder="nombre@ejemplo.com"
-                                                    className="flex-1"
                                                 />
                                                 <Select
                                                     value={inviteRole}
-                                                    onValueChange={(v) =>
-                                                        setInviteRole(v as 'participant' | 'admin')
-                                                    }
+                                                    onValueChange={(v) => setInviteRole(v as 'participant' | 'admin')}
                                                 >
-                                                    <SelectTrigger className="w-32">
+                                                    <SelectTrigger>
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -859,80 +657,298 @@ export function CreateSpaceDialog({
                                         </div>
                                     </SpaceDialogPanel>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground">
+                                    <div className="rounded-[20px] border border-foreground/[0.07] bg-secondary/50 p-4 text-sm text-muted-foreground">
                                         Este espacio es individual, no tiene participantes.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ── Step 2: Monedas + Período ── */}
+                        {step === 2 && (
+                            <div className="space-y-4">
+                                <SpaceDialogPanel>
+                                    <div className="space-y-3">
+                                        <SpaceDialogSectionEyebrow>Monedas</SpaceDialogSectionEyebrow>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {COMMON_CURRENCIES.map((c) => (
+                                                <SpaceDialogChoice
+                                                    key={c}
+                                                    active={form.currencies.includes(c)}
+                                                    onClick={() => toggleCurrency(c)}
+                                                >
+                                                    {c}
+                                                </SpaceDialogChoice>
+                                            ))}
+                                            {form.currencies
+                                                .filter((c) => !(COMMON_CURRENCIES as readonly string[]).includes(c))
+                                                .map((c) => (
+                                                    <div key={c} className="flex items-center gap-0.5">
+                                                        <SpaceDialogChoice active onClick={() => toggleCurrency(c)}>
+                                                            {c}
+                                                        </SpaceDialogChoice>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleCurrency(c)}
+                                                            className="text-muted-foreground hover:text-foreground"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                        {fieldErrors.currencies && (
+                                            <p className="text-xs text-destructive">{fieldErrors.currencies}</p>
+                                        )}
+                                        <div className="flex gap-1.5">
+                                            <Input
+                                                ref={customInputRef}
+                                                value={customCurrencyInput}
+                                                onChange={(e) =>
+                                                    setCustomCurrencyInput(e.target.value.toUpperCase().slice(0, 6))
+                                                }
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault()
+                                                        addCustomCurrency()
+                                                    }
+                                                }}
+                                                placeholder="EUR, BRL…"
+                                                className="h-8 flex-1 text-xs uppercase"
+                                                maxLength={6}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={addCustomCurrency}
+                                                className="h-8 px-2"
+                                            >
+                                                <Plus className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+
+                                        <SpaceDialogField label="Moneda de reporte">
+                                            <Select
+                                                value={form.reportingCurrency}
+                                                onValueChange={(v) => setField('reportingCurrency', v)}
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {form.currencies.map((c) => (
+                                                        <SelectItem key={c} value={c}>
+                                                            {c}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {fieldErrors.reportingCurrency && (
+                                                <p className="text-xs text-destructive">
+                                                    {fieldErrors.reportingCurrency}
+                                                </p>
+                                            )}
+                                        </SpaceDialogField>
+                                    </div>
+                                </SpaceDialogPanel>
+
+                                <SpaceDialogPanel>
+                                    <div className="space-y-3">
+                                        <SpaceDialogSectionEyebrow>Período</SpaceDialogSectionEyebrow>
+                                        <DatePickerField
+                                            label="Fecha de inicio"
+                                            value={form.startDate}
+                                            isOpen={startDateOpen}
+                                            onOpenChange={setStartDateOpen}
+                                            onChange={(d) => setField('startDate', d)}
+                                        />
+                                        <DatePickerField
+                                            label="Fecha de fin (opcional)"
+                                            value={form.endDate}
+                                            isOpen={endDateOpen}
+                                            onOpenChange={setEndDateOpen}
+                                            onChange={(d) => setField('endDate', d)}
+                                            error={fieldErrors.endDate}
+                                            showErrors
+                                        />
+                                    </div>
+                                </SpaceDialogPanel>
+                            </div>
+                        )}
+
+                        {/* ── Step 3: Reparto ── */}
+                        {step === 3 && (
+                            <div className="space-y-4">
+                                <SpaceDialogPanel>
+                                    <div className="space-y-3">
+                                        <SpaceDialogSectionEyebrow>Split por defecto</SpaceDialogSectionEyebrow>
+                                        <p className="text-xs text-muted-foreground">
+                                            Cómo se van a dividir los movimientos entre los participantes por defecto.
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                            {SPLIT_OPTIONS.map((opt) => {
+                                                const disabled = form.mode === 'solo' && opt.key !== 'none'
+                                                const active =
+                                                    (form.mode === 'solo' && opt.key === 'none') ||
+                                                    (form.mode !== 'solo' && form.defaultSplitMode === opt.key)
+                                                return (
+                                                    <SpaceDialogChoice
+                                                        key={opt.key}
+                                                        active={active}
+                                                        disabled={disabled}
+                                                        onClick={() => !disabled && setField('defaultSplitMode', opt.key)}
+                                                        className="justify-center text-center text-xs"
+                                                    >
+                                                        {opt.label}
+                                                    </SpaceDialogChoice>
+                                                )
+                                            })}
+                                        </div>
+                                        {form.defaultSplitMode === 'percentage' && form.mode !== 'solo' && (
+                                            <SplitPercentageEditor />
+                                        )}
+                                    </div>
+                                </SpaceDialogPanel>
+
+                                {/* Mini review */}
+                                <div className="rounded-[20px] border border-foreground/[0.07] bg-secondary/50 p-4">
+                                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                        Revisión
+                                    </p>
+                                    <div className="flex items-center gap-3">
+                                        <SpaceTypeIcon type={form.type} className="h-10 w-10 shrink-0 rounded-[14px]" />
+                                        <div>
+                                            <p className="font-semibold text-foreground">{form.name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {SPACE_TYPE_LABELS[form.type]} ·{' '}
+                                                {SPACE_MODE_LABELS[form.mode]} ·{' '}
+                                                {form.currencies.join(' / ')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {globalError && (
+                                    <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                                        {globalError}
                                     </p>
                                 )}
                             </div>
                         )}
 
-                        {globalError && (
-                            <p className="mt-4 rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                                {globalError}
-                            </p>
+                        {/* ── Step 4: Éxito ── */}
+                        {step === 4 && createdSpace && (
+                            <div className="flex flex-col items-center gap-6 py-8 text-center">
+                                <div
+                                    className="flex h-20 w-20 items-center justify-center rounded-[28px]"
+                                    style={{ background: 'color-mix(in srgb, var(--chart-3) 14%, transparent)' }}
+                                >
+                                    <Sparkles size={36} style={{ color: 'var(--chart-3)' }} />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                                        {createdSpace.name}
+                                    </h2>
+                                    <p className="text-sm text-muted-foreground">
+                                        Tu espacio está listo. Ya podés empezar a registrar movimientos y
+                                        gestionar el balance con los participantes.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                    <Button
+                                        className="rounded-full"
+                                        onClick={() => {
+                                            onOpenChange(false)
+                                            router.push(`/spaces/${String(createdSpace._id)}`)
+                                        }}
+                                    >
+                                        Ir al espacio
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="rounded-full"
+                                        onClick={() => {
+                                            setStep(0)
+                                            setForm(buildInitialForm())
+                                            setCreatedSpace(null)
+                                            setInvites([])
+                                        }}
+                                    >
+                                        Crear otro
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="rounded-full"
+                                        onClick={() => onOpenChange(false)}
+                                    >
+                                        Cerrar
+                                    </Button>
+                                </div>
+                            </div>
                         )}
                     </div>
 
                     {/* Footer */}
-                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-3 sm:px-6">
-                        <div className="flex w-full items-center gap-2">
-                            {step > 0 ? (
-                                <Button
-                                    variant="outline"
-                                    onClick={handleBack}
-                                    disabled={submitting}
-                                    className="rounded-full"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                    Atrás
-                                </Button>
-                            ) : (
-                                <Button
-                                    variant="outline"
-                                    onClick={() => onOpenChange(false)}
-                                    disabled={submitting}
-                                    className="rounded-full"
-                                >
-                                    Cancelar
-                                </Button>
-                            )}
+                    {!isSuccessStep && (
+                        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-3 sm:px-6">
+                            <div className="flex w-full items-center gap-2">
+                                {step > 0 ? (
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleBack}
+                                        disabled={submitting}
+                                        className="rounded-full"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                        Atrás
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => onOpenChange(false)}
+                                        disabled={submitting}
+                                        className="rounded-full"
+                                    >
+                                        Cancelar
+                                    </Button>
+                                )}
 
-                            <div className="flex flex-1 justify-center gap-1">
-                                {STEPS.map((_, i) => (
-                                    <div
-                                        key={i}
-                                        className={cn(
-                                            'h-1.5 rounded-full transition-all',
-                                            i === step ? 'w-5 bg-primary' : 'w-1.5 bg-muted'
-                                        )}
-                                    />
-                                ))}
+                                <div className="flex flex-1 justify-center gap-1">
+                                    {WIZARD_STEPS.slice(0, -1).map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className={cn(
+                                                'h-1.5 rounded-full transition-all',
+                                                i === step ? 'w-5 bg-primary' : 'w-1.5 bg-muted'
+                                            )}
+                                        />
+                                    ))}
+                                </div>
+
+                                {isLastDataStep ? (
+                                    <Button
+                                        onClick={handleSubmit}
+                                        disabled={submitting}
+                                        className="rounded-full"
+                                    >
+                                        {submitting ? 'Creando…' : 'Crear espacio'}
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={handleNext}
+                                        disabled={!canProceed}
+                                        className="rounded-full"
+                                    >
+                                        Siguiente
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                )}
                             </div>
-
-                            {isLastStep ? (
-                                <Button
-                                    onClick={handleSubmit}
-                                    disabled={submitting || !canProceed}
-                                    className="rounded-full"
-                                >
-                                    {submitting
-                                        ? 'Guardando…'
-                                        : isEdit
-                                            ? 'Guardar cambios'
-                                            : 'Crear espacio'}
-                                </Button>
-                            ) : (
-                                <Button
-                                    onClick={handleNext}
-                                    disabled={!canProceed}
-                                    className="rounded-full"
-                                >
-                                    Siguiente
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </div>
-                    </DialogFooter>
+                        </DialogFooter>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
