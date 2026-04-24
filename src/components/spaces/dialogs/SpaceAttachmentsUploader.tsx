@@ -77,8 +77,7 @@ export function SpaceAttachmentsUploader({
                     onChange={(event) => handleFiles(event.target.files)}
                 />
 
-                <button
-                    type="button"
+                <div
                     onClick={() => inputRef.current?.click()}
                     onDragEnter={() => setDragging(true)}
                     onDragLeave={() => setDragging(false)}
@@ -91,8 +90,16 @@ export function SpaceAttachmentsUploader({
                         setDragging(false)
                         handleFiles(event.dataTransfer.files)
                     }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            inputRef.current?.click()
+                        }
+                    }}
                     className={cn(
-                        'flex w-full flex-col items-center justify-center gap-3 rounded-[24px] border border-dashed px-5 py-8 text-center transition-colors',
+                        'flex w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-[24px] border border-dashed px-5 py-8 text-center transition-colors',
                         dragging
                             ? 'border-primary/30 bg-primary/8 text-primary'
                             : 'border-border bg-background/70 text-muted-foreground hover:border-primary/20 hover:bg-primary/5 hover:text-foreground'
@@ -109,11 +116,11 @@ export function SpaceAttachmentsUploader({
                             También podés seleccionar desde tus archivos.
                         </p>
                     </div>
-                    <Button type="button" variant="outline" className="rounded-full">
+                    <Button type="button" variant="outline" className="rounded-full" onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}>
                         <ImagePlus className="h-4 w-4" />
                         Seleccionar archivos
                     </Button>
-                </button>
+                </div>
 
                 {attachments.length > 0 ? (
                     <div className="space-y-3">
