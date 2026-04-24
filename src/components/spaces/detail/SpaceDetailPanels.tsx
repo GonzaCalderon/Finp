@@ -3,8 +3,8 @@
 import { CalendarRange, Coins, FileBadge2, FileText, Plus, Settings2, Sparkles, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
-import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceModeBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
-import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
+import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
+import { SPACE_MODE_LABELS, SPACE_SPLIT_MODE_LABELS, SPACE_STATUS_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
 
 export type SpaceEntryFilter = 'all' | ISpaceEntry['type']
@@ -252,6 +252,27 @@ export function SpaceSettingsPanel({
     canManage: boolean
     onEdit: () => void
 }) {
+    const identityRows = [
+        ['Tipo', SPACE_TYPE_LABELS[space.type]],
+        ['Estado', SPACE_STATUS_LABELS[space.status]],
+        ['Modo', SPACE_MODE_LABELS[space.mode]],
+    ]
+    const financeRows = [
+        ['Monedas', space.currencies.join(' / ')],
+        ['Reporte', space.reportingCurrency],
+        ['Split por defecto', SPACE_SPLIT_MODE_LABELS[space.defaultSplitMode]],
+    ]
+    const contextRows = [
+        ['Período', formatSpaceDateRange(space.startDate, space.endDate)],
+        ['Participantes', String(summary.participantCount)],
+        ['Movimientos', String(summary.totalEntryCount)],
+    ]
+    const groups = [
+        { title: 'Identidad', rows: identityRows },
+        { title: 'Finanzas', rows: financeRows },
+        { title: 'Contexto', rows: contextRows },
+    ]
+
     return (
         <div className="space-y-4">
             <SpaceSurface accent="var(--chart-1)">
@@ -269,72 +290,24 @@ export function SpaceSettingsPanel({
                     }
                 />
 
-                <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                    <div className="rounded-[28px] border border-foreground/[0.07] bg-background/74 p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            Identidad
-                        </p>
-                        <div className="mt-3 space-y-2 text-sm">
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Tipo</span>
-                                <span className="font-medium text-foreground">
-                                    {SPACE_TYPE_LABELS[space.type]}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Estado</span>
-                                <SpaceStatusBadge status={space.status} />
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Modo</span>
-                                <SpaceModeBadge mode={space.mode} />
+                <div className="mt-5 grid gap-x-8 gap-y-5 lg:grid-cols-3">
+                    {groups.map((group) => (
+                        <div key={group.title} className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                {group.title}
+                            </p>
+                            <div className="mt-3 divide-y divide-border/70 text-sm">
+                                {group.rows.map(([label, value]) => (
+                                    <div key={label} className="flex items-center justify-between gap-4 py-2.5">
+                                        <span className="text-muted-foreground">{label}</span>
+                                        <span className="min-w-0 text-right font-medium text-foreground">
+                                            {value}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    </div>
-
-                    <div className="rounded-[28px] border border-foreground/[0.07] bg-background/74 p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            Finanzas
-                        </p>
-                        <div className="mt-3 space-y-2 text-sm">
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Monedas</span>
-                                <span className="font-medium text-foreground">{space.currencies.join(' / ')}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Reporte</span>
-                                <span className="font-medium text-foreground">{space.reportingCurrency}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Split por defecto</span>
-                                <span className="font-medium text-foreground">
-                                    {SPACE_SPLIT_MODE_LABELS[space.defaultSplitMode]}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="rounded-[28px] border border-foreground/[0.07] bg-background/74 p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            Contexto
-                        </p>
-                        <div className="mt-3 space-y-2 text-sm">
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Período</span>
-                                <span className="font-medium text-right text-foreground">
-                                    {formatSpaceDateRange(space.startDate, space.endDate)}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Participantes</span>
-                                <span className="font-medium text-foreground">{summary.participantCount}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">Movimientos</span>
-                                <span className="font-medium text-foreground">{summary.totalEntryCount}</span>
-                            </div>
-                        </div>
-                    </div>
+                    ))}
                 </div>
             </SpaceSurface>
 
@@ -345,7 +318,7 @@ export function SpaceSettingsPanel({
                     description="La descripción y el alcance ayudan a entender rápidamente qué entra y qué no entra acá."
                 />
 
-                <div className="mt-5 rounded-[28px] border border-foreground/[0.07] bg-background/74 p-4 text-sm text-secondary-foreground">
+                <div className="mt-5 border-t border-border/70 pt-4 text-sm leading-relaxed text-secondary-foreground">
                     {space.description || 'Todavía no se cargó una descripción para este espacio.'}
                 </div>
             </SpaceSurface>

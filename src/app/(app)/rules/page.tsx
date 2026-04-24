@@ -67,35 +67,6 @@ const CONDITION_LABELS: Record<string, string> = {
     starts_with: 'empieza con',
 }
 
-function buildRuleDescription(
-    rule: ITransactionRule,
-    categories: ICategory[]
-): string {
-    const fieldLabel = FIELD_LABELS[rule.field] ?? rule.field
-    const conditionLabel = CONDITION_LABELS[rule.condition] ?? rule.condition
-    const appliesToLabel = APPLIES_TO_LABELS[rule.appliesTo] ?? rule.appliesTo
-
-    const categoryObj = categories.find(
-        (c) =>
-            c._id.toString() ===
-            ((rule.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
-                rule.categoryId?.toString())
-    )
-
-    let desc = `Si ${appliesToLabel === 'cualquier tipo' ? 'la' : `la`} ${fieldLabel} ${conditionLabel} "${rule.value}"`
-
-    const actions: string[] = []
-    if (categoryObj) actions.push(`→ ${categoryObj.name}`)
-    if (rule.setType) actions.push(`tipo: ${rule.setType === 'expense' ? 'gasto' : 'ingreso'}`)
-    if (rule.normalizeMerchant) actions.push(`comercio: ${rule.normalizeMerchant}`)
-
-    if (actions.length > 0) {
-        desc += `  ${actions.join(' · ')}`
-    }
-
-    return desc
-}
-
 // ─── Rule Card ────────────────────────────────────────────────────────────────
 
 function RuleCard({

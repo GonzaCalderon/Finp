@@ -3,16 +3,10 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Check, HandCoins } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-} from '@/components/ui/tabs'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useSpace } from '@/hooks/useSpace'
@@ -20,8 +14,8 @@ import { useSpaceEntries } from '@/hooks/useSpaceEntries'
 import { useSpaceParticipants } from '@/hooks/useSpaceParticipants'
 import { useToast } from '@/hooks/useToast'
 import {
-    CreateSpaceDialog,
     ConfirmSpaceEntryDialog,
+    EditSpaceSettingsDialog,
     SpaceEntryDialog,
     SpaceParticipantDialog,
 } from '@/components/spaces/SpaceDialogs'
@@ -39,6 +33,7 @@ import {
 } from '@/components/spaces/detail/SpaceDetailPanels'
 import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
+import { SpaceAmountInline } from '@/components/spaces/SpaceUi'
 import {
     RecentSpaceAttachmentsCard,
     RecentSpaceMovementsCard,
@@ -50,7 +45,9 @@ import {
     SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
 import { extractId } from '@/lib/utils/spaces'
+import { cn } from '@/lib/utils'
 import type {
+    SpaceBalanceItem,
     ISpaceEntry,
     ISpacePendingAction,
 } from '@/types'
@@ -58,18 +55,166 @@ import type { SpaceFormData } from '@/lib/validations'
 
 type SpaceTab = 'summary' | 'entries' | 'balance' | 'participants' | 'settings' | 'closure'
 
+const SPACE_TABS: Array<{ value: SpaceTab; label: string; shortLabel: string }> = [
+    { value: 'summary', label: 'Resumen', shortLabel: 'Resumen' },
+    { value: 'entries', label: 'Movimientos', shortLabel: 'Mov.' },
+    { value: 'balance', label: 'Balance', shortLabel: 'Balance' },
+    { value: 'participants', label: 'Participantes', shortLabel: 'Personas' },
+    { value: 'settings', label: 'Configuración', shortLabel: 'Ajustes' },
+    { value: 'closure', label: 'Cierre', shortLabel: 'Cierre' },
+]
+
 function DetailSkeleton() {
     return (
         <div className="mx-auto max-w-[1440px] space-y-6 px-4 py-4 md:px-6 md:py-6">
             <Skeleton className="h-12 w-48 rounded-full" />
-            <Skeleton className="h-64 rounded-[34px]" />
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Skeleton className="h-48 rounded-[28px]" />
+            <Skeleton className="h-12 rounded-[22px]" />
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, index) => (
-                    <Skeleton key={index} className="h-32 rounded-[28px]" />
+                    <Skeleton key={index} className="h-24 rounded-[22px]" />
                 ))}
             </div>
             <Skeleton className="h-[460px] rounded-[32px]" />
         </div>
+    )
+}
+
+function SpaceOptionsBar({
+    activeTab,
+    pendingCount,
+    onChange,
+}: {
+    activeTab: SpaceTab
+    pendingCount: number
+    onChange: (tab: SpaceTab) => void
+}) {
+    return (
+        <div className="rounded-[22px] border border-foreground/[0.08] bg-card/82 p-1">
+            <div className="grid grid-cols-3 gap-1 lg:grid-cols-6">
+                {SPACE_TABS.map((tab) => {
+                    const active = activeTab === tab.value
+                    const showPending = tab.value === 'entries' && pendingCount > 0
+
+                    return (
+                        <button
+                            key={tab.value}
+                            type="button"
+                            onClick={() => onChange(tab.value)}
+                            className={cn(
+                                'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-xs font-medium transition-colors sm:gap-2 sm:text-sm',
+                                active
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            )}
+                        >
+                            <span className="truncate lg:hidden">{tab.shortLabel}</span>
+                            <span className="hidden truncate lg:inline">{tab.label}</span>
+                            {showPending ? (
+                                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
+                                    {pendingCount}
+                                </span>
+                            ) : null}
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+function buildSettlementPreview(balances: SpaceBalanceItem[], currentUserId: string) {
+    const current = balances.find((balance) => balance.userId === currentUserId)
+    if (!current || current.balanceReporting === 0) return null
+
+    const isDebt = current.balanceReporting < 0
+    const counterpart = balances.find((balance) =>
+        isDebt ? balance.balanceReporting > 0 : balance.balanceReporting < 0
+    )
+    if (!counterpart) return null
+
+    return {
+        isDebt,
+        counterpart,
+        amount: Math.min(Math.abs(current.balanceReporting), Math.abs(counterpart.balanceReporting)),
+    }
+}
+
+function SpaceSettlementPanel({
+    balances,
+    currency,
+    currentUserId,
+    hidden,
+    onCreateEntry,
+}: {
+    balances: SpaceBalanceItem[]
+    currency: string
+    currentUserId: string
+    hidden: boolean
+    onCreateEntry: () => void
+}) {
+    const settlement = buildSettlementPreview(balances, currentUserId)
+    if (!settlement) return null
+
+    const accent = settlement.isDebt ? 'var(--destructive)' : 'var(--chart-3)'
+
+    return (
+        <section
+            className="rounded-[28px] border px-5 py-5 md:px-6"
+            style={{
+                background: settlement.isDebt
+                    ? 'color-mix(in srgb, var(--destructive) 7%, var(--card))'
+                    : 'color-mix(in srgb, var(--chart-3) 7%, var(--card))',
+                borderColor: settlement.isDebt
+                    ? 'color-mix(in srgb, var(--destructive) 24%, transparent)'
+                    : 'color-mix(in srgb, var(--chart-3) 24%, transparent)',
+            }}
+        >
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-2">
+                    <p
+                        className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                        style={{ color: accent }}
+                    >
+                        {settlement.isDebt ? 'Deuda pendiente' : 'Saldo a cobrar'}
+                    </p>
+                    <div className="space-y-1">
+                        <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                            {settlement.isDebt
+                                ? `Le debés a ${settlement.counterpart.displayName}`
+                                : `${settlement.counterpart.displayName} te debe`}
+                        </h2>
+                        <SpaceAmountInline
+                            amount={settlement.amount}
+                            currency={currency}
+                            hidden={hidden}
+                            color={accent}
+                            className="text-3xl font-semibold tracking-tight"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                    {settlement.isDebt ? (
+                        <>
+                            <Button variant="outline" className="rounded-full" onClick={onCreateEntry}>
+                                <HandCoins className="h-4 w-4" />
+                                Pago parcial
+                            </Button>
+                            <Button className="rounded-full bg-[var(--chart-3)] text-white hover:bg-[var(--chart-3)]/90" onClick={onCreateEntry}>
+                                <Check className="h-4 w-4" />
+                                Saldar total
+                            </Button>
+                        </>
+                    ) : (
+                        <Button variant="outline" className="rounded-full" onClick={onCreateEntry}>
+                            <HandCoins className="h-4 w-4" />
+                            Registrar cobro
+                        </Button>
+                    )}
+                </div>
+            </div>
+        </section>
     )
 }
 
@@ -218,37 +363,28 @@ export default function SpaceDetailPage() {
                     onCreateEntry={() => setEntryDialogOpen(true)}
                 />
 
+                <SpaceOptionsBar
+                    activeTab={activeTab}
+                    pendingCount={data.summary.pendingEntryCount}
+                    onChange={setActiveTab}
+                />
+
                 <SpaceKpiRow
                     summary={data.summary}
                     reportingCurrency={data.space.reportingCurrency}
                     hidden={hidden}
                 />
 
-                <Tabs
-                    value={activeTab}
-                    onValueChange={(value) => setActiveTab(value as SpaceTab)}
-                    className="space-y-5"
-                >
-                    <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-[22px] border border-foreground/[0.08] bg-card/94 p-2">
-                        {[
-                            { value: 'summary', label: 'Resumen' },
-                            { value: 'entries', label: 'Movimientos' },
-                            { value: 'balance', label: 'Balance' },
-                            { value: 'participants', label: 'Participantes' },
-                            { value: 'settings', label: 'Configuración' },
-                            { value: 'closure', label: 'Cierre' },
-                        ].map((tab) => (
-                            <TabsTrigger
-                                key={tab.value}
-                                value={tab.value}
-                                className="rounded-[18px] px-4 py-2 data-active:bg-background"
-                            >
-                                {tab.label}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
+                {activeTab === 'summary' ? (
+                    <div className="space-y-4">
+                        <SpaceSettlementPanel
+                            balances={data.summary.balances}
+                            currency={data.space.reportingCurrency}
+                            hidden={hidden}
+                            currentUserId={currentUserId}
+                            onCreateEntry={() => setEntryDialogOpen(true)}
+                        />
 
-                    <TabsContent value="summary" className="space-y-4">
                         <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
                             <SpaceEvolutionChart
                                 points={data.summary.monthlyTrend}
@@ -284,55 +420,55 @@ export default function SpaceDetailPage() {
                             actions={pendingConfirmations}
                             onReview={handleReviewPending}
                         />
-                    </TabsContent>
+                    </div>
+                ) : null}
 
-                    <TabsContent value="entries" className="space-y-4">
-                        <SpaceMovementsPanel
-                            entries={data.entries}
-                            participants={data.participants}
-                            entryFilter={entryFilter}
-                            onFilterChange={setEntryFilter}
-                            reportingCurrency={data.space.reportingCurrency}
-                            hidden={hidden}
-                            onCreate={() => setEntryDialogOpen(true)}
-                        />
-                    </TabsContent>
+                {activeTab === 'entries' ? (
+                    <SpaceMovementsPanel
+                        entries={data.entries}
+                        participants={data.participants}
+                        entryFilter={entryFilter}
+                        onFilterChange={setEntryFilter}
+                        reportingCurrency={data.space.reportingCurrency}
+                        hidden={hidden}
+                        onCreate={() => setEntryDialogOpen(true)}
+                    />
+                ) : null}
 
-                    <TabsContent value="balance" className="space-y-4">
-                        <SpaceBalanceSection
-                            balances={data.summary.balances}
-                            currency={data.space.reportingCurrency}
-                            hidden={hidden}
-                            currentUserId={currentUserId}
-                        />
-                    </TabsContent>
+                {activeTab === 'balance' ? (
+                    <SpaceBalanceSection
+                        balances={data.summary.balances}
+                        currency={data.space.reportingCurrency}
+                        hidden={hidden}
+                        currentUserId={currentUserId}
+                    />
+                ) : null}
 
-                    <TabsContent value="participants" className="space-y-4">
-                        <SpaceParticipantsPanel
-                            participants={data.participants}
-                            canManage={canManage}
-                            onAdd={() => setParticipantDialogOpen(true)}
-                        />
-                    </TabsContent>
+                {activeTab === 'participants' ? (
+                    <SpaceParticipantsPanel
+                        participants={data.participants}
+                        canManage={canManage}
+                        onAdd={() => setParticipantDialogOpen(true)}
+                    />
+                ) : null}
 
-                    <TabsContent value="settings" className="space-y-4">
-                        <SpaceSettingsPanel
-                            space={data.space}
-                            summary={data.summary}
-                            canManage={canManage}
-                            onEdit={() => setEditDialogOpen(true)}
-                        />
-                    </TabsContent>
+                {activeTab === 'settings' ? (
+                    <SpaceSettingsPanel
+                        space={data.space}
+                        summary={data.summary}
+                        canManage={canManage}
+                        onEdit={() => setEditDialogOpen(true)}
+                    />
+                ) : null}
 
-                    <TabsContent value="closure" className="space-y-4">
-                        <SpaceClosurePanel
-                            space={data.space}
-                            summary={data.summary}
-                            canManage={canManage}
-                            onToggleClosed={handleToggleClosed}
-                        />
-                    </TabsContent>
-                </Tabs>
+                {activeTab === 'closure' ? (
+                    <SpaceClosurePanel
+                        space={data.space}
+                        summary={data.summary}
+                        canManage={canManage}
+                        onToggleClosed={handleToggleClosed}
+                    />
+                ) : null}
             </div>
 
             <SpaceEntryDialog
@@ -355,7 +491,7 @@ export default function SpaceDetailPage() {
             />
 
             {canManage ? (
-                <CreateSpaceDialog
+                <EditSpaceSettingsDialog
                     open={editDialogOpen}
                     onOpenChange={setEditDialogOpen}
                     onSubmit={handleUpdateSpace}
@@ -371,9 +507,6 @@ export default function SpaceDetailPage() {
                         reportingCurrency: data.space.reportingCurrency,
                         defaultSplitMode: data.space.defaultSplitMode,
                     }}
-                    title="Editar espacio"
-                    description="Ajustá el perfil visual y operativo del espacio sin tocar su historial ni su lógica."
-                    hideParticipants
                 />
             ) : null}
 

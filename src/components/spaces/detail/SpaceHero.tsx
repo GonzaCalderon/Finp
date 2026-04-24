@@ -1,8 +1,8 @@
 'use client'
 
-import { CalendarRange, Coins, UserPlus, Users } from 'lucide-react'
+import { CalendarRange, Coins, ListChecks, UserPlus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SpaceMetaBadge, SpaceModeBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTypeBadge, SpaceTypeIcon } from '@/components/spaces/SpaceUi'
+import { SpaceMetaBadge, SpaceModeBadge, SpaceStatusBadge, SpaceSurface, SpaceTypeBadge, SpaceTypeIcon } from '@/components/spaces/SpaceUi'
 import { formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import type { ISpace, SpaceSummarySnapshot } from '@/types'
 
@@ -19,40 +19,31 @@ export function SpaceHero({
     onInvite: () => void
     onCreateEntry: () => void
 }) {
+    const description =
+        space.description ||
+        'Este espacio todavía no tiene una descripción cargada, pero ya está listo para ordenar movimientos, participantes y balances.'
+
     return (
-        <SpaceSurface accent="var(--chart-1)">
-            <SpaceSectionHeading
-                eyebrow="Espacio"
-                title={space.name}
-                description={
-                    space.description ||
-                    'Este espacio todavía no tiene una descripción cargada, pero ya está listo para ordenar movimientos, participantes y balances.'
-                }
-                action={
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                        {canManage ? (
-                            <Button variant="outline" className="rounded-full" onClick={onInvite}>
-                                <UserPlus className="h-4 w-4" />
-                                Invitar
-                            </Button>
-                        ) : null}
-                        <Button className="rounded-full" onClick={onCreateEntry}>
-                            <Coins className="h-4 w-4" />
-                            Nuevo movimiento
-                        </Button>
-                    </div>
-                }
-            />
+        <SpaceSurface accent="var(--chart-1)" padding="p-4 md:p-5" className="rounded-[28px]">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex min-w-0 items-start gap-4">
+                    <SpaceTypeIcon type={space.type} className="h-12 w-12 rounded-[18px] md:h-14 md:w-14 md:rounded-[20px]" iconClassName="h-5 w-5 md:h-6 md:w-6" />
 
-            <div className="mt-6 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="flex items-start gap-4">
-                    <SpaceTypeIcon type={space.type} className="h-16 w-16 rounded-[24px]" iconClassName="h-7 w-7" />
-
-                    <div className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <SpaceTypeBadge type={space.type} />
-                            <SpaceModeBadge mode={space.mode} />
-                            <SpaceStatusBadge status={space.status} />
+                    <div className="min-w-0 space-y-3">
+                        <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <SpaceTypeBadge type={space.type} />
+                                <SpaceModeBadge mode={space.mode} />
+                                <SpaceStatusBadge status={space.status} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
+                                    {space.name}
+                                </h2>
+                                <p className="mt-1 max-w-4xl text-sm text-muted-foreground md:text-[0.95rem]">
+                                    {description}
+                                </p>
+                            </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -60,6 +51,10 @@ export function SpaceHero({
                                 {summary.participantCount} participante{summary.participantCount === 1 ? '' : 's'}
                             </SpaceMetaBadge>
                             <SpaceMetaBadge icon={Coins}>{space.currencies.join(' / ')}</SpaceMetaBadge>
+                            <SpaceMetaBadge icon={Coins}>Reporte {space.reportingCurrency}</SpaceMetaBadge>
+                            <SpaceMetaBadge icon={ListChecks}>
+                                {summary.totalEntryCount} movimiento{summary.totalEntryCount === 1 ? '' : 's'}
+                            </SpaceMetaBadge>
                             <SpaceMetaBadge icon={CalendarRange}>
                                 {formatSpaceDateRange(space.startDate, space.endDate)}
                             </SpaceMetaBadge>
@@ -70,33 +65,17 @@ export function SpaceHero({
                     </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px] xl:max-w-[480px]">
-                    <div className="rounded-[24px] border border-foreground/[0.06] bg-background/72 p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            Estado
-                        </p>
-                        <p className="mt-2 text-lg font-semibold tracking-tight">
-                            {summary.pendingEntryCount > 0 ? 'Con revisión pendiente' : 'Operando con normalidad'}
-                        </p>
-                    </div>
-
-                    <div className="rounded-[24px] border border-foreground/[0.06] bg-background/72 p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            Moneda de reporte
-                        </p>
-                        <p className="mt-2 text-lg font-semibold tracking-tight">
-                            {space.reportingCurrency}
-                        </p>
-                    </div>
-
-                    <div className="rounded-[24px] border border-foreground/[0.06] bg-background/72 p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            Movimientos
-                        </p>
-                        <p className="mt-2 text-lg font-semibold tracking-tight">
-                            {summary.totalEntryCount}
-                        </p>
-                    </div>
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row xl:pt-3">
+                    {canManage ? (
+                        <Button size="sm" variant="outline" className="rounded-full" onClick={onInvite}>
+                            <UserPlus className="h-4 w-4" />
+                            Invitar
+                        </Button>
+                    ) : null}
+                    <Button size="sm" className="rounded-full" onClick={onCreateEntry}>
+                        <Coins className="h-4 w-4" />
+                        Nuevo movimiento
+                    </Button>
                 </div>
             </div>
         </SpaceSurface>

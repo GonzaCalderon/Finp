@@ -65,7 +65,13 @@
       "Bash(npm run *)",
       "Bash(cat next.config.ts)",
       "Bash(cat next.config.js)",
-      "Bash(cat next.config.mjs)"
+      "Bash(cat next.config.mjs)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Read(//c/Users/gonza/Downloads/**)",
+      "Bash(ls \"Finp_ Espacios.zip\")",
+      "Bash(mkdir -p finp_espacios_proto)",
+      "Bash(unzip -o \"Finp_ Espacios.zip\" -d finp_espacios_proto/)",
+      "Bash(grep -i \"SpaceOverviewCard\\\\|spaces/index\\\\|spaces\\\\\\\\\\\\\\\\index\")"
     ]
   }
 }

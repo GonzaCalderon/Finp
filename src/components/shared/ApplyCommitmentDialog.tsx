@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,8 +52,8 @@ export function ApplyCommitmentDialog({
     const {
         register,
         handleSubmit,
+        control,
         setValue,
-        watch,
         reset,
         formState: { isSubmitting },
     } = useForm({
@@ -65,7 +65,7 @@ export function ApplyCommitmentDialog({
         },
     })
 
-    const accountId = watch('accountId')
+    const accountId = useWatch({ control, name: 'accountId' })
 
     useEffect(() => {
         if (open && commitment) {

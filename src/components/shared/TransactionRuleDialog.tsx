@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
@@ -82,8 +82,8 @@ export function TransactionRuleDialog({
     const {
         register,
         handleSubmit,
+        control,
         setValue,
-        watch,
         reset,
         formState: { errors, isSubmitting, submitCount },
     } = useForm<RuleFormValues>({
@@ -105,12 +105,13 @@ export function TransactionRuleDialog({
     const scrollRef = useRef<HTMLDivElement>(null)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
-    const watchedAppliesTo = watch('appliesTo')
-    const watchedField = watch('field')
-    const watchedCondition = watch('condition')
-    const watchedCategoryId = watch('categoryId')
-    const watchedSetType = watch('setType')
-    const isActive = watch('isActive')
+    const watchedAppliesTo = useWatch({ control, name: 'appliesTo' })
+    const watchedField = useWatch({ control, name: 'field' })
+    const watchedCondition = useWatch({ control, name: 'condition' })
+    const watchedValue = useWatch({ control, name: 'value' })
+    const watchedCategoryId = useWatch({ control, name: 'categoryId' })
+    const watchedSetType = useWatch({ control, name: 'setType' })
+    const isActive = useWatch({ control, name: 'isActive' })
 
     // Filter categories based on appliesTo
     const filteredCategories = categories.filter((c) => {
@@ -266,7 +267,7 @@ export function TransactionRuleDialog({
                             <NaturalLanguagePreview
                                 field={watchedField}
                                 condition={watchedCondition}
-                                value={watch('value')}
+                                value={watchedValue}
                             />
                         </div>
 

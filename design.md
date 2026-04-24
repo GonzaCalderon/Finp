@@ -226,6 +226,18 @@ Cards:
 
 El lenguaje visual actual usa separación sutil, no contenedores pesados.
 
+Reglas de composición:
+
+- Evitar cards dentro de cards como patrón de layout. Ensucia la jerarquía, vuelve la interfaz más pesada y hace que el producto se sienta menos serio.
+- Si una sección ya está en una superficie, los elementos internos deben resolverse como filas, listas, divisores, badges o bloques sin sombra.
+- Usar cards internas sólo cuando representen entidades repetibles con entidad propia, por ejemplo una cuenta, una tarjeta o un movimiento en una lista.
+- Los gradientes en cards y superficies deben ser muy sutiles. La referencia es el prototipo de espacios: acento de baja opacidad, suficiente para orientar pero no para decorar.
+- En pantallas operativas, priorizar lectura y estructura sobre ornamentación.
+- En heroes operativos, los metadatos como estado, moneda de reporte o cantidad de movimientos no deben resolverse como cards grandes. Deben ser badges/chips informativos o texto secundario para no competir con el nombre, la acción primaria y el resumen financiero.
+- Los KPI secundarios deben dimensionarse según su función: si acompañan una pantalla de administración, tienen que ser compactos, escaneables y no dominar la primera pantalla.
+- En vistas de configuración, preferir filas con divisores y grupos semánticos antes que tarjetas internas. La configuración se lee como ficha técnica editable, no como tablero.
+- Editar una entidad existente no debe reutilizar visualmente el flujo de creación cuando eso implique pasos, lenguaje o jerarquía de onboarding. La edición debe ser directa, contextual y con campos disponibles en una sola superficie cuando sea razonable.
+
 ### Movimiento
 
 Librerías:
@@ -243,6 +255,54 @@ Reglas:
 - Cambios de estado deben sentirse rápidos.
 - No usar animación para esconder latencia de datos.
 - Respetar `prefers-reduced-motion`.
+
+#### Cards seleccionables
+
+La animación de referencia para cards seleccionables es la de los KPI del hero del dashboard (`Ingresos`, `Gastos`, `Deuda mensual`, `Compromisos del mes`): debe sentirse suave, mínima y directa.
+
+Patrón obligatorio:
+
+- El elemento clickeable externo debe actuar como `group`.
+- La superficie visual interna de la card es la única capa que se desplaza.
+- Usar `transition-transform duration-200 group-hover:-translate-y-0.5`.
+- El movimiento debe ser corto; no usar `hover:-translate-y-1` ni transformaciones más amplias para cards de selección.
+- No animar varias sub-cards internas al mismo tiempo. Si la card tiene bloques internos, pueden cambiar borde/color de forma sutil, pero no deben desplazarse.
+- El icono de navegación puede moverse apenas con `group-hover:translate-x-0.5`.
+
+Aplicar este patrón a:
+
+- KPI seleccionables del dashboard.
+- Tarjetas de crédito seleccionables o navegables.
+- Espacios.
+- Cards que actúan como filtro o acceso a detalle.
+
+#### Barras de opciones contextuales
+
+Cuando una pantalla tiene sub-vistas operativas, preferir una barra horizontal de opciones clara antes que tabs genéricos con mucha presencia visual.
+
+En espacios, la barra de referencia contiene:
+
+- Resumen.
+- Movimientos, con badge de pendientes cuando aplique.
+- Balance.
+- Participantes.
+- Configuración.
+- Cierre.
+
+La barra debe sentirse como navegación de administración del contexto, no como otra card. Debe ser baja, escaneable, con estado activo claro y sin ocupar altura excesiva.
+
+En desktop, distribuir las opciones de forma pareja cuando el set es estable. Evitar que queden agrupadas a la izquierda con un vacío grande a la derecha, porque la barra pasa a leerse como un contenedor incompleto.
+
+En mobile, no usar scroll horizontal para navegación estructural. Si hay muchas secciones, usar labels cortos, dos filas compactas o un patrón de selección explícito; el usuario no debe tener que descubrir opciones ocultas arrastrando lateralmente.
+
+#### Mobile en espacios
+
+Espacios concentra resumen, movimientos, balance, participantes, configuración y cierre. En mobile no se intenta mostrar todo a la vez:
+
+- La barra de secciones debe ser compacta y sin scroll horizontal.
+- Los KPI del espacio se agrupan como resumen financiero corto; no deben aparecer como cuatro cards verticales grandes.
+- Las secciones profundas deben quedar detrás de la navegación contextual, manteniendo una primera pantalla liviana.
+- Las acciones primarias pueden ocupar ancho completo, pero deben conservar separación clara respecto del borde inferior y de la bottom bar.
 
 ## Layout
 

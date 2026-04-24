@@ -488,7 +488,7 @@ export function SpaceEntryDialog({
                 variant="fullscreen-mobile"
                 className="max-w-[1120px] gap-0 overflow-hidden p-0 sm:max-h-[94vh] sm:max-w-[1120px]"
             >
-                <div className="flex h-full flex-col">
+                <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                     <div className="border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
                         <DialogHeader className="space-y-2">
                             <DialogTitle className="text-2xl tracking-tight">Nuevo movimiento</DialogTitle>
@@ -498,7 +498,7 @@ export function SpaceEntryDialog({
                         </DialogHeader>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
                         <div className="space-y-5">
                             <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
                                 <div className="space-y-5">
@@ -881,19 +881,20 @@ export function SpaceEntryDialog({
                         </div>
                     </div>
 
-                    <DialogFooter className="border-t border-border/70 bg-background/96">
-                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
+                        <Button variant="outline" className="rounded-full" onClick={() => onOpenChange(false)} disabled={submitting}>
                             Cancelar
                         </Button>
                         <Button
                             variant="outline"
+                            className="rounded-full"
                             onClick={handleSaveDraft}
                             disabled={submitting}
                         >
                             <Save className="h-4 w-4" />
                             Guardar borrador
                         </Button>
-                        <Button onClick={handleSubmit} disabled={submitting}>
+                        <Button className="rounded-full" onClick={handleSubmit} disabled={submitting}>
                             {submitting ? 'Guardando...' : 'Guardar movimiento'}
                         </Button>
                     </DialogFooter>

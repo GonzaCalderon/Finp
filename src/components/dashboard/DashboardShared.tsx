@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/button'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import {
+    selectableCardIconMotion,
+    selectableCardMotion,
+} from '@/components/shared/selectable-card-motion'
+import {
     ACCOUNT_TYPE_LABELS,
     formatDayOfMonth,
     getCategoryHref,
@@ -150,7 +154,10 @@ export function DashboardMetricLinkCard({
     return (
         <Link href={href} className={cn('group block', className)}>
             <Card
-                className="h-full gap-3 rounded-[28px] border-foreground/[0.08] bg-card/90 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:border-foreground/[0.14]"
+                className={cn(
+                    'h-full gap-3 rounded-[28px] border-foreground/[0.08] bg-card/90 group-hover:border-foreground/[0.14]',
+                    selectableCardMotion
+                )}
                 style={{
                     background:
                         'linear-gradient(180deg, color-mix(in srgb, var(--card) 94%, transparent) 0%, color-mix(in srgb, var(--card) 88%, transparent) 100%)',
@@ -171,7 +178,7 @@ export function DashboardMetricLinkCard({
                                 color: 'var(--muted-foreground)',
                             }}
                         >
-                            <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                            <ChevronRight className={cn('h-4 w-4', selectableCardIconMotion)} />
                         </span>
                     </div>
                 </CardHeader>

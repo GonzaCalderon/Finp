@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarIcon, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -130,8 +130,8 @@ export function InstallmentDialog({
 
   const {
     handleSubmit,
+    control,
     setValue,
-    watch,
     reset,
     formState: { errors, isSubmitting, submitCount },
   } = useForm<InstallmentFormInput, unknown, InstallmentFormData>({
@@ -153,7 +153,7 @@ export function InstallmentDialog({
   const scrollRef = useRef<HTMLDivElement>(null)
   useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
-  const watchedValues = watch()
+  const watchedValues = useWatch({ control })
 
   const totalAmount =
     typeof watchedValues.totalAmount === 'number' ? watchedValues.totalAmount : 0
@@ -237,7 +237,6 @@ export function InstallmentDialog({
         notes: '',
       })
     }
-    setShowMoreOptions(false)
   }, [open, reset, plan])
 
   const handleFormSubmit = async (data: InstallmentFormData) => {
@@ -259,7 +258,13 @@ export function InstallmentDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setShowMoreOptions(false)
+        onOpenChange(nextOpen)
+      }}
+    >
       <DialogContent className="max-w-lg p-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-0">
           <DialogTitle>{plan ? 'Editar gasto en cuotas' : 'Registrar compra en cuotas'}</DialogTitle>

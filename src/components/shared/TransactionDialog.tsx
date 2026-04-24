@@ -200,9 +200,8 @@ function buildSteps(params: {
     type: TransactionFormInput['type']
     isExpense: boolean
     showClassification: boolean
-    isEditing: boolean
 }): TransactionStep[] {
-    const { type, isExpense, showClassification, isEditing } = params
+    const { type, isExpense, showClassification } = params
     const steps: TransactionStep[] = [{ id: 'type' }]
 
     if (type !== 'income' && type !== 'credit_card_payment' && type !== 'exchange' && type !== 'transfer' && type !== 'adjustment') {
@@ -363,8 +362,8 @@ export function TransactionDialog({
     const descriptionIsOptional = ['transfer', 'exchange', 'credit_card_payment', 'adjustment'].includes(type)
     const primaryFlowType = getPrimaryFlowType(type)
     const steps = useMemo(
-        () => buildSteps({ type, isExpense, showClassification: showClassificationStep, isEditing }),
-        [type, isExpense, showClassificationStep, isEditing]
+        () => buildSteps({ type, isExpense, showClassification: showClassificationStep }),
+        [type, isExpense, showClassificationStep]
     )
     const detailsStepIndex = useMemo(() => steps.findIndex((step) => step.id === 'details'), [steps])
     const classificationStepIndex = useMemo(() => steps.findIndex((step) => step.id === 'classification'), [steps])

@@ -139,7 +139,7 @@ export function CategoriesProvider({
 
         invalidateData(CATEGORY_INVALIDATION_TAGS)
         return data.created as number
-    }, [fetchCategories])
+    }, [])
 
     const fetchMissingDefaults = useCallback(async () => {
         return apiJson<{

@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select'
 import {
     type DialogProps,
+    normalizeDialogDate,
     SpaceDialogChoice,
     SpaceDialogField,
     SpaceDialogPanel,
@@ -73,8 +74,8 @@ function buildInitialForm(initialValues?: Partial<SpaceFormData>): SpaceFormData
         type: initialValues?.type ?? 'home',
         mode: initialValues?.mode ?? 'managed',
         status: initialValues?.status ?? 'active',
-        startDate: initialValues?.startDate ?? new Date(),
-        endDate: initialValues?.endDate,
+        startDate: normalizeDialogDate(initialValues?.startDate) ?? new Date(),
+        endDate: normalizeDialogDate(initialValues?.endDate),
         currencies: initialValues?.currencies ?? ['ARS'],
         reportingCurrency: initialValues?.reportingCurrency ?? 'ARS',
         defaultSplitMode: initialValues?.defaultSplitMode ?? 'equal',
@@ -365,7 +366,9 @@ export function CreateSpaceDialog({
             if (!form.currencies.includes(form.reportingCurrency)) {
                 errors.reportingCurrency = 'La moneda de reporte debe estar incluida en las monedas del espacio'
             }
-            if (form.endDate && form.startDate && form.endDate < form.startDate) {
+            const startDate = normalizeDialogDate(form.startDate)
+            const endDate = normalizeDialogDate(form.endDate)
+            if (endDate && startDate && endDate < startDate) {
                 errors.endDate = 'La fecha de fin no puede ser anterior a la de inicio'
             }
         }
@@ -438,7 +441,7 @@ export function CreateSpaceDialog({
                 variant="fullscreen-mobile"
                 className="max-w-[680px] gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
             >
-                <div className="flex h-full flex-col">
+                <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                     {/* Header */}
                     <div className="shrink-0 border-b border-border/70 bg-background/92 px-5 py-4 backdrop-blur sm:px-6">
                         <DialogHeader className="space-y-1">
@@ -451,14 +454,14 @@ export function CreateSpaceDialog({
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+                    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
                         {/* ── Step 0: Tipo + Identidad ── */}
                         {step === 0 && (
                             <div className="space-y-4">
                                 <SpaceDialogPanel>
                                     <div className="space-y-3">
                                         <SpaceDialogSectionEyebrow>Tipo de espacio</SpaceDialogSectionEyebrow>
-                                        <div className="grid grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                                             {Object.entries(SPACE_TYPE_META).filter(([k]) => k !== 'other').map(
                                                 ([value, meta]) => {
                                                     const active = form.type === value
@@ -473,7 +476,7 @@ export function CreateSpaceDialog({
                                                                 }
                                                             }}
                                                             className={cn(
-                                                                'flex flex-col items-center gap-2 rounded-[18px] border p-3 transition-all',
+                                                                'flex min-h-[132px] flex-col items-center gap-2 rounded-[18px] border p-3 text-center transition-all',
                                                                 active
                                                                     ? 'border-primary/30 bg-primary/8 ring-1 ring-primary/20'
                                                                     : 'border-border bg-background/80 hover:bg-accent/20'
@@ -501,7 +504,7 @@ export function CreateSpaceDialog({
                                                         type="button"
                                                         onClick={() => setField('type', 'other')}
                                                         className={cn(
-                                                            'flex flex-col items-center gap-2 rounded-[18px] border p-3 transition-all',
+                                                            'flex min-h-[132px] flex-col items-center gap-2 rounded-[18px] border p-3 text-center transition-all',
                                                             active
                                                                 ? 'border-primary/30 bg-primary/8 ring-1 ring-primary/20'
                                                                 : 'border-border bg-background/80 hover:bg-accent/20'
@@ -782,7 +785,7 @@ export function CreateSpaceDialog({
                                                 Ingresá los emails de quienes vas a invitar. También podés hacerlo
                                                 más tarde desde el espacio.
                                             </p>
-                                            <div className="flex gap-2">
+                                            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]">
                                                 <Input
                                                     type="email"
                                                     value={inviteEmail}

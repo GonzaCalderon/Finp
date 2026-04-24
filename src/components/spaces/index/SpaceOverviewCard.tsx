@@ -10,7 +10,12 @@ import {
     SpaceTypeIcon,
     SpaceTypeBadge,
 } from '@/components/spaces/SpaceUi'
+import {
+    selectableCardIconMotion,
+    selectableCardMotion,
+} from '@/components/shared/selectable-card-motion'
 import { formatSpaceDateRange, resolveSpaceTypeAccent, extractId } from '@/lib/utils/spaces'
+import { cn } from '@/lib/utils'
 import type { ISpaceListItem } from '@/types'
 
 function ProgressRing({ pct, color }: { pct: number; color: string }) {
@@ -72,60 +77,64 @@ function SpaceOverviewCardMobile({ item, hidden }: { item: ISpaceListItem; hidde
         : item.summary.pendingToPayReporting
 
     return (
-        <Link
-            href={`/spaces/${extractId(item.space._id)}`}
-            className="group flex items-center gap-3 rounded-[22px] border border-foreground/[0.08] bg-card/94 px-4 py-3 transition-all hover:border-primary/20"
-            style={{ boxShadow: 'var(--card-shadow)' }}
-        >
-            <SpaceTypeIcon type={item.space.type} className="h-11 w-11 shrink-0 rounded-[14px]" />
+        <Link href={`/spaces/${extractId(item.space._id)}`} className="group block">
+            <div
+                className={cn(
+                    'flex items-center gap-3 rounded-[22px] border border-foreground/[0.08] bg-card/94 px-4 py-3 hover:border-primary/20',
+                    selectableCardMotion
+                )}
+                style={{ boxShadow: 'var(--card-shadow)' }}
+            >
+                <SpaceTypeIcon type={item.space.type} className="h-11 w-11 shrink-0 rounded-[14px]" />
 
-            <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                    <h3 className="truncate text-sm font-semibold text-foreground">
-                        {item.space.name}
-                    </h3>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5" />
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                        <h3 className="truncate text-sm font-semibold text-foreground">
+                            {item.space.name}
+                        </h3>
+                        <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground/60', selectableCardIconMotion)} />
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                        <SpaceTypeBadge type={item.space.type} className="px-2 py-0.5 text-[10px]" />
+                        <SpaceStatusBadge
+                            status={item.space.status}
+                            className="px-2 py-0.5 text-[10px]"
+                        />
+                        {item.summary.pendingEntryCount > 0 && (
+                            <span
+                                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                style={{ background: 'rgba(212,160,23,0.15)', color: '#A67C00' }}
+                            >
+                                {item.summary.pendingEntryCount} pend.
+                            </span>
+                        )}
+                    </div>
+                    <div className="mt-1">
+                        <ProgressRing
+                            pct={confirmedRatio}
+                            color="linear-gradient(90deg, var(--chart-3), color-mix(in srgb, var(--sky) 70%, white))"
+                        />
+                    </div>
                 </div>
-                <div className="mt-0.5 flex items-center gap-1.5">
-                    <SpaceTypeBadge type={item.space.type} className="px-2 py-0.5 text-[10px]" />
-                    <SpaceStatusBadge
-                        status={item.space.status}
-                        className="px-2 py-0.5 text-[10px]"
-                    />
-                    {item.summary.pendingEntryCount > 0 && (
-                        <span
-                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                            style={{ background: 'rgba(212,160,23,0.15)', color: '#A67C00' }}
-                        >
-                            {item.summary.pendingEntryCount} pend.
-                        </span>
-                    )}
-                </div>
-                <div className="mt-1">
-                    <ProgressRing
-                        pct={confirmedRatio}
-                        color="linear-gradient(90deg, var(--chart-3), color-mix(in srgb, var(--sky) 70%, white))"
-                    />
-                </div>
-            </div>
 
-            <div className="shrink-0 text-right">
-                <p className="text-[10px] text-muted-foreground">Tu parte</p>
-                <SpaceAmountInline
-                    amount={item.summary.yourShareReporting}
-                    currency={item.space.reportingCurrency}
-                    hidden={hidden}
-                    className="text-sm font-semibold"
-                />
-                {balanceAmount > 0 && (
+                <div className="shrink-0 text-right">
+                    <p className="text-[10px] text-muted-foreground">Tu parte</p>
                     <SpaceAmountInline
-                        amount={balanceAmount}
+                        amount={item.summary.yourShareReporting}
                         currency={item.space.reportingCurrency}
                         hidden={hidden}
-                        color={balancePositive ? 'var(--chart-3)' : undefined}
-                        className="text-xs"
+                        className="text-sm font-semibold"
                     />
-                )}
+                    {balanceAmount > 0 && (
+                        <SpaceAmountInline
+                            amount={balanceAmount}
+                            currency={item.space.reportingCurrency}
+                            hidden={hidden}
+                            color={balancePositive ? 'var(--chart-3)' : undefined}
+                            className="text-xs"
+                        />
+                    )}
+                </div>
             </div>
         </Link>
     )
@@ -169,117 +178,124 @@ export function SpaceOverviewCard({ item, hidden }: { item: ISpaceListItem; hidd
             {/* Desktop full card */}
             <Link
                 href={`/spaces/${extractId(item.space._id)}`}
-                className="group hidden h-full flex-col rounded-[28px] border border-foreground/[0.08] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/18 md:flex"
-                style={{
-                    background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent?.color ?? 'var(--chart-3)'} 8%, transparent) 0%, transparent 38%), var(--card, hsl(var(--card)))`,
-                    boxShadow: 'var(--card-shadow)',
-                    opacity: isFaded ? 0.76 : 1,
-                }}
+                className="group hidden h-full md:block"
             >
-                {/* Header: icon + badges */}
-                <div className="flex items-start justify-between gap-3">
-                    <SpaceTypeIcon
-                        type={item.space.type}
-                        className="h-[42px] w-[42px] shrink-0 rounded-[13px]"
-                    />
-                    <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        <SpaceStatusBadge
-                            status={item.space.status}
-                            className="px-2.5 py-1 text-[11px]"
-                        />
-                        {item.summary.pendingEntryCount > 0 && (
-                            <span
-                                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold"
-                                style={{ background: 'rgba(212,160,23,0.15)', color: '#A67C00' }}
-                            >
-                                <AlertCircle className="h-[11px] w-[11px]" />
-                                {item.summary.pendingEntryCount}
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Title + badges + description */}
-                <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-1.5">
-                        <h3 className="text-[1.05rem] font-semibold leading-tight tracking-tight text-foreground">
-                            {item.space.name}
-                        </h3>
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-50" />
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                        <SpaceTypeBadge type={item.space.type} className="px-2.5 py-0.5 text-[11px]" />
-                        <SpaceModeBadge mode={item.space.mode} className="px-2.5 py-0.5 text-[11px]" />
-                    </div>
-                    {item.space.description && (
-                        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                            {item.space.description}
-                        </p>
+                <div
+                    className={cn(
+                        'flex h-full flex-col rounded-[28px] border border-foreground/[0.08] p-5 hover:border-primary/18',
+                        selectableCardMotion
                     )}
-                </div>
-
-                {/* Participants + currencies */}
-                <div className="mt-4 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        <div className="flex -space-x-1.5">
-                            {topParticipants.map((p) => (
-                                <SpaceInitialsAvatar
-                                    key={extractId(p._id)}
-                                    name={p.displayName}
-                                    className="h-[26px] w-[26px] border-card text-[10px]"
-                                />
-                            ))}
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                            {item.summary.participantCount} participante
-                            {item.summary.participantCount === 1 ? '' : 's'}
-                        </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                        {item.space.currencies.map((c) => (
-                            <span
-                                key={c}
-                                className="rounded-full border border-border/80 bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
-                            >
-                                {c}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Metrics */}
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                    {metrics.map(({ label, amount, color }) => (
-                        <div
-                            key={label}
-                            className="rounded-[18px] border border-foreground/[0.06] bg-background/75 p-2.5"
-                        >
-                            <p className="text-[10px] text-muted-foreground">{label}</p>
-                            <SpaceAmountInline
-                                amount={amount}
-                                currency={item.space.reportingCurrency}
-                                hidden={hidden}
-                                color={color}
-                                className="mt-1 text-sm font-semibold leading-tight tabular-nums"
+                    style={{
+                        background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent?.color ?? 'var(--chart-3)'} 8%, transparent) 0%, transparent 38%), var(--card, hsl(var(--card)))`,
+                        boxShadow: 'var(--card-shadow)',
+                        opacity: isFaded ? 0.76 : 1,
+                    }}
+                >
+                    {/* Header: icon + badges */}
+                    <div className="flex items-start justify-between gap-3">
+                        <SpaceTypeIcon
+                            type={item.space.type}
+                            className="h-[42px] w-[42px] shrink-0 rounded-[13px]"
+                        />
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <SpaceStatusBadge
+                                status={item.space.status}
+                                className="px-2.5 py-1 text-[11px]"
                             />
+                            {item.summary.pendingEntryCount > 0 && (
+                                <span
+                                    className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold"
+                                    style={{ background: 'rgba(212,160,23,0.15)', color: '#A67C00' }}
+                                >
+                                    <AlertCircle className="h-[11px] w-[11px]" />
+                                    {item.summary.pendingEntryCount}
+                                </span>
+                            )}
                         </div>
-                    ))}
-                </div>
+                    </div>
 
-                {/* Footer: date + progress + sparkline */}
-                <div className="mt-4 flex items-end justify-between gap-3 border-t border-foreground/[0.06] pt-3">
-                    <div className="min-w-0 flex-1">
-                        {item.space.startDate && (
-                            <p className="mb-1.5 text-[11px] text-muted-foreground">
-                                {formatSpaceDateRange(item.space.startDate, item.space.endDate)}
+                    {/* Title + badges + description */}
+                    <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-1.5">
+                            <h3 className="text-[1.05rem] font-semibold leading-tight tracking-tight text-foreground">
+                                {item.space.name}
+                            </h3>
+                            <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-50', selectableCardIconMotion)} />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                            <SpaceTypeBadge type={item.space.type} className="px-2.5 py-0.5 text-[11px]" />
+                            <SpaceModeBadge mode={item.space.mode} className="px-2.5 py-0.5 text-[11px]" />
+                        </div>
+                        {item.space.description && (
+                            <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                                {item.space.description}
                             </p>
                         )}
-                        <ProgressRing pct={confirmedRatio} color={accent?.color ?? 'var(--chart-3)'} />
                     </div>
-                    <MiniSparkline
-                        points={item.summary.monthlyTrend}
-                        color={accent?.color ?? 'var(--chart-3)'}
-                    />
+
+                    {/* Participants + currencies */}
+                    <div className="mt-4 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <div className="flex -space-x-1.5">
+                                {topParticipants.map((p) => (
+                                    <SpaceInitialsAvatar
+                                        key={extractId(p._id)}
+                                        name={p.displayName}
+                                        className="h-[26px] w-[26px] border-card text-[10px]"
+                                    />
+                                ))}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                                {item.summary.participantCount} participante
+                                {item.summary.participantCount === 1 ? '' : 's'}
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                            {item.space.currencies.map((c) => (
+                                <span
+                                    key={c}
+                                    className="rounded-full border border-border/80 bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                                >
+                                    {c}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Metrics */}
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                        {metrics.map(({ label, amount, color }) => (
+                            <div
+                                key={label}
+                                className="rounded-[18px] border border-foreground/[0.06] bg-background/75 p-2.5"
+                            >
+                                <p className="text-[10px] text-muted-foreground">{label}</p>
+                                <SpaceAmountInline
+                                    amount={amount}
+                                    currency={item.space.reportingCurrency}
+                                    hidden={hidden}
+                                    color={color}
+                                    className="mt-1 text-sm font-semibold leading-tight tabular-nums"
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Footer: date + progress + sparkline */}
+                    <div className="mt-4 flex items-end justify-between gap-3 border-t border-foreground/[0.06] pt-3">
+                        <div className="min-w-0 flex-1">
+                            {item.space.startDate && (
+                                <p className="mb-1.5 text-[11px] text-muted-foreground">
+                                    {formatSpaceDateRange(item.space.startDate, item.space.endDate)}
+                                </p>
+                            )}
+                            <ProgressRing pct={confirmedRatio} color={accent?.color ?? 'var(--chart-3)'} />
+                        </div>
+                        <MiniSparkline
+                            points={item.summary.monthlyTrend}
+                            color={accent?.color ?? 'var(--chart-3)'}
+                        />
+                    </div>
                 </div>
             </Link>
         </>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,8 +45,8 @@ export function CommitmentDialog({
     const {
         register,
         handleSubmit,
+        control,
         setValue,
-        watch,
         reset,
         formState: { errors, isSubmitting, submitCount },
     } = useForm<CommitmentFormData>({
@@ -64,12 +64,12 @@ export function CommitmentDialog({
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const expenseCategories = categories.filter((c) => c.type === 'expense')
-    const recurrence = watch('recurrence')
-    const currency = watch('currency')
-    const categoryId = watch('categoryId')
-    const applyMode = watch('applyMode')
-    const startDate = watch('startDate')
-    const endDate = watch('endDate')
+    const recurrence = useWatch({ control, name: 'recurrence' })
+    const currency = useWatch({ control, name: 'currency' })
+    const categoryId = useWatch({ control, name: 'categoryId' })
+    const applyMode = useWatch({ control, name: 'applyMode' })
+    const startDate = useWatch({ control, name: 'startDate' })
+    const endDate = useWatch({ control, name: 'endDate' })
 
     useEffect(() => {
         if (open) {

@@ -1,4 +1,5 @@
 export { CreateSpaceDialog } from '@/components/spaces/dialogs/CreateSpaceDialog'
+export { EditSpaceSettingsDialog } from '@/components/spaces/dialogs/EditSpaceSettingsDialog'
 export { SpaceParticipantDialog } from '@/components/spaces/dialogs/SpaceParticipantDialog'
 export { SpaceEntryDialog } from '@/components/spaces/dialogs/SpaceEntryDialog'
 export { ConfirmSpaceEntryDialog } from '@/components/spaces/dialogs/ConfirmSpaceEntryDialog'

@@ -138,7 +138,7 @@ export function SpaceTypeIcon({
                 className
             )}
             style={{
-                background: `linear-gradient(135deg, ${accent.background} 0%, color-mix(in srgb, ${accent.color} 12%, white) 100%)`,
+                background: `linear-gradient(135deg, ${accent.background} 0%, color-mix(in srgb, ${accent.color} 12%, var(--card)) 100%)`,
                 color: accent.color,
             }}
         >
@@ -169,7 +169,7 @@ export function SpaceInitialsAvatar({
             )}
             style={{
                 background:
-                    'linear-gradient(135deg, color-mix(in srgb, var(--sky) 18%, white), color-mix(in srgb, var(--chart-3) 10%, white))',
+                    'linear-gradient(135deg, color-mix(in srgb, var(--sky) 18%, var(--card)), color-mix(in srgb, var(--chart-3) 10%, var(--card)))',
                 color: 'var(--foreground)',
             }}
         >
@@ -199,7 +199,7 @@ export function SpaceSurface({
                 className
             )}
             style={{
-                background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 12%, transparent) 0%, transparent 34%), linear-gradient(180deg, color-mix(in srgb, var(--card) 98%, transparent) 0%, color-mix(in srgb, var(--card) 94%, transparent) 100%)`,
+                background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 6%, transparent) 0%, transparent 38%), linear-gradient(180deg, color-mix(in srgb, var(--card) 98%, transparent) 0%, color-mix(in srgb, var(--card) 95%, transparent) 100%)`,
                 boxShadow: 'var(--card-shadow)',
                 ...style,
             }}
@@ -207,7 +207,7 @@ export function SpaceSurface({
             <div
                 className="pointer-events-none absolute inset-x-0 top-0 h-px"
                 style={{
-                    background: `linear-gradient(90deg, transparent 0%, color-mix(in srgb, ${accent} 35%, white) 50%, transparent 100%)`,
+                    background: `linear-gradient(90deg, transparent 0%, color-mix(in srgb, ${accent} 35%, var(--background)) 50%, transparent 100%)`,
                 }}
             />
             {children}
@@ -443,6 +443,7 @@ export function SpaceMetricCard({
     className,
     accent,
     footer,
+    compact = false,
 }: {
     label: string
     amount: number
@@ -451,15 +452,22 @@ export function SpaceMetricCard({
     className?: string
     accent?: string
     footer?: ReactNode
+    compact?: boolean
 }) {
     return (
         <div
             className={cn(
-                'rounded-[28px] border border-foreground/[0.07] bg-background/78 p-4 backdrop-blur-sm',
+                'border border-foreground/[0.07] bg-background/78 backdrop-blur-sm',
+                compact ? 'rounded-[22px] p-3.5' : 'rounded-[28px] p-4',
                 className
             )}
         >
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            <p
+                className={cn(
+                    'font-medium uppercase text-muted-foreground',
+                    compact ? 'text-[10px] tracking-[0.14em]' : 'text-xs tracking-[0.16em]'
+                )}
+            >
                 {label}
             </p>
             <ResponsiveAmount
@@ -467,9 +475,21 @@ export function SpaceMetricCard({
                 currency={currency}
                 hidden={hidden}
                 color={accent}
-                className="mt-3 text-[1.7rem] font-semibold tracking-tight"
+                className={cn(
+                    'font-semibold tracking-tight',
+                    compact ? 'mt-2 text-[1.35rem] md:text-[1.45rem]' : 'mt-3 text-[1.7rem]'
+                )}
             />
-            {footer ? <div className="mt-3 text-sm text-muted-foreground">{footer}</div> : null}
+            {footer ? (
+                <div
+                    className={cn(
+                        'text-muted-foreground',
+                        compact ? 'mt-2 text-xs' : 'mt-3 text-sm'
+                    )}
+                >
+                    {footer}
+                </div>
+            ) : null}
         </div>
     )
 }
