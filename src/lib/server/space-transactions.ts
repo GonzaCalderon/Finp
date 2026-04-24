@@ -5,6 +5,7 @@ import {
     getInitialBalancesByCurrency,
     supportsCurrency,
 } from '@/lib/utils/accounts'
+import type { Currency } from '@/lib/constants'
 import type { IAccount, ISpaceEntry, ITransaction } from '@/types'
 
 type CreateSpaceTransactionOptions = {
@@ -41,7 +42,8 @@ export async function createTransactionFromSpaceEntry({
         throw new Error('La cuenta seleccionada no existe o no pertenece al usuario.')
     }
 
-    if (!supportsCurrency(account, entry.currency)) {
+    const entryCurrency = entry.currency as Currency
+    if (!supportsCurrency(account, entryCurrency)) {
         throw new Error(`La cuenta "${account.name}" no opera en ${entry.currency}.`)
     }
 
@@ -49,7 +51,7 @@ export async function createTransactionFromSpaceEntry({
         const balances = await calculateAccountBalancesByCurrency(account._id, account.userId, {
             initialBalances: getInitialBalancesByCurrency(account),
         })
-        const balance = balances[entry.currency]
+        const balance = balances[entryCurrency]
 
         if (balance - entry.amount < 0) {
             throw new Error(`Saldo insuficiente en "${account.name}".`)
@@ -60,7 +62,7 @@ export async function createTransactionFromSpaceEntry({
         userId: account.userId,
         type: mapEntryTypeToTransactionType(entry.type),
         amount: entry.amount,
-        currency: entry.currency,
+        currency: entryCurrency,
         date: entry.date,
         description: description?.trim() || entry.title,
         categoryId: categoryId

@@ -25,13 +25,12 @@ const SpaceSchema = new Schema<ISpace>(
         endDate: { type: Date },
         closedAt: { type: Date },
         currencies: {
-            type: [{ type: String, enum: Object.values(CURRENCIES) }],
+            type: [{ type: String }],
             required: true,
             default: [CURRENCIES.ARS],
         },
         reportingCurrency: {
             type: String,
-            enum: Object.values(CURRENCIES),
             required: true,
             default: CURRENCIES.ARS,
         },

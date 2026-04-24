@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-const currencySchema = z.enum(['ARS', 'USD'])
+const currencySchema = z
+    .string()
+    .min(2, 'Moneda inválida')
+    .max(6, 'Moneda inválida')
+    .regex(/^[A-Z]{2,6}$/, 'El código de moneda debe ser de letras mayúsculas')
 
 const optionalTrimmedString = z.preprocess((value) => {
     if (typeof value !== 'string') return value

@@ -1,7 +1,6 @@
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type {
-    Currency,
     SpaceEntryType,
     SpaceInviteStatus,
     SpaceMode,
@@ -92,13 +91,13 @@ export function extractId(value: unknown): string | undefined {
     }
 
     if (typeof value === 'object' && value !== null) {
-        if ('_id' in value) {
-            return extractId((value as { _id?: unknown })._id)
-        }
-
         if ('toString' in value && typeof value.toString === 'function') {
             const resolved = value.toString()
-            return resolved && resolved !== '[object Object]' ? resolved : undefined
+            if (resolved && resolved !== '[object Object]') return resolved
+        }
+
+        if ('_id' in value) {
+            return extractId((value as { _id?: unknown })._id)
         }
     }
 
@@ -106,12 +105,12 @@ export function extractId(value: unknown): string | undefined {
 }
 
 export function normalizeSpaceCurrencies(
-    currencies: Currency[] | undefined,
-    reportingCurrency: Currency
+    currencies: string[] | undefined,
+    reportingCurrency: string
 ) {
     const normalized = Array.from(
         new Set([...(currencies ?? []), reportingCurrency])
-    ) as Currency[]
+    )
 
     return normalized.length > 0 ? normalized : [reportingCurrency]
 }
@@ -123,8 +122,8 @@ export function calculateReportingAmount({
     exchangeRate,
 }: {
     amount: number
-    currency: Currency
-    reportingCurrency: Currency
+    currency: string
+    reportingCurrency: string
     exchangeRate?: number
 }) {
     if (currency === reportingCurrency) return roundAmount(amount)
@@ -478,7 +477,7 @@ export function formatSpaceDate(date?: Date) {
     return format(new Date(date), 'dd MMM yyyy', { locale: es })
 }
 
-export function formatCurrencyAmount(amount: number, currency: Currency, options?: Intl.NumberFormatOptions) {
+export function formatCurrencyAmount(amount: number, currency: string, options?: Intl.NumberFormatOptions) {
     return new Intl.NumberFormat('es-AR', {
         style: 'currency',
         currency,

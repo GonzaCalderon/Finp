@@ -1,6 +1,6 @@
 import type { Types } from 'mongoose'
 import type {
-    Currency,
+    SpaceCurrency,
     SpaceEntryStatus,
     SpaceEntryType,
     SpaceInviteStatus,
@@ -12,7 +12,7 @@ import type {
     SpaceType,
 } from '@/lib/constants'
 
-export type SpaceCurrencyTotals = Record<Currency, number>
+export type SpaceCurrencyTotals = Record<string, number>
 
 export interface ISpace {
     _id: Types.ObjectId
@@ -25,8 +25,8 @@ export interface ISpace {
     startDate?: Date
     endDate?: Date
     closedAt?: Date
-    currencies: Currency[]
-    reportingCurrency: Currency
+    currencies: SpaceCurrency[]
+    reportingCurrency: SpaceCurrency
     defaultSplitMode: SpaceSplitMode
     createdAt: Date
     updatedAt: Date
@@ -74,7 +74,7 @@ export interface ISpaceEntry {
     title: string
     description?: string
     amount: number
-    currency: Currency
+    currency: SpaceCurrency
     reportingAmount: number
     exchangeRate?: number
     date: Date
@@ -179,4 +179,5 @@ export interface ISpaceDetailPayload {
     entries: ISpaceEntry[]
     summary: SpaceSummarySnapshot
     pendingActions: ISpacePendingAction[]
+    currentUserId: string
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { SpaceMetricCard } from '@/components/spaces/SpaceUi'
-import type { Currency } from '@/lib/constants'
 import type { SpaceSummarySnapshot } from '@/types'
 
 export function SpaceKpiRow({
@@ -10,7 +9,7 @@ export function SpaceKpiRow({
     hidden,
 }: {
     summary: SpaceSummarySnapshot
-    reportingCurrency: Currency
+    reportingCurrency: string
     hidden: boolean
 }) {
     return (

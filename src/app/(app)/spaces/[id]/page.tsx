@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import { ArrowLeft } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -77,8 +76,6 @@ function DetailSkeleton() {
 export default function SpaceDetailPage() {
     const params = useParams<{ id: string }>()
     const spaceId = params?.id
-    const { data: session } = useSession()
-    const currentUserId = session?.user?.id ?? ''
     const { hidden } = useHideAmounts()
     const { success, error: toastError } = useToast()
     const { data, loading, error, updateSpace } = useSpace(spaceId)
@@ -91,6 +88,8 @@ export default function SpaceDetailPage() {
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
+
+    const currentUserId = data?.currentUserId ?? ''
 
     usePageTitle(data?.space.name ? `${data.space.name} · Espacios` : 'Espacios')
     useAppStartupReady(!loading)
@@ -374,6 +373,7 @@ export default function SpaceDetailPage() {
                     }}
                     title="Editar espacio"
                     description="Ajustá el perfil visual y operativo del espacio sin tocar su historial ni su lógica."
+                    hideParticipants
                 />
             ) : null}
 

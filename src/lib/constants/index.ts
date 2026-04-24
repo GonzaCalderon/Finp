@@ -28,6 +28,8 @@ export const CURRENCIES = {
     USD: 'USD',
 } as const
 
+export const COMMON_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL', 'CLP', 'UYU', 'GBP', 'JPY', 'CAD', 'CHF'] as const
+
 export const RECURRENCE_TYPES = {
     MONTHLY: 'monthly',
     WEEKLY: 'weekly',
@@ -153,6 +155,7 @@ export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
 export type CategoryType = typeof CATEGORY_TYPES[keyof typeof CATEGORY_TYPES]
 export type Currency = typeof CURRENCIES[keyof typeof CURRENCIES]
+export type SpaceCurrency = string
 export type RecurrenceType = typeof RECURRENCE_TYPES[keyof typeof RECURRENCE_TYPES]
 export type ApplyMode = typeof APPLY_MODES[keyof typeof APPLY_MODES]
 export type TransactionStatus = typeof TRANSACTION_STATUS[keyof typeof TRANSACTION_STATUS]

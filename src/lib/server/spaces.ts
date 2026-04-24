@@ -267,6 +267,7 @@ export async function buildSpaceDetailPayload(spaceId: string, userId: string) {
             currentUserId: userId,
         }),
         pendingActions,
+        currentUserId: userId,
     } satisfies ISpaceDetailPayload
 }
 

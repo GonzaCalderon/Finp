@@ -31,7 +31,6 @@ import {
     resolveSpaceTypeAccent,
 } from '@/lib/utils/spaces'
 import type {
-    Currency,
     SpaceEntryStatus,
     SpaceEntryType,
     SpaceInviteStatus,
@@ -447,7 +446,7 @@ export function SpaceMetricCard({
 }: {
     label: string
     amount: number
-    currency: Currency
+    currency: string
     hidden: boolean
     className?: string
     accent?: string
@@ -483,7 +482,7 @@ export function SpaceAmountInline({
     color,
 }: {
     amount: number
-    currency: Currency
+    currency: string
     hidden: boolean
     className?: string
     color?: string

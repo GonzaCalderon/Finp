@@ -6,7 +6,6 @@ import { SpaceDialogChoice, SpaceDialogField, SpaceDialogPanel, SpaceDialogSecti
 import { Input } from '@/components/ui/input'
 import { SPACE_ROLE_LABELS, extractId } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
-import type { Currency } from '@/lib/constants'
 import type { ISpaceParticipant } from '@/types'
 import type { SpaceEntryFormData } from '@/lib/validations'
 
@@ -77,7 +76,7 @@ export function SpaceSplitConfigurator({
 }: {
     participants: ISpaceParticipant[]
     amount: number
-    currency: Currency
+    currency: string
     selectedParticipantIds: string[]
     splitMode: SpaceEntryFormData['splitMode']
     allocations?: SpaceEntryFormData['splitAllocations']

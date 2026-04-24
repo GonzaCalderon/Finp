@@ -2,7 +2,6 @@
 
 import { ArrowRightLeft, Users } from 'lucide-react'
 import { SpaceAmountInline, SpaceInitialsAvatar, SpaceInviteStatusBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
-import type { Currency } from '@/lib/constants'
 import type { SpaceBalanceItem } from '@/types'
 
 function buildBalanceHeadline(balances: SpaceBalanceItem[], currentUserId: string) {
@@ -46,7 +45,7 @@ export function SpaceBalanceSection({
     currentUserId,
 }: {
     balances: SpaceBalanceItem[]
-    currency: Currency
+    currency: string
     hidden: boolean
     currentUserId: string
 }) {

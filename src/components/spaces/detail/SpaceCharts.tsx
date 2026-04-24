@@ -13,10 +13,9 @@ import {
     YAxis,
 } from 'recharts'
 import { SpaceAmountInline, SpaceSectionHeading, SpaceSurface, getFallbackChartColor } from '@/components/spaces/SpaceUi'
-import type { Currency } from '@/lib/constants'
 import type { SpaceCategoryBreakdownItem, SpaceTrendPoint } from '@/types'
 
-const compactCurrency = (amount: number, currency: Currency, hidden: boolean) => {
+const compactCurrency = (amount: number, currency: string, hidden: boolean) => {
     if (hidden) return '••••'
 
     return new Intl.NumberFormat('es-AR', {
@@ -37,7 +36,7 @@ function EvolutionTooltip({
     active?: boolean
     payload?: Array<{ value: number }>
     label?: string
-    currency: Currency
+    currency: string
     hidden: boolean
 }) {
     if (!active || !payload?.length) return null
@@ -68,7 +67,7 @@ function CategoryTooltip({
 }: {
     active?: boolean
     payload?: Array<{ payload: SpaceCategoryBreakdownItem }>
-    currency: Currency
+    currency: string
     hidden: boolean
 }) {
     const item = payload?.[0]?.payload
@@ -99,7 +98,7 @@ export function SpaceEvolutionChart({
     hidden,
 }: {
     points: SpaceTrendPoint[]
-    currency: Currency
+    currency: string
     hidden: boolean
 }) {
     return (
@@ -172,7 +171,7 @@ export function SpaceCategoryBreakdown({
     hidden,
 }: {
     items: SpaceCategoryBreakdownItem[]
-    currency: Currency
+    currency: string
     hidden: boolean
 }) {
     const topItems = items.slice(0, 5)

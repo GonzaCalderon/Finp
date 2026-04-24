@@ -29,7 +29,7 @@ function MovementCard({
     participants,
 }: {
     entry: ISpaceEntry
-    reportingCurrency: 'ARS' | 'USD'
+    reportingCurrency: string
     hidden: boolean
     participants: ISpaceParticipant[]
 }) {
@@ -104,7 +104,7 @@ export function SpaceMovementsPanel({
     participants: ISpaceParticipant[]
     entryFilter: SpaceEntryFilter
     onFilterChange: (filter: SpaceEntryFilter) => void
-    reportingCurrency: 'ARS' | 'USD'
+    reportingCurrency: string
     hidden: boolean
     onCreate: () => void
 }) {

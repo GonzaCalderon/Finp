@@ -31,7 +31,7 @@ export async function GET(
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        return NextResponse.json(payload)
+        return NextResponse.json({ ...payload, currentUserId: session.user.id })
     } catch (error) {
         console.error('Error al obtener espacio:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

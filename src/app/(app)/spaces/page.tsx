@@ -27,7 +27,12 @@ import type { ISpaceEntry, ISpacePendingAction } from '@/types'
 type SpaceStatusFilter = 'all' | 'active' | 'paused' | 'closed' | 'archived'
 
 function SpaceCardSkeleton() {
-    return <Skeleton className="h-[360px] rounded-[30px]" />
+    return (
+        <>
+            <Skeleton className="h-[70px] rounded-[22px] md:hidden" />
+            <Skeleton className="hidden h-[360px] rounded-[30px] md:block" />
+        </>
+    )
 }
 
 export default function SpacesPage() {
@@ -44,13 +49,21 @@ export default function SpacesPage() {
     usePageTitle('Espacios')
     useAppStartupReady(!loading)
 
-    const filteredSpaces = useMemo(
-        () =>
-            spaces.filter((item) =>
-                statusFilter === 'all' ? true : item.space.status === statusFilter
-            ),
-        [spaces, statusFilter]
-    )
+    const filteredSpaces = useMemo(() => {
+        const filtered = spaces.filter((item) =>
+            statusFilter === 'all' ? true : item.space.status === statusFilter
+        )
+        // Sort by most recent activity (most recently updated entry first)
+        return [...filtered].sort((a, b) => {
+            const aDate = a.recentEntries[0]?.date
+                ? new Date(a.recentEntries[0].date).getTime()
+                : new Date(a.space.updatedAt ?? 0).getTime()
+            const bDate = b.recentEntries[0]?.date
+                ? new Date(b.recentEntries[0].date).getTime()
+                : new Date(b.space.updatedAt ?? 0).getTime()
+            return bDate - aDate
+        })
+    }, [spaces, statusFilter])
 
     const filterCounts = useMemo(
         () => ({
@@ -64,8 +77,9 @@ export default function SpacesPage() {
     )
 
     const handleCreateSpace = async (data: Parameters<typeof createSpace>[0]) => {
-        await createSpace(data)
+        const space = await createSpace(data)
         success('Espacio creado correctamente')
+        return space
     }
 
     const handleInviteResponse = async (
@@ -128,8 +142,8 @@ export default function SpacesPage() {
             <div className="mx-auto max-w-[1440px] space-y-6 px-4 py-4 md:px-6 md:py-6">
                 <SpacesPageHeader
                     totalSpaces={spaces.length}
-                    activeSpaces={filterCounts.active}
                     pendingCount={pending.counts.total}
+                    pendingActions={pending.pendingActions}
                     onCreate={() => setCreateDialogOpen(true)}
                     onShowPending={() => setPendingDialogOpen(true)}
                 />
@@ -137,12 +151,11 @@ export default function SpacesPage() {
                 <SpacesFiltersBar
                     selected={statusFilter}
                     counts={filterCounts}
-                    visibleCount={filteredSpaces.length}
                     onChange={setStatusFilter}
                 />
 
                 {loading ? (
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {Array.from({ length: 6 }).map((_, index) => (
                             <SpaceCardSkeleton key={index} />
                         ))}
@@ -162,7 +175,7 @@ export default function SpacesPage() {
                         />
                     </div>
                 ) : (
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {filteredSpaces.map((item) => (
                             <SpaceOverviewCard
                                 key={extractId(item.space._id)}

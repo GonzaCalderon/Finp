@@ -4,7 +4,6 @@ import { FileBadge2, FileText, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceMetaBadge, SpaceSectionHeading, SpaceSurface, SpaceTypeBadge } from '@/components/spaces/SpaceUi'
 import { formatSpaceDate, extractId } from '@/lib/utils/spaces'
-import type { Currency } from '@/lib/constants'
 import type { ISpaceEntry, ISpaceParticipant, ISpacePendingAction } from '@/types'
 
 function resolveCategoryName(entry: ISpaceEntry) {
@@ -41,7 +40,7 @@ export function RecentSpaceMovementsCard({
 }: {
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
-    reportingCurrency: Currency
+    reportingCurrency: string
     hidden: boolean
     onViewAll: () => void
 }) {

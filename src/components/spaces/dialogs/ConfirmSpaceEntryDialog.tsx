@@ -219,7 +219,7 @@ export function ConfirmSpaceEntryDialog({
                                                                           account.supportedCurrencies ?? [
                                                                               account.currency,
                                                                           ]
-                                                                      ).includes(entry.currency)
+                                                                      ).includes(entry.currency as never)
                                                                     : true
                                                             )
                                                             .map((account) => (

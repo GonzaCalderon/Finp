@@ -74,7 +74,7 @@ function buildDefaultForm({
 }: {
     activeParticipants: ISpaceParticipant[]
     currentUserId: string
-    defaultCurrency: 'ARS' | 'USD'
+    defaultCurrency: string
     defaultSplitMode: SpaceEntryFormData['splitMode']
     spaceMode: SpaceFormData['mode']
 }): SpaceEntryFormData {
@@ -177,8 +177,8 @@ export function SpaceEntryDialog({
     onSubmit: (data: SpaceEntryFormData) => Promise<unknown>
     participants: ISpaceParticipant[]
     currentUserId: string
-    defaultCurrency: 'ARS' | 'USD'
-    reportingCurrency: 'ARS' | 'USD'
+    defaultCurrency: string
+    reportingCurrency: string
     defaultSplitMode: SpaceEntryFormData['splitMode']
     spaceMode: SpaceFormData['mode']
     draftKey?: string
@@ -298,7 +298,7 @@ export function SpaceEntryDialog({
     const filteredAccounts = useMemo(
         () =>
             accounts.filter((account) =>
-                (account.supportedCurrencies ?? [account.currency]).includes(form.currency)
+                (account.supportedCurrencies ?? [account.currency]).includes(form.currency as never)
             ),
         [accounts, form.currency]
     )
@@ -592,7 +592,7 @@ export function SpaceEntryDialog({
                                                         onValueChange={(value) =>
                                                             setForm((previous) => ({
                                                                 ...previous,
-                                                                currency: value as 'ARS' | 'USD',
+                                                                currency: value,
                                                                 personalAccountId: undefined,
                                                             }))
                                                         }
