@@ -697,21 +697,23 @@ function MobileBottomBar() {
 
                     <div className="flex items-start justify-center">
                         {spaceAction ? (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    closeMore()
-                                    spaceAction.onPress()
-                                }}
-                                className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-full shadow-lg"
-                                style={{ background: 'var(--sky)', marginTop: '-24px' }}
-                                aria-label={spaceAction.label}
-                            >
-                                {spaceAction.icon ?? <Plus size={22} color="#fff" />}
-                                <span className="text-[9px] font-semibold text-white leading-none px-1 truncate max-w-[56px] text-center">
+                            <div className="flex flex-col items-center gap-1" style={{ marginTop: '-24px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        closeMore()
+                                        spaceAction.onPress()
+                                    }}
+                                    className="flex items-center justify-center w-14 h-14 rounded-full shadow-lg"
+                                    style={{ background: 'var(--sky)' }}
+                                    aria-label={spaceAction.label}
+                                >
+                                    {spaceAction.icon ?? <Plus size={22} color="#fff" />}
+                                </button>
+                                <span className="text-[10px] font-medium leading-none text-muted-foreground truncate max-w-[72px] text-center">
                                     {spaceAction.label}
                                 </span>
-                            </button>
+                            </div>
                         ) : (
                             <button
                                 type="button"

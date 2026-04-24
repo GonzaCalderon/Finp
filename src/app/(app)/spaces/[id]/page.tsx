@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, Plus } from 'lucide-react'
+import { ArrowLeft, Coins, Plus, Users } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,12 @@ import {
     SpaceEntryDialog,
     SpaceParticipantDialog,
 } from '@/components/spaces/SpaceDialogs'
+import {
+    SpaceMetaBadge,
+    SpaceModeBadge,
+    SpaceStatusBadge,
+    SpaceTypeBadge,
+} from '@/components/spaces/SpaceUi'
 import { SpaceBalanceSection } from '@/components/spaces/detail/SpaceBalanceSection'
 import {
     SpaceCategoryBreakdown,
@@ -35,6 +41,7 @@ import {
 import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
 import { SpaceDetailMobileHeader } from '@/components/spaces/detail/SpaceDetailMobileHeader'
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
+import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobileSettingsSheet'
 import { SpaceSettlementPanel } from '@/components/spaces/detail/SpaceSettlementPanel'
 import {
     RecentSpaceAttachmentsCard,
@@ -54,12 +61,21 @@ import type {
 } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
 
-type SpaceTab = 'summary' | 'entries' | 'balance'
+type SpaceTab = 'summary' | 'entries' | 'balance' | 'participants' | 'settings' | 'closure'
 
-const SPACE_TABS: Array<{ value: SpaceTab; label: string; shortLabel: string }> = [
-    { value: 'summary', label: 'Resumen', shortLabel: 'Resumen' },
-    { value: 'entries', label: 'Movimientos', shortLabel: 'Mov.' },
-    { value: 'balance', label: 'Balance', shortLabel: 'Balance' },
+const MOBILE_TABS: Array<{ value: SpaceTab; label: string }> = [
+    { value: 'summary', label: 'Resumen' },
+    { value: 'entries', label: 'Movimientos' },
+    { value: 'balance', label: 'Balance' },
+]
+
+const DESKTOP_TABS: Array<{ value: SpaceTab; label: string }> = [
+    { value: 'summary', label: 'Resumen' },
+    { value: 'entries', label: 'Movimientos' },
+    { value: 'balance', label: 'Balance' },
+    { value: 'participants', label: 'Participantes' },
+    { value: 'settings', label: 'Configuración' },
+    { value: 'closure', label: 'Cierre' },
 ]
 
 function DetailSkeleton() {
@@ -78,7 +94,51 @@ function DetailSkeleton() {
     )
 }
 
-function SpaceOptionsBar({
+function MobileTabBar({
+    activeTab,
+    pendingCount,
+    onChange,
+}: {
+    activeTab: SpaceTab
+    pendingCount: number
+    onChange: (tab: SpaceTab) => void
+}) {
+    const activeMobile = MOBILE_TABS.some((t) => t.value === activeTab) ? activeTab : 'summary'
+
+    return (
+        <div className="rounded-[22px] border border-foreground/[0.08] bg-card/82 p-1 md:hidden">
+            <div className="grid grid-cols-3 gap-1">
+                {MOBILE_TABS.map((tab) => {
+                    const active = activeMobile === tab.value
+                    const showPending = tab.value === 'entries' && pendingCount > 0
+
+                    return (
+                        <button
+                            key={tab.value}
+                            type="button"
+                            onClick={() => onChange(tab.value)}
+                            className={cn(
+                                'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-sm font-medium transition-colors',
+                                active
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            )}
+                        >
+                            <span className="truncate">{tab.label}</span>
+                            {showPending ? (
+                                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
+                                    {pendingCount}
+                                </span>
+                            ) : null}
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+function DesktopTabBar({
     activeTab,
     pendingCount,
     onChange,
@@ -88,9 +148,9 @@ function SpaceOptionsBar({
     onChange: (tab: SpaceTab) => void
 }) {
     return (
-        <div className="rounded-[22px] border border-foreground/[0.08] bg-card/82 p-1">
-            <div className="grid grid-cols-3 gap-1">
-                {SPACE_TABS.map((tab) => {
+        <div className="hidden rounded-[22px] border border-foreground/[0.08] bg-card/82 p-1 md:block">
+            <div className="grid grid-cols-6 gap-1">
+                {DESKTOP_TABS.map((tab) => {
                     const active = activeTab === tab.value
                     const showPending = tab.value === 'entries' && pendingCount > 0
 
@@ -100,14 +160,13 @@ function SpaceOptionsBar({
                             type="button"
                             onClick={() => onChange(tab.value)}
                             className={cn(
-                                'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-xs font-medium transition-colors sm:gap-2 sm:text-sm',
+                                'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-sm font-medium transition-colors',
                                 active
                                     ? 'bg-background text-foreground shadow-sm'
                                     : 'text-muted-foreground hover:text-foreground'
                             )}
                         >
-                            <span className="truncate md:hidden">{tab.shortLabel}</span>
-                            <span className="hidden truncate md:inline">{tab.label}</span>
+                            <span className="truncate">{tab.label}</span>
                             {showPending ? (
                                 <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
                                     {pendingCount}
@@ -135,6 +194,7 @@ export default function SpaceDetailPage() {
     const [entryDialogOpen, setEntryDialogOpen] = useState(false)
     const [participantDialogOpen, setParticipantDialogOpen] = useState(false)
     const [editDialogOpen, setEditDialogOpen] = useState(false)
+    const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
 
@@ -260,11 +320,13 @@ export default function SpaceDetailPage() {
     return (
         <>
             <div className="mx-auto max-w-[1440px] space-y-5 px-4 pb-28 pt-4 md:space-y-6 md:px-6 md:py-6">
+                {/* Mobile header: ← | selector | ⚙ | ⋯ */}
                 <SpaceDetailMobileHeader
                     space={data.space}
-                    onSettings={() => setEditDialogOpen(true)}
+                    onSettings={() => setSettingsSheetOpen(true)}
                 />
 
+                {/* Desktop back button */}
                 <div className="hidden flex-wrap items-center gap-3 md:flex">
                     <Button variant="outline" className="rounded-full" asChild>
                         <Link href="/spaces">
@@ -274,28 +336,63 @@ export default function SpaceDetailPage() {
                     </Button>
                 </div>
 
-                <div className="space-y-4">
-                    <SpaceHero
-                        space={data.space}
-                        summary={data.summary}
-                        canManage={canManage}
-                        onInvite={() => setParticipantDialogOpen(true)}
-                        onCreateEntry={() => setEntryDialogOpen(true)}
-                    />
-
-                    <SpaceKpiRow
-                        summary={data.summary}
-                        reportingCurrency={data.space.reportingCurrency}
-                        hidden={hidden}
-                    />
+                {/* Mobile compact title + pills */}
+                <div className="space-y-2 md:hidden">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground leading-tight">
+                        {data.space.name}
+                    </h1>
+                    {data.space.description ? (
+                        <p className="line-clamp-2 text-sm text-muted-foreground">
+                            {data.space.description}
+                        </p>
+                    ) : null}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        <SpaceTypeBadge type={data.space.type} />
+                        <SpaceModeBadge mode={data.space.mode} />
+                        <SpaceStatusBadge status={data.space.status} />
+                        <SpaceMetaBadge icon={Users}>
+                            {data.summary.participantCount} part.
+                        </SpaceMetaBadge>
+                        <SpaceMetaBadge icon={Coins}>
+                            {data.space.currencies.join('/')}
+                        </SpaceMetaBadge>
+                    </div>
                 </div>
 
-                <SpaceOptionsBar
+                {/* Desktop hero */}
+                <div className="hidden md:block">
+                    <div className="space-y-4">
+                        <SpaceHero
+                            space={data.space}
+                            summary={data.summary}
+                            canManage={canManage}
+                            onInvite={() => setParticipantDialogOpen(true)}
+                            onCreateEntry={() => setEntryDialogOpen(true)}
+                        />
+                    </div>
+                </div>
+
+                <SpaceKpiRow
+                    summary={data.summary}
+                    reportingCurrency={data.space.reportingCurrency}
+                    hidden={hidden}
+                />
+
+                {/* Mobile tab bar (3 tabs) */}
+                <MobileTabBar
                     activeTab={activeTab}
                     pendingCount={data.summary.pendingEntryCount}
                     onChange={setActiveTab}
                 />
 
+                {/* Desktop tab bar (6 tabs) */}
+                <DesktopTabBar
+                    activeTab={activeTab}
+                    pendingCount={data.summary.pendingEntryCount}
+                    onChange={setActiveTab}
+                />
+
+                {/* Summary tab */}
                 {activeTab === 'summary' ? (
                     <div className="space-y-4">
                         <SpaceSettlementPanel
@@ -306,7 +403,8 @@ export default function SpaceDetailPage() {
                             onCreateEntry={() => setEntryDialogOpen(true)}
                         />
 
-                        <div className="hidden gap-4 md:grid xl:grid-cols-[1.15fr_0.85fr]">
+                        {/* Charts: visible on mobile and desktop */}
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.15fr_0.85fr]">
                             <SpaceEvolutionChart
                                 points={data.summary.monthlyTrend}
                                 currency={data.space.reportingCurrency}
@@ -319,14 +417,13 @@ export default function SpaceDetailPage() {
                             />
                         </div>
 
-                        <div className="hidden md:block">
-                            <SpaceBalanceSection
-                                balances={data.summary.balances}
-                                currency={data.space.reportingCurrency}
-                                hidden={hidden}
-                                currentUserId={currentUserId}
-                            />
-                        </div>
+                        {/* Balance: visible on mobile and desktop in summary tab */}
+                        <SpaceBalanceSection
+                            balances={data.summary.balances}
+                            currency={data.space.reportingCurrency}
+                            hidden={hidden}
+                            currentUserId={currentUserId}
+                        />
 
                         <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                             <RecentSpaceMovementsCard
@@ -371,28 +468,32 @@ export default function SpaceDetailPage() {
                     />
                 ) : null}
 
-                <div className="hidden space-y-4 md:block">
-                    <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-                        <SpaceParticipantsPanel
-                            participants={data.participants}
-                            canManage={canManage}
-                            onAdd={() => setParticipantDialogOpen(true)}
-                        />
-                        <SpaceSettingsPanel
-                            space={data.space}
-                            summary={data.summary}
-                            canManage={canManage}
-                            onEdit={() => setEditDialogOpen(true)}
-                        />
-                    </div>
+                {/* Desktop-only tabs */}
+                {activeTab === 'participants' ? (
+                    <SpaceParticipantsPanel
+                        participants={data.participants}
+                        canManage={canManage}
+                        onAdd={() => setParticipantDialogOpen(true)}
+                    />
+                ) : null}
 
+                {activeTab === 'settings' ? (
+                    <SpaceSettingsPanel
+                        space={data.space}
+                        summary={data.summary}
+                        canManage={canManage}
+                        onEdit={() => setEditDialogOpen(true)}
+                    />
+                ) : null}
+
+                {activeTab === 'closure' ? (
                     <SpaceClosurePanel
                         space={data.space}
                         summary={data.summary}
                         canManage={canManage}
                         onToggleClosed={handleToggleClosed}
                     />
-                </div>
+                ) : null}
             </div>
 
             <SpaceEntryDialog
@@ -441,6 +542,19 @@ export default function SpaceDetailPage() {
                 onOpenChange={setConfirmDialogOpen}
                 entry={selectedPendingEntry}
                 onSubmit={handleConfirmPendingEntry}
+            />
+
+            {/* Mobile settings sheet: gear button → participantes + configuración + cierre */}
+            <SpaceMobileSettingsSheet
+                open={settingsSheetOpen}
+                onClose={() => setSettingsSheetOpen(false)}
+                space={data.space}
+                summary={data.summary}
+                participants={data.participants}
+                canManage={canManage}
+                onEdit={() => setEditDialogOpen(true)}
+                onAddParticipant={() => setParticipantDialogOpen(true)}
+                onToggleClosed={handleToggleClosed}
             />
         </>
     )

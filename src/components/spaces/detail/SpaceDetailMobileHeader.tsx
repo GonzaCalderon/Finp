@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { ArrowLeft, ChevronDown, Settings2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, MoreHorizontal, Settings2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SpaceStatusBadge, SpaceTypeIcon } from '@/components/spaces/SpaceUi'
 import { useSpaces } from '@/hooks/useSpaces'
@@ -12,9 +12,11 @@ import type { ISpace } from '@/types'
 export function SpaceDetailMobileHeader({
     space,
     onSettings,
+    onMore,
 }: {
     space: ISpace
     onSettings: () => void
+    onMore?: () => void
 }) {
     const [selectorOpen, setSelectorOpen] = useState(false)
     const { spaces } = useSpaces()
@@ -60,6 +62,17 @@ export function SpaceDetailMobileHeader({
                 >
                     <Settings2 size={16} />
                 </button>
+
+                {onMore ? (
+                    <button
+                        type="button"
+                        onClick={onMore}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-card/70 text-muted-foreground transition-colors active:bg-muted"
+                        aria-label="Más opciones"
+                    >
+                        <MoreHorizontal size={16} />
+                    </button>
+                ) : null}
             </div>
 
             <AnimatePresence>
