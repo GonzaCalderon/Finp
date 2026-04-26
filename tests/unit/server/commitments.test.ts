@@ -101,6 +101,25 @@ describe('applyCommitmentForUser', () => {
         expect(mocks.createTransactionForUser).not.toHaveBeenCalled()
     })
 
+    it('parses YYYY-MM-DD as a local date when validating the financial period', async () => {
+        mocks.User.findById.mockResolvedValue({ preferences: { monthStartDay: 1 } })
+
+        await applyCommitmentForUser('user-1', 'commitment-1', {
+            period: '2026-04',
+            amount: 1200,
+            accountId: 'account-1',
+            date: '2026-04-01',
+        })
+
+        expect(mocks.createTransactionForUser).toHaveBeenCalledWith(
+            'user-1',
+            expect.objectContaining({
+                date: new Date(2026, 3, 1),
+            }),
+            expect.any(Object)
+        )
+    })
+
     it('rejects an already applied commitment with 409 before creating a transaction', async () => {
         mocks.CommitmentApplication.findOne.mockResolvedValue({ _id: 'existing' })
 

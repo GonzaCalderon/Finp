@@ -22,6 +22,11 @@ function parseAmount(value: unknown): number {
 
 function parseDate(value: unknown): Date {
     if (!value) return new Date()
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [year, month, day] = value.split('-').map(Number)
+        return new Date(year, month - 1, day)
+    }
+
     const parsed = value instanceof Date ? value : new Date(String(value))
     if (Number.isNaN(parsed.getTime())) {
         throw new ServiceError(400, 'INVALID_COMMITMENT_DATE', 'La fecha de aplicacion es invalida.')
