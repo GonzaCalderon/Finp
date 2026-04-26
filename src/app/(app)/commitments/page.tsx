@@ -54,7 +54,7 @@ const RECURRENCE_LABELS: Record<string, string> = {
 
 const APPLY_MODE_LABELS: Record<string, string> = {
     manual: 'Manual',
-    auto_month_start: 'Automático',
+    auto_month_start: 'Preparado para automatización',
 }
 
 const getCurrentPeriod = () => {
@@ -485,9 +485,9 @@ export default function CommitmentsPage() {
                             hint="Incluye manuales y automáticos que todavía no impactaron"
                         />
                         <SummaryCard
-                            title="Automáticos"
+                            title="Configurados como automáticos"
                             value={String(automaticCommitments.length)}
-                            hint="Se aplican solos al inicio del período configurado"
+                            hint="La ejecución automática todavía no está activa"
                         />
                     </MobileCardCarousel>
                     <div className="hidden md:grid md:grid-cols-3 md:gap-3">
@@ -502,9 +502,9 @@ export default function CommitmentsPage() {
                             hint="Incluye manuales y automáticos que todavía no impactaron"
                         />
                         <SummaryCard
-                            title="Automáticos"
+                            title="Configurados como automáticos"
                             value={String(automaticCommitments.length)}
-                            hint="Se aplican solos al inicio del período configurado"
+                            hint="La ejecución automática todavía no está activa"
                         />
                     </div>
 
@@ -551,7 +551,7 @@ export default function CommitmentsPage() {
                             }}
                         >
                             <Sparkles className="h-3.5 w-3.5 text-[#D97706]" />
-                            Automáticos
+                            Preparados
                             <span className="text-muted-foreground">({automaticCommitments.length})</span>
                         </button>
                     </div>
@@ -585,8 +585,8 @@ export default function CommitmentsPage() {
 
                         <div id="commitments-automatic">
                             <CommitmentSection
-                                title="Automáticos"
-                                description="Se ejecutan según la configuración de aplicación automática."
+                                title="Pendientes de ejecución automática"
+                                description="La ejecución automática todavía no está activa."
                                 icon={Repeat}
                                 accent="#D97706"
                                 commitments={automaticCommitments}

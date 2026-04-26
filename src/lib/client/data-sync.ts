@@ -67,6 +67,7 @@ export const COMMITMENT_INVALIDATION_TAGS: DataTag[] = [
     'projection',
     'transactions',
     'accounts',
+    'account-detail',
 ]
 
 export const ACCOUNT_INVALIDATION_TAGS: DataTag[] = [

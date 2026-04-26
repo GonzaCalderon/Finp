@@ -14,6 +14,7 @@ import {
     normalizeLegacyTransactionType,
 } from '@/lib/utils/credit-card'
 import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
 import {
     clampRangeStartToOperationalStart,
     hasOperationalCoverage,
@@ -120,7 +121,7 @@ function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
     }
 }
 
-type PopulatedRef = string | { _id?: { toString(): string }; name?: string; color?: string; currency?: string } | null | undefined
+type PopulatedRef = string | { _id?: { toString(): string }; name?: string; color?: string; currency?: string; type?: string } | null | undefined
 
 function buildRecentTransactionContext(transaction: {
     type?: string
@@ -150,16 +151,13 @@ function buildRecentTransactionContext(transaction: {
             ? (transaction.installmentPlanId as { installmentCount?: number })
             : null
 
+    const primaryImpact = getTransactionAccountImpact(transaction)
     const impact =
-        normalizedType === 'income'
+        primaryImpact?.direction === 'increase'
             ? 'positive'
-            : normalizedType === 'transfer' || normalizedType === 'exchange'
+            : primaryImpact?.direction === 'neutral'
                 ? 'neutral'
-                : normalizedType === 'adjustment'
-                    ? transaction.amount >= 0
-                        ? 'positive'
-                        : 'negative'
-                    : 'negative'
+                : 'negative'
 
     const primaryAccount =
         normalizedType === 'income'
@@ -206,6 +204,8 @@ function buildRecentTransactionContext(transaction: {
             : null,
         installmentCount: installmentPlan?.installmentCount,
         merchant: typeof transaction.merchant === 'string' ? transaction.merchant : undefined,
+        displayAmount: Math.abs(primaryImpact?.delta ?? transaction.amount),
+        displayCurrency: primaryImpact?.currency ?? transaction.currency,
     }
 }
 
@@ -677,8 +677,8 @@ export async function GET(request: Request) {
                     _id: transaction._id.toString(),
                     type: normalizeLegacyTransactionType(transaction.type) ?? transaction.type,
                     description: transaction.description,
-                    amount: transaction.amount,
-                    currency: transaction.currency,
+                    amount: context.displayAmount,
+                    currency: context.displayCurrency,
                     date: transaction.date instanceof Date
                         ? transaction.date.toISOString()
                         : new Date(transaction.date).toISOString(),

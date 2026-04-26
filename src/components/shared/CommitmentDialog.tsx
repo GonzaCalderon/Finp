@@ -162,7 +162,7 @@ export function CommitmentDialog({
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="manual">Manual</SelectItem>
-                                <SelectItem value="auto_month_start">Automático al inicio del mes</SelectItem>
+                                <SelectItem value="auto_month_start">Preparado para automatización</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

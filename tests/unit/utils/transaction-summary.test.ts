@@ -123,4 +123,18 @@ describe('buildTransactionPeriodSummary', () => {
         expect(summary.expense).toEqual({ ars: 0, usd: 5 })
         expect(summary.balance).toEqual({ ars: -12500, usd: 5 })
     })
+
+    it('no cuenta ajustes como ingresos ni gastos operativos', () => {
+        const summary = buildTransactionPeriodSummary({
+            month: '2026-03',
+            transactions: [
+                transaction({ type: 'adjustment', amount: -1000, sourceAccountId: 'cash' }),
+                transaction({ type: 'adjustment', amount: 400, sourceAccountId: 'cash' }),
+            ],
+            plans: [],
+        })
+
+        expect(summary.income).toEqual({ ars: 0, usd: 0 })
+        expect(summary.expense).toEqual({ ars: 0, usd: 0 })
+    })
 })

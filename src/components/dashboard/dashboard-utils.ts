@@ -157,7 +157,7 @@ export function getTransactionAccentColor(transaction: DashboardRecentTransactio
 
 export function getTransactionAmountPrefix(transaction: DashboardRecentTransaction) {
     if (transaction.impact === 'positive') return '+'
-    if (transaction.type === 'transfer' || transaction.type === 'exchange') return ''
+    if (transaction.impact === 'neutral') return ''
     return '-'
 }
 

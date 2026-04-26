@@ -59,6 +59,7 @@ import { DURATION, easeSmooth, fadeIn, staggerContainer, staggerItem } from '@/l
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
 import { buildMonthOptions, getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-start'
+import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -1601,39 +1602,35 @@ export default function TransactionsPage() {
 }
 
 function isPositiveAdjustment(transaction: ITransaction) {
-    return transaction.type === 'adjustment' && transaction.amount < 0
+    return transaction.type === 'adjustment' && getTransactionAccountImpact(transaction)?.direction === 'increase'
 }
 
 function getTransactionAmountColor(transaction: ITransaction) {
-    if (transaction.type === 'income') return '#10B981'
-    if (transaction.type === 'expense') return 'var(--destructive)'
     if (transaction.type === 'credit_card_expense') return '#6366F1'
+    const impact = getTransactionAccountImpact(transaction)
+    if (impact?.direction === 'increase') return '#10B981'
+    if (impact?.direction === 'decrease') return 'var(--destructive)'
     if (transaction.type === 'exchange') return 'var(--sky-dark)'
-    if (transaction.type === 'adjustment') {
-        return isPositiveAdjustment(transaction) ? '#10B981' : 'var(--destructive)'
-    }
     return 'var(--foreground)'
 }
 
 function getTransactionAccentColor(transaction: ITransaction) {
-    if (transaction.type === 'income') return 'rgba(16,185,129,0.42)'
-    if (transaction.type === 'expense') return 'rgba(239,68,68,0.42)'
     if (transaction.type === 'credit_card_expense') return 'rgba(99,102,241,0.42)'
+    const impact = getTransactionAccountImpact(transaction)
+    if (impact?.direction === 'increase') return 'rgba(16,185,129,0.42)'
+    if (impact?.direction === 'decrease') return 'rgba(239,68,68,0.42)'
     if (transaction.type === 'exchange') return 'rgba(74,158,204,0.42)'
-    if (transaction.type === 'transfer') return 'rgba(148,163,184,0.28)'
-    if (transaction.type === 'credit_card_payment') return 'rgba(217,119,6,0.42)'
-    if (transaction.type === 'adjustment') {
-        return isPositiveAdjustment(transaction) ? 'rgba(16,185,129,0.42)' : 'rgba(239,68,68,0.42)'
-    }
     return 'rgba(148,163,184,0.28)'
 }
 
 function getTransactionDisplayAmount(transaction: ITransaction) {
-    return transaction.type === 'adjustment' ? Math.abs(transaction.amount) : transaction.amount
+    const impact = getTransactionAccountImpact(transaction)
+    return Math.abs(impact?.delta ?? transaction.amount)
 }
 
 function getTransactionDisplayPrefix(transaction: ITransaction) {
-    if (transaction.type === 'exchange') return '↔ '
-    if (transaction.type !== 'adjustment') return ''
-    return isPositiveAdjustment(transaction) ? '+' : '-'
+    const impact = getTransactionAccountImpact(transaction)
+    if (impact?.direction === 'increase') return '+'
+    if (impact?.direction === 'decrease') return '-'
+    return ''
 }

@@ -32,7 +32,7 @@ export function resolveTransactionDescription(input: TransactionDescriptionInput
             }
             return 'Pago de tarjeta'
         case 'adjustment':
-            return input.amount < 0 ? 'Ajuste negativo' : 'Ajuste positivo'
+            return input.amount < 0 ? 'Ajuste positivo' : 'Ajuste negativo'
         default:
             return explicitDescription
     }

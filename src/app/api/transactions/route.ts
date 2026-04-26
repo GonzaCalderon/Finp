@@ -2,17 +2,12 @@ import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account, User, TransactionRule, InstallmentPlan } from '@/lib/models'
-import { transactionSchema } from '@/lib/validations'
-import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
+import { Transaction, User, InstallmentPlan } from '@/lib/models'
 import { parseFinancialPeriod } from '@/lib/utils/period'
-import { evaluateRules } from '@/lib/utils/rules'
-import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
-import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
-import { normalizeManualExchange } from '@/lib/utils/exchange'
-import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 import { buildTransactionPeriodSummary } from '@/lib/utils/transaction-summary'
 import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
+import { createTransactionForUser, getTransactionListTypeFilter } from '@/lib/server/transactions'
+import { isServiceError } from '@/lib/server/errors'
 import type { Currency } from '@/lib/constants'
 import type { IInstallmentPlan, ITransaction } from '@/types'
 
@@ -55,7 +50,7 @@ export async function GET(request: Request) {
 
         await connectDB()
 
-        // ── Base filter (shared by list and summary) ──────────────────────────
+        // Base filter shared by list and summary.
         const baseFilter: Record<string, unknown> = { userId: session.user.id }
 
         const userDoc = await User.findById(session.user.id, {
@@ -103,7 +98,7 @@ export async function GET(request: Request) {
             }
         }
 
-        // ── Summary: computed from full period, no user-applied filters ───────
+        // Summary is computed from the full period, without user-applied filters.
         if (!summary) {
             const summaryFilter = {
                 ...baseFilter,
@@ -138,14 +133,11 @@ export async function GET(request: Request) {
             }
         }
 
-        // ── List filter: base + user-applied filters ───────────────────────────
+        // List filter: base plus user-applied filters.
         const filter: Record<string, unknown> = { ...baseFilter }
 
         if (type) {
-            const normalizedType = normalizeLegacyTransactionType(type)
-            filter.type = normalizedType === 'credit_card_payment'
-                ? { $in: [...CREDIT_CARD_PAYMENT_TYPES] }
-                : normalizedType
+            filter.type = getTransactionListTypeFilter(type)
         }
         if (categoryId) filter.categoryId = categoryId
         if (currency && ['ARS', 'USD'].includes(currency)) filter.currency = currency
@@ -199,193 +191,18 @@ export async function POST(request: Request) {
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const body = await request.json()
-        const parsed = transactionSchema.safeParse(body)
-
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: 'Datos de transacción inválidos', details: parsed.error.flatten() },
-                { status: 400 }
-            )
-        }
-
         await connectDB()
 
-        const data = {
-            ...parsed.data,
-            type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
-        }
-
-        const accountIds = [data.sourceAccountId, data.destinationAccountId].filter(Boolean)
-        const relatedAccounts = accountIds.length > 0
-            ? await Account.find({
-                _id: { $in: accountIds },
-                userId: session.user.id,
-            })
-            : []
-        const accountMap = new Map(relatedAccounts.map((account) => [account._id.toString(), account]))
-        const sourceAccount = data.sourceAccountId ? accountMap.get(data.sourceAccountId) : null
-        const destinationAccount = data.destinationAccountId ? accountMap.get(data.destinationAccountId) : null
-        const description = resolveTransactionDescription({
-            type: data.type,
-            description: data.description,
-            amount: data.amount,
-            currency: data.currency,
-            sourceAccount,
-            destinationAccount,
-        })
-
-        if (data.sourceAccountId && !sourceAccount) {
-            return NextResponse.json({ error: 'La cuenta origen no existe o no pertenece al usuario.' }, { status: 400 })
-        }
-
-        if (data.destinationAccountId && !destinationAccount) {
-            return NextResponse.json({ error: 'La cuenta destino no existe o no pertenece al usuario.' }, { status: 400 })
-        }
-
-        if (data.type === 'transfer' && sourceAccount && destinationAccount) {
-            const commonCurrencies = getCommonSupportedCurrencies([sourceAccount, destinationAccount])
-            if (commonCurrencies.length === 0) {
-                return NextResponse.json(
-                    {
-                        error: 'La transferencia entre cuentas de distinta moneda debe registrarse como un cambio manual.',
-                    },
-                    { status: 400 }
-                )
-            }
-        }
-
-        if (sourceAccount && !supportsCurrency(sourceAccount, data.currency)) {
-            return NextResponse.json(
-                { error: `La cuenta "${sourceAccount.name}" no opera en ${data.currency}.` },
-                { status: 400 }
-            )
-        }
-
-        if (
-            data.type === 'exchange' &&
-            destinationAccount &&
-            data.destinationCurrency &&
-            !supportsCurrency(destinationAccount, data.destinationCurrency)
-        ) {
-            return NextResponse.json(
-                { error: `La cuenta "${destinationAccount.name}" no opera en ${data.destinationCurrency}.` },
-                { status: 400 }
-            )
-        }
-
-        if (data.type !== 'exchange' && destinationAccount && !supportsCurrency(destinationAccount, data.currency)) {
-            return NextResponse.json(
-                { error: `La cuenta "${destinationAccount.name}" no opera en ${data.currency}.` },
-                { status: 400 }
-            )
-        }
-
-        // Validar saldo si la cuenta no permite saldo negativo
-        if (sourceAccount) {
-            if (sourceAccount.allowNegativeBalance === false) {
-                const balances = await calculateAccountBalancesByCurrency(
-                    sourceAccount._id,
-                    sourceAccount.userId,
-                    {
-                        initialBalances: getInitialBalancesByCurrency(sourceAccount),
-                    }
-                )
-                const balance = balances[data.currency]
-
-                if (balance - data.amount < 0) {
-                    return NextResponse.json(
-                        {
-                            error: `Saldo insuficiente en "${sourceAccount.name}". Disponible: ${new Intl.NumberFormat('es-AR', {
-                                style: 'currency',
-                                currency: data.currency,
-                                maximumFractionDigits: 0,
-                            }).format(balance)}`,
-                        },
-                        { status: 400 }
-                    )
-                }
-            }
-        }
-
-        if (data.type === 'exchange') {
-            try {
-                normalizeManualExchange({
-                    sourceCurrency: data.currency,
-                    sourceAmount: data.amount,
-                    destinationCurrency: data.destinationCurrency!,
-                    destinationAmount: data.destinationAmount!,
-                    exchangeRate: data.exchangeRate!,
-                })
-            } catch (error) {
-                return NextResponse.json(
-                    { error: error instanceof Error ? error.message : 'Datos de cambio manual inválidos.' },
-                    { status: 400 }
-                )
-            }
-        }
-
-        // Evaluate categorization rules (for expense, income, and credit_card_expense)
-        let resolvedCategoryId = data.categoryId
-        let resolvedMerchant = data.merchant
-        let appliedRuleId: string | undefined
-        let appliedRuleNameSnapshot: string | undefined
-
-        if (data.type === 'expense' || data.type === 'income' || data.type === 'credit_card_expense') {
-            const ruleType = data.type === 'credit_card_expense' ? 'expense' : data.type
-            const rules = await TransactionRule.find({
-                userId: session.user.id,
-                isActive: true,
-            }).sort({ priority: -1 })
-
-            const { matched, rule } = evaluateRules(rules, {
-                type: ruleType,
-                description,
-                merchant: data.merchant,
-            })
-
-            if (matched && rule) {
-                appliedRuleId = rule._id.toString()
-                appliedRuleNameSnapshot = rule.name
-                if (!resolvedCategoryId && rule.categoryId) {
-                    resolvedCategoryId = rule.categoryId.toString()
-                }
-                if (!resolvedMerchant && rule.normalizeMerchant) {
-                    resolvedMerchant = rule.normalizeMerchant
-                }
-            }
-        }
-
-        const transaction = await Transaction.create({
-            userId: session.user.id,
-            type: data.type,
-            amount: data.amount,
-            currency: data.currency,
-            date: data.date,
-            description,
-            categoryId: resolvedCategoryId,
-            sourceAccountId: data.sourceAccountId,
-            destinationAccountId: data.destinationAccountId,
-            destinationAmount: data.type === 'exchange' ? data.destinationAmount : undefined,
-            destinationCurrency: data.type === 'exchange' ? data.destinationCurrency : undefined,
-            exchangeRate: data.type === 'exchange' ? data.exchangeRate : undefined,
-            paymentGroupId: data.paymentGroupId,
-            notes: data.notes,
-            merchant: resolvedMerchant,
-            status: 'confirmed',
-            createdFrom: 'web',
-            appliedRuleId,
-            appliedRuleNameSnapshot,
-            spaceId: data.spaceId,
-            spaceEntryId: data.spaceEntryId,
-        })
-
-        const populated = await Transaction.findById(transaction._id)
-            .populate('categoryId', 'name color type')
-            .populate('sourceAccountId', 'name type currency supportedCurrencies color')
-            .populate('destinationAccountId', 'name type currency supportedCurrencies color')
+        const populated = await createTransactionForUser(session.user.id, body)
 
         return NextResponse.json({ transaction: populated }, { status: 201 })
     } catch (error) {
+        if (isServiceError(error)) {
+            return NextResponse.json(
+                { error: error.message, code: error.code, details: error.details },
+                { status: error.status }
+            )
+        }
         console.error('Error al crear transacción:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
     }
