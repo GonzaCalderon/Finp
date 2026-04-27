@@ -221,10 +221,7 @@ export async function POST(
             date: parsed.data.date,
             categoryId: parsed.data.categoryId,
             paidByParticipantId: parsed.data.paidByParticipantId,
-            sharedWithParticipantIds:
-                parsed.data.splitMode === 'none'
-                    ? undefined
-                    : parsed.data.sharedWithParticipantIds,
+            sharedWithParticipantIds: parsed.data.sharedWithParticipantIds,
             splitMode: context.space.mode === 'solo' ? 'none' : parsed.data.splitMode,
             splitAllocations:
                 parsed.data.splitMode === 'percentage' || parsed.data.splitMode === 'fixed'

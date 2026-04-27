@@ -25,7 +25,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { SPACE_ENTRY_TYPE_META, SpaceAmountInline, SpaceEntryTypeBadge, SpaceMetaBadge } from '@/components/spaces/SpaceUi'
+import { SPACE_ENTRY_TYPE_META, SpaceAmountInline, SpaceEntryTypeBadge, SpaceInitialsAvatar, SpaceMetaBadge } from '@/components/spaces/SpaceUi'
 import {
     DialogProps,
     formatDateInput,
@@ -48,11 +48,19 @@ function buildDefaultSplitAllocations(
     participantIds: string[],
     splitMode: SpaceEntryFormData['splitMode']
 ) {
+    if (participantIds.length === 0) return undefined
+
     if (splitMode === 'percentage') {
-        return participantIds.map((participantId) => ({
-            participantId,
-            percentage: Number((100 / participantIds.length).toFixed(2)),
-        }))
+        const base = Number((100 / participantIds.length).toFixed(2))
+        let assigned = 0
+        return participantIds.map((participantId, index) => {
+            const percentage =
+                index === participantIds.length - 1
+                    ? Number((100 - assigned).toFixed(2))
+                    : base
+            assigned = Number((assigned + percentage).toFixed(2))
+            return { participantId, percentage }
+        })
     }
 
     if (splitMode === 'fixed') {
@@ -63,6 +71,51 @@ function buildDefaultSplitAllocations(
     }
 
     return undefined
+}
+
+function reconcilePercentageAllocations(
+    participantIds: string[],
+    currentAllocations: SpaceEntryFormData['splitAllocations']
+) {
+    if (participantIds.length === 0) return undefined
+    if (participantIds.length === 1) {
+        return [{ participantId: participantIds[0], percentage: 100 }]
+    }
+
+    const existing = new Map(
+        (currentAllocations ?? []).map((allocation) => [
+            allocation.participantId,
+            allocation.percentage,
+        ])
+    )
+    const next = participantIds.map((participantId) => ({
+        participantId,
+        percentage: existing.get(participantId),
+    }))
+    const missing = next.filter((allocation) => typeof allocation.percentage !== 'number')
+    const assigned = next.reduce(
+        (acc, allocation) => acc + (typeof allocation.percentage === 'number' ? allocation.percentage : 0),
+        0
+    )
+    const remaining = Math.max(0, 100 - assigned)
+
+    if (missing.length > 0) {
+        const base = Number((remaining / missing.length).toFixed(2))
+        let distributed = 0
+        missing.forEach((allocation, index) => {
+            allocation.percentage =
+                index === missing.length - 1
+                    ? Number((remaining - distributed).toFixed(2))
+                    : base
+            distributed = Number((distributed + (allocation.percentage ?? 0)).toFixed(2))
+        })
+    }
+
+    const total = next.reduce((acc, allocation) => acc + (allocation.percentage ?? 0), 0)
+    const diff = Number((100 - total).toFixed(2))
+    next[next.length - 1].percentage = Number(((next[next.length - 1].percentage ?? 0) + diff).toFixed(2))
+
+    return next
 }
 
 function buildDefaultForm({
@@ -84,6 +137,15 @@ function buildDefaultForm({
     const currentParticipantId = extractId(
         activeParticipants.find((participant) => extractId(participant.userId) === currentUserId)?._id
     )
+    const responsibleParticipantId = currentParticipantId ?? allParticipantIds[0]
+    const defaultSharedParticipantIds =
+        spaceMode === 'solo'
+            ? undefined
+            : defaultSplitMode === 'none'
+                ? responsibleParticipantId
+                    ? [responsibleParticipantId]
+                    : undefined
+                : allParticipantIds
 
     return {
         type: 'expense',
@@ -95,7 +157,7 @@ function buildDefaultForm({
         date: new Date(),
         categoryId: undefined,
         paidByParticipantId: currentParticipantId,
-        sharedWithParticipantIds: spaceMode === 'solo' ? undefined : allParticipantIds,
+        sharedWithParticipantIds: defaultSharedParticipantIds,
         splitMode: spaceMode === 'solo' ? 'none' : defaultSplitMode,
         splitAllocations:
             spaceMode === 'solo'
@@ -142,7 +204,11 @@ function sanitizeDraft({
                     ? parsed.paidByParticipantId
                     : defaults.paidByParticipantId,
             sharedWithParticipantIds:
-                spaceMode === 'solo' || splitMode === 'none' ? undefined : sharedWithParticipantIds,
+                spaceMode === 'solo'
+                    ? undefined
+                    : splitMode === 'none'
+                        ? sharedWithParticipantIds?.slice(0, 1)
+                        : sharedWithParticipantIds,
             splitMode: spaceMode === 'solo' ? 'none' : splitMode,
             splitAllocations:
                 splitMode === 'percentage' || splitMode === 'fixed'
@@ -287,7 +353,10 @@ export function SpaceEntryDialog({
 
         setForm((previous) => ({
             ...previous,
-            splitAllocations: buildDefaultSplitAllocations(participantIds, previous.splitMode),
+            splitAllocations:
+                previous.splitMode === 'percentage'
+                    ? reconcilePercentageAllocations(participantIds, previous.splitAllocations)
+                    : buildDefaultSplitAllocations(participantIds, previous.splitMode),
         }))
     }, [form.sharedWithParticipantIds, form.splitMode, form.splitAllocations, spaceMode])
 
@@ -326,6 +395,15 @@ export function SpaceEntryDialog({
         }))
     }
 
+    const updateSplitAllocations = (
+        allocations: NonNullable<SpaceEntryFormData['splitAllocations']>
+    ) => {
+        setForm((previous) => ({
+            ...previous,
+            splitAllocations: allocations,
+        }))
+    }
+
     const toggleSharedParticipant = (participantId: string) => {
         setForm((previous) => {
             const current = previous.sharedWithParticipantIds ?? []
@@ -340,6 +418,15 @@ export function SpaceEntryDialog({
         })
     }
 
+    const setResponsibleParticipant = (participantId: string) => {
+        setForm((previous) => ({
+            ...previous,
+            splitMode: 'none',
+            sharedWithParticipantIds: [participantId],
+            splitAllocations: undefined,
+        }))
+    }
+
     const applySplitPreset = (
         preset: 'none' | 'equal' | 'half' | '6040' | 'custom'
     ) => {
@@ -349,14 +436,22 @@ export function SpaceEntryDialog({
 
         setForm((previous) => {
             const selectedIds =
-                previous.sharedWithParticipantIds && previous.sharedWithParticipantIds.length > 0
+                previous.splitMode !== 'none' &&
+                previous.sharedWithParticipantIds &&
+                previous.sharedWithParticipantIds.length > 1
                     ? previous.sharedWithParticipantIds
                     : allParticipantIds
 
             if (preset === 'none') {
+                const responsibleId =
+                    previous.sharedWithParticipantIds?.[0] ??
+                    previous.paidByParticipantId ??
+                    allParticipantIds[0]
                 return {
                     ...previous,
                     splitMode: 'none',
+                    sharedWithParticipantIds: responsibleId ? [responsibleId] : undefined,
+                    splitAllocations: undefined,
                 }
             }
 
@@ -450,7 +545,7 @@ export function SpaceEntryDialog({
             ...form,
             splitMode: spaceMode === 'solo' ? 'none' : form.splitMode,
             sharedWithParticipantIds:
-                spaceMode === 'solo' || form.splitMode === 'none'
+                spaceMode === 'solo'
                     ? undefined
                     : form.sharedWithParticipantIds,
             splitAllocations:
@@ -495,9 +590,9 @@ export function SpaceEntryDialog({
                                 Movimiento del espacio
                             </div>
                             <div className="space-y-1">
-                                <DialogTitle className="text-2xl tracking-tight">Nuevo movimiento</DialogTitle>
+                                <DialogTitle className="text-2xl tracking-tight">Nuevo gasto</DialogTitle>
                                 <DialogDescription>
-                                    Tipo, monto, pagador y reparto. Los comprobantes y notas son opcionales.
+                                    Monto, pagador y reparto. Los comprobantes y notas son opcionales.
                                 </DialogDescription>
                             </div>
                         </DialogHeader>
@@ -507,7 +602,7 @@ export function SpaceEntryDialog({
                         <div className="space-y-5">
                             <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
                                 <div className="space-y-5">
-                                    <SpaceDialogPanel>
+                                    <SpaceDialogPanel className="hidden">
                                         <div className="space-y-4">
                                             <div className="space-y-1">
                                                 <SpaceDialogSectionEyebrow>Tipo de movimiento</SpaceDialogSectionEyebrow>
@@ -517,7 +612,7 @@ export function SpaceEntryDialog({
                                             </div>
 
                                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                                {(Object.keys(SPACE_ENTRY_TYPE_META) as SpaceEntryFormData['type'][]).map(
+                                                {(['expense', 'income', 'adjustment'] as SpaceEntryFormData['type'][]).map(
                                                     (type) => {
                                                         const meta = SPACE_ENTRY_TYPE_META[type]
                                                         const Icon = meta.icon
@@ -644,21 +739,31 @@ export function SpaceEntryDialog({
                                                     <Select
                                                         value={form.paidByParticipantId}
                                                         onValueChange={(value) =>
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                paidByParticipantId: value,
-                                                                personalAccountId:
+                                                            setForm((previous) => {
+                                                                const nextIsCurrentUser =
                                                                     extractId(
                                                                         activeParticipants.find(
                                                                             (participant) =>
-                                                                                extractId(
-                                                                                    participant._id
-                                                                                ) === value
+                                                                                extractId(participant._id) === value
                                                                         )?.userId
                                                                     ) === currentUserId
+                                                                const shouldMoveResponsibility =
+                                                                    previous.splitMode === 'none' &&
+                                                                    (!previous.sharedWithParticipantIds?.[0] ||
+                                                                        previous.sharedWithParticipantIds[0] ===
+                                                                            previous.paidByParticipantId)
+
+                                                                return {
+                                                                    ...previous,
+                                                                    paidByParticipantId: value,
+                                                                    sharedWithParticipantIds: shouldMoveResponsibility
+                                                                        ? [value]
+                                                                        : previous.sharedWithParticipantIds,
+                                                                    personalAccountId: nextIsCurrentUser
                                                                         ? previous.personalAccountId
                                                                         : undefined,
-                                                            }))
+                                                                }
+                                                            })
                                                         }
                                                     >
                                                         <SelectTrigger className="w-full">
@@ -670,7 +775,13 @@ export function SpaceEntryDialog({
                                                                     key={extractId(participant._id)}
                                                                     value={extractId(participant._id) ?? ''}
                                                                 >
-                                                                    {participant.displayName}
+                                                                    <span className="flex items-center gap-2">
+                                                                        <SpaceInitialsAvatar
+                                                                            name={participant.displayName}
+                                                                            className="h-6 w-6 text-[10px]"
+                                                                        />
+                                                                        <span>{participant.displayName}</span>
+                                                                    </span>
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectContent>
@@ -734,12 +845,15 @@ export function SpaceEntryDialog({
                                             participants={activeParticipants}
                                             amount={Number.isFinite(form.amount) ? form.amount : 0}
                                             currency={form.currency}
+                                            paidByParticipantId={form.paidByParticipantId}
                                             selectedParticipantIds={form.sharedWithParticipantIds ?? []}
                                             splitMode={form.splitMode}
                                             allocations={form.splitAllocations}
                                             onToggleParticipant={toggleSharedParticipant}
+                                            onResponsibleChange={setResponsibleParticipant}
                                             onApplyPreset={applySplitPreset}
                                             onAllocationChange={updateSplitAllocation}
+                                            onAllocationsChange={updateSplitAllocations}
                                         />
                                     ) : null}
                                 </div>
@@ -789,11 +903,11 @@ export function SpaceEntryDialog({
                                                 <div className="space-y-1">
                                                     <SpaceDialogSectionEyebrow>Impacto personal</SpaceDialogSectionEyebrow>
                                                     <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                        Tu contabilidad
+                                                        Pagado desde
                                                     </h3>
                                                 </div>
 
-                                                <SpaceDialogField label="Impactar en tu contabilidad">
+                                                <SpaceDialogField label="Pagado desde">
                                                     <Select
                                                         value={form.personalAccountId ?? 'none'}
                                                         onValueChange={(value) =>
@@ -805,11 +919,11 @@ export function SpaceEntryDialog({
                                                         }
                                                     >
                                                         <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Solo guardar dentro del espacio" />
+                                                            <SelectValue placeholder="Solo registrar en el espacio" />
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="none">
-                                                                Solo guardar en el espacio
+                                                                Solo registrar en el espacio
                                                             </SelectItem>
                                                             {filteredAccounts.map((account: IAccount) => (
                                                                 <SelectItem
@@ -824,7 +938,7 @@ export function SpaceEntryDialog({
                                                 </SpaceDialogField>
 
                                                 <p className="text-xs text-muted-foreground">
-                                                    Si elegís una cuenta, el movimiento también puede reflejarse en tu contabilidad personal.
+                                                    Elegí una cuenta o tarjeta si querés impactarlo también en tu Finp personal.
                                                 </p>
                                             </div>
                                         </SpaceDialogPanel>
@@ -835,6 +949,50 @@ export function SpaceEntryDialog({
                                         onFilesSelected={handleFilesSelected}
                                         onRemove={handleRemoveAttachment}
                                     />
+
+                                    <SpaceDialogPanel>
+                                        <div className="space-y-4">
+                                            <div className="space-y-1">
+                                                <SpaceDialogSectionEyebrow>Opciones avanzadas</SpaceDialogSectionEyebrow>
+                                                <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                                                    Ajustes del gasto
+                                                </h3>
+                                            </div>
+                                            <SpaceDialogField label="Tipo">
+                                                <Select
+                                                    value={form.type}
+                                                    onValueChange={(value) =>
+                                                        setForm((previous) => ({
+                                                            ...previous,
+                                                            type: value as SpaceEntryFormData['type'],
+                                                        }))
+                                                    }
+                                                >
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(['expense', 'income', 'adjustment'] as SpaceEntryFormData['type'][]).map((type) => (
+                                                            <SelectItem key={type} value={type}>
+                                                                {SPACE_ENTRY_TYPE_LABELS[type]}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </SpaceDialogField>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="w-full justify-start rounded-full text-muted-foreground"
+                                                onClick={handleSaveDraft}
+                                                disabled={submitting}
+                                            >
+                                                <Save className="h-4 w-4" />
+                                                Guardar borrador local
+                                            </Button>
+                                        </div>
+                                    </SpaceDialogPanel>
 
                                     <SpaceDialogPanel>
                                         <div className="space-y-3">
@@ -885,16 +1043,7 @@ export function SpaceEntryDialog({
 
                     <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
                         <Button className="rounded-full" onClick={handleSubmit} disabled={submitting}>
-                            {submitting ? 'Guardando...' : 'Guardar movimiento'}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="rounded-full"
-                            onClick={handleSaveDraft}
-                            disabled={submitting}
-                        >
-                            <Save className="h-4 w-4" />
-                            Guardar borrador
+                            {submitting ? 'Guardando...' : 'Guardar gasto'}
                         </Button>
                         <Button variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)} disabled={submitting}>
                             Cancelar

@@ -185,7 +185,10 @@ export function buildEntryShares(entry: ISpaceEntry, participants: ISpacePartici
     if (totalAmount <= 0) return [] as ShareAllocation[]
 
     if (entry.splitMode === 'none') {
-        const targetId = payerId ?? sharedIds[0]
+        const responsibleId = (entry.sharedWithParticipantIds ?? [])
+            .map((participantId) => extractId(participantId))
+            .find((participantId): participantId is string => Boolean(participantId))
+        const targetId = responsibleId ?? payerId
         return targetId
             ? [{ participantId: targetId, amount: totalAmount, reportingAmount: totalReporting }]
             : []

@@ -1,27 +1,44 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Layers3, Sparkles } from 'lucide-react'
+import { Layers3, Plus, Sparkles } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { useBreadcrumbAction } from '@/contexts/BreadcrumbActionContext'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { useSpaceEntries } from '@/hooks/useSpaceEntries'
 import { useSpacePendingActions } from '@/hooks/useSpacePendingActions'
 import { useSpaces } from '@/hooks/useSpaces'
 import { useToast } from '@/hooks/useToast'
 import {
     ConfirmSpaceEntryDialog,
     CreateSpaceDialog,
+    SpaceEntryDialog,
 } from '@/components/spaces/SpaceDialogs'
+import {
+    SpaceCurrencyBadge,
+    SpaceInitialsAvatar,
+    SpaceTypeBadge,
+} from '@/components/spaces/SpaceUi'
 import { SpaceOverviewCard } from '@/components/spaces/index/SpaceOverviewCard'
 import { SpacesFiltersBar } from '@/components/spaces/index/SpacesFiltersBar'
 import type { SpaceSortOption } from '@/components/spaces/index/SpacesFiltersBar'
 import { SpacesPageTopBar, SpacesPendingBell } from '@/components/spaces/index/SpacesPageHeader'
 import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingViews'
 import { extractId } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpacePendingAction } from '@/types'
+import type { ISpaceEntry, ISpaceListItem, ISpacePendingAction } from '@/types'
+import type { SpaceEntryFormData } from '@/lib/validations'
 
 type SpaceStatusFilter = 'all' | 'active' | 'paused' | 'closed' | 'archived'
 
@@ -34,22 +51,166 @@ function SpaceCardSkeleton() {
     )
 }
 
+function SpacePickerDialog({
+    open,
+    spaces,
+    onOpenChange,
+    onSelectSpace,
+    onCreateSpace,
+}: {
+    open: boolean
+    spaces: ISpaceListItem[]
+    onOpenChange: (open: boolean) => void
+    onSelectSpace: (spaceId: string) => void
+    onCreateSpace: () => void
+}) {
+    const sortedSpaces = useMemo(
+        () =>
+            [...spaces].sort((left, right) => {
+                const leftActive = left.space.status === 'active' ? 0 : 1
+                const rightActive = right.space.status === 'active' ? 0 : 1
+                if (leftActive !== rightActive) return leftActive - rightActive
+                return left.space.name.localeCompare(right.space.name, 'es')
+            }),
+        [spaces]
+    )
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-[560px]">
+                <DialogHeader>
+                    <DialogTitle>Elegir espacio</DialogTitle>
+                    <DialogDescription>
+                        Seleccioná dónde querés registrar el nuevo gasto.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3">
+                    {sortedSpaces.map((item) => {
+                        const spaceId = extractId(item.space._id) ?? ''
+                        const topParticipants = item.participants.slice(0, 4)
+
+                        return (
+                            <button
+                                key={spaceId}
+                                type="button"
+                                onClick={() => onSelectSpace(spaceId)}
+                                className="w-full rounded-[22px] border border-foreground/[0.08] bg-background/74 p-4 text-left transition-colors hover:border-primary/20 hover:bg-accent/20"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 space-y-2">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <h3 className="truncate font-semibold text-foreground">
+                                                {item.space.name}
+                                            </h3>
+                                            <SpaceTypeBadge type={item.space.type} />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex -space-x-1.5">
+                                                {topParticipants.map((participant) => (
+                                                    <SpaceInitialsAvatar
+                                                        key={extractId(participant._id)}
+                                                        name={participant.displayName}
+                                                        className="h-7 w-7 border-card text-[10px]"
+                                                    />
+                                                ))}
+                                            </div>
+                                            <span className="text-xs text-muted-foreground">
+                                                {item.summary.participantCount} participante{item.summary.participantCount === 1 ? '' : 's'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <SpaceCurrencyBadge currency={item.space.reportingCurrency} />
+                                </div>
+                            </button>
+                        )
+                    })}
+
+                    <Button variant="outline" className="w-full rounded-full" onClick={onCreateSpace}>
+                        Crear nuevo espacio
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function SpacesQuickEntryFlow({
+    item,
+    currentUserId,
+    open,
+    onOpenChange,
+    onSaved,
+}: {
+    item: ISpaceListItem | null
+    currentUserId: string
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    onSaved: () => void
+}) {
+    const spaceId = item ? extractId(item.space._id) : undefined
+    const entriesApi = useSpaceEntries(spaceId)
+
+    if (!item || !spaceId) return null
+
+    const handleCreateEntry = async (payload: SpaceEntryFormData) => {
+        await entriesApi.createEntry(payload)
+        onSaved()
+    }
+
+    return (
+        <SpaceEntryDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            onSubmit={handleCreateEntry}
+            participants={item.participants}
+            currentUserId={currentUserId}
+            defaultCurrency={item.space.reportingCurrency}
+            reportingCurrency={item.space.reportingCurrency}
+            defaultSplitMode={item.space.defaultSplitMode}
+            spaceMode={item.space.mode}
+            draftKey={`spaces-home-${spaceId}`}
+        />
+    )
+}
+
 export default function SpacesPage() {
     const { hidden } = useHideAmounts()
     const { setAction: setBreadcrumbAction, clearAction: clearBreadcrumbAction } = useBreadcrumbAction()
+    const { setAction: setSpaceAction, clearAction: clearSpaceAction } = useSpaceAction()
     const { success, error: toastError } = useToast()
-    const { spaces, loading, error, createSpace } = useSpaces()
+    const { spaces, loading, error, createSpace, currentUserId } = useSpaces()
     const pending = useSpacePendingActions()
     const [statusFilter, setStatusFilter] = useState<SpaceStatusFilter>('all')
     const [search, setSearch] = useState('')
     const [sort, setSort] = useState<SpaceSortOption>('recent')
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    const [spacePickerOpen, setSpacePickerOpen] = useState(false)
+    const [entryDialogOpen, setEntryDialogOpen] = useState(false)
+    const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
     const [pendingDialogOpen, setPendingDialogOpen] = useState(false)
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
 
     usePageTitle('Espacios')
     useAppStartupReady(!loading)
+
+    useEffect(() => {
+        setSpaceAction({
+            label: 'Nuevo gasto',
+            icon: <Plus size={18} color="#fff" />,
+            onPress: () => {
+                if (spaces.length === 0) {
+                    setCreateDialogOpen(true)
+                    return
+                }
+
+                setSpacePickerOpen(true)
+            },
+        })
+
+        return () => clearSpaceAction()
+    }, [clearSpaceAction, setSpaceAction, spaces.length])
 
     useEffect(() => {
         setBreadcrumbAction(
@@ -120,10 +281,32 @@ export default function SpacesPage() {
         [spaces]
     )
 
+    const selectedSpaceItem = useMemo(
+        () => spaces.find((item) => extractId(item.space._id) === selectedSpaceId) ?? null,
+        [selectedSpaceId, spaces]
+    )
+
     const handleCreateSpace = async (data: Parameters<typeof createSpace>[0]) => {
         const space = await createSpace(data)
         success('Espacio creado correctamente')
         return space
+    }
+
+    const handleSelectSpaceForEntry = (spaceId: string) => {
+        setSelectedSpaceId(spaceId)
+        setSpacePickerOpen(false)
+        setEntryDialogOpen(true)
+    }
+
+    const handleCreateSpaceFromPicker = () => {
+        setSpacePickerOpen(false)
+        setCreateDialogOpen(true)
+    }
+
+    const handleQuickEntrySaved = () => {
+        success('Gasto guardado')
+        setEntryDialogOpen(false)
+        setSelectedSpaceId(null)
     }
 
     const handleInviteResponse = async (
@@ -248,6 +431,25 @@ export default function SpacesPage() {
                 open={createDialogOpen}
                 onOpenChange={setCreateDialogOpen}
                 onSubmit={handleCreateSpace}
+            />
+
+            <SpacePickerDialog
+                open={spacePickerOpen}
+                spaces={spaces}
+                onOpenChange={setSpacePickerOpen}
+                onSelectSpace={handleSelectSpaceForEntry}
+                onCreateSpace={handleCreateSpaceFromPicker}
+            />
+
+            <SpacesQuickEntryFlow
+                item={selectedSpaceItem}
+                currentUserId={currentUserId}
+                open={entryDialogOpen}
+                onOpenChange={(open) => {
+                    setEntryDialogOpen(open)
+                    if (!open) setSelectedSpaceId(null)
+                }}
+                onSaved={handleQuickEntrySaved}
             />
 
             <SpacesPendingSheet

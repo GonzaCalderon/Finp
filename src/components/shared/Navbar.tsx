@@ -347,7 +347,7 @@ function DesktopFloatingTransactionButton() {
         setTxDialogOpen(true)
     }
 
-    if (isSpacesRoute) return null
+    if (isSpacesRoute && !spaceAction) return null
 
     return (
         <>
@@ -380,19 +380,21 @@ function DesktopFloatingTransactionButton() {
                 </div>
             </div>
 
-            <TransactionDialog
-                open={txDialogOpen}
-                onOpenChange={setTxDialogOpen}
-                transaction={null}
-                accounts={accounts}
-                categories={categories}
-                onSubmit={handleCreateTransaction}
-                onBatchSubmit={handleCreateTransactionBatch}
-                onInstallmentSubmit={handleCreateInstallment}
-                rules={rules}
-                defaultAccountId={preferences.defaultAccountId}
-                monthStartDay={preferences.monthStartDay}
-            />
+            {!isSpacesRoute ? (
+                <TransactionDialog
+                    open={txDialogOpen}
+                    onOpenChange={setTxDialogOpen}
+                    transaction={null}
+                    accounts={accounts}
+                    categories={categories}
+                    onSubmit={handleCreateTransaction}
+                    onBatchSubmit={handleCreateTransactionBatch}
+                    onInstallmentSubmit={handleCreateInstallment}
+                    rules={rules}
+                    defaultAccountId={preferences.defaultAccountId}
+                    monthStartDay={preferences.monthStartDay}
+                />
+            ) : null}
         </>
     )
 }

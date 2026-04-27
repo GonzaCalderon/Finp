@@ -56,6 +56,71 @@ function space(overrides: Record<string, unknown>): ISpace {
 }
 
 describe('buildEntryShares', () => {
+    it('usa el responsable explicito cuando el split es none', () => {
+        const participants = [
+            participant({ _id: 'participant-gonzalo', displayName: 'Gonzalo' }),
+            participant({ _id: 'participant-roro', displayName: 'Roro' }),
+        ]
+
+        const shares = buildEntryShares(
+            entry({
+                amount: 120,
+                reportingAmount: 120,
+                paidByParticipantId: 'participant-gonzalo',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['participant-roro'],
+            }),
+            participants
+        )
+
+        expect(shares).toEqual([
+            { participantId: 'participant-roro', amount: 120, reportingAmount: 120 },
+        ])
+    })
+
+    it('usa el pagador como fallback en split none sin responsable explicito', () => {
+        const participants = [
+            participant({ _id: 'participant-gonzalo', displayName: 'Gonzalo' }),
+            participant({ _id: 'participant-roro', displayName: 'Roro' }),
+        ]
+
+        const shares = buildEntryShares(
+            entry({
+                amount: 80,
+                reportingAmount: 80,
+                paidByParticipantId: 'participant-gonzalo',
+                splitMode: 'none',
+            }),
+            participants
+        )
+
+        expect(shares).toEqual([
+            { participantId: 'participant-gonzalo', amount: 80, reportingAmount: 80 },
+        ])
+    })
+
+    it('mantiene saldado el gasto cuando pagador y responsable son iguales', () => {
+        const participants = [
+            participant({ _id: 'participant-gonzalo', displayName: 'Gonzalo' }),
+            participant({ _id: 'participant-roro', displayName: 'Roro' }),
+        ]
+
+        const shares = buildEntryShares(
+            entry({
+                amount: 60,
+                reportingAmount: 60,
+                paidByParticipantId: 'participant-gonzalo',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['participant-gonzalo'],
+            }),
+            participants
+        )
+
+        expect(shares).toEqual([
+            { participantId: 'participant-gonzalo', amount: 60, reportingAmount: 60 },
+        ])
+    })
+
     it('reparte en partes iguales cuando el split es equal', () => {
         const participants = [
             participant({ _id: 'participant-gonzalo', displayName: 'Gonzalo' }),

@@ -16,12 +16,14 @@ type SpacesResponse = {
     spaces: ISpaceListItem[]
     pendingActions: ISpacePendingAction[]
     pendingCount: number
+    currentUserId: string
 }
 
 export function useSpaces() {
     const [spaces, setSpaces] = useState<ISpaceListItem[]>([])
     const [pendingActions, setPendingActions] = useState<ISpacePendingAction[]>([])
     const [pendingCount, setPendingCount] = useState(0)
+    const [currentUserId, setCurrentUserId] = useState('')
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -39,6 +41,7 @@ export function useSpaces() {
             setSpaces(data.spaces)
             setPendingActions(data.pendingActions)
             setPendingCount(data.pendingCount)
+            setCurrentUserId(data.currentUserId)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar espacios')
         } finally {
@@ -70,6 +73,7 @@ export function useSpaces() {
         spaces,
         pendingActions,
         pendingCount,
+        currentUserId,
         loading,
         refreshing,
         error,

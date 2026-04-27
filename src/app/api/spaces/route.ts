@@ -24,6 +24,7 @@ export async function GET() {
             spaces,
             pendingActions,
             pendingCount: pendingActions.length,
+            currentUserId: session.user.id,
         })
     } catch (error) {
         console.error('Error al obtener espacios:', error)
