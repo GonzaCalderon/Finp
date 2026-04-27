@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
@@ -33,7 +32,6 @@ import {
     DialogProps,
     normalizeDialogDate,
     SpaceDialogField,
-    SpaceDialogTextArea,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { cn } from '@/lib/utils'
 import type { ISpaceParticipant } from '@/types'
@@ -179,9 +177,6 @@ export function EditSpaceSettingsDialog({
                     <div className="shrink-0 border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
                         <DialogHeader className="space-y-2">
                             <DialogTitle className="text-2xl tracking-tight">{initialValues.name}</DialogTitle>
-                            <DialogDescription>
-                                Configuración del espacio separada de la operación diaria.
-                            </DialogDescription>
                         </DialogHeader>
                     </div>
 
@@ -214,14 +209,6 @@ export function EditSpaceSettingsDialog({
                                         </Select>
                                     </SpaceDialogField>
                                 </div>
-                                <SpaceDialogField label="Descripción">
-                                    <SpaceDialogTextArea
-                                        value={form.description ?? ''}
-                                        onChange={(event) => setField('description', event.target.value)}
-                                        maxLength={240}
-                                        placeholder="Qué entra y qué no entra en este espacio."
-                                    />
-                                </SpaceDialogField>
                             </SettingSection>
 
                             <SettingSection title="Participantes">

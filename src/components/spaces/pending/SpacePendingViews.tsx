@@ -19,9 +19,17 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     SpaceAmountInline,
+    SpaceCurrencyStack,
     SpaceEntryTypeBadge,
     SpaceMetaBadge,
     SpaceModeBadge,
@@ -156,7 +164,7 @@ function PendingInviteCard({
                             {SPACE_ROLE_LABELS[action.participant.role]}
                         </SpaceMetaBadge>
                         <SpaceMetaBadge icon={Wallet}>
-                            {action.space.currencies.join(' / ')}
+                            <SpaceCurrencyStack currencies={action.space.currencies} />
                         </SpaceMetaBadge>
                     </div>
                 </div>
@@ -401,6 +409,75 @@ export function SpacesPendingDialog({
                 </div>
             </DialogContent>
         </Dialog>
+    )
+}
+
+export function SpacesPendingSheet({
+    open,
+    onOpenChange,
+    actions,
+    loading,
+    ...handlers
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    actions: ISpacePendingAction[]
+    loading: boolean
+} & PendingActionHandlers) {
+    const [filter, setFilter] = useState<PendingViewFilter>('all')
+    const filteredActions = useMemo(
+        () => actions.filter((action) => matchesFilter(action, filter)),
+        [actions, filter]
+    )
+
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[440px]">
+                <SheetHeader className="border-b border-border/70 px-5 pb-4 pt-5">
+                    <SheetTitle className="text-xl tracking-tight">Pendientes</SheetTitle>
+                    <SheetDescription>
+                        Invitaciones, confirmaciones y liquidaciones que requieren una acción tuya.
+                    </SheetDescription>
+                    <div className="pt-2">
+                        <PendingFilterBar actions={actions} value={filter} onChange={setFilter} />
+                    </div>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto px-5 py-5">
+                    {loading ? (
+                        <div className="space-y-3">
+                            <Skeleton className="h-28 rounded-[20px]" />
+                            <Skeleton className="h-28 rounded-[20px]" />
+                        </div>
+                    ) : filteredActions.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                <Bell className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <div className="space-y-1">
+                                <p className="font-semibold tracking-tight">
+                                    Nada pendiente
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                    Cuando aparezcan acciones nuevas dentro de tus espacios, las vas a ver acá.
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {filteredActions.map((action) => (
+                                <PendingActionCard
+                                    key={pendingActionKey(action, 'sheet')}
+                                    action={action}
+                                    compact
+                                    {...handlers}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </SheetContent>
+        </Sheet>
     )
 }
 

@@ -21,6 +21,7 @@
         "bcryptjs": "^3.0.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "country-flag-icons": "^1.6.16",
         "d3": "^7.9.0",
         "d3-sankey": "^0.12.3",
         "date-fns": "^4.1.0",

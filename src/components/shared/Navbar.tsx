@@ -322,6 +322,9 @@ function useTransactionLauncher() {
 }
 
 function DesktopFloatingTransactionButton() {
+    const pathname = usePathname()
+    const { action: spaceAction } = useSpaceAction()
+    const isSpacesRoute = pathname === '/spaces' || pathname.startsWith('/spaces/')
     const {
         txDialogOpen,
         setTxDialogOpen,
@@ -333,6 +336,18 @@ function DesktopFloatingTransactionButton() {
         handleCreateTransactionBatch,
         handleCreateInstallment,
     } = useTransactionLauncher()
+    const actionLabel = isSpacesRoute ? (spaceAction?.label ?? 'Agregar movimiento') : 'Nueva transacción'
+
+    const handlePress = () => {
+        if (isSpacesRoute) {
+            spaceAction?.onPress()
+            return
+        }
+
+        setTxDialogOpen(true)
+    }
+
+    if (isSpacesRoute) return null
 
     return (
         <>
@@ -349,18 +364,18 @@ function DesktopFloatingTransactionButton() {
                                 border: '0.5px solid var(--border)',
                             }}
                         >
-                            Nueva transacción
+                            {actionLabel}
                         </div>
                     </div>
 
                     <Button
                         type="button"
-                        onClick={() => setTxDialogOpen(true)}
+                        onClick={handlePress}
                         size="icon"
                         className="h-14 w-14 rounded-full shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:scale-[1.04] active:scale-[0.98]"
-                        aria-label="Nueva transacción"
+                        aria-label={actionLabel}
                     >
-                        <Plus className="w-5 h-5" />
+                        {isSpacesRoute && spaceAction?.icon ? spaceAction.icon : <Plus className="w-5 h-5" />}
                     </Button>
                 </div>
             </div>
@@ -782,3 +797,4 @@ export function Navbar() {
         </>
     )
 }
+

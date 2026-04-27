@@ -102,7 +102,7 @@ export function SpaceEvolutionChart({
     hidden: boolean
 }) {
     return (
-        <SpaceSurface accent="var(--chart-1)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Resumen"
                 title="Evolución mensual"
@@ -171,7 +171,7 @@ export function SpaceCategoryBreakdown({
     const total = topItems.reduce((acc, item) => acc + item.amount, 0)
 
     return (
-        <SpaceSurface accent="var(--chart-3)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Distribución"
                 title="Categorías"
@@ -218,10 +218,7 @@ export function SpaceCategoryBreakdown({
 
                     <div className="space-y-3">
                         {topItems.map((item, index) => (
-                            <div
-                                key={`${item.categoryId ?? 'uncategorized'}-${item.label}`}
-                                className="rounded-[22px] border border-foreground/[0.06] bg-background/72 p-3"
-                            >
+                            <div key={`${item.categoryId ?? 'uncategorized'}-${item.label}`} className="border-b border-border/70 pb-3 last:border-b-0">
                                 <div className="flex items-center justify-between gap-3 text-sm">
                                     <div className="flex items-center gap-2">
                                         <span

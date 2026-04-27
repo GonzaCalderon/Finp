@@ -4,6 +4,8 @@ import { Settings2, UserPlus, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import {
+    SpaceCurrencyBadge,
+    SpaceCurrencyStack,
     SpaceInviteStatusBadge,
     SpaceMetaBadge,
     SpaceModeBadge,
@@ -27,6 +29,15 @@ function SettingsRow({ label, value }: { label: string; value: string }) {
         <div className="flex items-center justify-between gap-3 py-3 text-sm">
             <span className="text-muted-foreground">{label}</span>
             <span className="text-right font-medium text-foreground">{value}</span>
+        </div>
+    )
+}
+
+function SettingsContentRow({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex items-center justify-between gap-3 py-3 text-sm">
+            <span className="text-muted-foreground">{label}</span>
+            <div className="flex justify-end text-right font-medium text-foreground">{children}</div>
         </div>
     )
 }
@@ -158,11 +169,6 @@ export function SpaceMobileSettingsSheet({
                                         <SettingsRow label="Modo" value={SPACE_MODE_LABELS[space.mode]} />
                                     </div>
                                 </SettingsCard>
-                                {space.description ? (
-                                    <p className="mt-2 px-1 text-xs leading-relaxed text-muted-foreground">
-                                        {space.description}
-                                    </p>
-                                ) : null}
                             </section>
 
                             {/* PARTICIPANTES */}
@@ -214,10 +220,14 @@ export function SpaceMobileSettingsSheet({
                                         <SettingsRow label="Split por defecto" value={SPACE_SPLIT_MODE_LABELS[space.defaultSplitMode]} />
                                     </div>
                                     <div className="px-4">
-                                        <SettingsRow label="Moneda de reporte" value={space.reportingCurrency} />
+                                        <SettingsContentRow label="Moneda de reporte">
+                                            <SpaceCurrencyBadge currency={space.reportingCurrency} />
+                                        </SettingsContentRow>
                                     </div>
                                     <div className="px-4">
-                                        <SettingsRow label="Monedas operativas" value={space.currencies.join(' · ')} />
+                                        <SettingsContentRow label="Monedas operativas">
+                                            <SpaceCurrencyStack currencies={space.currencies} />
+                                        </SettingsContentRow>
                                     </div>
                                     <div className="px-4">
                                         <SettingsRow label="Período" value={formatSpaceDateRange(space.startDate, space.endDate)} />

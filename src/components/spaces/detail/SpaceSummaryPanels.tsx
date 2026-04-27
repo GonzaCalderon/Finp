@@ -1,6 +1,6 @@
 'use client'
 
-import { FileBadge2, FileText, Paperclip } from 'lucide-react'
+import { Eye, FileBadge2, FileText, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceMetaBadge, SpaceSectionHeading, SpaceSurface, SpaceTypeBadge } from '@/components/spaces/SpaceUi'
 import { formatSpaceDate, extractId } from '@/lib/utils/spaces'
@@ -50,7 +50,7 @@ export function RecentSpaceMovementsCard({
     )
 
     return (
-        <SpaceSurface accent="var(--chart-4)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Actividad"
                 title="Movimientos recientes"
@@ -66,12 +66,13 @@ export function RecentSpaceMovementsCard({
                 {recentEntries.length > 0 ? (
                     recentEntries.map((entry) => {
                         const payer = participantsById.get(extractId(entry.paidByParticipantId) ?? '')
+                        const attachment = entry.attachments?.[0]
+                        const attachmentHref = attachment?.storageKey?.startsWith('http')
+                            ? attachment.storageKey
+                            : undefined
 
                         return (
-                            <div
-                                key={extractId(entry._id)}
-                                className="rounded-[26px] border border-foreground/[0.07] bg-background/74 p-4"
-                            >
+                            <div key={extractId(entry._id)} className="border-b border-border/70 pb-4 last:border-b-0">
                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                     <div className="space-y-3">
                                         <div className="flex flex-wrap items-center gap-2">
@@ -80,7 +81,16 @@ export function RecentSpaceMovementsCard({
                                         </div>
 
                                         <div className="space-y-1.5">
-                                            <p className="text-base font-semibold text-foreground">{entry.title}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-base font-semibold text-foreground">{entry.title}</p>
+                                                {attachmentHref ? (
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" asChild>
+                                                        <a href={attachmentHref} target="_blank" rel="noreferrer" aria-label="Ver comprobante">
+                                                            <Eye className="h-4 w-4" />
+                                                        </a>
+                                                    </Button>
+                                                ) : null}
+                                            </div>
                                             <p className="text-sm text-muted-foreground">
                                                 {entry.description || entry.notes || 'Sin detalle adicional por ahora.'}
                                             </p>
@@ -98,7 +108,7 @@ export function RecentSpaceMovementsCard({
                                     </div>
 
                                     <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[260px]">
-                                        <div className="rounded-[20px] border border-foreground/[0.06] bg-card/70 p-3">
+                                        <div>
                                             <p className="text-xs text-muted-foreground">Monto original</p>
                                             <SpaceAmountInline
                                                 amount={entry.amount}
@@ -107,7 +117,7 @@ export function RecentSpaceMovementsCard({
                                                 className="mt-1 text-base font-semibold"
                                             />
                                         </div>
-                                        <div className="rounded-[20px] border border-foreground/[0.06] bg-card/70 p-3">
+                                        <div>
                                             <p className="text-xs text-muted-foreground">Reporte</p>
                                             <SpaceAmountInline
                                                 amount={entry.reportingAmount}

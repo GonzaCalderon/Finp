@@ -3,10 +3,12 @@
 import Link from 'next/link'
 import { useMemo, useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import { motion } from 'framer-motion'
 import { ArrowLeft, Coins, Plus, Users } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { useBreadcrumbAction } from '@/contexts/BreadcrumbActionContext'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -21,7 +23,9 @@ import {
     SpaceParticipantDialog,
 } from '@/components/spaces/SpaceDialogs'
 import {
+    SpaceCurrencyStack,
     SpaceMetaBadge,
+    SpaceAmountInline,
     SpaceModeBadge,
     SpaceStatusBadge,
     SpaceTypeBadge,
@@ -32,10 +36,8 @@ import {
     SpaceEvolutionChart,
 } from '@/components/spaces/detail/SpaceCharts'
 import {
-    SpaceClosurePanel,
     SpaceEntryFilter,
     SpaceMovementsPanel,
-    SpaceParticipantsPanel,
     SpaceSettingsPanel,
 } from '@/components/spaces/detail/SpaceDetailPanels'
 import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
@@ -44,10 +46,11 @@ import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
 import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobileSettingsSheet'
 import { SpaceSettlementPanel } from '@/components/spaces/detail/SpaceSettlementPanel'
 import {
-    RecentSpaceAttachmentsCard,
     RecentSpaceMovementsCard,
     SpacePendingConfirmationsCard,
 } from '@/components/spaces/detail/SpaceSummaryPanels'
+import { SpacesPendingBell } from '@/components/spaces/index/SpacesPageHeader'
+import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingViews'
 import { apiJson } from '@/lib/client/auth-client'
 import {
     invalidateData,
@@ -58,10 +61,11 @@ import { cn } from '@/lib/utils'
 import type {
     ISpaceEntry,
     ISpacePendingAction,
+    SpaceSummarySnapshot,
 } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
 
-type SpaceTab = 'summary' | 'entries' | 'balance' | 'participants' | 'settings' | 'closure'
+type SpaceTab = 'summary' | 'entries' | 'balance' | 'settings'
 
 const MOBILE_TABS: Array<{ value: SpaceTab; label: string }> = [
     { value: 'summary', label: 'Resumen' },
@@ -73,9 +77,7 @@ const DESKTOP_TABS: Array<{ value: SpaceTab; label: string }> = [
     { value: 'summary', label: 'Resumen' },
     { value: 'entries', label: 'Movimientos' },
     { value: 'balance', label: 'Balance' },
-    { value: 'participants', label: 'Participantes' },
     { value: 'settings', label: 'Configuración' },
-    { value: 'closure', label: 'Cierre' },
 ]
 
 function DetailSkeleton() {
@@ -117,16 +119,12 @@ function MobileTabBar({
                             key={tab.value}
                             type="button"
                             onClick={() => onChange(tab.value)}
-                            className={cn(
-                                'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-sm font-medium transition-colors',
-                                active
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
-                            )}
+                            className={cn('relative inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-sm font-medium transition-colors', active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
                         >
-                            <span className="truncate">{tab.label}</span>
+                            {active ? <motion.span layoutId="space-mobile-tab" className="absolute inset-0 rounded-[16px] bg-background shadow-sm" /> : null}
+                            <span className="relative truncate">{tab.label}</span>
                             {showPending ? (
-                                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
+                                <span className="relative shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
                                     {pendingCount}
                                 </span>
                             ) : null}
@@ -149,7 +147,7 @@ function DesktopTabBar({
 }) {
     return (
         <div className="hidden rounded-[22px] border border-foreground/[0.08] bg-card/82 p-1 md:block">
-            <div className="grid grid-cols-6 gap-1">
+            <div className="grid grid-cols-4 gap-1">
                 {DESKTOP_TABS.map((tab) => {
                     const active = activeTab === tab.value
                     const showPending = tab.value === 'entries' && pendingCount > 0
@@ -159,16 +157,12 @@ function DesktopTabBar({
                             key={tab.value}
                             type="button"
                             onClick={() => onChange(tab.value)}
-                            className={cn(
-                                'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-sm font-medium transition-colors',
-                                active
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
-                            )}
+                            className={cn('relative inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[16px] px-2 py-2 text-sm font-medium transition-colors', active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
                         >
-                            <span className="truncate">{tab.label}</span>
+                            {active ? <motion.span layoutId="space-desktop-tab" className="absolute inset-0 rounded-[16px] bg-background shadow-sm" /> : null}
+                            <span className="relative truncate">{tab.label}</span>
                             {showPending ? (
-                                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
+                                <span className="relative shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
                                     {pendingCount}
                                 </span>
                             ) : null}
@@ -180,11 +174,49 @@ function DesktopTabBar({
     )
 }
 
+function SpaceMovementsKpiRow({
+    summary,
+    currency,
+    hidden,
+}: {
+    summary: SpaceSummarySnapshot
+    currency: string
+    hidden: boolean
+}) {
+    const items = [
+        ['Total gastado', summary.totalReporting, `${summary.totalEntryCount} movimientos`, undefined],
+        ['Tu parte', summary.yourShareReporting, 'Correspondiente', 'var(--chart-1)'],
+        ['Confirmados', Math.max(0, summary.totalEntryCount - summary.pendingEntryCount), 'Movimientos cerrados', 'var(--chart-3)'],
+        ['Pendientes', summary.pendingEntryCount, 'Por confirmar', 'var(--destructive)'],
+    ] as const
+
+    return (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {items.map(([label, value, footer, accent], index) => (
+                <div
+                    key={label}
+                    className="rounded-2xl border border-foreground/[0.08] bg-card p-3.5"
+                    style={{ boxShadow: 'var(--card-shadow)' }}
+                >
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+                    {index < 2 ? (
+                        <SpaceAmountInline amount={value} currency={currency} hidden={hidden} color={accent} className="mt-2 block text-[1.35rem] font-semibold tracking-tight" />
+                    ) : (
+                        <p className="mt-2 text-[1.35rem] font-semibold tracking-tight" style={{ color: accent }}>{value}</p>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">{footer}</p>
+                </div>
+            ))}
+        </div>
+    )
+}
+
 
 export default function SpaceDetailPage() {
     const params = useParams<{ id: string }>()
     const spaceId = params?.id
     const { hidden } = useHideAmounts()
+    const { setAction: setBreadcrumbAction, clearAction: clearBreadcrumbAction } = useBreadcrumbAction()
     const { success, error: toastError } = useToast()
     const { data, loading, error, updateSpace } = useSpace(spaceId)
     const entriesApi = useSpaceEntries(spaceId)
@@ -195,6 +227,7 @@ export default function SpaceDetailPage() {
     const [participantDialogOpen, setParticipantDialogOpen] = useState(false)
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
+    const [pendingSheetOpen, setPendingSheetOpen] = useState(false)
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
 
@@ -203,12 +236,23 @@ export default function SpaceDetailPage() {
 
     useEffect(() => {
         setAction({
-            label: 'Movimiento',
+            label: 'Agregar movimiento',
             icon: <Plus size={18} color="#fff" />,
             onPress: () => setEntryDialogOpen(true),
         })
         return () => clearAction()
     }, [setAction, clearAction])
+
+    useEffect(() => {
+        setBreadcrumbAction(
+            <SpacesPendingBell
+                pendingCount={data?.pendingActions.length ?? 0}
+                onShowPending={() => setPendingSheetOpen(true)}
+            />
+        )
+
+        return () => clearBreadcrumbAction()
+    }, [clearBreadcrumbAction, data?.pendingActions.length, setBreadcrumbAction])
 
     usePageTitle(data?.space.name ? `${data.space.name} · Espacios` : 'Espacios')
     useAppStartupReady(!loading)
@@ -246,8 +290,38 @@ export default function SpaceDetailPage() {
         success('Participante agregado')
     }
 
+    const handleInviteResponse = async (
+        action: Extract<ISpacePendingAction, { kind: 'invite' }>,
+        inviteStatus: 'accepted' | 'declined'
+    ) => {
+        await participantsApi.respondToInvite(
+            extractId(action.participant._id) ?? '',
+            inviteStatus
+        )
+        success(inviteStatus === 'accepted' ? 'Invitación aceptada' : 'Invitación rechazada')
+    }
+
     const handleUpdateSpace = async (payload: SpaceFormData) => {
         await updateSpace(payload)
+        success('Espacio actualizado')
+    }
+
+    const handlePatchSpace = async (patch: Partial<SpaceFormData>) => {
+        if (!data) return
+
+        await updateSpace({
+            name: data.space.name,
+            description: data.space.description,
+            type: data.space.type,
+            mode: data.space.mode,
+            status: data.space.status,
+            startDate: data.space.startDate,
+            endDate: data.space.endDate,
+            currencies: data.space.currencies,
+            reportingCurrency: data.space.reportingCurrency,
+            defaultSplitMode: data.space.defaultSplitMode,
+            ...patch,
+        })
         success('Espacio actualizado')
     }
 
@@ -282,6 +356,16 @@ export default function SpaceDetailPage() {
     ) => {
         setSelectedPendingEntry(action.entry)
         setConfirmDialogOpen(true)
+    }
+
+    const handleRejectConfirmation = async (
+        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
+    ) => {
+        await apiJson(`/api/space-entries/${extractId(action.entry._id)}/reject`, {
+            method: 'POST',
+        })
+        invalidateData(SPACE_INVALIDATION_TAGS)
+        success('Movimiento rechazado')
     }
 
     const handleConfirmPendingEntry = async (payload: {
@@ -354,7 +438,7 @@ export default function SpaceDetailPage() {
                             {data.summary.participantCount} part.
                         </SpaceMetaBadge>
                         <SpaceMetaBadge icon={Coins}>
-                            {data.space.currencies.join('/')}
+                            <SpaceCurrencyStack currencies={data.space.currencies} />
                         </SpaceMetaBadge>
                     </div>
                 </div>
@@ -371,12 +455,7 @@ export default function SpaceDetailPage() {
                         />
                     </div>
                 </div>
-
-                <SpaceKpiRow
-                    summary={data.summary}
-                    reportingCurrency={data.space.reportingCurrency}
-                    hidden={hidden}
-                />
+                <div className="hidden border-t border-border/70 md:block" />
 
                 {/* Mobile tab bar (3 tabs) */}
                 <MobileTabBar
@@ -395,6 +474,12 @@ export default function SpaceDetailPage() {
                 {/* Summary tab */}
                 {activeTab === 'summary' ? (
                     <div className="space-y-4">
+                        <SpaceKpiRow
+                            summary={data.summary}
+                            reportingCurrency={data.space.reportingCurrency}
+                            hidden={hidden}
+                        />
+
                         <SpaceSettlementPanel
                             balances={data.summary.balances}
                             currency={data.space.reportingCurrency}
@@ -417,26 +502,13 @@ export default function SpaceDetailPage() {
                             />
                         </div>
 
-                        {/* Balance: visible on mobile and desktop in summary tab */}
-                        <SpaceBalanceSection
-                            balances={data.summary.balances}
-                            currency={data.space.reportingCurrency}
+                        <RecentSpaceMovementsCard
+                            entries={data.entries}
+                            participants={data.participants}
+                            reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
-                            currentUserId={currentUserId}
+                            onViewAll={() => setActiveTab('entries')}
                         />
-
-                        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                            <RecentSpaceMovementsCard
-                                entries={data.entries}
-                                participants={data.participants}
-                                reportingCurrency={data.space.reportingCurrency}
-                                hidden={hidden}
-                                onViewAll={() => setActiveTab('entries')}
-                            />
-                            <div className="hidden md:block">
-                                <RecentSpaceAttachmentsCard entries={data.entries} />
-                            </div>
-                        </div>
 
                         {pendingConfirmations.length > 0 ? (
                             <SpacePendingConfirmationsCard
@@ -448,32 +520,31 @@ export default function SpaceDetailPage() {
                 ) : null}
 
                 {activeTab === 'entries' ? (
-                    <SpaceMovementsPanel
-                        entries={data.entries}
-                        participants={data.participants}
-                        entryFilter={entryFilter}
-                        onFilterChange={setEntryFilter}
-                        reportingCurrency={data.space.reportingCurrency}
-                        hidden={hidden}
-                        onCreate={() => setEntryDialogOpen(true)}
-                    />
+                    <div className="space-y-4">
+                        <SpaceMovementsKpiRow
+                            summary={data.summary}
+                            currency={data.space.reportingCurrency}
+                            hidden={hidden}
+                        />
+                        <SpaceMovementsPanel
+                            entries={data.entries}
+                            participants={data.participants}
+                            entryFilter={entryFilter}
+                            onFilterChange={setEntryFilter}
+                            reportingCurrency={data.space.reportingCurrency}
+                            hidden={hidden}
+                            onCreate={() => setEntryDialogOpen(true)}
+                        />
+                    </div>
                 ) : null}
 
                 {activeTab === 'balance' ? (
                     <SpaceBalanceSection
                         balances={data.summary.balances}
+                        entries={data.entries}
                         currency={data.space.reportingCurrency}
                         hidden={hidden}
                         currentUserId={currentUserId}
-                    />
-                ) : null}
-
-                {/* Desktop-only tabs */}
-                {activeTab === 'participants' ? (
-                    <SpaceParticipantsPanel
-                        participants={data.participants}
-                        canManage={canManage}
-                        onAdd={() => setParticipantDialogOpen(true)}
                     />
                 ) : null}
 
@@ -481,17 +552,12 @@ export default function SpaceDetailPage() {
                     <SpaceSettingsPanel
                         space={data.space}
                         summary={data.summary}
+                        participants={data.participants}
                         canManage={canManage}
                         onEdit={() => setEditDialogOpen(true)}
-                    />
-                ) : null}
-
-                {activeTab === 'closure' ? (
-                    <SpaceClosurePanel
-                        space={data.space}
-                        summary={data.summary}
-                        canManage={canManage}
+                        onAddParticipant={() => setParticipantDialogOpen(true)}
                         onToggleClosed={handleToggleClosed}
+                        onUpdateSettings={handlePatchSpace}
                     />
                 ) : null}
             </div>
@@ -513,6 +579,17 @@ export default function SpaceDetailPage() {
                 open={participantDialogOpen}
                 onOpenChange={setParticipantDialogOpen}
                 onSubmit={handleAddParticipant}
+            />
+
+            <SpacesPendingSheet
+                open={pendingSheetOpen}
+                onOpenChange={setPendingSheetOpen}
+                actions={data.pendingActions}
+                loading={false}
+                onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
+                onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
+                onReviewConfirmation={handleReviewPending}
+                onRejectConfirmation={(action) => void handleRejectConfirmation(action)}
             />
 
             {canManage ? (

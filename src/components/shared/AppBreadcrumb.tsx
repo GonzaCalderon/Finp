@@ -11,6 +11,7 @@ import {
     BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { RouteTransitionButton } from '@/components/shared/RouteTransitionButton'
+import { useBreadcrumbAction } from '@/contexts/BreadcrumbActionContext'
 
 const ROUTE_LABELS: Record<string, string> = {
     dashboard: 'Dashboard',
@@ -39,6 +40,7 @@ function segmentLabel(segment: string, previousSegment?: string): string {
 
 export function AppBreadcrumb() {
     const pathname = usePathname()
+    const { action } = useBreadcrumbAction()
     const segments = pathname.split('/').filter(Boolean)
 
     if (segments.length === 0) return null
@@ -84,7 +86,7 @@ export function AppBreadcrumb() {
                 </BreadcrumbList>
             </Breadcrumb>
 
-            {pathname === '/transactions' && (
+            {action ?? (pathname === '/transactions' ? (
                 <RouteTransitionButton
                     href="/transactions/credit-card"
                     direction="forward"
@@ -100,7 +102,7 @@ export function AppBreadcrumb() {
                     <span>Gastos con TC</span>
                     <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
                 </RouteTransitionButton>
-            )}
+            ) : null)}
         </div>
     )
 }

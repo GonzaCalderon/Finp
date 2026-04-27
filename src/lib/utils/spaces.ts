@@ -28,7 +28,7 @@ type ShareAllocation = {
 
 export const SPACE_TYPE_LABELS: Record<SpaceType, string> = {
     couple: 'Pareja',
-    home: 'Hogar',
+    home: 'Grupo',
     travel: 'Viaje',
     project: 'Proyecto',
     event: 'Evento',

@@ -1,13 +1,23 @@
 'use client'
 
+import { useState } from 'react'
 import { CalendarRange, Coins, FileBadge2, FileText, Plus, Settings2, Sparkles, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
-import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
 import { SPACE_MODE_LABELS, SPACE_SPLIT_MODE_LABELS, SPACE_STATUS_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
+import type { SpaceFormData } from '@/lib/validations'
 
 export type SpaceEntryFilter = 'all' | ISpaceEntry['type']
+type SpaceEntrySort = 'recent' | 'amount' | 'status'
 
 function resolveCategoryName(entry: ISpaceEntry) {
     if (
@@ -108,6 +118,7 @@ export function SpaceMovementsPanel({
     hidden: boolean
     onCreate: () => void
 }) {
+    const [sort, setSort] = useState<SpaceEntrySort>('recent')
     const filters: SpaceEntryFilter[] = ['all', 'expense', 'income', 'adjustment', 'settlement']
     const counts = {
         all: entries.length,
@@ -119,43 +130,70 @@ export function SpaceMovementsPanel({
     const filteredEntries = entries.filter((entry) =>
         entryFilter === 'all' ? true : entry.type === entryFilter
     )
+    const sortedEntries = [...filteredEntries].sort((a, b) => {
+        if (sort === 'amount') {
+            return (b.reportingAmount ?? b.amount) - (a.reportingAmount ?? a.amount)
+        }
+        if (sort === 'status') {
+            const order = ['pending_confirmation', 'confirmed', 'linked', 'rejected']
+            return order.indexOf(a.status) - order.indexOf(b.status)
+        }
+
+        return new Date(b.date).getTime() - new Date(a.date).getTime()
+    })
 
     return (
-        <SpaceSurface accent="var(--chart-4)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Historial"
                 title="Movimientos"
                 description="Gastos, ingresos, ajustes y liquidaciones con una lectura más clara de montos, estado y contexto."
             />
 
-            <div className="mt-5 flex flex-wrap gap-2">
-                {filters.map((filter) => (
-                    <button
-                        key={filter}
-                        type="button"
-                        onClick={() => onFilterChange(filter)}
-                        className={[
-                            'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors',
-                            entryFilter === filter
-                                ? 'border-primary/20 bg-primary/10 text-primary'
-                                : 'border-border bg-background/80 text-muted-foreground hover:text-foreground',
-                        ].join(' ')}
-                    >
-                        <span>{filter === 'all' ? 'Todos' : filter === 'expense' ? 'Gastos' : filter === 'income' ? 'Ingresos' : filter === 'adjustment' ? 'Ajustes' : 'Liquidaciones'}</span>
-                        <span
+            <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap gap-2">
+                    {filters.map((filter) => (
+                        <button
+                            key={filter}
+                            type="button"
+                            onClick={() => onFilterChange(filter)}
                             className={[
-                                'rounded-full px-2 py-0.5 text-[11px]',
-                                entryFilter === filter ? 'bg-primary/12 text-primary' : 'bg-secondary text-secondary-foreground',
+                                'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors',
+                                entryFilter === filter
+                                    ? 'border-primary/20 bg-primary/10 text-primary'
+                                    : 'border-border bg-background/80 text-muted-foreground hover:text-foreground',
                             ].join(' ')}
                         >
-                            {counts[filter]}
-                        </span>
-                    </button>
-                ))}
+                            <span>{filter === 'all' ? 'Todos' : filter === 'expense' ? 'Gastos' : filter === 'income' ? 'Ingresos' : filter === 'adjustment' ? 'Ajustes' : 'Liquidaciones'}</span>
+                            <span
+                                className={[
+                                    'rounded-full px-2 py-0.5 text-[11px]',
+                                    entryFilter === filter ? 'bg-primary/12 text-primary' : 'bg-secondary text-secondary-foreground',
+                                ].join(' ')}
+                            >
+                                {counts[filter]}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground lg:justify-end">
+                    <span className="shrink-0">Ordenar por:</span>
+                    <Select value={sort} onValueChange={(value) => setSort(value as SpaceEntrySort)}>
+                        <SelectTrigger size="sm" className="h-8 w-[150px] rounded-full border-border/70 bg-background/80 text-xs">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent position="popper" align="end">
+                            <SelectItem value="recent">Reciente</SelectItem>
+                            <SelectItem value="amount">Monto</SelectItem>
+                            <SelectItem value="status">Estado</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             <div className="mt-5 space-y-3">
-                {filteredEntries.length === 0 ? (
+                {sortedEntries.length === 0 ? (
                     <EmptyState
                         icon={Sparkles}
                         title="Todavía no hay movimientos"
@@ -164,7 +202,7 @@ export function SpaceMovementsPanel({
                         onAction={onCreate}
                     />
                 ) : (
-                    filteredEntries.map((entry) => (
+                    sortedEntries.map((entry) => (
                         <MovementCard
                             key={extractId(entry._id)}
                             entry={entry}
@@ -244,83 +282,244 @@ export function SpaceParticipantsPanel({
 export function SpaceSettingsPanel({
     space,
     summary,
+    participants,
     canManage,
     onEdit,
+    onAddParticipant,
+    onToggleClosed,
+    onUpdateSettings,
 }: {
     space: ISpace
     summary: SpaceSummarySnapshot
+    participants: ISpaceParticipant[]
     canManage: boolean
     onEdit: () => void
+    onAddParticipant: () => void
+    onToggleClosed: () => void
+    onUpdateSettings: (patch: Partial<SpaceFormData>) => Promise<unknown>
 }) {
-    const identityRows = [
-        ['Tipo', SPACE_TYPE_LABELS[space.type]],
-        ['Estado', SPACE_STATUS_LABELS[space.status]],
-        ['Modo', SPACE_MODE_LABELS[space.mode]],
-    ]
-    const financeRows = [
-        ['Monedas', space.currencies.join(' / ')],
-        ['Reporte', space.reportingCurrency],
-        ['Split por defecto', SPACE_SPLIT_MODE_LABELS[space.defaultSplitMode]],
-    ]
-    const contextRows = [
-        ['Período', formatSpaceDateRange(space.startDate, space.endDate)],
-        ['Participantes', String(summary.participantCount)],
-        ['Movimientos', String(summary.totalEntryCount)],
-    ]
-    const groups = [
-        { title: 'Identidad', rows: identityRows },
-        { title: 'Finanzas', rows: financeRows },
-        { title: 'Contexto', rows: contextRows },
-    ]
+    const [savingKey, setSavingKey] = useState<string | null>(null)
+    const isClosed = space.status === 'closed'
+
+    const updateSetting = async (key: string, patch: Partial<SpaceFormData>) => {
+        if (!canManage) return
+        setSavingKey(key)
+        try {
+            await onUpdateSettings(patch)
+        } finally {
+            setSavingKey(null)
+        }
+    }
 
     return (
-        <div className="space-y-4">
-            <SpaceSurface accent="var(--chart-1)">
-                <SpaceSectionHeading
-                    eyebrow="Configuración"
-                    title="Ajustes generales"
-                    description="Una vista más ordenada del tipo de espacio, su forma de trabajo y las reglas financieras que hoy lo gobiernan."
-                    action={
-                        canManage ? (
-                            <Button variant="outline" className="rounded-full" onClick={onEdit}>
-                                <Settings2 className="h-4 w-4" />
-                                Editar
-                            </Button>
-                        ) : null
-                    }
-                />
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_0.9fr]">
+            <SpaceSurface>
+                <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-base font-semibold text-foreground">General</h2>
+                    {canManage ? (
+                        <Button variant="outline" size="sm" className="rounded-full" onClick={onEdit}>
+                            <Settings2 className="h-4 w-4" />
+                            Editar nombre
+                        </Button>
+                    ) : null}
+                </div>
 
-                <div className="mt-5 grid gap-x-8 gap-y-5 lg:grid-cols-3">
-                    {groups.map((group) => (
-                        <div key={group.title} className="min-w-0">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                {group.title}
-                            </p>
-                            <div className="mt-3 divide-y divide-border/70 text-sm">
-                                {group.rows.map(([label, value]) => (
-                                    <div key={label} className="flex items-center justify-between gap-4 py-2.5">
-                                        <span className="text-muted-foreground">{label}</span>
-                                        <span className="min-w-0 text-right font-medium text-foreground">
-                                            {value}
-                                        </span>
-                                    </div>
-                                ))}
+                <div className="mt-4 divide-y divide-border/70">
+                    <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                        <span className="text-muted-foreground">Nombre</span>
+                        <span className="min-w-0 truncate text-right font-medium text-foreground">{space.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                        <span className="text-muted-foreground">Tipo</span>
+                        {canManage ? (
+                            <Select
+                                value={space.type}
+                                onValueChange={(value) => void updateSetting('type', { type: value as SpaceFormData['type'] })}
+                                disabled={savingKey === 'type'}
+                            >
+                                <SelectTrigger size="sm" className="h-8 w-[150px] rounded-full bg-background/80">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                    {Object.entries(SPACE_TYPE_LABELS).map(([value, label]) => (
+                                        <SelectItem key={value} value={value}>
+                                            {label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <span className="font-medium text-foreground">{SPACE_TYPE_LABELS[space.type]}</span>
+                        )}
+                    </div>
+                    <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                        <span className="text-muted-foreground">Período</span>
+                        <span className="text-right font-medium text-foreground">
+                            {formatSpaceDateRange(space.startDate, space.endDate)}
+                        </span>
+                    </div>
+                </div>
+            </SpaceSurface>
+
+            <SpaceSurface>
+                <h2 className="text-base font-semibold text-foreground">Reparto y monedas</h2>
+                <div className="mt-4 divide-y divide-border/70">
+                    <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                        <span className="text-muted-foreground">Split por defecto</span>
+                        {canManage ? (
+                            <Select
+                                value={space.mode === 'solo' ? 'none' : space.defaultSplitMode}
+                                onValueChange={(value) =>
+                                    void updateSetting('defaultSplitMode', {
+                                        defaultSplitMode: value as SpaceFormData['defaultSplitMode'],
+                                    })
+                                }
+                                disabled={savingKey === 'defaultSplitMode' || space.mode === 'solo'}
+                            >
+                                <SelectTrigger size="sm" className="h-8 w-[170px] rounded-full bg-background/80">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                    {Object.entries(SPACE_SPLIT_MODE_LABELS).map(([value, label]) => (
+                                        <SelectItem key={value} value={value}>
+                                            {label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <span className="font-medium text-foreground">
+                                {SPACE_SPLIT_MODE_LABELS[space.defaultSplitMode]}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                        <span className="text-muted-foreground">Moneda de reporte</span>
+                        {canManage ? (
+                            <Select
+                                value={space.reportingCurrency}
+                                onValueChange={(value) => void updateSetting('reportingCurrency', { reportingCurrency: value })}
+                                disabled={savingKey === 'reportingCurrency'}
+                            >
+                                <SelectTrigger size="sm" className="h-8 w-[132px] rounded-full bg-background/80">
+                                    <span className="flex items-center gap-2">
+                                        <SpaceCurrencyIcon currency={space.reportingCurrency} className="h-5 w-5" />
+                                        <span>{space.reportingCurrency}</span>
+                                    </span>
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                    {space.currencies.map((currency) => (
+                                        <SelectItem key={currency} value={currency}>
+                                            <span className="flex items-center gap-2">
+                                                <SpaceCurrencyIcon currency={currency} className="h-5 w-5" />
+                                                <span>{currency}</span>
+                                            </span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <SpaceCurrencyBadge currency={space.reportingCurrency} />
+                        )}
+                    </div>
+                    <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                        <span className="text-muted-foreground">Monedas</span>
+                        <SpaceCurrencyStack currencies={space.currencies} className="max-w-[65%] justify-end" />
+                    </div>
+                </div>
+            </SpaceSurface>
+
+            <SpaceSurface>
+                <h2 className="text-base font-semibold text-foreground">Actividad</h2>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
+                        <p className="text-xs text-muted-foreground">Movimientos</p>
+                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.totalEntryCount}</p>
+                    </div>
+                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
+                        <p className="text-xs text-muted-foreground">Pendientes</p>
+                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.pendingEntryCount}</p>
+                    </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                    <SpaceStatusBadge status={space.status} />
+                    <SpaceMetaBadge icon={Users}>
+                        {summary.participantCount} participante{summary.participantCount === 1 ? '' : 's'}
+                    </SpaceMetaBadge>
+                    <SpaceMetaBadge icon={Coins}>
+                        <SpaceCurrencyBadge currency={space.reportingCurrency} />
+                    </SpaceMetaBadge>
+                </div>
+            </SpaceSurface>
+
+            <SpaceSurface className="lg:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-base font-semibold text-foreground">Participantes</h2>
+                    {canManage ? (
+                        <Button className="rounded-full" size="sm" onClick={onAddParticipant}>
+                            <UserPlus className="h-4 w-4" />
+                            Invitar
+                        </Button>
+                    ) : null}
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {participants.map((participant) => (
+                        <div
+                            key={extractId(participant._id)}
+                            className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-4"
+                        >
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="truncate font-semibold text-foreground">{participant.displayName}</p>
+                                    <p className="mt-1 truncate text-sm text-muted-foreground">
+                                        {participant.email || 'Participante externo'}
+                                    </p>
+                                </div>
+                                <SpaceInviteStatusBadge status={participant.inviteStatus} />
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                <SpaceRoleBadge role={participant.role} />
+                                <SpaceMetaBadge icon={FileBadge2}>
+                                    {participant.kind === 'finp_user' ? 'Usuario Finp' : 'Externo'}
+                                </SpaceMetaBadge>
                             </div>
                         </div>
                     ))}
                 </div>
             </SpaceSurface>
 
-            <SpaceSurface accent="var(--chart-2)">
-                <SpaceSectionHeading
-                    eyebrow="Descripción"
-                    title="Propósito del espacio"
-                    description="La descripción y el alcance ayudan a entender rápidamente qué entra y qué no entra acá."
-                />
-
-                <div className="mt-5 border-t border-border/70 pt-4 text-sm leading-relaxed text-secondary-foreground">
-                    {space.description || 'Todavía no se cargó una descripción para este espacio.'}
+            <SpaceSurface>
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-base font-semibold text-foreground">Cierre</h2>
+                        <p className="mt-2 text-sm font-medium text-foreground">
+                            {isClosed ? 'Espacio cerrado' : 'Espacio activo'}
+                        </p>
+                    </div>
+                    <SpaceStatusBadge status={space.status} />
                 </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
+                        <p className="text-xs text-muted-foreground">Movimientos</p>
+                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.totalEntryCount}</p>
+                    </div>
+                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
+                        <p className="text-xs text-muted-foreground">Pendientes</p>
+                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.pendingEntryCount}</p>
+                    </div>
+                </div>
+
+                {canManage ? (
+                    <Button
+                        className="mt-4 w-full rounded-full"
+                        variant={isClosed ? 'default' : 'outline'}
+                        onClick={onToggleClosed}
+                    >
+                        {isClosed ? 'Reabrir espacio' : 'Cerrar espacio'}
+                    </Button>
+                ) : null}
             </SpaceSurface>
         </div>
     )

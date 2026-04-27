@@ -1,7 +1,8 @@
 'use client'
 
-import type { CSSProperties, ReactNode } from 'react'
+import type { ComponentType, CSSProperties, ReactNode, SVGProps } from 'react'
 import type { LucideIcon } from 'lucide-react'
+import * as FlagIcons from 'country-flag-icons/react/1x1'
 import {
     ArrowDownLeft,
     ArrowUpRight,
@@ -10,15 +11,17 @@ import {
     CircleDollarSign,
     FileText,
     HandCoins,
-    Home,
+    Lightbulb,
     PauseCircle,
     Plane,
     Settings2,
     Sparkles,
     Users,
+    UsersRound,
 } from 'lucide-react'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { Badge } from '@/components/ui/badge'
+import { ISO_CURRENCIES } from '@/lib/constants/iso-currencies'
 import { cn } from '@/lib/utils'
 import {
     SPACE_ENTRY_TYPE_LABELS,
@@ -40,6 +43,8 @@ import type {
     SpaceType,
 } from '@/lib/constants'
 
+type FlagComponent = ComponentType<SVGProps<SVGSVGElement>>
+
 export const SPACE_TYPE_META: Record<
     SpaceType,
     {
@@ -52,15 +57,15 @@ export const SPACE_TYPE_META: Record<
         description: 'Gastos, balances y acuerdos compartidos de pareja.',
     },
     home: {
-        icon: Home,
-        description: 'Vida cotidiana, alquiler y costos del hogar.',
+        icon: UsersRound,
+        description: 'Gastos y balances de un grupo de personas.',
     },
     travel: {
         icon: Plane,
         description: 'Presupuesto, reservas, gastos y cierre del viaje.',
     },
     project: {
-        icon: Sparkles,
+        icon: Lightbulb,
         description: 'Objetivos, proyectos o contextos colaborativos.',
     },
     event: {
@@ -178,10 +183,108 @@ export function SpaceInitialsAvatar({
     )
 }
 
+function resolveCurrencyMeta(currency: string) {
+    return ISO_CURRENCIES.find((item) => item.code === currency)
+}
+
+export function SpaceCurrencyIcon({
+    currency,
+    className,
+}: {
+    currency: string
+    className?: string
+}) {
+    const meta = resolveCurrencyMeta(currency)
+    const flagKey = meta?.countryCode.replaceAll('-', '_')
+    const Flag = flagKey
+        ? (FlagIcons as unknown as Record<string, FlagComponent>)[flagKey]
+        : undefined
+
+    return (
+        <span
+            className={cn(
+                'inline-flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted align-middle shadow-sm',
+                className
+            )}
+            title={meta ? `${currency} · ${meta.name}` : currency}
+        >
+            {Flag ? (
+                <Flag className="h-full w-full object-cover" aria-hidden="true" />
+            ) : (
+                <span className="text-[10px] font-semibold text-muted-foreground">
+                    {currency.slice(0, 2)}
+                </span>
+            )}
+        </span>
+    )
+}
+
+export function SpaceCurrencyBadge({
+    currency,
+    showCode = true,
+    className,
+}: {
+    currency: string
+    showCode?: boolean
+    className?: string
+}) {
+    return (
+        <span
+            className={cn(
+                'inline-flex items-center gap-2 rounded-full border border-foreground/[0.08] bg-background/80 px-2.5 py-1 text-xs font-semibold text-foreground',
+                className
+            )}
+        >
+            <SpaceCurrencyIcon currency={currency} className="h-5 w-5" />
+            {showCode ? <span>{currency}</span> : null}
+        </span>
+    )
+}
+
+export function SpaceCurrencyStack({
+    currencies,
+    max = 4,
+    showCodes = true,
+    className,
+}: {
+    currencies: string[]
+    max?: number
+    showCodes?: boolean
+    className?: string
+}) {
+    const visible = currencies.slice(0, max)
+    const extra = Math.max(0, currencies.length - visible.length)
+
+    return (
+        <span className={cn('inline-flex items-center gap-2', className)}>
+            <span className="flex items-center">
+                {visible.map((currency, index) => (
+                    <SpaceCurrencyIcon
+                        key={currency}
+                        currency={currency}
+                        className={cn('h-6 w-6 ring-2 ring-background', index > 0 && '-ml-2')}
+                    />
+                ))}
+                {extra > 0 ? (
+                    <span className="-ml-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-border bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground ring-2 ring-background">
+                        +{extra}
+                    </span>
+                ) : null}
+            </span>
+            {showCodes ? (
+                <span className="text-xs font-semibold text-foreground">
+                    {visible.join(' / ')}
+                    {extra > 0 ? ` +${extra}` : ''}
+                </span>
+            ) : null}
+        </span>
+    )
+}
+
 export function SpaceSurface({
     children,
     className,
-    accent = 'var(--sky)',
+    accent: _accent = 'var(--sky)',
     padding = 'p-5 md:p-6',
     style,
 }: {
@@ -194,22 +297,17 @@ export function SpaceSurface({
     return (
         <section
             className={cn(
-                'relative overflow-hidden rounded-[32px] border border-foreground/[0.08] bg-card/95',
+                'relative overflow-hidden rounded-2xl border bg-card',
                 padding,
                 className
             )}
             style={{
-                background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 6%, transparent) 0%, transparent 38%), linear-gradient(180deg, color-mix(in srgb, var(--card) 98%, transparent) 0%, color-mix(in srgb, var(--card) 95%, transparent) 100%)`,
+                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
                 boxShadow: 'var(--card-shadow)',
                 ...style,
             }}
         >
-            <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-px"
-                style={{
-                    background: `linear-gradient(90deg, transparent 0%, color-mix(in srgb, ${accent} 35%, var(--background)) 50%, transparent 100%)`,
-                }}
-            />
             {children}
         </section>
     )
