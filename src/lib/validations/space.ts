@@ -70,6 +70,7 @@ export const spaceSchema = z
         currencies: z.array(currencySchema).min(1, 'Seleccioná al menos una moneda'),
         reportingCurrency: currencySchema,
         defaultSplitMode: z.enum(['none', 'equal', 'percentage', 'fixed']).default('equal'),
+        simplifyDebts: z.boolean().nullable().optional(),
     })
     .superRefine((data, ctx) => {
         if (!data.currencies.includes(data.reportingCurrency)) {
@@ -203,6 +204,45 @@ export const spaceEntrySchema = z
                 path: ['paidByParticipantId'],
             })
         }
+
+        if (data.type === 'settlement') {
+            if (!data.paidByParticipantId) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Indicá quién realizó el pago',
+                    path: ['paidByParticipantId'],
+                })
+            }
+
+            const receivers = data.sharedWithParticipantIds ?? []
+            if (receivers.length !== 1) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Un pago requiere exactamente un receptor',
+                    path: ['sharedWithParticipantIds'],
+                })
+            }
+
+            if (
+                data.paidByParticipantId &&
+                receivers.length === 1 &&
+                data.paidByParticipantId === receivers[0]
+            ) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'El pagador y el receptor no pueden ser la misma persona',
+                    path: ['sharedWithParticipantIds'],
+                })
+            }
+
+            if (data.splitMode !== 'none') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Los pagos deben usar splitMode none',
+                    path: ['splitMode'],
+                })
+            }
+        }
     })
 
 export const spaceParticipantResponseSchema = z.object({
@@ -236,6 +276,26 @@ export const spaceEntryConfirmSchema = z
             })
         }
     })
+
+export const spaceSettlementSchema = z
+    .object({
+        payerId: z.string().min(1, 'Indicá quién realizó el pago'),
+        receiverId: z.string().min(1, 'Indicá quién recibió el pago'),
+        amount: amountSchema,
+        currency: currencySchema,
+        date: dateSchema,
+        notes: optionalTrimmedString.refine(
+            (value) => value === undefined || value.length <= 400,
+            'Las notas no pueden superar los 400 caracteres'
+        ),
+    })
+    .refine((data) => data.payerId !== data.receiverId, {
+        message: 'El pagador y el receptor no pueden ser la misma persona',
+        path: ['receiverId'],
+    })
+
+export type SpaceSettlementInput = z.input<typeof spaceSettlementSchema>
+export type SpaceSettlementData = z.output<typeof spaceSettlementSchema>
 
 export type SpaceFormInput = z.input<typeof spaceSchema>
 export type SpaceFormData = z.output<typeof spaceSchema>

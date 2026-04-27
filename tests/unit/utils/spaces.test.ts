@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildEntryShares, buildSpaceSummary } from '@/lib/utils/spaces'
-import type { ISpace, ISpaceEntry, ISpaceParticipant } from '@/types'
+import { buildEntryShares, buildSpaceBalances, buildSpaceSummary } from '@/lib/utils/spaces'
+import { simplifyDebts } from '@/lib/utils/space-debts'
+import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceBalanceItem } from '@/types'
 
 function participant(overrides: Record<string, unknown>): ISpaceParticipant {
     return {
@@ -140,6 +141,188 @@ describe('buildEntryShares', () => {
         expect(shares).toHaveLength(2)
         expect(shares[0]?.amount).toBe(50)
         expect(shares[1]?.amount).toBe(50)
+    })
+})
+
+describe('buildEntryShares — settlements', () => {
+    const participants = [
+        participant({ _id: 'p-gonzalo', displayName: 'Gonzalo' }),
+        participant({ _id: 'p-roro', displayName: 'Roro' }),
+    ]
+
+    it('settlement: registra share en el receptor', () => {
+        const shares = buildEntryShares(
+            entry({
+                type: 'settlement',
+                amount: 60000,
+                reportingAmount: 60000,
+                paidByParticipantId: 'p-roro',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-gonzalo'],
+            }),
+            participants
+        )
+        expect(shares).toEqual([{ participantId: 'p-gonzalo', amount: 60000, reportingAmount: 60000 }])
+    })
+
+    it('settlement parcial: solo registra el monto pagado', () => {
+        const shares = buildEntryShares(
+            entry({
+                type: 'settlement',
+                amount: 40000,
+                reportingAmount: 40000,
+                paidByParticipantId: 'p-roro',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-gonzalo'],
+            }),
+            participants
+        )
+        expect(shares).toEqual([{ participantId: 'p-gonzalo', amount: 40000, reportingAmount: 40000 }])
+    })
+})
+
+describe('buildSpaceBalances — settlements', () => {
+    const participants = [
+        participant({ _id: 'p-gonzalo', userId: 'u-gonzalo', displayName: 'Gonzalo' }),
+        participant({ _id: 'p-roro', userId: 'u-roro', displayName: 'Roro' }),
+    ]
+
+    it('settlement parcial reduce la deuda correctamente', () => {
+        const entries = [
+            entry({
+                amount: 100000,
+                reportingAmount: 100000,
+                paidByParticipantId: 'p-gonzalo',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-roro'],
+            }),
+            entry({
+                type: 'settlement',
+                amount: 40000,
+                reportingAmount: 40000,
+                paidByParticipantId: 'p-roro',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-gonzalo'],
+            }),
+        ]
+        const balances = buildSpaceBalances(entries, participants)
+        const gonzalo = balances.find((b) => b.participantId === 'p-gonzalo')
+        const roro = balances.find((b) => b.participantId === 'p-roro')
+        expect(gonzalo?.balanceReporting).toBe(60000)
+        expect(roro?.balanceReporting).toBe(-60000)
+    })
+
+    it('settlement total deja balances en 0', () => {
+        const entries = [
+            entry({
+                amount: 100000,
+                reportingAmount: 100000,
+                paidByParticipantId: 'p-gonzalo',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-roro'],
+            }),
+            entry({
+                type: 'settlement',
+                amount: 100000,
+                reportingAmount: 100000,
+                paidByParticipantId: 'p-roro',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-gonzalo'],
+            }),
+        ]
+        const balances = buildSpaceBalances(entries, participants)
+        expect(balances.every((b) => b.balanceReporting === 0)).toBe(true)
+    })
+
+    it('settlement pending_confirmation no reduce balances', () => {
+        const entries = [
+            entry({
+                amount: 100000,
+                reportingAmount: 100000,
+                paidByParticipantId: 'p-gonzalo',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-roro'],
+            }),
+            entry({
+                type: 'settlement',
+                status: 'pending_confirmation',
+                amount: 100000,
+                reportingAmount: 100000,
+                paidByParticipantId: 'p-roro',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-gonzalo'],
+            }),
+        ]
+        const balances = buildSpaceBalances(entries, participants)
+        const gonzalo = balances.find((b) => b.participantId === 'p-gonzalo')
+        const roro = balances.find((b) => b.participantId === 'p-roro')
+        expect(gonzalo?.balanceReporting).toBe(100000)
+        expect(roro?.balanceReporting).toBe(-100000)
+    })
+
+    it('entry rechazado no afecta balances', () => {
+        const entries = [
+            entry({
+                amount: 50000,
+                reportingAmount: 50000,
+                status: 'rejected',
+                paidByParticipantId: 'p-gonzalo',
+                splitMode: 'none',
+                sharedWithParticipantIds: ['p-roro'],
+            }),
+        ]
+        const balances = buildSpaceBalances(entries, participants)
+        expect(balances.every((b) => b.balanceReporting === 0)).toBe(true)
+    })
+})
+
+function balance(participantId: string, balanceReporting: number): SpaceBalanceItem {
+    return {
+        participantId,
+        displayName: participantId,
+        kind: 'finp_user',
+        role: 'participant',
+        inviteStatus: 'accepted',
+        paidReporting: 0,
+        shareReporting: 0,
+        balanceReporting,
+    }
+}
+
+describe('simplifyDebts', () => {
+    it('dos participantes directos', () => {
+        const payments = simplifyDebts([balance('A', 100), balance('B', -100)])
+        expect(payments).toEqual([{ fromParticipantId: 'B', toParticipantId: 'A', amount: 100 }])
+    })
+
+    it('tres participantes con deuda circular A→B $10, B→C $10 → A paga $10 a C', () => {
+        // A pagó todo, B y C deben
+        // A: +20, B: -10, C: -10
+        const payments = simplifyDebts([balance('A', 20), balance('B', -10), balance('C', -10)])
+        expect(payments).toHaveLength(2)
+        expect(payments[0]).toMatchObject({ fromParticipantId: 'B', toParticipantId: 'A', amount: 10 })
+        expect(payments[1]).toMatchObject({ fromParticipantId: 'C', toParticipantId: 'A', amount: 10 })
+    })
+
+    it('simplifica: A debe a B $10, B debe a C $10 → A paga $10 a C', () => {
+        // A: -10, B: 0, C: +10
+        const payments = simplifyDebts([balance('A', -10), balance('B', 0), balance('C', 10)])
+        expect(payments).toEqual([{ fromParticipantId: 'A', toParticipantId: 'C', amount: 10 }])
+    })
+
+    it('pagos menores a 0.01 se ignoran', () => {
+        const payments = simplifyDebts([balance('A', 0.005), balance('B', -0.005)])
+        expect(payments).toHaveLength(0)
+    })
+
+    it('participante con balance 0 no genera pagos', () => {
+        const payments = simplifyDebts([balance('A', 0), balance('B', 0)])
+        expect(payments).toHaveLength(0)
+    })
+
+    it('redondeo a 2 decimales', () => {
+        const payments = simplifyDebts([balance('A', 33.337), balance('B', -33.337)])
+        expect(payments[0]?.amount).toBe(33.34)
     })
 })
 

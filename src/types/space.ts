@@ -28,6 +28,7 @@ export interface ISpace {
     currencies: SpaceCurrency[]
     reportingCurrency: SpaceCurrency
     defaultSplitMode: SpaceSplitMode
+    simplifyDebts?: boolean | null
     createdAt: Date
     updatedAt: Date
 }

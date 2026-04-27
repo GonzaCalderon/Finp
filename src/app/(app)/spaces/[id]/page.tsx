@@ -23,6 +23,10 @@ import {
     SpaceParticipantDialog,
 } from '@/components/spaces/SpaceDialogs'
 import {
+    SpaceSettlementDialog,
+    type SettlementPrefill,
+} from '@/components/spaces/dialogs/SpaceSettlementDialog'
+import {
     SpaceCurrencyStack,
     SpaceMetaBadge,
     SpaceAmountInline,
@@ -230,6 +234,8 @@ export default function SpaceDetailPage() {
     const [pendingSheetOpen, setPendingSheetOpen] = useState(false)
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
+    const [settlementDialogOpen, setSettlementDialogOpen] = useState(false)
+    const [settlementPrefill, setSettlementPrefill] = useState<SettlementPrefill | undefined>()
 
     const currentUserId = data?.currentUserId ?? ''
     const { setAction, clearAction } = useSpaceAction()
@@ -281,6 +287,11 @@ export default function SpaceDetailPage() {
     const handleCreateEntry = async (payload: Parameters<typeof entriesApi.createEntry>[0]) => {
         await entriesApi.createEntry(payload)
         success('Movimiento guardado')
+    }
+
+    function handleRegisterSettlement(prefill?: SettlementPrefill) {
+        setSettlementPrefill(prefill)
+        setSettlementDialogOpen(true)
     }
 
     const handleAddParticipant = async (
@@ -495,7 +506,7 @@ export default function SpaceDetailPage() {
                             currency={data.space.reportingCurrency}
                             hidden={hidden}
                             currentUserId={currentUserId}
-                            onCreateEntry={() => setEntryDialogOpen(true)}
+                            onCreateEntry={() => handleRegisterSettlement()}
                         />
 
                         {/* Charts: visible on mobile and desktop */}
@@ -555,6 +566,12 @@ export default function SpaceDetailPage() {
                         currency={data.space.reportingCurrency}
                         hidden={hidden}
                         currentUserId={currentUserId}
+                        simplifyDebts={data.space.simplifyDebts ?? undefined}
+                        onRegisterSettlement={handleRegisterSettlement}
+                        onViewAllSettlements={() => {
+                            setActiveTab('entries')
+                            setEntryFilter('settlement')
+                        }}
                     />
                 ) : null}
 
@@ -593,6 +610,16 @@ export default function SpaceDetailPage() {
                 onSubmit={handleAddParticipant}
             />
 
+            <SpaceSettlementDialog
+                open={settlementDialogOpen}
+                onOpenChange={setSettlementDialogOpen}
+                onSubmit={handleCreateEntry}
+                participants={data.participants}
+                defaultCurrency={data.space.reportingCurrency}
+                reportingCurrency={data.space.reportingCurrency}
+                prefill={settlementPrefill}
+            />
+
             <SpacesPendingSheet
                 open={pendingSheetOpen}
                 onOpenChange={setPendingSheetOpen}
@@ -622,6 +649,7 @@ export default function SpaceDetailPage() {
                         currencies: data.space.currencies,
                         reportingCurrency: data.space.reportingCurrency,
                         defaultSplitMode: data.space.defaultSplitMode,
+                        simplifyDebts: data.space.simplifyDebts,
                     }}
                 />
             ) : null}

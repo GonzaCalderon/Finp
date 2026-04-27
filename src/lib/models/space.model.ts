@@ -40,6 +40,7 @@ const SpaceSchema = new Schema<ISpace>(
             required: true,
             default: SPACE_SPLIT_MODES.EQUAL,
         },
+        simplifyDebts: { type: Boolean },
     },
     { timestamps: true }
 )

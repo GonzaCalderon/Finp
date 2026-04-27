@@ -96,26 +96,29 @@ export async function PATCH(
             parsed.data.reportingCurrency
         )
 
+        const { simplifyDebts, ...restData } = parsed.data
+        const shouldUnsetSimplifyDebts = simplifyDebts === null || simplifyDebts === undefined
+
+        const baseSet = {
+            ...restData,
+            currencies: normalizedCurrencies,
+            defaultSplitMode: parsed.data.mode === 'solo' ? 'none' : parsed.data.defaultSplitMode,
+        }
+        if (!shouldUnsetSimplifyDebts) {
+            (baseSet as Record<string, unknown>).simplifyDebts = simplifyDebts
+        }
+
         const update =
             parsed.data.status === 'closed'
                 ? {
-                    $set: {
-                        ...parsed.data,
-                        currencies: normalizedCurrencies,
-                        defaultSplitMode:
-                            parsed.data.mode === 'solo' ? 'none' : parsed.data.defaultSplitMode,
-                        closedAt: context.space.closedAt ?? new Date(),
-                    },
+                    $set: { ...baseSet, closedAt: context.space.closedAt ?? new Date() },
+                    ...(shouldUnsetSimplifyDebts ? { $unset: { simplifyDebts: 1 } } : {}),
                 }
                 : {
-                    $set: {
-                        ...parsed.data,
-                        currencies: normalizedCurrencies,
-                        defaultSplitMode:
-                            parsed.data.mode === 'solo' ? 'none' : parsed.data.defaultSplitMode,
-                    },
+                    $set: baseSet,
                     $unset: {
                         closedAt: 1,
+                        ...(shouldUnsetSimplifyDebts ? { simplifyDebts: 1 } : {}),
                     },
                 }
 

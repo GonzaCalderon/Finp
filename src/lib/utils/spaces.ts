@@ -278,7 +278,11 @@ export function buildSpaceBalances(entries: ISpaceEntry[], participants: ISpaceP
     })
 
     entries
-        .filter((entry) => entry.status !== 'rejected')
+        .filter((entry) => {
+            if (entry.status === 'rejected') return false
+            if (entry.type === 'settlement' && entry.status === 'pending_confirmation') return false
+            return true
+        })
         .forEach((entry) => {
             const payerId = extractId(entry.paidByParticipantId)
             const reportingAmount = roundAmount(entry.reportingAmount ?? entry.amount)

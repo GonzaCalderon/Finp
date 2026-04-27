@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { ArrowRight, HandCoins, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -48,10 +49,10 @@ function buildUserBalanceSummary(balances: SpaceBalanceItem[], currentUserId: st
     if (!current || Math.abs(current.balanceReporting) <= 0.01) {
         return {
             eyebrow: '',
-            title: 'Estás al día',
+            title: 'Todo saldado',
             amount: 0,
             tone: 'neutral' as const,
-            detail: 'No tenés saldo pendiente en este espacio.',
+            detail: 'No hay deudas pendientes en este espacio.',
         }
     }
 
@@ -59,24 +60,20 @@ function buildUserBalanceSummary(balances: SpaceBalanceItem[], currentUserId: st
     const counterpart = balances.find((item) =>
         isDebt ? item.balanceReporting > 0 : item.balanceReporting < 0
     )
-    const amount = counterpart
-        ? Math.min(Math.abs(current.balanceReporting), Math.abs(counterpart.balanceReporting))
-        : Math.abs(current.balanceReporting)
+    const amount = Math.abs(current.balanceReporting)
 
     return {
         eyebrow: isDebt ? 'Por pagar' : 'Por cobrar',
-        title: counterpart
-            ? isDebt
-                ? `Pago pendiente con ${counterpart.displayName}`
-                : `Cobro pendiente con ${counterpart.displayName}`
-            : isDebt
-                ? 'Tenés un pago pendiente'
-                : 'Tenés un cobro pendiente',
+        title: isDebt ? 'Tenés un pago pendiente' : 'Tenés un cobro pendiente',
         amount,
         tone: isDebt ? ('negative' as const) : ('positive' as const),
         detail: isDebt
-            ? 'Este es el pago más relevante para equilibrar tu saldo.'
-            : 'Este es el cobro más relevante para equilibrar tu saldo.',
+            ? counterpart
+                ? `Debés $${amount.toLocaleString()} ARS. Podés registrar un pago parcial o total.`
+                : 'Podés registrar un pago parcial o total.'
+            : counterpart
+                ? `${counterpart.displayName} tiene un saldo pendiente con vos.`
+                : 'Tenés saldo pendiente en este espacio.',
     }
 }
 
@@ -86,28 +83,62 @@ export function SpaceBalanceSection({
     currency,
     hidden,
     currentUserId,
+    simplifyDebts,
+    onRegisterSettlement,
+    onViewAllSettlements,
 }: {
     balances: SpaceBalanceItem[]
     entries?: ISpaceEntry[]
     currency: string
     hidden: boolean
     currentUserId: string
+    simplifyDebts?: boolean
+    onRegisterSettlement?: (prefill?: { payerId: string; receiverId: string; amount: number }) => void
+    onViewAllSettlements?: () => void
 }) {
+    const activeParticipantCount = balances.length
+    const defaultSimplified = simplifyDebts === true || (simplifyDebts === undefined && activeParticipantCount >= 3)
+    const [showSimplified, setShowSimplified] = useState(defaultSimplified)
     const recommendedPayments = buildRecommendedPayments(balances)
     const settlementEntries = entries.filter((entry) => entry.type === 'settlement').slice(0, 5)
     const userSummary = buildUserBalanceSummary(balances, currentUserId)
+    const anyDebt = balances.some((b) => Math.abs(b.balanceReporting) > 0.01)
 
     return (
         <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
-            <div className="space-y-5">
+            <div className="order-2 space-y-5 xl:order-1">
                 <SpaceSurface>
-                    <SpaceSectionHeading
-                        eyebrow="Pagos recomendados"
-                        title="Cómo saldar el espacio"
-                        description="Pagos mínimos sugeridos para equilibrar lo que cada participante tiene pendiente o por cobrar."
-                    />
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <SpaceSectionHeading
+                            eyebrow="Pagos recomendados"
+                            title="Cómo saldar el espacio"
+                            description="Pagos mínimos sugeridos para equilibrar lo que cada participante tiene pendiente o por cobrar."
+                        />
+                        {activeParticipantCount >= 3 ? (
+                            <div className="flex shrink-0 overflow-hidden rounded-full border border-border bg-background/80 text-xs font-medium">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSimplified(true)}
+                                    className={showSimplified ? 'bg-primary/10 px-3 py-1.5 text-primary' : 'px-3 py-1.5 text-muted-foreground hover:text-foreground'}
+                                >
+                                    Simplificada
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSimplified(false)}
+                                    className={!showSimplified ? 'bg-primary/10 px-3 py-1.5 text-primary' : 'px-3 py-1.5 text-muted-foreground hover:text-foreground'}
+                                >
+                                    Directa
+                                </button>
+                            </div>
+                        ) : null}
+                    </div>
                     <div className="mt-4 space-y-2">
-                        {recommendedPayments.length > 0 ? (
+                        {!showSimplified ? (
+                            <div className="rounded-[24px] border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                                Vista directa: revisá el balance individual de cada participante en la sección de abajo.
+                            </div>
+                        ) : recommendedPayments.length > 0 ? (
                             recommendedPayments.map((payment) => (
                                 <div
                                     key={`${payment.from.participantId}-${payment.to.participantId}`}
@@ -131,7 +162,18 @@ export function SpaceBalanceSection({
                                             hidden={hidden}
                                             className="text-sm font-semibold"
                                         />
-                                        <Button size="sm" variant="outline" className="rounded-full">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="rounded-full"
+                                            onClick={() =>
+                                                onRegisterSettlement?.({
+                                                    payerId: payment.from.participantId,
+                                                    receiverId: payment.to.participantId,
+                                                    amount: payment.amount,
+                                                })
+                                            }
+                                        >
                                             Registrar
                                         </Button>
                                     </div>
@@ -228,8 +270,16 @@ export function SpaceBalanceSection({
                                             <SpaceAmountInline amount={balance.paidReporting} currency={currency} hidden={hidden} className="mt-1 block font-semibold" />
                                         </div>
                                         <div className="pl-3">
-                                            <p className="text-xs text-muted-foreground">Parte</p>
-                                            <SpaceAmountInline amount={balance.shareReporting} currency={currency} hidden={hidden} className="mt-1 block font-semibold" />
+                                            <p className="text-xs text-muted-foreground">
+                                                {isSettled ? 'Equilibrado' : positive ? 'Le deben' : 'Debe'}
+                                            </p>
+                                            <SpaceAmountInline
+                                                amount={netAmount}
+                                                currency={currency}
+                                                hidden={hidden}
+                                                color={netColor}
+                                                className="mt-1 block font-semibold"
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -244,7 +294,7 @@ export function SpaceBalanceSection({
                 </SpaceSurface>
             </div>
 
-            <aside className="space-y-5">
+            <aside className="order-1 space-y-5 xl:order-2">
                 <SpaceSurface>
                     <SpaceSectionHeading eyebrow="Balance" title="Resumen" />
                     <div className="mt-4 space-y-4">
@@ -275,11 +325,31 @@ export function SpaceBalanceSection({
                             />
                             <p className="mt-2 text-sm text-muted-foreground">{userSummary.detail}</p>
                         </div>
+                        {anyDebt && onRegisterSettlement ? (
+                            <Button
+                                className="w-full"
+                                onClick={() => onRegisterSettlement()}
+                            >
+                                Registrar pago
+                            </Button>
+                        ) : null}
                     </div>
                 </SpaceSurface>
 
                 <SpaceSurface>
-                    <SpaceSectionHeading eyebrow="Pagos" title="Últimos registrados" />
+                    <div className="flex items-start justify-between gap-3">
+                        <SpaceSectionHeading eyebrow="Pagos" title="Últimos registrados" />
+                        {settlementEntries.length > 0 && onViewAllSettlements ? (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={onViewAllSettlements}
+                            >
+                                Ver todos
+                            </Button>
+                        ) : null}
+                    </div>
                     <div className="mt-4 space-y-3">
                         {settlementEntries.length > 0 ? settlementEntries.map((entry) => (
                             <div key={extractId(entry._id)} className="border-b border-border/70 pb-3 last:border-b-0">

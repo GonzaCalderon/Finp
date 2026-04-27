@@ -80,19 +80,62 @@ describe('spaceEntrySchema', () => {
         expect(result.success).toBe(false)
     })
 
-    it('acepta liquidaciones con split fijo que suma el total', () => {
+    it('acepta liquidaciones con splitMode none y un receptor', () => {
         const result = spaceEntrySchema.safeParse({
             type: 'settlement',
-            title: 'Liquidación abril',
+            title: 'Pago de B a A',
             amount: 50,
             currency: 'ARS',
             date: new Date('2026-04-15'),
             paidByParticipantId: PARTICIPANT_B,
-            splitMode: 'fixed',
+            splitMode: 'none',
             sharedWithParticipantIds: [PARTICIPANT_A],
-            splitAllocations: [{ participantId: PARTICIPANT_A, amount: 50 }],
         })
 
         expect(result.success).toBe(true)
+    })
+
+    it('rechaza liquidación sin pagador', () => {
+        const result = spaceEntrySchema.safeParse({
+            type: 'settlement',
+            title: 'Pago',
+            amount: 50,
+            currency: 'ARS',
+            date: new Date('2026-04-15'),
+            splitMode: 'none',
+            sharedWithParticipantIds: [PARTICIPANT_A],
+        })
+
+        expect(result.success).toBe(false)
+    })
+
+    it('rechaza liquidación sin receptor', () => {
+        const result = spaceEntrySchema.safeParse({
+            type: 'settlement',
+            title: 'Pago',
+            amount: 50,
+            currency: 'ARS',
+            date: new Date('2026-04-15'),
+            paidByParticipantId: PARTICIPANT_B,
+            splitMode: 'none',
+            sharedWithParticipantIds: [],
+        })
+
+        expect(result.success).toBe(false)
+    })
+
+    it('rechaza liquidación con pagador igual al receptor', () => {
+        const result = spaceEntrySchema.safeParse({
+            type: 'settlement',
+            title: 'Pago',
+            amount: 50,
+            currency: 'ARS',
+            date: new Date('2026-04-15'),
+            paidByParticipantId: PARTICIPANT_A,
+            splitMode: 'none',
+            sharedWithParticipantIds: [PARTICIPANT_A],
+        })
+
+        expect(result.success).toBe(false)
     })
 })

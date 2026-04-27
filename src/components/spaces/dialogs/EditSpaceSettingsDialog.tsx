@@ -31,6 +31,7 @@ import {
 import {
     DialogProps,
     normalizeDialogDate,
+    SpaceDialogChoice,
     SpaceDialogField,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { cn } from '@/lib/utils'
@@ -277,6 +278,27 @@ export function EditSpaceSettingsDialog({
                                         </Select>
                                     </SpaceDialogField>
                                 </div>
+
+                                <SpaceDialogField
+                                    label="Simplificar deudas entre participantes"
+                                    hint="Finp minimiza la cantidad de pagos necesarios para saldar el espacio."
+                                >
+                                    <div className="flex flex-wrap gap-2">
+                                        {([
+                                            { value: null, label: 'Automático' },
+                                            { value: true, label: 'Activado' },
+                                            { value: false, label: 'Desactivado' },
+                                        ] as const).map((option) => (
+                                            <SpaceDialogChoice
+                                                key={String(option.value)}
+                                                active={form.simplifyDebts === option.value}
+                                                onClick={() => setField('simplifyDebts', option.value)}
+                                            >
+                                                {option.label}
+                                            </SpaceDialogChoice>
+                                        ))}
+                                    </div>
+                                </SpaceDialogField>
                             </SettingSection>
 
                             <SettingSection title="Reparto">
