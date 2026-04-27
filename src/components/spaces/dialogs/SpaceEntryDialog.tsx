@@ -1,12 +1,24 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarRange, Coins, Save } from 'lucide-react'
+import {
+    Banknote,
+    Building2,
+    CalendarRange,
+    CircleDollarSign,
+    Coins,
+    CreditCard,
+    PiggyBank,
+    Save,
+    Wallet,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
 import { extractId, SPACE_ENTRY_TYPE_LABELS } from '@/lib/utils/spaces'
+import type { AccountType } from '@/lib/constants'
 import type { IAccount, ICategory, ISpaceParticipant } from '@/types'
 import {
     Dialog,
@@ -25,7 +37,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { SPACE_ENTRY_TYPE_META, SpaceAmountInline, SpaceEntryTypeBadge, SpaceInitialsAvatar, SpaceMetaBadge } from '@/components/spaces/SpaceUi'
+import {
+    SpaceAmountInline,
+    SpaceEntryTypeBadge,
+    SpaceInitialsAvatar,
+    SpaceMetaBadge,
+} from '@/components/spaces/SpaceUi'
 import {
     DialogProps,
     formatDateInput,
@@ -39,6 +56,27 @@ import {
     SpaceAttachmentsUploader,
 } from '@/components/spaces/dialogs/SpaceAttachmentsUploader'
 import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitConfigurator'
+
+// ── Account type helpers ──────────────────────────────────────────────────────
+
+function getAccountTypeMeta(type: AccountType): { label: string; icon: LucideIcon } {
+    switch (type) {
+        case 'bank':
+            return { label: 'Cuenta bancaria', icon: Building2 }
+        case 'cash':
+            return { label: 'Efectivo', icon: Banknote }
+        case 'wallet':
+            return { label: 'Billetera', icon: Wallet }
+        case 'credit_card':
+            return { label: 'Tarjeta de crédito', icon: CreditCard }
+        case 'savings':
+            return { label: 'Caja de ahorro', icon: PiggyBank }
+        default:
+            return { label: 'Cuenta', icon: CircleDollarSign }
+    }
+}
+
+// ── Internal types ────────────────────────────────────────────────────────────
 
 type EntryDraftPayload = Omit<SpaceEntryFormData, 'date'> & {
     date: string
@@ -228,6 +266,8 @@ function revokeAttachment(attachment: SpaceAttachmentDraft) {
     }
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export function SpaceEntryDialog({
     open,
     onOpenChange,
@@ -286,7 +326,6 @@ export function SpaceEntryDialog({
 
     useEffect(() => {
         if (open) return
-
         setAttachments((previous) => {
             previous.forEach(revokeAttachment)
             return previous.length > 0 ? [] : previous
@@ -372,29 +411,6 @@ export function SpaceEntryDialog({
         [accounts, form.currency]
     )
 
-    const updateSplitAllocation = (
-        participantId: string,
-        field: 'percentage' | 'amount',
-        value: string
-    ) => {
-        const numericValue = value === '' ? undefined : Number(value.replace(',', '.'))
-
-        setForm((previous) => ({
-            ...previous,
-            splitAllocations: (previous.splitAllocations ?? []).map((allocation) =>
-                allocation.participantId === participantId
-                    ? {
-                          ...allocation,
-                          [field]:
-                              typeof numericValue === 'number' && Number.isFinite(numericValue)
-                                  ? numericValue
-                                  : undefined,
-                      }
-                    : allocation
-            ),
-        }))
-    }
-
     const updateSplitAllocations = (
         allocations: NonNullable<SpaceEntryFormData['splitAllocations']>
     ) => {
@@ -427,9 +443,7 @@ export function SpaceEntryDialog({
         }))
     }
 
-    const applySplitPreset = (
-        preset: 'none' | 'equal' | 'half' | '6040' | 'custom'
-    ) => {
+    const applySplitPreset = (preset: SpaceEntryFormData['splitMode']) => {
         const allParticipantIds = activeParticipants
             .map((participant) => extractId(participant._id) ?? '')
             .filter(Boolean)
@@ -464,36 +478,25 @@ export function SpaceEntryDialog({
                 }
             }
 
-            if (preset === 'half' && selectedIds.length === 2) {
+            if (preset === 'percentage') {
                 return {
                     ...previous,
                     splitMode: 'percentage',
                     sharedWithParticipantIds: selectedIds,
-                    splitAllocations: [
-                        { participantId: selectedIds[0], percentage: 50 },
-                        { participantId: selectedIds[1], percentage: 50 },
-                    ],
+                    splitAllocations: buildDefaultSplitAllocations(selectedIds, 'percentage'),
                 }
             }
 
-            if (preset === '6040' && selectedIds.length === 2) {
+            if (preset === 'fixed') {
                 return {
                     ...previous,
-                    splitMode: 'percentage',
+                    splitMode: 'fixed',
                     sharedWithParticipantIds: selectedIds,
-                    splitAllocations: [
-                        { participantId: selectedIds[0], percentage: 60 },
-                        { participantId: selectedIds[1], percentage: 40 },
-                    ],
+                    splitAllocations: buildDefaultSplitAllocations(selectedIds, 'fixed'),
                 }
             }
 
-            return {
-                ...previous,
-                splitMode: 'percentage',
-                sharedWithParticipantIds: selectedIds,
-                splitAllocations: buildDefaultSplitAllocations(selectedIds, 'percentage'),
-            }
+            return previous
         })
     }
 
@@ -528,7 +531,6 @@ export function SpaceEntryDialog({
             file,
             previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
         }))
-
         setAttachments((previous) => [...previous, ...nextAttachments])
     }
 
@@ -541,16 +543,23 @@ export function SpaceEntryDialog({
     }
 
     const handleSubmit = async () => {
+        // Normalize 1-participant fixed mode: allocation should equal full amount
+        const normalizedAllocations =
+            form.splitMode === 'fixed' && (form.sharedWithParticipantIds?.length ?? 0) === 1
+                ? form.sharedWithParticipantIds?.map((id) => ({
+                      participantId: id,
+                      amount: Number.isFinite(form.amount) ? form.amount : 0,
+                  }))
+                : form.splitAllocations
+
         const parsed = spaceEntrySchema.safeParse({
             ...form,
             splitMode: spaceMode === 'solo' ? 'none' : form.splitMode,
             sharedWithParticipantIds:
-                spaceMode === 'solo'
-                    ? undefined
-                    : form.sharedWithParticipantIds,
+                spaceMode === 'solo' ? undefined : form.sharedWithParticipantIds,
             splitAllocations:
                 form.splitMode === 'percentage' || form.splitMode === 'fixed'
-                    ? form.splitAllocations
+                    ? normalizedAllocations
                     : undefined,
         })
 
@@ -571,7 +580,7 @@ export function SpaceEntryDialog({
             })
             onOpenChange(false)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'No pudimos guardar el movimiento.')
+            setError(err instanceof Error ? err.message : 'No pudimos guardar el gasto.')
         } finally {
             setSubmitting(false)
         }
@@ -584,6 +593,7 @@ export function SpaceEntryDialog({
                 className="max-w-[1120px] gap-0 overflow-hidden p-0 sm:max-h-[94vh] sm:max-w-[1120px]"
             >
                 <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
+                    {/* ── Header ── */}
                     <div className="border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
                         <DialogHeader className="space-y-3">
                             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-primary">
@@ -598,76 +608,15 @@ export function SpaceEntryDialog({
                         </DialogHeader>
                     </div>
 
+                    {/* ── Body ── */}
                     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
                         <div className="space-y-5">
                             <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+
+                                {/* ── Left column ── */}
                                 <div className="space-y-5">
-                                    <SpaceDialogPanel className="hidden">
-                                        <div className="space-y-4">
-                                            <div className="space-y-1">
-                                                <SpaceDialogSectionEyebrow>Tipo de movimiento</SpaceDialogSectionEyebrow>
-                                                <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                    Elegí el contexto contable
-                                                </h3>
-                                            </div>
 
-                                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                                {(['expense', 'income', 'adjustment'] as SpaceEntryFormData['type'][]).map(
-                                                    (type) => {
-                                                        const meta = SPACE_ENTRY_TYPE_META[type]
-                                                        const Icon = meta.icon
-                                                        const active = form.type === type
-
-                                                        return (
-                                                            <button
-                                                                key={type}
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setForm((previous) => ({
-                                                                        ...previous,
-                                                                        type,
-                                                                    }))
-                                                                }
-                                                                className={[
-                                                                    'rounded-[22px] border px-4 py-4 text-left transition-colors',
-                                                                    active
-                                                                        ? 'border-primary/20 bg-primary/8'
-                                                                        : 'border-border bg-background/72 hover:bg-accent/25',
-                                                                ].join(' ')}
-                                                            >
-                                                                <div className="space-y-3">
-                                                                    <div
-                                                                        className="flex h-10 w-10 items-center justify-center rounded-[16px]"
-                                                                        style={{
-                                                                            background: meta.softAccent,
-                                                                            color: meta.accent,
-                                                                        }}
-                                                                    >
-                                                                        <Icon className="h-5 w-5" />
-                                                                    </div>
-                                                                    <div className="space-y-1">
-                                                                        <p className="font-semibold text-foreground">
-                                                                            {SPACE_ENTRY_TYPE_LABELS[type]}
-                                                                        </p>
-                                                                        <p className="text-xs text-muted-foreground">
-                                                                            {type === 'expense'
-                                                                                ? 'Compra, gasto o pago compartido.'
-                                                                                : type === 'income'
-                                                                                    ? 'Ingreso que impacta el espacio.'
-                                                                                    : type === 'adjustment'
-                                                                                        ? 'Corrección o ajuste interno.'
-                                                                                        : 'Saldar deuda entre participantes.'}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </button>
-                                                        )
-                                                    }
-                                                )}
-                                            </div>
-                                        </div>
-                                    </SpaceDialogPanel>
-
+                                    {/* Monto, moneda, fecha, descripción, pagó, categoría */}
                                     <SpaceDialogPanel>
                                         <div className="grid gap-4">
                                             <div className="grid gap-4 lg:grid-cols-[1.1fr_0.55fr_0.7fr]">
@@ -840,6 +789,7 @@ export function SpaceEntryDialog({
                                         </div>
                                     </SpaceDialogPanel>
 
+                                    {/* Split configurator */}
                                     {spaceMode !== 'solo' ? (
                                         <SpaceSplitConfigurator
                                             participants={activeParticipants}
@@ -852,13 +802,15 @@ export function SpaceEntryDialog({
                                             onToggleParticipant={toggleSharedParticipant}
                                             onResponsibleChange={setResponsibleParticipant}
                                             onApplyPreset={applySplitPreset}
-                                            onAllocationChange={updateSplitAllocation}
                                             onAllocationsChange={updateSplitAllocations}
                                         />
                                     ) : null}
                                 </div>
 
+                                {/* ── Right column ── */}
                                 <div className="space-y-5">
+
+                                    {/* Resumen */}
                                     <SpaceDialogPanel>
                                         <div className="space-y-4">
                                             <div className="space-y-1">
@@ -897,9 +849,10 @@ export function SpaceEntryDialog({
                                         </div>
                                     </SpaceDialogPanel>
 
+                                    {/* Pagado desde */}
                                     {isCurrentUserPayer ? (
                                         <SpaceDialogPanel>
-                                            <div className="space-y-4">
+                                            <div className="space-y-3">
                                                 <div className="space-y-1">
                                                     <SpaceDialogSectionEyebrow>Impacto personal</SpaceDialogSectionEyebrow>
                                                     <h3 className="text-lg font-semibold tracking-tight text-foreground">
@@ -907,7 +860,7 @@ export function SpaceEntryDialog({
                                                     </h3>
                                                 </div>
 
-                                                <SpaceDialogField label="Pagado desde">
+                                                <SpaceDialogField label="Cuenta o tarjeta">
                                                     <Select
                                                         value={form.personalAccountId ?? 'none'}
                                                         onValueChange={(value) =>
@@ -922,17 +875,41 @@ export function SpaceEntryDialog({
                                                             <SelectValue placeholder="Solo registrar en el espacio" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="none">
-                                                                Solo registrar en el espacio
+                                                            <SelectItem value="none" textValue="Solo registrar en el espacio">
+                                                                <span className="flex items-center gap-2.5">
+                                                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-muted">
+                                                                        <CircleDollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                    </span>
+                                                                    <span className="text-sm text-muted-foreground">
+                                                                        Solo registrar en el espacio
+                                                                    </span>
+                                                                </span>
                                                             </SelectItem>
-                                                            {filteredAccounts.map((account: IAccount) => (
-                                                                <SelectItem
-                                                                    key={extractId(account._id)}
-                                                                    value={extractId(account._id) ?? ''}
-                                                                >
-                                                                    {account.name}
-                                                                </SelectItem>
-                                                            ))}
+                                                            {filteredAccounts.map((account: IAccount) => {
+                                                                const meta = getAccountTypeMeta(account.type)
+                                                                const Icon = meta.icon
+                                                                return (
+                                                                    <SelectItem
+                                                                        key={extractId(account._id)}
+                                                                        value={extractId(account._id) ?? ''}
+                                                                        textValue={account.name}
+                                                                    >
+                                                                        <span className="flex items-center gap-2.5">
+                                                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-muted">
+                                                                                <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                            </span>
+                                                                            <span>
+                                                                                <span className="block text-sm font-medium leading-tight">
+                                                                                    {account.name}
+                                                                                </span>
+                                                                                <span className="block text-xs leading-tight text-muted-foreground">
+                                                                                    {meta.label} · {account.currency}
+                                                                                </span>
+                                                                            </span>
+                                                                        </span>
+                                                                    </SelectItem>
+                                                                )
+                                                            })}
                                                         </SelectContent>
                                                     </Select>
                                                 </SpaceDialogField>
@@ -944,20 +921,17 @@ export function SpaceEntryDialog({
                                         </SpaceDialogPanel>
                                     ) : null}
 
+                                    {/* Adjuntos */}
                                     <SpaceAttachmentsUploader
                                         attachments={attachments}
                                         onFilesSelected={handleFilesSelected}
                                         onRemove={handleRemoveAttachment}
                                     />
 
+                                    {/* Opciones avanzadas */}
                                     <SpaceDialogPanel>
-                                        <div className="space-y-4">
-                                            <div className="space-y-1">
-                                                <SpaceDialogSectionEyebrow>Opciones avanzadas</SpaceDialogSectionEyebrow>
-                                                <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                    Ajustes del gasto
-                                                </h3>
-                                            </div>
+                                        <div className="space-y-3">
+                                            <SpaceDialogSectionEyebrow>Opciones avanzadas</SpaceDialogSectionEyebrow>
                                             <SpaceDialogField label="Tipo">
                                                 <Select
                                                     value={form.type}
@@ -993,23 +967,10 @@ export function SpaceEntryDialog({
                                             </Button>
                                         </div>
                                     </SpaceDialogPanel>
-
-                                    <SpaceDialogPanel>
-                                        <div className="space-y-3">
-                                            <div className="space-y-1">
-                                                <SpaceDialogSectionEyebrow>Borrador</SpaceDialogSectionEyebrow>
-                                                <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                    Guardado local
-                                                </h3>
-                                            </div>
-                                            <p className="text-sm text-muted-foreground">
-                                                Guardá el formulario como borrador y retomalo después en este espacio. Los comprobantes adjuntados no se incluyen en el borrador.
-                                            </p>
-                                        </div>
-                                    </SpaceDialogPanel>
                                 </div>
                             </div>
 
+                            {/* Notas */}
                             <SpaceDialogPanel>
                                 <div className="space-y-3">
                                     <div className="space-y-1">
@@ -1018,7 +979,6 @@ export function SpaceEntryDialog({
                                             Contexto adicional
                                         </h3>
                                     </div>
-
                                     <SpaceDialogTextArea
                                         value={form.notes ?? ''}
                                         onChange={(event) =>
@@ -1041,11 +1001,17 @@ export function SpaceEntryDialog({
                         </div>
                     </div>
 
+                    {/* ── Footer ── */}
                     <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
                         <Button className="rounded-full" onClick={handleSubmit} disabled={submitting}>
                             {submitting ? 'Guardando...' : 'Guardar gasto'}
                         </Button>
-                        <Button variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)} disabled={submitting}>
+                        <Button
+                            variant="ghost"
+                            className="rounded-full"
+                            onClick={() => onOpenChange(false)}
+                            disabled={submitting}
+                        >
                             Cancelar
                         </Button>
                     </DialogFooter>

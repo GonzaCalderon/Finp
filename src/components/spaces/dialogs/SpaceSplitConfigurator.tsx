@@ -6,16 +6,12 @@ import { SpaceAmountInline, SpaceInitialsAvatar, SpaceTonePill } from '@/compone
 import { SpaceDialogChoice, SpaceDialogField, SpaceDialogPanel, SpaceDialogSectionEyebrow } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { Input } from '@/components/ui/input'
 import { SPACE_ROLE_LABELS, extractId } from '@/lib/utils/spaces'
+import { applySmartFixed, applySmartPercentage, round2 } from '@/lib/utils/space-split'
 import { cn } from '@/lib/utils'
 import type { ISpaceParticipant } from '@/types'
 import type { SpaceEntryFormData } from '@/lib/validations'
 
-type SplitPreset = 'none' | 'equal' | 'half' | '6040' | 'custom'
 type SplitAllocation = NonNullable<SpaceEntryFormData['splitAllocations']>[number]
-
-function round2(value: number) {
-    return Math.round((value + Number.EPSILON) * 100) / 100
-}
 
 function getParticipantId(participant: ISpaceParticipant) {
     return extractId(participant._id) ?? ''
@@ -23,6 +19,10 @@ function getParticipantId(participant: ISpaceParticipant) {
 
 function getPercentage(allocations: SpaceEntryFormData['splitAllocations'], participantId: string) {
     return allocations?.find((item) => item.participantId === participantId)?.percentage ?? 0
+}
+
+function getAmount(allocations: SpaceEntryFormData['splitAllocations'], participantId: string) {
+    return allocations?.find((item) => item.participantId === participantId)?.amount ?? 0
 }
 
 function resolvePreviewValue({
@@ -39,28 +39,19 @@ function resolvePreviewValue({
     allocations?: SpaceEntryFormData['splitAllocations']
 }) {
     if (splitMode === 'none') {
-        return {
-            amount,
-            percentage: 100,
-        }
+        return { amount, percentage: 100 }
     }
 
     if (splitMode === 'equal') {
         const count = selectedParticipantIds.length || 1
-        return {
-            amount: amount / count,
-            percentage: 100 / count,
-        }
+        return { amount: amount / count, percentage: 100 / count }
     }
 
     const allocation = allocations?.find((item) => item.participantId === participantId)
 
     if (splitMode === 'percentage') {
         const percentage = allocation?.percentage ?? 0
-        return {
-            amount: amount * (percentage / 100),
-            percentage,
-        }
+        return { amount: amount * (percentage / 100), percentage }
     }
 
     if (splitMode === 'fixed') {
@@ -71,11 +62,10 @@ function resolvePreviewValue({
         }
     }
 
-    return {
-        amount: 0,
-        percentage: 0,
-    }
+    return { amount: 0, percentage: 0 }
 }
+
+// ── Preview bar ───────────────────────────────────────────────────────────────
 
 export function SpaceSplitPreviewBar({
     participants,
@@ -98,33 +88,45 @@ export function SpaceSplitPreviewBar({
 }) {
     const selectedParticipants =
         splitMode === 'none'
-            ? participants.filter((participant) => getParticipantId(participant) === responsibleParticipantId)
-            : participants.filter((participant) => selectedParticipantIds.includes(getParticipantId(participant)))
-    const paidByParticipant = participants.find((participant) => getParticipantId(participant) === paidByParticipantId)
+            ? participants.filter((p) => getParticipantId(p) === responsibleParticipantId)
+            : participants.filter((p) => selectedParticipantIds.includes(getParticipantId(p)))
+
+    const paidByParticipant = participants.find((p) => getParticipantId(p) === paidByParticipantId)
     const responsibleParticipant = selectedParticipants[0]
+
     const configuredTotal =
         splitMode === 'percentage'
             ? round2((allocations ?? []).reduce((acc, item) => acc + (item.percentage ?? 0), 0))
             : splitMode === 'fixed'
                 ? round2((allocations ?? []).reduce((acc, item) => acc + (item.amount ?? 0), 0))
                 : 100
+
     const difference =
         splitMode === 'percentage'
             ? round2(configuredTotal - 100)
             : splitMode === 'fixed'
                 ? round2(configuredTotal - amount)
                 : 0
+
     const complete = Math.abs(difference) < 0.01
+
     const statusLabel =
         splitMode === 'none' && responsibleParticipant
-            ? paidByParticipant && getParticipantId(paidByParticipant) !== getParticipantId(responsibleParticipant)
+            ? paidByParticipant &&
+              getParticipantId(paidByParticipant) !== getParticipantId(responsibleParticipant)
                 ? `${responsibleParticipant.displayName} absorbe el 100%. Si pagó ${paidByParticipant.displayName}, ${responsibleParticipant.displayName} le debe el total.`
                 : `${responsibleParticipant.displayName} absorbe el 100%. El gasto queda saldado.`
-            : complete
-                ? 'Reparto completo: 100%'
-                : difference < 0
-                    ? `Falta asignar ${Math.abs(difference).toFixed(2)}%`
-                    : `Excede ${difference.toFixed(2)}%`
+            : splitMode === 'fixed'
+                ? complete
+                    ? 'Reparto completo'
+                    : difference < 0
+                        ? `Falta asignar ${currency} ${Math.abs(difference).toFixed(2)}`
+                        : `Excede ${currency} ${difference.toFixed(2)}`
+                : complete
+                    ? 'Reparto completo: 100%'
+                    : difference < 0
+                        ? `Falta asignar ${Math.abs(difference).toFixed(2)}%`
+                        : `Excede ${difference.toFixed(2)}%`
 
     return (
         <div className="rounded-[20px] border border-foreground/[0.07] bg-background/74 p-3">
@@ -134,7 +136,9 @@ export function SpaceSplitPreviewBar({
                     <p className="text-xs text-muted-foreground">{statusLabel}</p>
                 </div>
                 <SpaceTonePill positive={complete}>
-                    {splitMode === 'fixed' ? `${configuredTotal.toFixed(2)} ${currency}` : `${configuredTotal.toFixed(2)}%`}
+                    {splitMode === 'fixed'
+                        ? `${configuredTotal.toFixed(2)} ${currency}`
+                        : `${configuredTotal.toFixed(2)}%`}
                 </SpaceTonePill>
             </div>
 
@@ -148,7 +152,6 @@ export function SpaceSplitPreviewBar({
                         selectedParticipantIds,
                         allocations,
                     })
-
                     return (
                         <span
                             key={participantId}
@@ -172,7 +175,6 @@ export function SpaceSplitPreviewBar({
                         selectedParticipantIds,
                         allocations,
                     })
-
                     return (
                         <div key={participantId} className="flex items-center justify-between gap-3 text-sm">
                             <div className="flex min-w-0 items-center gap-2">
@@ -196,6 +198,8 @@ export function SpaceSplitPreviewBar({
     )
 }
 
+// ── Configurator ──────────────────────────────────────────────────────────────
+
 export function SpaceSplitConfigurator({
     participants,
     amount,
@@ -207,7 +211,6 @@ export function SpaceSplitConfigurator({
     onToggleParticipant,
     onResponsibleChange,
     onApplyPreset,
-    onAllocationChange,
     onAllocationsChange,
 }: {
     participants: ISpaceParticipant[]
@@ -219,27 +222,27 @@ export function SpaceSplitConfigurator({
     allocations?: SpaceEntryFormData['splitAllocations']
     onToggleParticipant: (participantId: string) => void
     onResponsibleChange: (participantId: string) => void
-    onApplyPreset: (preset: SplitPreset) => void
-    onAllocationChange: (
-        participantId: string,
-        field: 'percentage' | 'amount',
-        value: string
-    ) => void
+    onApplyPreset: (preset: SpaceEntryFormData['splitMode']) => void
     onAllocationsChange: (allocations: SplitAllocation[]) => void
 }) {
     const [manualPercentages, setManualPercentages] = useState<Set<string>>(new Set())
+    const [manualAmounts, setManualAmounts] = useState<Set<string>>(new Set())
+
     const selectedParticipants = useMemo(
-        () => participants.filter((participant) => selectedParticipantIds.includes(getParticipantId(participant))),
+        () => participants.filter((p) => selectedParticipantIds.includes(getParticipantId(p))),
         [participants, selectedParticipantIds]
     )
-    const responsibleParticipantId = selectedParticipantIds[0] ?? paidByParticipantId ?? getParticipantId(participants[0])
-    const twoWaySplit = selectedParticipants.length === 2
+
+    const responsibleParticipantId =
+        selectedParticipantIds[0] ?? paidByParticipantId ?? getParticipantId(participants[0])
+
     const configuredTotal =
         splitMode === 'percentage'
             ? round2((allocations ?? []).reduce((acc, item) => acc + (item.percentage ?? 0), 0))
             : splitMode === 'fixed'
                 ? round2((allocations ?? []).reduce((acc, item) => acc + (item.amount ?? 0), 0))
                 : 100
+
     const splitInvalid =
         splitMode === 'percentage'
             ? Math.abs(configuredTotal - 100) > 0.01
@@ -247,78 +250,70 @@ export function SpaceSplitConfigurator({
                 ? Math.abs(configuredTotal - amount) > 0.01
                 : false
 
-    const applyPreset = (preset: SplitPreset) => {
+    const applyPreset = (preset: SpaceEntryFormData['splitMode']) => {
         setManualPercentages(new Set())
+        setManualAmounts(new Set())
         onApplyPreset(preset)
     }
 
+    // ── Smart percentage ──────────────────────────────────────────────────────
+
     const handleSmartPercentageChange = (participantId: string, value: string) => {
-        const index = selectedParticipants.findIndex((participant) => getParticipantId(participant) === participantId)
-        if (index < 0) return
-
-        const count = selectedParticipants.length
-        if (count === 0) return
-
         const parsed = Number(value.replace(',', '.'))
         const rawValue = Number.isFinite(parsed) ? parsed : 0
 
-        if (count === 1) {
-            onAllocationsChange([{ participantId, percentage: 100 }])
-            return
-        }
+        const participantIds = selectedParticipants.map(getParticipantId)
+        const currentAllocations = participantIds.map((id) => ({
+            participantId: id,
+            percentage: getPercentage(allocations, id),
+        }))
 
-        if (count === 2) {
-            const clamped = round2(Math.max(0, Math.min(100, rawValue)))
-            const otherIndex = index === 0 ? 1 : 0
-            const next = selectedParticipants.map((participant, itemIndex) => ({
-                participantId: getParticipantId(participant),
-                percentage:
-                    itemIndex === index
-                        ? clamped
-                        : itemIndex === otherIndex
-                            ? round2(100 - clamped)
-                            : 0,
-            }))
-            setManualPercentages(new Set([participantId]))
-            onAllocationsChange(next)
-            return
-        }
+        const result = applySmartPercentage(participantIds, currentAllocations, participantId, rawValue)
+        if (!result) return
 
-        if (index === count - 1) return
-
-        const current = selectedParticipants.map((participant) => {
-            const id = getParticipantId(participant)
-            return {
-                participantId: id,
-                percentage: getPercentage(allocations, id),
+        const index = participantIds.indexOf(participantId)
+        setManualPercentages((prev) => {
+            const next = new Set(prev)
+            next.add(participantId)
+            if (participantIds.length >= 3) {
+                participantIds.slice(index + 1).forEach((id) => next.delete(id))
             }
+            return next
         })
-        const upperSum = round2(current.slice(0, index).reduce((acc, item) => acc + item.percentage, 0))
-        const maxAllowed = round2(Math.max(0, 100 - upperSum))
-        const clamped = round2(Math.max(0, Math.min(maxAllowed, rawValue)))
-        const remaining = round2(100 - upperSum - clamped)
-        const lowerCount = count - index - 1
-        const lowerBase = lowerCount > 0 ? round2(remaining / lowerCount) : 0
-        let lowerAssigned = 0
-        const next = current.map((item, itemIndex) => {
-            if (itemIndex < index) return item
-            if (itemIndex === index) return { ...item, percentage: clamped }
-            if (itemIndex === count - 1) {
-                return { ...item, percentage: round2(remaining - lowerAssigned) }
-            }
-            lowerAssigned = round2(lowerAssigned + lowerBase)
-            return { ...item, percentage: lowerBase }
-        })
+        onAllocationsChange(result)
+    }
 
-        setManualPercentages((previous) => {
-            const nextManual = new Set(previous)
-            nextManual.add(participantId)
-            selectedParticipants.slice(index + 1).forEach((participant) => {
-                nextManual.delete(getParticipantId(participant))
-            })
-            return nextManual
+    // ── Smart fixed ───────────────────────────────────────────────────────────
+
+    const handleSmartFixedChange = (participantId: string, value: string) => {
+        const parsed = Number(value.replace(',', '.'))
+        const rawValue = Number.isFinite(parsed) ? parsed : 0
+
+        const participantIds = selectedParticipants.map(getParticipantId)
+        const currentAllocations = participantIds.map((id) => ({
+            participantId: id,
+            amount: getAmount(allocations, id),
+        }))
+
+        const result = applySmartFixed(
+            participantIds,
+            currentAllocations,
+            participantId,
+            rawValue,
+            amount
+        )
+        if (!result) return
+
+        const index = participantIds.indexOf(participantId)
+        setManualAmounts((prev) => {
+            const next = new Set(prev)
+            next.add(participantId)
+            if (participantIds.length >= 3) {
+                participantIds.slice(index + 1).forEach((id) => next.delete(id))
+            }
+            return next
         })
-        onAllocationsChange(next)
+        onAllocationsChange(result)
     }
 
     return (
@@ -330,39 +325,39 @@ export function SpaceSplitConfigurator({
                         Cómo se reparte este gasto
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                        Elegí una lógica rápida o usá Smart para completar el 100% sin cuentas manuales.
+                        Elegí cómo dividir el gasto entre los participantes.
                     </p>
                 </div>
 
+                {/* ── Preset buttons ── */}
                 <div className="flex flex-wrap gap-2">
-                    <SpaceDialogChoice active={splitMode === 'equal'} onClick={() => applyPreset('equal')}>
+                    <SpaceDialogChoice
+                        active={splitMode === 'equal'}
+                        onClick={() => applyPreset('equal')}
+                    >
                         Partes iguales
                     </SpaceDialogChoice>
-                    <SpaceDialogChoice active={splitMode === 'none'} onClick={() => applyPreset('none')}>
+                    <SpaceDialogChoice
+                        active={splitMode === 'none'}
+                        onClick={() => applyPreset('none')}
+                    >
                         Responsable único
                     </SpaceDialogChoice>
                     <SpaceDialogChoice
-                        active={splitMode === 'percentage' && allocations?.[0]?.percentage === 50}
-                        onClick={() => applyPreset('half')}
-                        disabled={!twoWaySplit}
+                        active={splitMode === 'percentage'}
+                        onClick={() => applyPreset('percentage')}
                     >
-                        50/50
+                        Porcentajes
                     </SpaceDialogChoice>
                     <SpaceDialogChoice
-                        active={splitMode === 'percentage' && allocations?.[0]?.percentage === 60}
-                        onClick={() => applyPreset('6040')}
-                        disabled={!twoWaySplit}
+                        active={splitMode === 'fixed'}
+                        onClick={() => applyPreset('fixed')}
                     >
-                        60/40
-                    </SpaceDialogChoice>
-                    <SpaceDialogChoice
-                        active={splitMode === 'percentage' && Boolean(allocations?.some((item) => typeof item.percentage === 'number'))}
-                        onClick={() => applyPreset('custom')}
-                    >
-                        Personalizado / Smart
+                        Montos fijos
                     </SpaceDialogChoice>
                 </div>
 
+                {/* ── Responsable único ── */}
                 {splitMode === 'none' ? (
                     <SpaceDialogField
                         label="¿Quién es responsable?"
@@ -386,10 +381,17 @@ export function SpaceSplitConfigurator({
                                         )}
                                     >
                                         <div className="flex min-w-0 items-center gap-3">
-                                            <SpaceInitialsAvatar name={participant.displayName} className="h-9 w-9" />
+                                            <SpaceInitialsAvatar
+                                                name={participant.displayName}
+                                                className="h-9 w-9"
+                                            />
                                             <div className="min-w-0">
-                                                <p className="truncate font-medium text-foreground">{participant.displayName}</p>
-                                                <p className="text-xs text-muted-foreground">{SPACE_ROLE_LABELS[participant.role]}</p>
+                                                <p className="truncate font-medium text-foreground">
+                                                    {participant.displayName}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {SPACE_ROLE_LABELS[participant.role]}
+                                                </p>
                                             </div>
                                         </div>
                                         <div
@@ -409,6 +411,7 @@ export function SpaceSplitConfigurator({
                     </SpaceDialogField>
                 ) : (
                     <>
+                        {/* ── Participant selector ── */}
                         <SpaceDialogField
                             label="Participantes incluidos"
                             hint="Toca para sumar o sacar participantes del reparto."
@@ -431,13 +434,19 @@ export function SpaceSplitConfigurator({
                                             )}
                                         >
                                             <div className="flex min-w-0 items-center gap-3">
-                                                <SpaceInitialsAvatar name={participant.displayName} className="h-9 w-9" />
+                                                <SpaceInitialsAvatar
+                                                    name={participant.displayName}
+                                                    className="h-9 w-9"
+                                                />
                                                 <div className="min-w-0">
-                                                    <p className="truncate font-medium text-foreground">{participant.displayName}</p>
-                                                    <p className="text-xs text-muted-foreground">{SPACE_ROLE_LABELS[participant.role]}</p>
+                                                    <p className="truncate font-medium text-foreground">
+                                                        {participant.displayName}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {SPACE_ROLE_LABELS[participant.role]}
+                                                    </p>
                                                 </div>
                                             </div>
-
                                             <div
                                                 className={cn(
                                                     'flex h-5 w-5 items-center justify-center rounded-full border',
@@ -454,11 +463,14 @@ export function SpaceSplitConfigurator({
                             </div>
                         </SpaceDialogField>
 
+                        {/* ── Porcentajes ── */}
                         {splitMode === 'percentage' ? (
                             <div className="grid gap-3 sm:grid-cols-2">
                                 {selectedParticipants.map((participant, index) => {
                                     const participantId = getParticipantId(participant)
-                                    const lastResidual = selectedParticipants.length >= 3 && index === selectedParticipants.length - 1
+                                    const lastResidual =
+                                        selectedParticipants.length >= 3 &&
+                                        index === selectedParticipants.length - 1
                                     const twoPersonCalculated =
                                         selectedParticipants.length === 2 &&
                                         manualPercentages.size > 0 &&
@@ -481,8 +493,15 @@ export function SpaceSplitConfigurator({
                                         >
                                             <Input
                                                 value={Number.isFinite(percentage) ? String(percentage) : ''}
-                                                onChange={(event) => handleSmartPercentageChange(participantId, event.target.value)}
-                                                disabled={lastResidual || selectedParticipants.length === 1}
+                                                onChange={(event) =>
+                                                    handleSmartPercentageChange(
+                                                        participantId,
+                                                        event.target.value
+                                                    )
+                                                }
+                                                disabled={
+                                                    lastResidual || selectedParticipants.length === 1
+                                                }
                                                 inputMode="decimal"
                                                 placeholder="50"
                                             />
@@ -492,17 +511,55 @@ export function SpaceSplitConfigurator({
                             </div>
                         ) : null}
 
+                        {/* ── Montos fijos ── */}
                         {splitMode === 'fixed' ? (
                             <div className="grid gap-3 sm:grid-cols-2">
-                                {selectedParticipants.map((participant) => {
+                                {selectedParticipants.map((participant, index) => {
                                     const participantId = getParticipantId(participant)
-                                    const allocation = allocations?.find((item) => item.participantId === participantId)
+                                    const allocation = allocations?.find(
+                                        (item) => item.participantId === participantId
+                                    )
+                                    const lastResidual =
+                                        selectedParticipants.length >= 3 &&
+                                        index === selectedParticipants.length - 1
+                                    const twoPersonCalculated =
+                                        selectedParticipants.length === 2 &&
+                                        manualAmounts.size > 0 &&
+                                        !manualAmounts.has(participantId)
+                                    // 1 participant → disabled, shows the full amount
+                                    const isSingleParticipant = selectedParticipants.length === 1
+                                    const displayValue = isSingleParticipant
+                                        ? String(amount)
+                                        : Number.isFinite(allocation?.amount)
+                                            ? String(allocation?.amount)
+                                            : ''
 
                                     return (
-                                        <SpaceDialogField key={participantId} label={`${participant.displayName} · Monto`}>
+                                        <SpaceDialogField
+                                            key={participantId}
+                                            label={`${participant.displayName} · ${currency}`}
+                                            hint={
+                                                lastResidual
+                                                    ? 'Resto · Completa el total'
+                                                    : isSingleParticipant
+                                                        ? 'Absorbe el total'
+                                                        : manualAmounts.has(participantId)
+                                                            ? 'Manual'
+                                                            : twoPersonCalculated
+                                                                ? 'Calculado'
+                                                                : 'Auto'
+                                            }
+                                        >
                                             <Input
-                                                value={allocation?.amount ?? ''}
-                                                onChange={(event) => onAllocationChange(participantId, 'amount', event.target.value)}
+                                                value={displayValue}
+                                                onChange={(event) =>
+                                                    handleSmartFixedChange(
+                                                        participantId,
+                                                        event.target.value
+                                                    )
+                                                }
+                                                disabled={lastResidual || isSingleParticipant}
+                                                inputMode="decimal"
                                                 placeholder="22500"
                                             />
                                         </SpaceDialogField>
@@ -513,9 +570,12 @@ export function SpaceSplitConfigurator({
                     </>
                 )}
 
+                {/* ── Validation message ── */}
                 {splitInvalid ? (
                     <p className="rounded-[18px] border border-destructive/15 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                        El reparto tiene que cerrar en 100% antes de guardar.
+                        {splitMode === 'fixed'
+                            ? `El reparto tiene que cerrar en ${currency} ${amount.toFixed(2)} antes de guardar.`
+                            : 'El reparto tiene que cerrar en 100% antes de guardar.'}
                     </p>
                 ) : null}
 
