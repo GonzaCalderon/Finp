@@ -78,6 +78,44 @@ export function useSpaceParticipants(spaceId?: string) {
         [spaceId]
     )
 
+    const updateParticipantRole = useCallback(
+        async (participantId: string, role: 'admin' | 'participant') => {
+            if (!spaceId) {
+                throw new Error('Espacio inválido')
+            }
+
+            const data = await apiJson<{ participant: ISpaceParticipant }>(
+                `/api/spaces/${spaceId}/participants/${participantId}`,
+                {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role }),
+                }
+            )
+
+            invalidateData(SPACE_INVALIDATION_TAGS)
+            return data.participant
+        },
+        [spaceId]
+    )
+
+    const removeParticipant = useCallback(
+        async (participantId: string) => {
+            if (!spaceId) {
+                throw new Error('Espacio inválido')
+            }
+
+            const data = await apiJson<{ participant: ISpaceParticipant }>(
+                `/api/spaces/${spaceId}/participants/${participantId}`,
+                { method: 'DELETE' }
+            )
+
+            invalidateData(SPACE_INVALIDATION_TAGS)
+            return data.participant
+        },
+        [spaceId]
+    )
+
     useEffect(() => {
         if (!spaceId) return
         void fetchParticipants()
@@ -96,5 +134,7 @@ export function useSpaceParticipants(spaceId?: string) {
         fetchParticipants,
         addParticipant,
         respondToInvite,
+        updateParticipantRole,
+        removeParticipant,
     }
 }

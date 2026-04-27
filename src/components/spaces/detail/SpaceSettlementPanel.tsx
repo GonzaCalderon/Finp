@@ -36,54 +36,67 @@ export function SpaceSettlementPanel({
     onCreateEntry: () => void
 }) {
     const settlement = buildSettlementPreview(balances, currentUserId)
-    if (!settlement) return null
+    if (!settlement) {
+        return (
+            <section className="rounded-2xl border border-foreground/[0.06] bg-card/55 px-4 py-3">
+                <div className="flex items-center gap-3">
+                    <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                        style={{ background: 'color-mix(in srgb, var(--chart-3) 13%, transparent)' }}
+                    >
+                        <Check className="h-4 w-4" style={{ color: 'var(--chart-3)' }} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold text-foreground">Todo saldado</p>
+                        <p className="text-xs text-muted-foreground">No tenés pagos pendientes en este espacio.</p>
+                    </div>
+                </div>
+            </section>
+        )
+    }
 
     const accent = settlement.isDebt ? 'var(--destructive)' : 'var(--chart-3)'
 
     return (
         <section
-            className="rounded-[28px] border px-5 py-5 md:px-6"
+            className="rounded-2xl border px-4 py-3"
             style={{
                 background: settlement.isDebt
-                    ? 'color-mix(in srgb, var(--destructive) 7%, var(--card))'
-                    : 'color-mix(in srgb, var(--chart-3) 7%, var(--card))',
+                    ? 'color-mix(in srgb, var(--destructive) 6%, var(--card))'
+                    : 'color-mix(in srgb, var(--chart-3) 6%, var(--card))',
                 borderColor: settlement.isDebt
-                    ? 'color-mix(in srgb, var(--destructive) 24%, transparent)'
-                    : 'color-mix(in srgb, var(--chart-3) 24%, transparent)',
+                    ? 'color-mix(in srgb, var(--destructive) 18%, transparent)'
+                    : 'color-mix(in srgb, var(--chart-3) 18%, transparent)',
             }}
         >
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: accent }}>
-                        {settlement.isDebt ? 'DEUDA PENDIENTE' : 'SALDO A COBRAR'}
-                    </p>
-                    <div className="space-y-1">
-                        <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                    <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                        style={{ background: `color-mix(in srgb, ${accent} 13%, transparent)` }}
+                    >
+                        <HandCoins className="h-4 w-4" style={{ color: accent }} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
                             {settlement.isDebt
-                                ? `Le debes a ${settlement.counterpart.displayName}`
+                                ? `Debés a ${settlement.counterpart.displayName}`
                                 : `${settlement.counterpart.displayName} te debe`}
-                        </h2>
+                        </p>
                         <SpaceAmountInline
                             amount={settlement.amount}
                             currency={currency}
                             hidden={hidden}
                             color={accent}
-                            className="text-3xl font-semibold tracking-tight"
+                            className="mt-0.5 block text-xl font-semibold tracking-tight"
                         />
                     </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 md:justify-end">
-                    <Button variant="outline" className="rounded-full" onClick={onCreateEntry}>
+                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                    <Button variant="outline" size="sm" className="rounded-full" onClick={onCreateEntry}>
                         <HandCoins className="h-4 w-4" />
-                        Pago parcial
-                    </Button>
-                    <Button
-                        className="rounded-full bg-[var(--chart-3)] text-white hover:bg-[var(--chart-3)]/90"
-                        onClick={onCreateEntry}
-                    >
-                        <Check className="h-4 w-4" />
-                        Saldar total
+                        Registrar pago
                     </Button>
                 </div>
             </div>

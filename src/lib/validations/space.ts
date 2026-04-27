@@ -206,8 +206,10 @@ export const spaceEntrySchema = z
     })
 
 export const spaceParticipantResponseSchema = z.object({
-    inviteStatus: z.enum(['accepted', 'declined']),
+    inviteStatus: z.enum(['accepted', 'declined']).optional(),
+    role: z.enum(['admin', 'participant']).optional(),
 })
+    .refine((data) => data.inviteStatus || data.role, 'No hay cambios para guardar')
 
 export const spaceEntryConfirmSchema = z
     .object({

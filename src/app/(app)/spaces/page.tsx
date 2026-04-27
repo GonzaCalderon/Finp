@@ -213,7 +213,7 @@ export default function SpacesPage() {
                         {error}
                     </div>
                 ) : filteredSpaces.length === 0 ? (
-                    <div className="rounded-[30px] border border-foreground/[0.08] bg-card/94 px-4 py-6">
+                    <div className="px-2 py-8 md:py-12">
                         <EmptyState
                             icon={search ? Layers3 : Sparkles}
                             title={search ? 'No encontramos espacios' : 'Todavía no tenés espacios cargados'}

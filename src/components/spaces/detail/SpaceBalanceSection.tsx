@@ -95,8 +95,6 @@ export function SpaceBalanceSection({
 }) {
     const recommendedPayments = buildRecommendedPayments(balances)
     const settlementEntries = entries.filter((entry) => entry.type === 'settlement').slice(0, 5)
-    const totalPositive = balances.reduce((sum, item) => sum + Math.max(0, item.balanceReporting), 0)
-    const totalNegative = balances.reduce((sum, item) => sum + Math.abs(Math.min(0, item.balanceReporting)), 0)
     const userSummary = buildUserBalanceSummary(balances, currentUserId)
 
     return (
@@ -147,28 +145,40 @@ export function SpaceBalanceSection({
                     </div>
                 </SpaceSurface>
 
-                <section>
+                <SpaceSurface>
                     <SpaceSectionHeading eyebrow="Participantes" title="Balance por persona" />
-                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <div className="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
                         {balances.length > 0 ? balances.map((balance) => {
                             const isCurrent = balance.userId === currentUserId
-                            const positive = balance.balanceReporting >= 0
+                            const netAmount = Math.abs(balance.balanceReporting)
+                            const isSettled = netAmount <= 0.01
+                            const positive = balance.balanceReporting > 0
+                            const netColor = isSettled
+                                ? 'var(--muted-foreground)'
+                                : positive
+                                    ? 'var(--chart-3)'
+                                    : 'var(--destructive)'
+                            const netLabel = isSettled ? 'Sin pendiente' : positive ? 'Por cobrar' : 'Por pagar'
+                            const netDescription = isSettled
+                                ? 'Sin movimientos pendientes'
+                                : positive
+                                    ? 'Monto pendiente de cobro'
+                                    : 'Monto pendiente de pago'
 
                             return (
                                 <div
                                     key={balance.participantId}
-                                    className="rounded-2xl border border-foreground/[0.08] bg-card p-4"
+                                    className="rounded-2xl border border-foreground/[0.08] bg-background/58 p-4 transition-colors hover:border-foreground/[0.14]"
                                     style={{
-                                        background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                                        boxShadow: 'var(--card-shadow)',
+                                        background: 'color-mix(in srgb, var(--background) 72%, var(--card))',
                                     }}
                                 >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="flex min-w-0 items-center gap-3">
-                                            <SpaceInitialsAvatar name={balance.displayName} className="h-10 w-10" />
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex min-w-0 items-start gap-3">
+                                            <SpaceInitialsAvatar name={balance.displayName} className="h-11 w-11 text-sm" />
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <p className="truncate font-semibold text-foreground">{balance.displayName}</p>
+                                                    <p className="truncate text-base font-semibold text-foreground">{balance.displayName}</p>
                                                     {isCurrent ? (
                                                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                                                             Vos
@@ -181,32 +191,57 @@ export function SpaceBalanceSection({
                                                 </div>
                                             </div>
                                         </div>
+                                        <div
+                                            className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                                            style={{
+                                                background: isSettled
+                                                    ? 'color-mix(in srgb, var(--muted) 70%, transparent)'
+                                                    : positive
+                                                        ? 'color-mix(in srgb, var(--chart-3) 14%, transparent)'
+                                                        : 'color-mix(in srgb, var(--destructive) 12%, transparent)',
+                                                color: netColor,
+                                            }}
+                                        >
+                                            {netLabel}
+                                        </div>
                                     </div>
 
-                                    <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                                        <div>
+                                    <div className="mt-4 border-t border-border/70 pt-3">
+                                        <div className="flex items-end justify-between gap-3">
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Balance</p>
+                                                <p className="mt-1 text-xs text-muted-foreground">{netDescription}</p>
+                                            </div>
+                                            <SpaceAmountInline
+                                                amount={netAmount}
+                                                currency={currency}
+                                                hidden={hidden}
+                                                color={netColor}
+                                                className="text-right text-xl font-semibold tracking-tight"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-2 divide-x divide-border/70 border-t border-border/70 pt-3 text-sm">
+                                        <div className="pr-3">
                                             <p className="text-xs text-muted-foreground">Pagó</p>
-                                            <SpaceAmountInline amount={balance.paidReporting} currency={currency} hidden={hidden} className="mt-1 font-semibold" />
+                                            <SpaceAmountInline amount={balance.paidReporting} currency={currency} hidden={hidden} className="mt-1 block font-semibold" />
                                         </div>
-                                        <div>
+                                        <div className="pl-3">
                                             <p className="text-xs text-muted-foreground">Parte</p>
-                                            <SpaceAmountInline amount={balance.shareReporting} currency={currency} hidden={hidden} className="mt-1 font-semibold" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Neto</p>
-                                            <SpaceAmountInline amount={Math.abs(balance.balanceReporting)} currency={currency} hidden={hidden} color={positive ? 'var(--chart-3)' : 'var(--destructive)'} className="mt-1 font-semibold" />
+                                            <SpaceAmountInline amount={balance.shareReporting} currency={currency} hidden={hidden} className="mt-1 block font-semibold" />
                                         </div>
                                     </div>
                                 </div>
                             )
                         }) : (
-                            <div className="rounded-[24px] border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground lg:col-span-2">
+                            <div className="rounded-[24px] border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground lg:col-span-2 2xl:col-span-3">
                                 <Users className="mx-auto mb-3 h-5 w-5" />
                                 Todavía no hay participantes con saldo para mostrar.
                             </div>
                         )}
                     </div>
-                </section>
+                </SpaceSurface>
             </div>
 
             <aside className="space-y-5">
@@ -239,17 +274,6 @@ export function SpaceBalanceSection({
                                 className="mt-2 block text-3xl font-semibold tracking-tight"
                             />
                             <p className="mt-2 text-sm text-muted-foreground">{userSummary.detail}</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 border-t border-border/70 pt-4">
-                            <div>
-                                <p className="text-xs text-muted-foreground">Por cobrar</p>
-                                <SpaceAmountInline amount={totalPositive} currency={currency} hidden={hidden} color="var(--chart-3)" className="mt-1 block text-base font-semibold" />
-                            </div>
-                            <div>
-                                <p className="text-xs text-muted-foreground">Por pagar</p>
-                                <SpaceAmountInline amount={totalNegative} currency={currency} hidden={hidden} color="var(--destructive)" className="mt-1 block text-base font-semibold" />
-                            </div>
                         </div>
                     </div>
                 </SpaceSurface>

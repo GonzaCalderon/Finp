@@ -50,12 +50,15 @@ export function SpaceKpiRow({
 
     return (
         <>
-            <div className="grid grid-cols-2 gap-3 md:hidden">
-                {items.map((item) => (
+            <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-foreground/[0.06] bg-card/55 md:hidden">
+                {items.map((item, index) => (
                     <div
                         key={item.label}
-                        className="rounded-2xl border border-foreground/[0.08] bg-card p-3"
-                        style={{ boxShadow: 'var(--card-shadow)' }}
+                        className={[
+                            'p-3',
+                            index % 2 === 0 ? 'border-r border-border/60' : '',
+                            index < 2 ? 'border-b border-border/60' : '',
+                        ].filter(Boolean).join(' ')}
                     >
                         <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {item.label}

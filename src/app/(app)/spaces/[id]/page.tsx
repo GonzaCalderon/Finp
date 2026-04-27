@@ -290,6 +290,16 @@ export default function SpaceDetailPage() {
         success('Participante agregado')
     }
 
+    const handleUpdateParticipantRole = async (participantId: string, role: 'admin' | 'participant') => {
+        await participantsApi.updateParticipantRole(participantId, role)
+        success('Rol actualizado')
+    }
+
+    const handleRemoveParticipant = async (participantId: string) => {
+        await participantsApi.removeParticipant(participantId)
+        success('Participante quitado')
+    }
+
     const handleInviteResponse = async (
         action: Extract<ISpacePendingAction, { kind: 'invite' }>,
         inviteStatus: 'accepted' | 'declined'
@@ -551,13 +561,15 @@ export default function SpaceDetailPage() {
                 {activeTab === 'settings' ? (
                     <SpaceSettingsPanel
                         space={data.space}
-                        summary={data.summary}
                         participants={data.participants}
                         canManage={canManage}
-                        onEdit={() => setEditDialogOpen(true)}
+                        currentParticipantRole={currentParticipant?.role ?? 'participant'}
+                        currentUserId={currentUserId}
                         onAddParticipant={() => setParticipantDialogOpen(true)}
                         onToggleClosed={handleToggleClosed}
                         onUpdateSettings={handlePatchSpace}
+                        onUpdateParticipantRole={handleUpdateParticipantRole}
+                        onRemoveParticipant={handleRemoveParticipant}
                     />
                 ) : null}
             </div>
@@ -626,12 +638,15 @@ export default function SpaceDetailPage() {
                 open={settingsSheetOpen}
                 onClose={() => setSettingsSheetOpen(false)}
                 space={data.space}
-                summary={data.summary}
                 participants={data.participants}
                 canManage={canManage}
+                currentParticipantRole={currentParticipant?.role ?? 'participant'}
+                currentUserId={currentUserId}
                 onEdit={() => setEditDialogOpen(true)}
                 onAddParticipant={() => setParticipantDialogOpen(true)}
                 onToggleClosed={handleToggleClosed}
+                onUpdateParticipantRole={handleUpdateParticipantRole}
+                onRemoveParticipant={handleRemoveParticipant}
             />
         </>
     )

@@ -1,6 +1,6 @@
 'use client'
 
-import { Eye, FileBadge2, FileText, Paperclip } from 'lucide-react'
+import { Eye, FileText, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceMetaBadge, SpaceSectionHeading, SpaceSurface, SpaceTypeBadge } from '@/components/spaces/SpaceUi'
 import { formatSpaceDate, extractId } from '@/lib/utils/spaces'
@@ -44,25 +44,28 @@ export function RecentSpaceMovementsCard({
     hidden: boolean
     onViewAll: () => void
 }) {
-    const recentEntries = entries.slice(0, 4)
+    const recentEntries = entries.slice(0, 2)
     const participantsById = new Map(
         participants.map((participant) => [extractId(participant._id) ?? '', participant])
     )
 
     return (
-        <SpaceSurface>
-            <SpaceSectionHeading
-                eyebrow="Actividad"
-                title="Movimientos recientes"
-                description="Lo último que pasó dentro del espacio, con mejor jerarquía entre tipo, estado y montos."
-                action={
-                    <Button variant="ghost" className="rounded-full" onClick={onViewAll}>
-                        Ver todos
-                    </Button>
-                }
-            />
+        <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                        Actividad
+                    </p>
+                    <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+                        Última actividad
+                    </h2>
+                </div>
+                <Button variant="ghost" className="rounded-full" onClick={onViewAll}>
+                    Ver todos
+                </Button>
+            </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="space-y-2">
                 {recentEntries.length > 0 ? (
                     recentEntries.map((entry) => {
                         const payer = participantsById.get(extractId(entry.paidByParticipantId) ?? '')
@@ -72,72 +75,43 @@ export function RecentSpaceMovementsCard({
                             : undefined
 
                         return (
-                            <div key={extractId(entry._id)} className="border-b border-border/70 pb-4 last:border-b-0">
-                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                    <div className="space-y-3">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <SpaceEntryTypeBadge type={entry.type} />
-                                            <SpaceEntryStatusBadge status={entry.status} />
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-base font-semibold text-foreground">{entry.title}</p>
-                                                {attachmentHref ? (
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" asChild>
-                                                        <a href={attachmentHref} target="_blank" rel="noreferrer" aria-label="Ver comprobante">
-                                                            <Eye className="h-4 w-4" />
-                                                        </a>
-                                                    </Button>
-                                                ) : null}
-                                            </div>
-                                            <p className="text-sm text-muted-foreground">
-                                                {entry.description || entry.notes || 'Sin detalle adicional por ahora.'}
-                                            </p>
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-2">
-                                            <SpaceMetaBadge icon={FileText}>{formatSpaceDate(entry.date)}</SpaceMetaBadge>
-                                            <SpaceMetaBadge icon={FileBadge2}>
-                                                {payer?.displayName ?? 'Sin pagador'}
-                                            </SpaceMetaBadge>
-                                            <SpaceMetaBadge icon={FileBadge2}>
-                                                {resolveCategoryName(entry)}
-                                            </SpaceMetaBadge>
-                                        </div>
+                            <div
+                                key={extractId(entry._id)}
+                                className="flex flex-col gap-3 rounded-2xl border border-foreground/[0.06] bg-card/55 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                                <div className="min-w-0">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <SpaceEntryTypeBadge type={entry.type} />
+                                        <SpaceEntryStatusBadge status={entry.status} />
+                                        <p className="truncate text-sm font-semibold text-foreground">{entry.title}</p>
+                                        {attachmentHref ? (
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-full" asChild>
+                                                <a href={attachmentHref} target="_blank" rel="noreferrer" aria-label="Ver comprobante">
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </a>
+                                            </Button>
+                                        ) : null}
                                     </div>
-
-                                    <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[260px]">
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Monto original</p>
-                                            <SpaceAmountInline
-                                                amount={entry.amount}
-                                                currency={entry.currency}
-                                                hidden={hidden}
-                                                className="mt-1 text-base font-semibold"
-                                            />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Reporte</p>
-                                            <SpaceAmountInline
-                                                amount={entry.reportingAmount}
-                                                currency={reportingCurrency}
-                                                hidden={hidden}
-                                                className="mt-1 text-base font-semibold"
-                                            />
-                                        </div>
-                                    </div>
+                                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                                        {formatSpaceDate(entry.date)} · {payer?.displayName ?? 'Sin pagador'} · {resolveCategoryName(entry)}
+                                    </p>
                                 </div>
+                                <SpaceAmountInline
+                                    amount={entry.reportingAmount}
+                                    currency={reportingCurrency}
+                                    hidden={hidden}
+                                    className="shrink-0 text-sm font-semibold"
+                                />
                             </div>
                         )
                     })
                 ) : (
-                    <div className="rounded-[26px] border border-dashed border-border bg-background/60 px-4 py-12 text-center text-sm text-muted-foreground">
+                    <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                         Todavía no hay movimientos recientes para mostrar.
                     </div>
                 )}
             </div>
-        </SpaceSurface>
+        </section>
     )
 }
 

@@ -1,9 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarRange, Coins, FileBadge2, FileText, Plus, Settings2, Sparkles, UserPlus, Users } from 'lucide-react'
+import type { DateRange } from 'react-day-picker'
+import { CalendarRange, Coins, FileBadge2, FileText, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
     Select,
     SelectContent,
@@ -15,6 +19,7 @@ import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrency
 import { SPACE_MODE_LABELS, SPACE_SPLIT_MODE_LABELS, SPACE_STATUS_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
+import type { SpaceParticipantRole } from '@/lib/constants'
 
 export type SpaceEntryFilter = 'all' | ISpaceEntry['type']
 type SpaceEntrySort = 'recent' | 'amount' | 'status'
@@ -281,25 +286,34 @@ export function SpaceParticipantsPanel({
 
 export function SpaceSettingsPanel({
     space,
-    summary,
     participants,
     canManage,
-    onEdit,
+    currentParticipantRole,
+    currentUserId,
     onAddParticipant,
     onToggleClosed,
     onUpdateSettings,
+    onUpdateParticipantRole,
+    onRemoveParticipant,
 }: {
     space: ISpace
-    summary: SpaceSummarySnapshot
     participants: ISpaceParticipant[]
     canManage: boolean
-    onEdit: () => void
+    currentParticipantRole: SpaceParticipantRole
+    currentUserId: string
     onAddParticipant: () => void
     onToggleClosed: () => void
     onUpdateSettings: (patch: Partial<SpaceFormData>) => Promise<unknown>
+    onUpdateParticipantRole: (participantId: string, role: 'admin' | 'participant') => Promise<unknown>
+    onRemoveParticipant: (participantId: string) => Promise<unknown>
 }) {
     const [savingKey, setSavingKey] = useState<string | null>(null)
+    const [editingName, setEditingName] = useState(false)
+    const [nameDraft, setNameDraft] = useState(space.name)
+    const [periodOpen, setPeriodOpen] = useState(false)
     const isClosed = space.status === 'closed'
+    const isOwner = currentParticipantRole === 'owner'
+    const isAdmin = currentParticipantRole === 'admin'
 
     const updateSetting = async (key: string, patch: Partial<SpaceFormData>) => {
         if (!canManage) return
@@ -311,23 +325,77 @@ export function SpaceSettingsPanel({
         }
     }
 
+    const commitName = async () => {
+        const next = nameDraft.trim()
+        if (!next || next === space.name) {
+            setNameDraft(space.name)
+            setEditingName(false)
+            return
+        }
+
+        await updateSetting('name', { name: next })
+        setEditingName(false)
+    }
+
+    const updatePeriod = async (range: DateRange | undefined) => {
+        if (!range?.from) return
+        await updateSetting('period', {
+            startDate: range.from,
+            endDate: range.to,
+        })
+    }
+
+    const canEditParticipantRole = (participant: ISpaceParticipant) => {
+        if (!canManage || participant.role === 'owner') return false
+        if (extractId(participant.userId) === currentUserId) return false
+        return isOwner
+    }
+
+    const canRemoveParticipant = (participant: ISpaceParticipant) => {
+        if (!canManage || participant.role === 'owner') return false
+        if (extractId(participant.userId) === currentUserId) return false
+        return isOwner || (isAdmin && participant.role === 'participant')
+    }
+
     return (
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_0.9fr]">
             <SpaceSurface>
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-foreground">General</h2>
-                    {canManage ? (
-                        <Button variant="outline" size="sm" className="rounded-full" onClick={onEdit}>
-                            <Settings2 className="h-4 w-4" />
-                            Editar nombre
-                        </Button>
-                    ) : null}
                 </div>
 
                 <div className="mt-4 divide-y divide-border/70">
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
                         <span className="text-muted-foreground">Nombre</span>
-                        <span className="min-w-0 truncate text-right font-medium text-foreground">{space.name}</span>
+                        <div className="flex min-w-0 flex-1 justify-end">
+                            {editingName ? (
+                                <Input
+                                    value={nameDraft}
+                                    onChange={(event) => setNameDraft(event.target.value)}
+                                    onBlur={() => void commitName()}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') void commitName()
+                                        if (event.key === 'Escape') {
+                                            setNameDraft(space.name)
+                                            setEditingName(false)
+                                        }
+                                    }}
+                                    autoFocus
+                                    className="h-8 max-w-[220px] rounded-full text-right"
+                                    disabled={savingKey === 'name'}
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="inline-flex min-w-0 items-center gap-2 rounded-full px-2 py-1 text-right font-medium text-foreground hover:bg-accent/50 disabled:pointer-events-none"
+                                    onClick={() => canManage && setEditingName(true)}
+                                    disabled={!canManage}
+                                >
+                                    <span className="truncate">{space.name}</span>
+                                    {canManage ? <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
                         <span className="text-muted-foreground">Tipo</span>
@@ -354,9 +422,33 @@ export function SpaceSettingsPanel({
                     </div>
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
                         <span className="text-muted-foreground">Período</span>
-                        <span className="text-right font-medium text-foreground">
-                            {formatSpaceDateRange(space.startDate, space.endDate)}
-                        </span>
+                        {canManage ? (
+                            <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="rounded-full bg-background/80">
+                                        <CalendarRange className="h-3.5 w-3.5" />
+                                        {formatSpaceDateRange(space.startDate, space.endDate)}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-2" align="end">
+                                    <Calendar
+                                        mode="range"
+                                        selected={{
+                                            from: space.startDate ? new Date(space.startDate) : undefined,
+                                            to: space.endDate ? new Date(space.endDate) : undefined,
+                                        }}
+                                        onSelect={(range) => void updatePeriod(range)}
+                                    />
+                                    <p className="px-2 pb-2 text-xs text-muted-foreground">
+                                        Seleccioná inicio y fin sobre el mismo calendario para ver la guía del período.
+                                    </p>
+                                </PopoverContent>
+                            </Popover>
+                        ) : (
+                            <span className="text-right font-medium text-foreground">
+                                {formatSpaceDateRange(space.startDate, space.endDate)}
+                            </span>
+                        )}
                     </div>
                 </div>
             </SpaceSurface>
@@ -429,29 +521,6 @@ export function SpaceSettingsPanel({
                 </div>
             </SpaceSurface>
 
-            <SpaceSurface>
-                <h2 className="text-base font-semibold text-foreground">Actividad</h2>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
-                        <p className="text-xs text-muted-foreground">Movimientos</p>
-                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.totalEntryCount}</p>
-                    </div>
-                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
-                        <p className="text-xs text-muted-foreground">Pendientes</p>
-                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.pendingEntryCount}</p>
-                    </div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                    <SpaceStatusBadge status={space.status} />
-                    <SpaceMetaBadge icon={Users}>
-                        {summary.participantCount} participante{summary.participantCount === 1 ? '' : 's'}
-                    </SpaceMetaBadge>
-                    <SpaceMetaBadge icon={Coins}>
-                        <SpaceCurrencyBadge currency={space.reportingCurrency} />
-                    </SpaceMetaBadge>
-                </div>
-            </SpaceSurface>
-
             <SpaceSurface className="lg:col-span-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-foreground">Participantes</h2>
@@ -464,28 +533,62 @@ export function SpaceSettingsPanel({
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    {participants.map((participant) => (
-                        <div
-                            key={extractId(participant._id)}
-                            className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-4"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <p className="truncate font-semibold text-foreground">{participant.displayName}</p>
-                                    <p className="mt-1 truncate text-sm text-muted-foreground">
-                                        {participant.email || 'Participante externo'}
-                                    </p>
+                    {participants.map((participant) => {
+                        const participantId = extractId(participant._id) ?? ''
+                        const editableRole = canEditParticipantRole(participant)
+                        const removable = canRemoveParticipant(participant)
+
+                        return (
+                            <div
+                                key={participantId}
+                                className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-4"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="truncate font-semibold text-foreground">{participant.displayName}</p>
+                                        <p className="mt-1 truncate text-sm text-muted-foreground">
+                                            {participant.email || 'Participante externo'}
+                                        </p>
+                                    </div>
+                                    <SpaceInviteStatusBadge status={participant.inviteStatus} />
                                 </div>
-                                <SpaceInviteStatusBadge status={participant.inviteStatus} />
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    {editableRole ? (
+                                        <Select
+                                            value={participant.role}
+                                            onValueChange={(value) =>
+                                                void onUpdateParticipantRole(participantId, value as 'admin' | 'participant')
+                                            }
+                                        >
+                                            <SelectTrigger size="sm" className="h-7 rounded-full bg-background/80">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent align="start">
+                                                <SelectItem value="admin">Admin</SelectItem>
+                                                <SelectItem value="participant">Participante</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <SpaceRoleBadge role={participant.role} />
+                                    )}
+                                    <SpaceMetaBadge icon={FileBadge2}>
+                                        {participant.kind === 'finp_user' ? 'Usuario Finp' : 'Externo'}
+                                    </SpaceMetaBadge>
+                                    {removable ? (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="ml-auto h-8 w-8 rounded-full text-muted-foreground hover:text-destructive"
+                                            onClick={() => void onRemoveParticipant(participantId)}
+                                            aria-label="Quitar participante"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    ) : null}
+                                </div>
                             </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <SpaceRoleBadge role={participant.role} />
-                                <SpaceMetaBadge icon={FileBadge2}>
-                                    {participant.kind === 'finp_user' ? 'Usuario Finp' : 'Externo'}
-                                </SpaceMetaBadge>
-                            </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             </SpaceSurface>
 
@@ -498,17 +601,6 @@ export function SpaceSettingsPanel({
                         </p>
                     </div>
                     <SpaceStatusBadge status={space.status} />
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
-                        <p className="text-xs text-muted-foreground">Movimientos</p>
-                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.totalEntryCount}</p>
-                    </div>
-                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/70 p-3">
-                        <p className="text-xs text-muted-foreground">Pendientes</p>
-                        <p className="mt-1 text-xl font-semibold text-foreground">{summary.pendingEntryCount}</p>
-                    </div>
                 </div>
 
                 {canManage ? (

@@ -1,13 +1,19 @@
 'use client'
 
-import { Settings2, UserPlus, X } from 'lucide-react'
+import { Settings2, Trash2, UserPlus, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 import {
     SpaceCurrencyBadge,
     SpaceCurrencyStack,
     SpaceInviteStatusBadge,
-    SpaceMetaBadge,
     SpaceModeBadge,
     SpaceRoleBadge,
     SpaceStatusBadge,
@@ -21,8 +27,8 @@ import {
     extractId,
     formatSpaceDateRange,
 } from '@/lib/utils/spaces'
-import type { ISpace, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
-import { Coins, Users } from 'lucide-react'
+import type { ISpace, ISpaceParticipant } from '@/types'
+import type { SpaceParticipantRole } from '@/lib/constants'
 
 function SettingsRow({ label, value }: { label: string; value: string }) {
     return (
@@ -62,24 +68,42 @@ export function SpaceMobileSettingsSheet({
     open,
     onClose,
     space,
-    summary,
     participants,
     canManage,
+    currentParticipantRole,
+    currentUserId,
     onEdit,
     onAddParticipant,
     onToggleClosed,
+    onUpdateParticipantRole,
+    onRemoveParticipant,
 }: {
     open: boolean
     onClose: () => void
     space: ISpace
-    summary: SpaceSummarySnapshot
     participants: ISpaceParticipant[]
     canManage: boolean
+    currentParticipantRole: SpaceParticipantRole
+    currentUserId: string
     onEdit: () => void
     onAddParticipant: () => void
     onToggleClosed: () => void
+    onUpdateParticipantRole: (participantId: string, role: 'admin' | 'participant') => Promise<unknown>
+    onRemoveParticipant: (participantId: string) => Promise<unknown>
 }) {
     const isClosed = space.status === 'closed'
+    const isOwner = currentParticipantRole === 'owner'
+    const isAdmin = currentParticipantRole === 'admin'
+    const canEditParticipantRole = (participant: ISpaceParticipant) => {
+        if (!canManage || participant.role === 'owner') return false
+        if (extractId(participant.userId) === currentUserId) return false
+        return isOwner
+    }
+    const canRemoveParticipant = (participant: ISpaceParticipant) => {
+        if (!canManage || participant.role === 'owner') return false
+        if (extractId(participant.userId) === currentUserId) return false
+        return isOwner || (isAdmin && participant.role === 'participant')
+    }
 
     return (
         <AnimatePresence>
@@ -187,28 +211,63 @@ export function SpaceMobileSettingsSheet({
                                     ) : null}
                                 </div>
                                 <div className="space-y-1.5">
-                                    {participants.map((p) => (
-                                        <div
-                                            key={extractId(p._id)}
-                                            className="flex items-center gap-3 rounded-2xl border border-foreground/[0.06] bg-card/60 px-3 py-2.5"
-                                        >
-                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                                                {(p.displayName?.[0] ?? '?').toUpperCase()}
+                                    {participants.map((p) => {
+                                        const participantId = extractId(p._id) ?? ''
+                                        const editableRole = canEditParticipantRole(p)
+                                        const removable = canRemoveParticipant(p)
+
+                                        return (
+                                            <div
+                                                key={participantId}
+                                                className="rounded-2xl border border-foreground/[0.06] bg-card/60 px-3 py-2.5"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                                                        {(p.displayName?.[0] ?? '?').toUpperCase()}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate text-sm font-semibold text-foreground">
+                                                            {p.displayName}
+                                                        </p>
+                                                        <p className="truncate text-xs text-muted-foreground">
+                                                            {p.email ?? 'Participante externo'}
+                                                        </p>
+                                                    </div>
+                                                    <SpaceInviteStatusBadge status={p.inviteStatus} />
+                                                </div>
+                                                <div className="mt-2 flex items-center gap-2 pl-12">
+                                                    {editableRole ? (
+                                                        <Select
+                                                            value={p.role}
+                                                            onValueChange={(value) =>
+                                                                void onUpdateParticipantRole(participantId, value as 'admin' | 'participant')
+                                                            }
+                                                        >
+                                                            <SelectTrigger size="sm" className="h-7 rounded-full bg-background/80">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent align="start">
+                                                                <SelectItem value="admin">Admin</SelectItem>
+                                                                <SelectItem value="participant">Participante</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    ) : (
+                                                        <SpaceRoleBadge role={p.role} />
+                                                    )}
+                                                    {removable ? (
+                                                        <button
+                                                            type="button"
+                                                            className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground active:bg-muted"
+                                                            onClick={() => void onRemoveParticipant(participantId)}
+                                                            aria-label="Quitar participante"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    ) : null}
+                                                </div>
                                             </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-semibold text-foreground">
-                                                    {p.displayName}
-                                                </p>
-                                                <p className="truncate text-xs text-muted-foreground">
-                                                    {p.email ?? 'Participante externo'}
-                                                </p>
-                                            </div>
-                                            <div className="flex shrink-0 flex-col items-end gap-1">
-                                                <SpaceRoleBadge role={p.role} />
-                                                <SpaceInviteStatusBadge status={p.inviteStatus} />
-                                            </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             </section>
 
@@ -233,14 +292,6 @@ export function SpaceMobileSettingsSheet({
                                         <SettingsRow label="Período" value={formatSpaceDateRange(space.startDate, space.endDate)} />
                                     </div>
                                 </SettingsCard>
-                                <div className="mt-2 flex flex-wrap gap-1.5 px-1">
-                                    <SpaceMetaBadge icon={Coins}>
-                                        {summary.totalEntryCount} mov.
-                                    </SpaceMetaBadge>
-                                    <SpaceMetaBadge icon={Users}>
-                                        {summary.participantCount} part.
-                                    </SpaceMetaBadge>
-                                </div>
                             </section>
 
                             {/* CIERRE */}
