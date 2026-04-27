@@ -154,8 +154,9 @@ function SpacesQuickEntryFlow({
     if (!item || !spaceId) return null
 
     const handleCreateEntry = async (payload: SpaceEntryFormData) => {
-        await entriesApi.createEntry(payload)
+        const entry = await entriesApi.createEntry(payload)
         onSaved()
+        return entry
     }
 
     return (
@@ -163,6 +164,7 @@ function SpacesQuickEntryFlow({
             open={open}
             onOpenChange={onOpenChange}
             onSubmit={handleCreateEntry}
+            spaceId={spaceId}
             participants={item.participants}
             currentUserId={currentUserId}
             defaultCurrency={item.space.reportingCurrency}

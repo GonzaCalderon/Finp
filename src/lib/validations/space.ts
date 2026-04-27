@@ -18,6 +18,11 @@ const optionalObjectIdString = z.preprocess((value) => {
     return trimmed === '' ? undefined : trimmed
 }, z.string().optional())
 
+const optionalMongoId = optionalObjectIdString.refine(
+    (value) => value === undefined || /^[0-9a-fA-F]{24}$/.test(value),
+    'ID inválido'
+)
+
 const amountSchema = z.preprocess((value) => {
     if (typeof value === 'number') return value
 
@@ -143,6 +148,7 @@ export const spaceEntrySchema = z
         ),
         date: dateSchema,
         categoryId: optionalObjectIdString,
+        spaceCategoryId: optionalMongoId,
         paidByParticipantId: optionalObjectIdString,
         sharedWithParticipantIds: z.array(z.string().min(1)).optional(),
         splitMode: z.enum(['none', 'equal', 'percentage', 'fixed']).default('none'),
@@ -251,6 +257,16 @@ export const spaceParticipantResponseSchema = z.object({
 })
     .refine((data) => data.inviteStatus || data.role, 'No hay cambios para guardar')
 
+export const spaceCategorySchema = z.object({
+    name: z.string().trim().min(1, 'El nombre es obligatorio').max(50),
+    color: z.string().trim().min(1, 'El color es obligatorio'),
+    type: z.enum(['expense', 'income', 'adjustment']).default('expense'),
+})
+
+export const spaceCategoryUpdateSchema = spaceCategorySchema.partial().extend({
+    isArchived: z.boolean().optional(),
+})
+
 export const spaceEntryConfirmSchema = z
     .object({
         mode: z.enum(['create', 'link']).default('create'),
@@ -303,5 +319,6 @@ export type SpaceParticipantFormInput = z.input<typeof spaceParticipantSchema>
 export type SpaceParticipantFormData = z.output<typeof spaceParticipantSchema>
 export type SpaceEntryFormInput = z.input<typeof spaceEntrySchema>
 export type SpaceEntryFormData = z.output<typeof spaceEntrySchema>
+export type SpaceCategoryFormData = z.output<typeof spaceCategorySchema>
 export type SpaceEntryConfirmInput = z.input<typeof spaceEntryConfirmSchema>
 export type SpaceEntryConfirmData = z.output<typeof spaceEntryConfirmSchema>

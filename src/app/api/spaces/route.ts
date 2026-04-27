@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Space, SpaceParticipant } from '@/lib/models'
+import { Space, SpaceCategory, SpaceParticipant } from '@/lib/models'
 import { buildSpaceListItems, getPendingSpaceActions } from '@/lib/server/spaces'
 import { spaceSchema } from '@/lib/validations'
+import { getDefaultSpaceCategories } from '@/lib/utils/space-categories'
 import { normalizeSpaceCurrencies } from '@/lib/utils/spaces'
 
 export async function GET() {
@@ -74,6 +75,18 @@ export async function POST(request: Request) {
             inviteStatus: 'accepted',
             isActive: true,
         })
+
+        const defaults = getDefaultSpaceCategories(space.type)
+        if (defaults.length > 0) {
+            await SpaceCategory.insertMany(
+                defaults.map((category) => ({
+                    spaceId: space._id,
+                    ...category,
+                    isDefault: true,
+                    isArchived: false,
+                }))
+            )
+        }
 
         return NextResponse.json({ space }, { status: 201 })
     } catch (error) {

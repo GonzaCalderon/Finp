@@ -34,6 +34,7 @@ import {
     SpaceDialogChoice,
     SpaceDialogField,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
+import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
 import { cn } from '@/lib/utils'
 import type { ISpaceParticipant } from '@/types'
 
@@ -72,11 +73,13 @@ function SettingSection({
 export function EditSpaceSettingsDialog({
     open,
     onOpenChange,
+    spaceId,
     initialValues,
     participants = [],
     onInvite,
     onSubmit,
 }: DialogProps & {
+    spaceId: string
     initialValues: SpaceFormData
     participants?: ISpaceParticipant[]
     onInvite?: () => void
@@ -239,6 +242,10 @@ export function EditSpaceSettingsDialog({
                                         ) : null}
                                     </div>
                                 </div>
+                            </SettingSection>
+
+                            <SettingSection title="Categorías">
+                                <SpaceCategoryManager spaceId={spaceId} />
                             </SettingSection>
 
                             <SettingSection title="Funcionamiento">

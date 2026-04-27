@@ -8,6 +8,15 @@ import type { ISpaceEntry, ISpaceParticipant, ISpacePendingAction } from '@/type
 
 function resolveCategoryName(entry: ISpaceEntry) {
     if (
+        entry.spaceCategoryId &&
+        typeof entry.spaceCategoryId === 'object' &&
+        'name' in entry.spaceCategoryId &&
+        typeof entry.spaceCategoryId.name === 'string'
+    ) {
+        return entry.spaceCategoryId.name
+    }
+
+    if (
         entry.categoryId &&
         typeof entry.categoryId === 'object' &&
         'name' in entry.categoryId &&
@@ -37,12 +46,14 @@ export function RecentSpaceMovementsCard({
     reportingCurrency,
     hidden,
     onViewAll,
+    spaceId,
 }: {
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
     reportingCurrency: string
     hidden: boolean
     onViewAll: () => void
+    spaceId: string
 }) {
     const recentEntries = entries.slice(0, 2)
     const participantsById = new Map(
@@ -70,8 +81,10 @@ export function RecentSpaceMovementsCard({
                     recentEntries.map((entry) => {
                         const payer = participantsById.get(extractId(entry.paidByParticipantId) ?? '')
                         const attachment = entry.attachments?.[0]
-                        const attachmentHref = attachment?.storageKey?.startsWith('http')
-                            ? attachment.storageKey
+                        const entryId = extractId(entry._id)
+                        const attachmentId = extractId(attachment?._id)
+                        const attachmentHref = attachmentId && entryId
+                            ? `/api/spaces/${spaceId}/entries/${entryId}/attachments/${attachmentId}`
                             : undefined
 
                         return (

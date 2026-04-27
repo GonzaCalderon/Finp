@@ -49,6 +49,7 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         exchangeRate: { type: Number },
         date: { type: Date, required: true },
         categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
+        spaceCategoryId: { type: Schema.Types.ObjectId, ref: 'SpaceCategory' },
         paidByParticipantId: { type: Schema.Types.ObjectId, ref: 'SpaceParticipant' },
         sharedWithParticipantIds: [{ type: Schema.Types.ObjectId, ref: 'SpaceParticipant' }],
         splitMode: {
@@ -73,6 +74,13 @@ SpaceEntrySchema.index({ spaceId: 1, date: -1, createdAt: -1 })
 SpaceEntrySchema.index({ paidByParticipantId: 1, status: 1, createdAt: -1 })
 SpaceEntrySchema.index({ linkedTransactionId: 1 })
 
+const existingSpaceEntryModel = mongoose.models.SpaceEntry as mongoose.Model<ISpaceEntry> | undefined
+
+if (existingSpaceEntryModel && !existingSpaceEntryModel.schema.path('spaceCategoryId')) {
+    existingSpaceEntryModel.schema.add({
+        spaceCategoryId: { type: Schema.Types.ObjectId, ref: 'SpaceCategory' },
+    })
+}
+
 export const SpaceEntry =
-    (mongoose.models.SpaceEntry as mongoose.Model<ISpaceEntry> | undefined) ||
-    mongoose.model<ISpaceEntry>('SpaceEntry', SpaceEntrySchema)
+    existingSpaceEntryModel || mongoose.model<ISpaceEntry>('SpaceEntry', SpaceEntrySchema)

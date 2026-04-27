@@ -13,6 +13,26 @@ import type {
 } from '@/lib/constants'
 
 export type SpaceCurrencyTotals = Record<string, number>
+export type SpaceCategoryType = 'expense' | 'income' | 'adjustment'
+
+export interface ISpaceCategory {
+    _id?: Types.ObjectId
+    spaceId: Types.ObjectId
+    name: string
+    color: string
+    type: SpaceCategoryType
+    isDefault: boolean
+    isArchived: boolean
+    createdAt?: Date
+    updatedAt?: Date
+}
+
+export interface ISpaceCategorySnapshot {
+    _id?: Types.ObjectId
+    name?: string
+    color?: string
+    type?: SpaceCategoryType
+}
 
 export interface ISpace {
     _id: Types.ObjectId
@@ -79,7 +99,8 @@ export interface ISpaceEntry {
     reportingAmount: number
     exchangeRate?: number
     date: Date
-    categoryId?: Types.ObjectId
+    categoryId?: Types.ObjectId | { _id?: Types.ObjectId; name?: string; color?: string; type?: string }
+    spaceCategoryId?: Types.ObjectId | ISpaceCategorySnapshot
     paidByParticipantId?: Types.ObjectId
     sharedWithParticipantIds?: Types.ObjectId[]
     splitMode: SpaceSplitMode

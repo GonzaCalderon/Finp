@@ -14,12 +14,17 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
-import { useCategories } from '@/hooks/useCategories'
+import { useSpaceCategories } from '@/hooks/useSpaceCategories'
 import { useToast } from '@/hooks/useToast'
+import { apiJson } from '@/lib/client/auth-client'
+import {
+    invalidateData,
+    SPACE_INVALIDATION_TAGS,
+} from '@/lib/client/data-sync'
 import { spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
 import { extractId, SPACE_ENTRY_TYPE_LABELS } from '@/lib/utils/spaces'
 import type { AccountType } from '@/lib/constants'
-import type { IAccount, ICategory, ISpaceParticipant } from '@/types'
+import type { IAccount, ISpaceCategory, ISpaceEntry, ISpaceParticipant } from '@/types'
 import {
     Dialog,
     DialogContent,
@@ -193,7 +198,7 @@ function buildDefaultForm({
         currency: defaultCurrency,
         exchangeRate: undefined,
         date: new Date(),
-        categoryId: undefined,
+        spaceCategoryId: undefined,
         paidByParticipantId: currentParticipantId,
         sharedWithParticipantIds: defaultSharedParticipantIds,
         splitMode: spaceMode === 'solo' ? 'none' : defaultSplitMode,
@@ -272,6 +277,7 @@ export function SpaceEntryDialog({
     open,
     onOpenChange,
     onSubmit,
+    spaceId,
     participants,
     currentUserId,
     defaultCurrency,
@@ -280,7 +286,8 @@ export function SpaceEntryDialog({
     spaceMode,
     draftKey,
 }: DialogProps & {
-    onSubmit: (data: SpaceEntryFormData) => Promise<unknown>
+    onSubmit: (data: SpaceEntryFormData) => Promise<ISpaceEntry>
+    spaceId: string
     participants: ISpaceParticipant[]
     currentUserId: string
     defaultCurrency: string
@@ -289,9 +296,9 @@ export function SpaceEntryDialog({
     spaceMode: SpaceFormData['mode']
     draftKey?: string
 }) {
-    const { categories } = useCategories()
+    const { categories } = useSpaceCategories(spaceId)
     const { accounts } = useAccounts()
-    const { success } = useToast()
+    const { success, warning } = useToast()
 
     const activeParticipants = useMemo(
         () => participants.filter((participant) => participant.isActive),
@@ -410,6 +417,24 @@ export function SpaceEntryDialog({
             ),
         [accounts, form.currency]
     )
+    const filteredCategories = useMemo(
+        () => categories.filter((category) => category.type === form.type),
+        [categories, form.type]
+    )
+
+    useEffect(() => {
+        if (!form.spaceCategoryId) return
+        if (categories.length === 0) return
+        const selectedStillMatches = filteredCategories.some(
+            (category) => extractId(category._id) === form.spaceCategoryId
+        )
+        if (selectedStillMatches) return
+
+        setForm((previous) => ({
+            ...previous,
+            spaceCategoryId: undefined,
+        }))
+    }, [categories.length, filteredCategories, form.spaceCategoryId])
 
     const updateSplitAllocations = (
         allocations: NonNullable<SpaceEntryFormData['splitAllocations']>
@@ -542,6 +567,27 @@ export function SpaceEntryDialog({
         })
     }
 
+    const uploadDraftAttachments = async (entryId: string, draftAttachments: SpaceAttachmentDraft[]) => {
+        if (draftAttachments.length === 0) return true
+
+        let allUploaded = true
+        for (const attachment of draftAttachments) {
+            try {
+                const formData = new FormData()
+                formData.append('file', attachment.file)
+                await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/attachments`, {
+                    method: 'POST',
+                    body: formData,
+                })
+            } catch {
+                allUploaded = false
+            }
+        }
+
+        invalidateData(SPACE_INVALIDATION_TAGS)
+        return allUploaded
+    }
+
     const handleSubmit = async () => {
         // Normalize 1-participant fixed mode: allocation should equal full amount
         const normalizedAllocations =
@@ -572,7 +618,14 @@ export function SpaceEntryDialog({
         setError(null)
 
         try {
-            await onSubmit(parsed.data)
+            const entry = await onSubmit(parsed.data)
+            const entryId = extractId(entry._id)
+            if (entryId && attachmentsRef.current.length > 0) {
+                const uploaded = await uploadDraftAttachments(entryId, attachmentsRef.current)
+                if (!uploaded) {
+                    warning('El movimiento se guardó, pero algún comprobante no pudo subirse.')
+                }
+            }
             clearDraft()
             setAttachments((previous) => {
                 previous.forEach(revokeAttachment)
@@ -739,11 +792,11 @@ export function SpaceEntryDialog({
 
                                                 <SpaceDialogField label="Categoría">
                                                     <Select
-                                                        value={form.categoryId ?? 'none'}
+                                                        value={form.spaceCategoryId ?? 'none'}
                                                         onValueChange={(value) =>
                                                             setForm((previous) => ({
                                                                 ...previous,
-                                                                categoryId: value === 'none' ? undefined : value,
+                                                                spaceCategoryId: value === 'none' ? undefined : value,
                                                             }))
                                                         }
                                                     >
@@ -752,7 +805,7 @@ export function SpaceEntryDialog({
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="none">Sin categoría</SelectItem>
-                                                            {categories.map((category: ICategory) => (
+                                                            {filteredCategories.map((category: ISpaceCategory) => (
                                                                 <SelectItem
                                                                     key={extractId(category._id)}
                                                                     value={extractId(category._id) ?? ''}

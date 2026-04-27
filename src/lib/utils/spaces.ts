@@ -319,6 +319,20 @@ export function buildSpaceBalances(entries: ISpaceEntry[], participants: ISpaceP
 
 function resolveCategoryInfo(entry: ISpaceEntry) {
     if (
+        entry.spaceCategoryId &&
+        typeof entry.spaceCategoryId === 'object' &&
+        entry.spaceCategoryId !== null &&
+        'name' in entry.spaceCategoryId
+    ) {
+        const category = entry.spaceCategoryId as { _id?: unknown; name?: unknown; color?: unknown }
+        return {
+            categoryId: extractId(category._id),
+            label: typeof category.name === 'string' ? category.name : 'Sin categoría',
+            color: typeof category.color === 'string' ? category.color : undefined,
+        }
+    }
+
+    if (
         entry.categoryId &&
         typeof entry.categoryId === 'object' &&
         entry.categoryId !== null &&

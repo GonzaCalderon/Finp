@@ -5,6 +5,7 @@ import {
     getInitialBalancesByCurrency,
     supportsCurrency,
 } from '@/lib/utils/accounts'
+import { extractId } from '@/lib/utils/spaces'
 import type { Currency } from '@/lib/constants'
 import type { IAccount, ISpaceEntry, ITransaction } from '@/types'
 
@@ -58,6 +59,7 @@ export async function createTransactionFromSpaceEntry({
         }
     }
 
+    const fallbackCategoryId = extractId(entry.categoryId)
     const payload: Partial<ITransaction> = {
         userId: account.userId,
         type: mapEntryTypeToTransactionType(entry.type),
@@ -67,7 +69,9 @@ export async function createTransactionFromSpaceEntry({
         description: description?.trim() || entry.title,
         categoryId: categoryId
             ? new Types.ObjectId(categoryId)
-            : entry.categoryId,
+            : fallbackCategoryId
+                ? new Types.ObjectId(fallbackCategoryId)
+                : undefined,
         status: 'confirmed',
         createdFrom: 'web',
         spaceId: entry.spaceId,

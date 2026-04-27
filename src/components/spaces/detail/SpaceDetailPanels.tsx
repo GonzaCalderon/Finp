@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { CalendarRange, Coins, FileBadge2, FileText, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { CalendarRange, Coins, FileBadge2, FileImage, FileText, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -15,8 +15,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
 import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
-import { SPACE_MODE_LABELS, SPACE_SPLIT_MODE_LABELS, SPACE_STATUS_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
+import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
+import { cn } from '@/lib/utils'
 import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
 import type { SpaceParticipantRole } from '@/lib/constants'
@@ -24,17 +26,32 @@ import type { SpaceParticipantRole } from '@/lib/constants'
 export type SpaceEntryFilter = 'all' | ISpaceEntry['type']
 type SpaceEntrySort = 'recent' | 'amount' | 'status'
 
-function resolveCategoryName(entry: ISpaceEntry) {
+function resolveCategoryInfo(entry: ISpaceEntry) {
+    if (
+        entry.spaceCategoryId &&
+        typeof entry.spaceCategoryId === 'object' &&
+        'name' in entry.spaceCategoryId &&
+        typeof entry.spaceCategoryId.name === 'string'
+    ) {
+        return {
+            name: entry.spaceCategoryId.name,
+            color: typeof entry.spaceCategoryId.color === 'string' ? entry.spaceCategoryId.color : undefined,
+        }
+    }
+
     if (
         entry.categoryId &&
         typeof entry.categoryId === 'object' &&
         'name' in entry.categoryId &&
         typeof entry.categoryId.name === 'string'
     ) {
-        return entry.categoryId.name
+        return {
+            name: entry.categoryId.name,
+            color: typeof entry.categoryId.color === 'string' ? entry.categoryId.color : undefined,
+        }
     }
 
-    return 'Sin categoría'
+    return { name: 'Sin categoría', color: undefined }
 }
 
 function MovementCard({
@@ -42,19 +59,42 @@ function MovementCard({
     reportingCurrency,
     hidden,
     participants,
+    onEntryClick,
 }: {
     entry: ISpaceEntry
     reportingCurrency: string
     hidden: boolean
     participants: ISpaceParticipant[]
+    onEntryClick?: (entry: ISpaceEntry) => void
 }) {
     const payer = participants.find(
         (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
     )
     const attachments = entry.attachments?.length ?? 0
+    const category = resolveCategoryInfo(entry)
+    const hasImageAttachment = (entry.attachments ?? []).some((attachment) =>
+        attachment.mimeType.startsWith('image/')
+    )
+    const AttachmentIcon = hasImageAttachment ? FileImage : FileText
+    const clickable = Boolean(onEntryClick)
 
     return (
-        <div className="rounded-[28px] border border-foreground/[0.07] bg-background/74 p-4">
+        <div
+            role={clickable ? 'button' : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onClick={() => onEntryClick?.(entry)}
+            onKeyDown={(event) => {
+                if (!clickable) return
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onEntryClick?.(entry)
+                }
+            }}
+            className={cn(
+                'rounded-[28px] border border-foreground/[0.07] bg-background/74 p-4 transition-colors',
+                clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/5' : ''
+            )}
+        >
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
@@ -72,9 +112,17 @@ function MovementCard({
                     <div className="flex flex-wrap gap-2">
                         <SpaceMetaBadge icon={CalendarRange}>{formatSpaceDate(entry.date)}</SpaceMetaBadge>
                         <SpaceMetaBadge icon={Users}>{payer?.displayName ?? 'Sin pagador'}</SpaceMetaBadge>
-                        <SpaceMetaBadge icon={FileBadge2}>{resolveCategoryName(entry)}</SpaceMetaBadge>
+                        <SpaceMetaBadge icon={FileBadge2}>
+                            {category.color ? (
+                                <span
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: category.color }}
+                                />
+                            ) : null}
+                            {category.name}
+                        </SpaceMetaBadge>
                         {attachments > 0 ? (
-                            <SpaceMetaBadge icon={FileText}>
+                            <SpaceMetaBadge icon={AttachmentIcon}>
                                 {attachments} adjunto{attachments === 1 ? '' : 's'}
                             </SpaceMetaBadge>
                         ) : null}
@@ -114,6 +162,7 @@ export function SpaceMovementsPanel({
     reportingCurrency,
     hidden,
     onCreate,
+    onEntryClick,
 }: {
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
@@ -122,6 +171,7 @@ export function SpaceMovementsPanel({
     reportingCurrency: string
     hidden: boolean
     onCreate: () => void
+    onEntryClick?: (entry: ISpaceEntry) => void
 }) {
     const [sort, setSort] = useState<SpaceEntrySort>('recent')
     const filters: SpaceEntryFilter[] = ['all', 'expense', 'income', 'adjustment', 'settlement']
@@ -214,6 +264,7 @@ export function SpaceMovementsPanel({
                             reportingCurrency={reportingCurrency}
                             hidden={hidden}
                             participants={participants}
+                            onEntryClick={onEntryClick}
                         />
                     ))
                 )}
@@ -286,6 +337,7 @@ export function SpaceParticipantsPanel({
 
 export function SpaceSettingsPanel({
     space,
+    spaceId,
     participants,
     canManage,
     currentParticipantRole,
@@ -297,6 +349,7 @@ export function SpaceSettingsPanel({
     onRemoveParticipant,
 }: {
     space: ISpace
+    spaceId: string
     participants: ISpaceParticipant[]
     canManage: boolean
     currentParticipantRole: SpaceParticipantRole
@@ -518,6 +571,18 @@ export function SpaceSettingsPanel({
                         <span className="text-muted-foreground">Monedas</span>
                         <SpaceCurrencyStack currencies={space.currencies} className="max-w-[65%] justify-end" />
                     </div>
+                </div>
+            </SpaceSurface>
+
+            <SpaceSurface className="lg:col-span-2">
+                <div className="space-y-1">
+                    <h2 className="text-base font-semibold text-foreground">Categorías</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Organización propia del espacio para movimientos y reportes.
+                    </p>
+                </div>
+                <div className="mt-4">
+                    <SpaceCategoryManager spaceId={spaceId} canManage={canManage} />
                 </div>
             </SpaceSurface>
 

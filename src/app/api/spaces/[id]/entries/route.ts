@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import {
     Category,
+    SpaceCategory,
     SpaceEntry,
     Transaction,
 } from '@/lib/models'
@@ -167,6 +168,21 @@ export async function POST(
             }
         }
 
+        if (parsed.data.spaceCategoryId) {
+            const category = await SpaceCategory.findOne({
+                _id: parsed.data.spaceCategoryId,
+                spaceId: id,
+                isArchived: false,
+            })
+
+            if (!category) {
+                return NextResponse.json(
+                    { error: 'La categoría seleccionada no es válida.' },
+                    { status: 400 }
+                )
+            }
+        }
+
         if (parsed.data.linkedTransactionId) {
             const linkedTransaction = await Transaction.findOne({
                 _id: parsed.data.linkedTransactionId,
@@ -220,6 +236,7 @@ export async function POST(
                     : undefined,
             date: parsed.data.date,
             categoryId: parsed.data.categoryId,
+            spaceCategoryId: parsed.data.spaceCategoryId,
             paidByParticipantId: parsed.data.paidByParticipantId,
             sharedWithParticipantIds: parsed.data.sharedWithParticipantIds,
             splitMode: context.space.mode === 'solo' ? 'none' : parsed.data.splitMode,
@@ -259,6 +276,7 @@ export async function POST(
                     { new: true }
                 )
                     .populate('categoryId', 'name color type')
+                    .populate('spaceCategoryId', 'name color type')
                     .lean<ISpaceEntry | null>()
             } catch (error) {
                 await SpaceEntry.findByIdAndDelete(entry._id)
@@ -287,6 +305,7 @@ export async function POST(
                 { new: true }
             )
                 .populate('categoryId', 'name color type')
+                .populate('spaceCategoryId', 'name color type')
                 .lean<ISpaceEntry | null>()
         }
 

@@ -48,6 +48,7 @@ import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
 import { SpaceDetailMobileHeader } from '@/components/spaces/detail/SpaceDetailMobileHeader'
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
 import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobileSettingsSheet'
+import { SpaceEntryDetailSheet } from '@/components/spaces/detail/SpaceEntryDetailSheet'
 import { SpaceSettlementPanel } from '@/components/spaces/detail/SpaceSettlementPanel'
 import {
     RecentSpaceMovementsCard,
@@ -234,6 +235,7 @@ export default function SpaceDetailPage() {
     const [pendingSheetOpen, setPendingSheetOpen] = useState(false)
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
+    const [detailEntry, setDetailEntry] = useState<ISpaceEntry | null>(null)
     const [settlementDialogOpen, setSettlementDialogOpen] = useState(false)
     const [settlementPrefill, setSettlementPrefill] = useState<SettlementPrefill | undefined>()
 
@@ -285,8 +287,9 @@ export default function SpaceDetailPage() {
     )
 
     const handleCreateEntry = async (payload: Parameters<typeof entriesApi.createEntry>[0]) => {
-        await entriesApi.createEntry(payload)
+        const entry = await entriesApi.createEntry(payload)
         success('Movimiento guardado')
+        return entry
     }
 
     function handleRegisterSettlement(prefill?: SettlementPrefill) {
@@ -528,6 +531,7 @@ export default function SpaceDetailPage() {
                             participants={data.participants}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
+                            spaceId={spaceId}
                             onViewAll={() => setActiveTab('entries')}
                         />
 
@@ -555,6 +559,7 @@ export default function SpaceDetailPage() {
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
                             onCreate={() => setEntryDialogOpen(true)}
+                            onEntryClick={setDetailEntry}
                         />
                     </div>
                 ) : null}
@@ -578,6 +583,7 @@ export default function SpaceDetailPage() {
                 {activeTab === 'settings' ? (
                     <SpaceSettingsPanel
                         space={data.space}
+                        spaceId={spaceId}
                         participants={data.participants}
                         canManage={canManage}
                         currentParticipantRole={currentParticipant?.role ?? 'participant'}
@@ -595,6 +601,7 @@ export default function SpaceDetailPage() {
                 open={entryDialogOpen}
                 onOpenChange={setEntryDialogOpen}
                 onSubmit={handleCreateEntry}
+                spaceId={spaceId}
                 participants={data.participants}
                 currentUserId={currentUserId}
                 defaultCurrency={data.space.reportingCurrency}
@@ -636,6 +643,7 @@ export default function SpaceDetailPage() {
                     open={editDialogOpen}
                     onOpenChange={setEditDialogOpen}
                     onSubmit={handleUpdateSpace}
+                    spaceId={spaceId}
                     participants={data.participants}
                     onInvite={() => setParticipantDialogOpen(true)}
                     initialValues={{
@@ -659,6 +667,17 @@ export default function SpaceDetailPage() {
                 onOpenChange={setConfirmDialogOpen}
                 entry={selectedPendingEntry}
                 onSubmit={handleConfirmPendingEntry}
+            />
+
+            <SpaceEntryDetailSheet
+                open={detailEntry !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDetailEntry(null)
+                }}
+                entry={detailEntry}
+                participants={data.participants}
+                spaceId={spaceId}
+                currency={data.space.reportingCurrency}
             />
 
             {/* Mobile settings sheet: gear button → participantes + configuración + cierre */}

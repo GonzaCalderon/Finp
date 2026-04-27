@@ -1300,3 +1300,9 @@ Al entrar a un espacio, el contexto registra una acción que reemplaza el botón
 - **Tone pills**: `SpaceTonePill` verde (positivo) / rojo (negativo).
 - **Amount inline**: `SpaceAmountInline` respeta el contexto de ocultamiento de montos global.
 - **Charts**: `LineChart` de Recharts sin área rellena. `ResponsiveContainer` para respetar el ancho.
+# Fase 4 - Categorías de espacio y comprobantes
+
+- Cada espacio administra categorías propias mediante `SpaceCategory`, con defaults por tipo de espacio y seed manual para espacios existentes.
+- Los movimientos soportan `spaceCategoryId` sin eliminar `categoryId` legacy, y los reportes prefieren la categoría del espacio cuando existe.
+- Los comprobantes se suben a Vercel Blob privado, se guardan como `storageKey` en `SpaceEntry.attachments[]` y se sirven desde endpoints autenticados que resuelven el attachment desde DB.
+- El detalle de movimiento vive en `SpaceEntryDetailSheet`, con vista de montos, participantes, categoría, notas y adjuntos en modo live.
