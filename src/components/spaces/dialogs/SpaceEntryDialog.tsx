@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
+import { useCategories } from '@/hooks/useCategories'
 import { useSpaceCategories } from '@/hooks/useSpaceCategories'
 import { useToast } from '@/hooks/useToast'
 import { apiJson } from '@/lib/client/auth-client'
@@ -22,9 +23,9 @@ import {
     SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
 import { spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
-import { extractId, SPACE_ENTRY_TYPE_LABELS } from '@/lib/utils/spaces'
+import { extractId } from '@/lib/utils/spaces'
 import type { AccountType } from '@/lib/constants'
-import type { IAccount, ISpaceCategory, ISpaceEntry, ISpaceParticipant } from '@/types'
+import type { IAccount, ICategory, ISpaceCategory, ISpaceEntry, ISpaceParticipant } from '@/types'
 import {
     Dialog,
     DialogContent,
@@ -239,6 +240,7 @@ function sanitizeDraft({
         return {
             ...defaults,
             ...parsed,
+            type: 'expense',
             amount: typeof parsed.amount === 'number' && Number.isFinite(parsed.amount) ? parsed.amount : defaults.amount,
             currency: parsed.currency ?? defaults.currency,
             date: parsed.date ? new Date(parsed.date) : defaults.date,
@@ -282,6 +284,7 @@ export function SpaceEntryDialog({
     currentUserId,
     defaultCurrency,
     reportingCurrency,
+    spaceCurrencies,
     defaultSplitMode,
     spaceMode,
     draftKey,
@@ -292,11 +295,13 @@ export function SpaceEntryDialog({
     currentUserId: string
     defaultCurrency: string
     reportingCurrency: string
+    spaceCurrencies: string[]
     defaultSplitMode: SpaceEntryFormData['splitMode']
     spaceMode: SpaceFormData['mode']
     draftKey?: string
 }) {
     const { categories } = useSpaceCategories(spaceId)
+    const { categories: personalCategories } = useCategories()
     const { accounts } = useAccounts()
     const { success, warning } = useToast()
 
@@ -406,6 +411,16 @@ export function SpaceEntryDialog({
         }))
     }, [form.sharedWithParticipantIds, form.splitMode, form.splitAllocations, spaceMode])
 
+    useEffect(() => {
+        if (spaceCurrencies.includes(form.currency)) return
+        setForm((previous) => ({
+            ...previous,
+            currency: spaceCurrencies[0] ?? reportingCurrency,
+            personalAccountId: undefined,
+            categoryId: undefined,
+        }))
+    }, [form.currency, reportingCurrency, spaceCurrencies])
+
     const paidByParticipant = activeParticipants.find(
         (participant) => extractId(participant._id) === form.paidByParticipantId
     )
@@ -418,8 +433,16 @@ export function SpaceEntryDialog({
         [accounts, form.currency]
     )
     const filteredCategories = useMemo(
-        () => categories.filter((category) => category.type === form.type),
-        [categories, form.type]
+        () => categories.filter((category) => category.type === 'expense'),
+        [categories]
+    )
+    const personalExpenseCategories = useMemo(
+        () => personalCategories.filter((category) => category.type === 'expense' && !category.isArchived),
+        [personalCategories]
+    )
+    const selectedSpaceCategory = useMemo(
+        () => filteredCategories.find((category) => extractId(category._id) === form.spaceCategoryId),
+        [filteredCategories, form.spaceCategoryId]
     )
 
     useEffect(() => {
@@ -435,6 +458,37 @@ export function SpaceEntryDialog({
             spaceCategoryId: undefined,
         }))
     }, [categories.length, filteredCategories, form.spaceCategoryId])
+
+    useEffect(() => {
+        if (!form.personalAccountId) {
+            if (!form.categoryId) return
+            setForm((previous) => ({ ...previous, categoryId: undefined }))
+            return
+        }
+
+        if (form.categoryId || !selectedSpaceCategory) return
+
+        const normalizeCategoryName = (value: string) =>
+            value.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        const normalizedSpaceName = normalizeCategoryName(selectedSpaceCategory.name)
+        const match = personalExpenseCategories.find(
+            (category) => {
+                const normalizedPersonalName = normalizeCategoryName(category.name)
+                return (
+                    normalizedPersonalName === normalizedSpaceName ||
+                    normalizedPersonalName.includes(normalizedSpaceName) ||
+                    normalizedSpaceName.includes(normalizedPersonalName)
+                )
+            }
+        )
+
+        if (!match) return
+
+        setForm((previous) => ({
+            ...previous,
+            categoryId: extractId(match._id),
+        }))
+    }, [form.categoryId, form.personalAccountId, personalExpenseCategories, selectedSpaceCategory])
 
     const updateSplitAllocations = (
         allocations: NonNullable<SpaceEntryFormData['splitAllocations']>
@@ -600,6 +654,7 @@ export function SpaceEntryDialog({
 
         const parsed = spaceEntrySchema.safeParse({
             ...form,
+            type: 'expense',
             splitMode: spaceMode === 'solo' ? 'none' : form.splitMode,
             sharedWithParticipantIds:
                 spaceMode === 'solo' ? undefined : form.sharedWithParticipantIds,
@@ -618,7 +673,10 @@ export function SpaceEntryDialog({
         setError(null)
 
         try {
-            const entry = await onSubmit(parsed.data)
+            const entry = await onSubmit({
+                ...parsed.data,
+                categoryId: parsed.data.personalAccountId ? parsed.data.categoryId : undefined,
+            })
             const entryId = extractId(entry._id)
             if (entryId && attachmentsRef.current.length > 0) {
                 const uploaded = await uploadDraftAttachments(entryId, attachmentsRef.current)
@@ -696,6 +754,7 @@ export function SpaceEntryDialog({
                                                                 ...previous,
                                                                 currency: value,
                                                                 personalAccountId: undefined,
+                                                                categoryId: undefined,
                                                             }))
                                                         }
                                                     >
@@ -703,8 +762,11 @@ export function SpaceEntryDialog({
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="ARS">ARS</SelectItem>
-                                                            <SelectItem value="USD">USD</SelectItem>
+                                                            {spaceCurrencies.map((currency) => (
+                                                                <SelectItem key={currency} value={currency}>
+                                                                    {currency}
+                                                                </SelectItem>
+                                                            ))}
                                                         </SelectContent>
                                                     </Select>
                                                 </SpaceDialogField>
@@ -790,7 +852,7 @@ export function SpaceEntryDialog({
                                                     </Select>
                                                 </SpaceDialogField>
 
-                                                <SpaceDialogField label="Categoría">
+                                                <SpaceDialogField label="Categoría del espacio">
                                                     <Select
                                                         value={form.spaceCategoryId ?? 'none'}
                                                         onValueChange={(value) =>
@@ -921,6 +983,8 @@ export function SpaceEntryDialog({
                                                                 ...previous,
                                                                 personalAccountId:
                                                                     value === 'none' ? undefined : value,
+                                                                categoryId:
+                                                                    value === 'none' ? undefined : previous.categoryId,
                                                             }))
                                                         }
                                                     >
@@ -967,6 +1031,44 @@ export function SpaceEntryDialog({
                                                     </Select>
                                                 </SpaceDialogField>
 
+                                                {filteredAccounts.length === 0 ? (
+                                                    <p className="rounded-[18px] border border-warning-soft bg-warning-soft/40 px-3 py-2 text-xs text-warning-foreground">
+                                                        Para impactarlo en Finp personal vas a necesitar registrarlo en una moneda compatible o resolverlo con una conversión.
+                                                    </p>
+                                                ) : null}
+
+                                                {form.personalAccountId ? (
+                                                    <SpaceDialogField
+                                                        label="Categoría personal"
+                                                        hint="Solo impacta en tu Finp personal. La categoría del espacio se conserva aparte."
+                                                    >
+                                                        <Select
+                                                            value={form.categoryId ?? 'none'}
+                                                            onValueChange={(value) =>
+                                                                setForm((previous) => ({
+                                                                    ...previous,
+                                                                    categoryId: value === 'none' ? undefined : value,
+                                                                }))
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="w-full">
+                                                                <SelectValue placeholder="Sin categoría" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="none">Sin categoría</SelectItem>
+                                                                {personalExpenseCategories.map((category: ICategory) => (
+                                                                    <SelectItem
+                                                                        key={extractId(category._id)}
+                                                                        value={extractId(category._id) ?? ''}
+                                                                    >
+                                                                        {category.name}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </SpaceDialogField>
+                                                ) : null}
+
                                                 <p className="text-xs text-muted-foreground">
                                                     Elegí una cuenta o tarjeta si querés impactarlo también en tu Finp personal.
                                                 </p>
@@ -981,32 +1083,10 @@ export function SpaceEntryDialog({
                                         onRemove={handleRemoveAttachment}
                                     />
 
-                                    {/* Opciones avanzadas */}
+                                    {/* Borrador */}
                                     <SpaceDialogPanel>
                                         <div className="space-y-3">
-                                            <SpaceDialogSectionEyebrow>Opciones avanzadas</SpaceDialogSectionEyebrow>
-                                            <SpaceDialogField label="Tipo">
-                                                <Select
-                                                    value={form.type}
-                                                    onValueChange={(value) =>
-                                                        setForm((previous) => ({
-                                                            ...previous,
-                                                            type: value as SpaceEntryFormData['type'],
-                                                        }))
-                                                    }
-                                                >
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {(['expense', 'income', 'adjustment'] as SpaceEntryFormData['type'][]).map((type) => (
-                                                            <SelectItem key={type} value={type}>
-                                                                {SPACE_ENTRY_TYPE_LABELS[type]}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </SpaceDialogField>
+                                            <SpaceDialogSectionEyebrow>Borrador</SpaceDialogSectionEyebrow>
                                             <Button
                                                 type="button"
                                                 variant="ghost"

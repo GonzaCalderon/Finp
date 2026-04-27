@@ -36,6 +36,7 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
         return {
             name: entry.spaceCategoryId.name,
             color: typeof entry.spaceCategoryId.color === 'string' ? entry.spaceCategoryId.color : undefined,
+            isArchived: entry.spaceCategoryId.isArchived === true,
         }
     }
 
@@ -48,10 +49,11 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
         return {
             name: entry.categoryId.name,
             color: typeof entry.categoryId.color === 'string' ? entry.categoryId.color : undefined,
+            isArchived: false,
         }
     }
 
-    return { name: 'Sin categoría', color: undefined }
+    return { name: 'Sin categoría', color: undefined, isArchived: false }
 }
 
 function MovementCard({
@@ -59,12 +61,14 @@ function MovementCard({
     reportingCurrency,
     hidden,
     participants,
+    currentUserId,
     onEntryClick,
 }: {
     entry: ISpaceEntry
     reportingCurrency: string
     hidden: boolean
     participants: ISpaceParticipant[]
+    currentUserId?: string
     onEntryClick?: (entry: ISpaceEntry) => void
 }) {
     const payer = participants.find(
@@ -77,6 +81,13 @@ function MovementCard({
     )
     const AttachmentIcon = hasImageAttachment ? FileImage : FileText
     const clickable = Boolean(onEntryClick)
+    const includedCount = entry.sharedWithParticipantIds?.length ?? 0
+    const impactsCurrentUser = Boolean(
+        entry.linkedTransactionId &&
+        currentUserId &&
+        payer &&
+        extractId(payer.userId) === currentUserId
+    )
 
     return (
         <div
@@ -91,19 +102,24 @@ function MovementCard({
                 }
             }}
             className={cn(
-                'rounded-[28px] border border-foreground/[0.07] bg-background/74 p-4 transition-colors',
+                'rounded-2xl border border-foreground/[0.07] bg-background/74 p-3.5 transition-colors sm:p-4',
                 clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/5' : ''
             )}
         >
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
+                <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
                         <SpaceEntryTypeBadge type={entry.type} />
                         <SpaceEntryStatusBadge status={entry.status} />
+                        {impactsCurrentUser ? (
+                            <SpaceMetaBadge icon={Coins}>En tu Finp</SpaceMetaBadge>
+                        ) : null}
                     </div>
 
                     <div className="space-y-1.5">
-                        <p className="text-lg font-semibold tracking-tight text-foreground">{entry.title}</p>
+                        <p className="truncate text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                            {entry.title}
+                        </p>
                         <p className="text-sm text-muted-foreground">
                             {entry.description || entry.notes || 'Sin detalle adicional.'}
                         </p>
@@ -112,6 +128,11 @@ function MovementCard({
                     <div className="flex flex-wrap gap-2">
                         <SpaceMetaBadge icon={CalendarRange}>{formatSpaceDate(entry.date)}</SpaceMetaBadge>
                         <SpaceMetaBadge icon={Users}>{payer?.displayName ?? 'Sin pagador'}</SpaceMetaBadge>
+                        <SpaceMetaBadge icon={Users}>
+                            {includedCount > 0
+                                ? `${includedCount} incluido${includedCount === 1 ? '' : 's'}`
+                                : 'Sin split'}
+                        </SpaceMetaBadge>
                         <SpaceMetaBadge icon={FileBadge2}>
                             {category.color ? (
                                 <span
@@ -120,6 +141,9 @@ function MovementCard({
                                 />
                             ) : null}
                             {category.name}
+                            {category.isArchived ? (
+                                <span className="ml-1 text-[10px] text-muted-foreground">Archivada</span>
+                            ) : null}
                         </SpaceMetaBadge>
                         {attachments > 0 ? (
                             <SpaceMetaBadge icon={AttachmentIcon}>
@@ -130,7 +154,7 @@ function MovementCard({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[300px]">
-                    <div className="rounded-[20px] border border-foreground/[0.06] bg-card/70 p-3">
+                    <div className="rounded-2xl border border-foreground/[0.06] bg-card/70 p-3">
                         <p className="text-xs text-muted-foreground">Monto original</p>
                         <SpaceAmountInline
                             amount={entry.amount}
@@ -139,7 +163,7 @@ function MovementCard({
                             className="mt-1 text-base font-semibold"
                         />
                     </div>
-                    <div className="rounded-[20px] border border-foreground/[0.06] bg-card/70 p-3">
+                    <div className="rounded-2xl border border-foreground/[0.06] bg-card/70 p-3">
                         <p className="text-xs text-muted-foreground">Reporte</p>
                         <SpaceAmountInline
                             amount={entry.reportingAmount}
@@ -157,6 +181,7 @@ function MovementCard({
 export function SpaceMovementsPanel({
     entries,
     participants,
+    currentUserId,
     entryFilter,
     onFilterChange,
     reportingCurrency,
@@ -166,6 +191,7 @@ export function SpaceMovementsPanel({
 }: {
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
+    currentUserId?: string
     entryFilter: SpaceEntryFilter
     onFilterChange: (filter: SpaceEntryFilter) => void
     reportingCurrency: string
@@ -174,7 +200,7 @@ export function SpaceMovementsPanel({
     onEntryClick?: (entry: ISpaceEntry) => void
 }) {
     const [sort, setSort] = useState<SpaceEntrySort>('recent')
-    const filters: SpaceEntryFilter[] = ['all', 'expense', 'income', 'adjustment', 'settlement']
+    const filters: SpaceEntryFilter[] = ['all', 'expense', 'settlement']
     const counts = {
         all: entries.length,
         expense: entries.filter((entry) => entry.type === 'expense').length,
@@ -202,7 +228,7 @@ export function SpaceMovementsPanel({
             <SpaceSectionHeading
                 eyebrow="Historial"
                 title="Movimientos"
-                description="Gastos, ingresos, ajustes y liquidaciones con una lectura más clara de montos, estado y contexto."
+                description="Gastos y liquidaciones con una lectura más clara de montos, estado y contexto."
             />
 
             <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -219,7 +245,7 @@ export function SpaceMovementsPanel({
                                     : 'border-border bg-background/80 text-muted-foreground hover:text-foreground',
                             ].join(' ')}
                         >
-                            <span>{filter === 'all' ? 'Todos' : filter === 'expense' ? 'Gastos' : filter === 'income' ? 'Ingresos' : filter === 'adjustment' ? 'Ajustes' : 'Liquidaciones'}</span>
+                            <span>{filter === 'all' ? 'Todos' : filter === 'expense' ? 'Gastos' : 'Liquidaciones'}</span>
                             <span
                                 className={[
                                     'rounded-full px-2 py-0.5 text-[11px]',
@@ -264,6 +290,7 @@ export function SpaceMovementsPanel({
                             reportingCurrency={reportingCurrency}
                             hidden={hidden}
                             participants={participants}
+                            currentUserId={currentUserId}
                             onEntryClick={onEntryClick}
                         />
                     ))
@@ -411,7 +438,8 @@ export function SpaceSettingsPanel({
     }
 
     return (
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_0.9fr]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.42fr)]">
+            <div className="space-y-4">
             <SpaceSurface>
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-foreground">General</h2>
@@ -574,7 +602,7 @@ export function SpaceSettingsPanel({
                 </div>
             </SpaceSurface>
 
-            <SpaceSurface className="lg:col-span-2">
+            <SpaceSurface>
                 <div className="space-y-1">
                     <h2 className="text-base font-semibold text-foreground">Categorías</h2>
                     <p className="text-sm text-muted-foreground">
@@ -586,7 +614,10 @@ export function SpaceSettingsPanel({
                 </div>
             </SpaceSurface>
 
-            <SpaceSurface className="lg:col-span-2">
+            </div>
+
+            <div className="space-y-4">
+            <SpaceSurface>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-foreground">Participantes</h2>
                     {canManage ? (
@@ -678,6 +709,7 @@ export function SpaceSettingsPanel({
                     </Button>
                 ) : null}
             </SpaceSurface>
+            </div>
         </div>
     )
 }

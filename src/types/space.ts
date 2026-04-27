@@ -32,6 +32,7 @@ export interface ISpaceCategorySnapshot {
     name?: string
     color?: string
     type?: SpaceCategoryType
+    isArchived?: boolean
 }
 
 export interface ISpace {

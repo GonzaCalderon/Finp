@@ -154,6 +154,13 @@ export async function POST(
             )
         }
 
+        if (!context.space.currencies.includes(parsed.data.currency)) {
+            return NextResponse.json(
+                { error: 'La moneda no está habilitada en este espacio.' },
+                { status: 400 }
+            )
+        }
+
         if (parsed.data.categoryId) {
             const category = await Category.findOne({
                 _id: parsed.data.categoryId,
@@ -214,6 +221,8 @@ export async function POST(
             payerUserId && payerUserId !== session.user.id
         )
 
+        const personalCategoryId = parsed.data.personalAccountId ? parsed.data.categoryId : undefined
+
         const entry = await SpaceEntry.create({
             spaceId: id,
             createdByUserId: session.user.id,
@@ -235,7 +244,7 @@ export async function POST(
                     ? parsed.data.exchangeRate
                     : undefined,
             date: parsed.data.date,
-            categoryId: parsed.data.categoryId,
+            categoryId: personalCategoryId,
             spaceCategoryId: parsed.data.spaceCategoryId,
             paidByParticipantId: parsed.data.paidByParticipantId,
             sharedWithParticipantIds: parsed.data.sharedWithParticipantIds,
@@ -260,7 +269,8 @@ export async function POST(
                     userId: session.user.id,
                     accountId: parsed.data.personalAccountId,
                     description: parsed.data.title,
-                    categoryId: parsed.data.categoryId,
+                    categoryId: personalCategoryId,
+                    spaceNameSnapshot: context.space.name,
                 })
 
                 updatedEntry = await SpaceEntry.findByIdAndUpdate(
@@ -276,7 +286,7 @@ export async function POST(
                     { new: true }
                 )
                     .populate('categoryId', 'name color type')
-                    .populate('spaceCategoryId', 'name color type')
+                    .populate('spaceCategoryId', 'name color type isArchived')
                     .lean<ISpaceEntry | null>()
             } catch (error) {
                 await SpaceEntry.findByIdAndDelete(entry._id)
@@ -305,7 +315,7 @@ export async function POST(
                 { new: true }
             )
                 .populate('categoryId', 'name color type')
-                .populate('spaceCategoryId', 'name color type')
+                .populate('spaceCategoryId', 'name color type isArchived')
                 .lean<ISpaceEntry | null>()
         }
 

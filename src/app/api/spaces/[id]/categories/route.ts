@@ -20,6 +20,8 @@ export async function GET(
         }
 
         const { id } = await params
+        const { searchParams } = new URL(request.url)
+        const includeArchived = searchParams.get('includeArchived') === 'true'
 
         await connectDB()
 
@@ -30,7 +32,7 @@ export async function GET(
 
         const categories = await SpaceCategory.find({
             spaceId: id,
-            isArchived: false,
+            ...(includeArchived ? {} : { isArchived: false }),
         })
             .sort({ name: 1 })
             .lean()

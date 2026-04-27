@@ -169,6 +169,7 @@ function SpacesQuickEntryFlow({
             currentUserId={currentUserId}
             defaultCurrency={item.space.reportingCurrency}
             reportingCurrency={item.space.reportingCurrency}
+            spaceCurrencies={item.space.currencies}
             defaultSplitMode={item.space.defaultSplitMode}
             spaceMode={item.space.mode}
             draftKey={`spaces-home-${spaceId}`}

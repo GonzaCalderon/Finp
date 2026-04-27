@@ -32,6 +32,7 @@ function resolveCategory(entry: ISpaceEntry | null) {
         return {
             name: entry.spaceCategoryId.name,
             color: typeof entry.spaceCategoryId.color === 'string' ? entry.spaceCategoryId.color : undefined,
+            isArchived: entry.spaceCategoryId.isArchived === true,
         }
     }
 
@@ -44,6 +45,7 @@ function resolveCategory(entry: ISpaceEntry | null) {
         return {
             name: entry.categoryId.name,
             color: typeof entry.categoryId.color === 'string' ? entry.categoryId.color : undefined,
+            isArchived: false,
         }
     }
 
@@ -153,6 +155,9 @@ export function SpaceEntryDetailSheet({
                                     />
                                 ) : null}
                                 {category.name}
+                                {category.isArchived ? (
+                                    <span className="ml-1 text-[10px] text-muted-foreground">Archivada</span>
+                                ) : null}
                             </SpaceMetaBadge>
                         ) : null}
                     </div>

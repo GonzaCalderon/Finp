@@ -1,7 +1,6 @@
 import mongoose, { Schema } from 'mongoose'
 import type { ISpaceEntry } from '@/types'
 import {
-    CURRENCIES,
     SPACE_ENTRY_STATUSES,
     SPACE_ENTRY_TYPES,
     SPACE_SPLIT_MODES,
@@ -44,7 +43,7 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         title: { type: String, required: true, trim: true },
         description: { type: String, trim: true },
         amount: { type: Number, required: true },
-        currency: { type: String, enum: Object.values(CURRENCIES), required: true },
+        currency: { type: String, required: true },
         reportingAmount: { type: Number, required: true },
         exchangeRate: { type: Number },
         date: { type: Date, required: true },

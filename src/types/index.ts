@@ -110,6 +110,7 @@ export interface ITransaction {
     importSourceType?: ImportSourceType
     spaceId?: Types.ObjectId
     spaceEntryId?: Types.ObjectId
+    spaceNameSnapshot?: string
     createdAt: Date
     updatedAt: Date
 }

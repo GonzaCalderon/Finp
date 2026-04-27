@@ -1404,6 +1404,16 @@ function TransactionsPageInner() {
                                 </span>
                                                             )}
 
+                                                            {transaction.spaceId && (
+                                                                <Link
+                                                                    href={`/spaces/${transaction.spaceId.toString()}`}
+                                                                    className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/12"
+                                                                >
+                                                                    Espacio
+                                                                    {transaction.spaceNameSnapshot ? `: ${transaction.spaceNameSnapshot}` : ''}
+                                                                </Link>
+                                                            )}
+
                                                             {sourceAccount?.name && (
                                                                 <span className="flex items-center gap-1 text-xs text-muted-foreground/90">
                                   ·

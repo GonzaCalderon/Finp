@@ -15,6 +15,7 @@ type CreateSpaceTransactionOptions = {
     accountId: string
     description?: string
     categoryId?: string
+    spaceNameSnapshot?: string
 }
 
 function mapEntryTypeToTransactionType(entry: ISpaceEntry['type']) {
@@ -29,6 +30,7 @@ export async function createTransactionFromSpaceEntry({
     accountId,
     description,
     categoryId,
+    spaceNameSnapshot,
 }: CreateSpaceTransactionOptions) {
     if (!Types.ObjectId.isValid(accountId)) {
         throw new Error('La cuenta seleccionada no es válida.')
@@ -76,6 +78,7 @@ export async function createTransactionFromSpaceEntry({
         createdFrom: 'web',
         spaceId: entry.spaceId,
         spaceEntryId: entry._id,
+        spaceNameSnapshot,
     }
 
     if (entry.type === 'income') {

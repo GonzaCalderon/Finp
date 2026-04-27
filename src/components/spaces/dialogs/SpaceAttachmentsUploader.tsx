@@ -52,6 +52,17 @@ function isPdf(file: File) {
     return file.type === 'application/pdf'
 }
 
+function buildAttachmentsSignature(attachments: ISpaceEntryAttachment[]) {
+    return attachments
+        .map((attachment) => [
+            extractId(attachment._id) ?? '',
+            attachment.storageKey,
+            attachment.size,
+            attachment.createdAt ? new Date(attachment.createdAt).toISOString() : '',
+        ].join(':'))
+        .join('|')
+}
+
 export function SpaceAttachmentsUploader({
     attachments = [],
     onFilesSelected,
@@ -84,11 +95,18 @@ export function SpaceAttachmentsUploader({
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const inputRef = useRef<HTMLInputElement | null>(null)
+    const existingAttachmentsSignature = buildAttachmentsSignature(existingAttachments)
+    const existingAttachmentsRef = useRef(existingAttachments)
+    const lastExistingAttachmentsSignature = useRef(existingAttachmentsSignature)
     const liveMode = Boolean(spaceId && entryId)
 
+    existingAttachmentsRef.current = existingAttachments
+
     useEffect(() => {
-        setPersistedAttachments(existingAttachments)
-    }, [existingAttachments])
+        if (lastExistingAttachmentsSignature.current === existingAttachmentsSignature) return
+        lastExistingAttachmentsSignature.current = existingAttachmentsSignature
+        setPersistedAttachments(existingAttachmentsRef.current)
+    }, [existingAttachmentsSignature])
 
     const uploadFile = async (file: File) => {
         if (!spaceId || !entryId) return

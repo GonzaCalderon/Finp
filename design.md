@@ -1306,3 +1306,12 @@ Al entrar a un espacio, el contexto registra una acción que reemplaza el botón
 - Los movimientos soportan `spaceCategoryId` sin eliminar `categoryId` legacy, y los reportes prefieren la categoría del espacio cuando existe.
 - Los comprobantes se suben a Vercel Blob privado, se guardan como `storageKey` en `SpaceEntry.attachments[]` y se sirven desde endpoints autenticados que resuelven el attachment desde DB.
 - El detalle de movimiento vive en `SpaceEntryDetailSheet`, con vista de montos, participantes, categoría, notas y adjuntos en modo live.
+
+## Follow-up post Fase 4
+
+- La categoría del espacio (`spaceCategoryId`) y la categoría personal (`categoryId`) son conceptos separados: la primera organiza reportes compartidos, la segunda sólo se usa cuando el pagador impacta el gasto en su Finp personal.
+- Las transacciones personales creadas desde Espacios guardan origen mediante `spaceId`, `spaceEntryId` y `spaceNameSnapshot`, y la UI de Transacciones muestra una referencia "Espacio" con navegación al espacio.
+- La UI de Espacios oculta Ingreso y Ajuste por ahora. El modelo y las APIs siguen soportando `income` y `adjustment` para compatibilidad, pero la experiencia principal sólo ofrece gastos y liquidaciones.
+- La moneda del movimiento debe pertenecer a `space.currencies`; si el usuario quiere impactar en Finp personal, sólo puede elegir cuentas compatibles con esa moneda. La conversión avanzada espacio EUR -> Finp personal ARS/USD queda para una fase posterior como operación de cambio explícita.
+- Los movimientos editados/eliminados quedan fuera de esta fase: editar requerirá aprobación de participantes involucrados, tag "Editado", versión anterior y notificaciones; eliminar será lógico, dejando el movimiento gris y marcado como eliminado.
+- URL amigable de espacios: no se migra ahora. Plan técnico recomendado: agregar `slug` estable a `Space`, generarlo desde el nombre al crear, resolver colisiones con sufijo corto, permitir que la ruta `[id]` acepte ObjectId o slug para compatibilidad, y hacer que links internos nuevos prefieran `slug` cuando exista. El slug no debería cambiar automáticamente al renombrar para no romper enlaces.

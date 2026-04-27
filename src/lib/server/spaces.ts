@@ -66,7 +66,7 @@ export async function getSpaceEntries(spaceId: string) {
     return SpaceEntry.find({ spaceId })
         .sort({ date: -1, createdAt: -1 })
         .populate('categoryId', 'name color type')
-        .populate('spaceCategoryId', 'name color type')
+        .populate('spaceCategoryId', 'name color type isArchived')
         .lean<ISpaceEntry[]>()
 }
 
@@ -99,7 +99,7 @@ export async function buildSpaceListItems(userId: string) {
         SpaceEntry.find({ spaceId: { $in: spaceIds } })
             .sort({ date: -1, createdAt: -1 })
             .populate('categoryId', 'name color type')
-            .populate('spaceCategoryId', 'name color type')
+            .populate('spaceCategoryId', 'name color type isArchived')
             .lean<ISpaceEntry[]>(),
     ])
 
@@ -177,7 +177,7 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
         })
             .sort({ date: -1, createdAt: -1 })
             .populate('categoryId', 'name color type')
-            .populate('spaceCategoryId', 'name color type')
+            .populate('spaceCategoryId', 'name color type isArchived')
             .lean<ISpaceEntry[]>(),
         SpaceInvite.find({
             participantId: { $in: participantIds },
@@ -281,7 +281,7 @@ export async function getEntryConfirmationContext(entryId: string, userId: strin
 
     const entry = await SpaceEntry.findById(entryId)
         .populate('categoryId', 'name color type')
-        .populate('spaceCategoryId', 'name color type')
+        .populate('spaceCategoryId', 'name color type isArchived')
         .lean<ISpaceEntry | null>()
 
     if (!entry) return null

@@ -30,6 +30,7 @@ const TransactionSchema = new Schema<ITransaction>(
         importSourceType: { type: String, enum: Object.values(IMPORT_SOURCE_TYPES) },
         spaceId: { type: Schema.Types.ObjectId, ref: 'Space' },
         spaceEntryId: { type: Schema.Types.ObjectId, ref: 'SpaceEntry' },
+        spaceNameSnapshot: { type: String },
     },
     { timestamps: true }
 )
@@ -49,6 +50,7 @@ const hasDestinationAmountPath = Boolean(existingTransactionModel?.schema.path('
 const hasPaymentGroupIdPath = Boolean(existingTransactionModel?.schema.path('paymentGroupId'))
 const hasSpaceIdPath = Boolean(existingTransactionModel?.schema.path('spaceId'))
 const hasSpaceEntryIdPath = Boolean(existingTransactionModel?.schema.path('spaceEntryId'))
+const hasSpaceNameSnapshotPath = Boolean(existingTransactionModel?.schema.path('spaceNameSnapshot'))
 const needsSchemaRefresh =
     !!existingTransactionModel &&
     (!currentTypeEnum ||
@@ -57,7 +59,8 @@ const needsSchemaRefresh =
         !hasDestinationAmountPath ||
         !hasPaymentGroupIdPath ||
         !hasSpaceIdPath ||
-        !hasSpaceEntryIdPath)
+        !hasSpaceEntryIdPath ||
+        !hasSpaceNameSnapshotPath)
 
 if (needsSchemaRefresh) {
     delete mongoose.models.Transaction

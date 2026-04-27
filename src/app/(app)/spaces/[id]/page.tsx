@@ -554,6 +554,7 @@ export default function SpaceDetailPage() {
                         <SpaceMovementsPanel
                             entries={data.entries}
                             participants={data.participants}
+                            currentUserId={currentUserId}
                             entryFilter={entryFilter}
                             onFilterChange={setEntryFilter}
                             reportingCurrency={data.space.reportingCurrency}
@@ -606,6 +607,7 @@ export default function SpaceDetailPage() {
                 currentUserId={currentUserId}
                 defaultCurrency={data.space.reportingCurrency}
                 reportingCurrency={data.space.reportingCurrency}
+                spaceCurrencies={data.space.currencies}
                 defaultSplitMode={data.space.defaultSplitMode}
                 spaceMode={data.space.mode}
                 draftKey={spaceId}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { apiJson } from '@/lib/client/auth-client'
 import {
     invalidateData,
@@ -30,7 +31,7 @@ export function useSpaceCategories(spaceId?: string) {
             setError(null)
 
             const data = await apiJson<{ categories: ISpaceCategory[] }>(
-                `/api/spaces/${spaceId}/categories`
+                `/api/spaces/${spaceId}/categories?includeArchived=true`
             )
             setCategories(data.categories)
         } catch (err) {
@@ -78,6 +79,11 @@ export function useSpaceCategories(spaceId?: string) {
         [updateCategory]
     )
 
+    const restoreCategory = useCallback(
+        (categoryId: string) => updateCategory(categoryId, { isArchived: false }),
+        [updateCategory]
+    )
+
     const deleteCategory = useCallback(async (categoryId: string) => {
         if (!spaceId) throw new Error('Espacio inválido')
 
@@ -112,8 +118,20 @@ export function useSpaceCategories(spaceId?: string) {
         void fetchCategories({ silent: true })
     })
 
+    const activeCategories = useMemo(
+        () => categories.filter((category) => !category.isArchived),
+        [categories]
+    )
+    const archivedCategories = useMemo(
+        () => categories.filter((category) => category.isArchived),
+        [categories]
+    )
+
     return {
-        categories,
+        categories: activeCategories,
+        activeCategories,
+        archivedCategories,
+        allCategories: categories,
         loading,
         refreshing,
         error,
@@ -121,6 +139,7 @@ export function useSpaceCategories(spaceId?: string) {
         createCategory,
         updateCategory,
         archiveCategory,
+        restoreCategory,
         deleteCategory,
         seedCategories,
     }
