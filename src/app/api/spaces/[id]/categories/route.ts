@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceCategory } from '@/lib/models'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { normalizeSpaceCategoryName } from '@/lib/utils/space-categories'
 import { spaceCategorySchema } from '@/lib/validations'
 
 function canManageSpace(context: { isOwner: boolean; currentParticipant?: { role?: string } | null }) {
@@ -76,6 +77,26 @@ export async function POST(
             return NextResponse.json(
                 { error: 'No tenés permisos para editar categorías.' },
                 { status: 403 }
+            )
+        }
+
+        const normalizedName = normalizeSpaceCategoryName(parsed.data.name)
+        const existingCategories = await SpaceCategory.find({
+            spaceId: id,
+            type: parsed.data.type,
+        }).lean()
+        const duplicate = existingCategories.find(
+            (category) => normalizeSpaceCategoryName(category.name) === normalizedName
+        )
+
+        if (duplicate) {
+            return NextResponse.json(
+                {
+                    error: duplicate.isArchived
+                        ? 'Ya existe una categoría archivada con ese nombre y tipo. Restaurala para volver a usarla.'
+                        : 'Ya existe una categoría con ese nombre y tipo en este espacio.',
+                },
+                { status: 409 }
             )
         }
 
