@@ -8,6 +8,7 @@ import {
     ArrowLeftRight,
     ChevronDown,
     CreditCard,
+    ExternalLink,
     Pencil,
     SlidersHorizontal,
     Trash2,
@@ -1405,13 +1406,17 @@ function TransactionsPageInner() {
                                                             )}
 
                                                             {transaction.spaceId && (
-                                                                <Link
-                                                                    href={`/spaces/${transaction.spaceId.toString()}`}
-                                                                    className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/12"
-                                                                >
-                                                                    Espacio
-                                                                    {transaction.spaceNameSnapshot ? `: ${transaction.spaceNameSnapshot}` : ''}
-                                                                </Link>
+                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground/90">
+                                                                    ·
+                                                                    <Link
+                                                                        href={`/spaces/${transaction.spaceId.toString()}`}
+                                                                        aria-label={`Ver espacio${transaction.spaceNameSnapshot ? ` ${transaction.spaceNameSnapshot}` : ''}`}
+                                                                        className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors"
+                                                                    >
+                                                                        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                                                                        {transaction.spaceNameSnapshot ?? 'Espacio'}
+                                                                    </Link>
+                                                                </span>
                                                             )}
 
                                                             {sourceAccount?.name && (

@@ -113,6 +113,8 @@ export interface DashboardRecentTransaction {
         color?: string
     } | null
     installmentCount?: number
+    spaceId?: string
+    spaceNameSnapshot?: string
 }
 
 export interface DashboardData {

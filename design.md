@@ -1315,3 +1315,52 @@ Al entrar a un espacio, el contexto registra una acción que reemplaza el botón
 - La moneda del movimiento debe pertenecer a `space.currencies`; si el usuario quiere impactar en Finp personal, sólo puede elegir cuentas compatibles con esa moneda. La conversión avanzada espacio EUR -> Finp personal ARS/USD queda para una fase posterior como operación de cambio explícita.
 - Los movimientos editados/eliminados quedan fuera de esta fase: editar requerirá aprobación de participantes involucrados, tag "Editado", versión anterior y notificaciones; eliminar será lógico, dejando el movimiento gris y marcado como eliminado.
 - URL amigable de espacios: no se migra ahora. Plan técnico recomendado: agregar `slug` estable a `Space`, generarlo desde el nombre al crear, resolver colisiones con sufijo corto, permitir que la ruta `[id]` acepte ObjectId o slug para compatibilidad, y hacer que links internos nuevos prefieran `slug` cuando exista. El slug no debería cambiar automáticamente al renombrar para no romper enlaces.
+
+# Fase 5 — Saldos, movimientos y edición controlada
+
+## Propósito
+
+Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visualizar movimientos con el mismo nivel de detalle que Transacciones personales, y sentar las bases de edición/eliminación con aprobación de participantes.
+
+## Cambios planeados
+
+### SpaceSettlementDialog — opciones rápidas de pago
+
+- Unificar el diálogo de liquidación existente en `SpaceSettlementDialog`.
+- Mostrar saldo actual antes del pago.
+- Opciones rápidas: **Total**, **50%**, **Otro monto** (input numérico).
+- Mostrar preview: saldo antes / pago / saldo restante.
+- Confirmar pago → crea movimiento de tipo `settlement` y actualiza saldo en tiempo real.
+
+### Rediseño visual de movimientos en Espacios
+
+- Tabla/lista de movimientos del espacio con diseño similar a Transacciones personales.
+- Mostrar: descripción, monto, fecha, categoría del espacio, pagador, participantes incluidos.
+- Badge de estado (pendiente / liquidado / parcial).
+- Acciones rápidas por movimiento: ver detalle, iniciar liquidación parcial.
+- Adaptar al contexto compartido: mostrar quién pagó y quién debe qué.
+
+### Edición y eliminación con aprobación (diseño, no implementar aún)
+
+- Editar un movimiento requiere aprobación de todos los participantes involucrados.
+- El movimiento editado muestra tag "Editado" y permite ver la versión anterior.
+- Eliminar es lógico: el movimiento queda gris y marcado como eliminado, no desaparece.
+- Las aprobaciones/rechazos se gestionan por notificaciones.
+
+## Componentes nuevos / modificados
+
+| Componente | Estado |
+|---|---|
+| `SpaceSettlementDialog` | Modificar — opciones rápidas y preview de saldo |
+| `SpaceEntryList` (nuevo) | Nuevo — lista de movimientos estilo Transacciones |
+| `SpaceEntryRow` (nuevo) | Nuevo — fila de movimiento con estado y participantes |
+| `SpaceEditRequestDialog` (futuro) | Futuro — flujo de aprobación |
+
+## No implementar todavía
+
+- Aprobación de edición/eliminación.
+- Movimiento editado con historial de versiones.
+- Eliminación lógica (soft delete).
+- Pago múltiple.
+- Slug de espacios.
+- Mejoras a categorías personales (archivar, restaurar).

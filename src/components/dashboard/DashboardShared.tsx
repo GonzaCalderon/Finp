@@ -301,6 +301,11 @@ export function DashboardRecentTransactionsList({
                                     {transaction.installmentCount && transaction.installmentCount > 1 && (
                                         <span>{transaction.installmentCount} cuotas</span>
                                     )}
+                                    {transaction.spaceId && (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                            Espacio{transaction.spaceNameSnapshot ? `: ${transaction.spaceNameSnapshot}` : ''}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <div className="shrink-0 text-right">

@@ -173,7 +173,9 @@ export function SpaceAttachmentsUploader({
             onAttachmentDeleted?.(attachmentId)
             invalidateData(SPACE_INVALIDATION_TAGS)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'No pudimos borrar el comprobante.')
+            const msg = err instanceof Error ? err.message : ''
+            const isHtmlResponse = msg.startsWith('<') || msg.includes('<!DOCTYPE')
+            setError(isHtmlResponse ? 'No pudimos borrar el comprobante. Intentá de nuevo.' : msg || 'No pudimos borrar el comprobante.')
         } finally {
             setDeletingId(null)
         }
@@ -322,7 +324,7 @@ export function SpaceAttachmentsUploader({
                                             </Button>
                                         ) : null}
 
-                                        {liveMode ? (
+                                        {liveMode && attachmentId ? (
                                             <Button
                                                 type="button"
                                                 variant="ghost"

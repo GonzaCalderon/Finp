@@ -689,6 +689,8 @@ export async function GET(request: Request) {
                     sourceAccount: context.sourceAccount,
                     destinationAccount: context.destinationAccount,
                     installmentCount: context.installmentCount,
+                    spaceId: transaction.spaceId?.toString(),
+                    spaceNameSnapshot: transaction.spaceNameSnapshot,
                 }
             })
 

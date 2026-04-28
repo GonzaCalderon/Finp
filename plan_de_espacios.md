@@ -31,10 +31,10 @@ Pendiente:
 Incluye:
 - Flujo principal como “Nuevo gasto”.
 - Split con:
-  - Partes iguales.
-  - Responsable único.
-  - Porcentajes.
-  - Montos fijos.
+    - Partes iguales.
+    - Responsable único.
+    - Porcentajes.
+    - Montos fijos.
 - Preview de reparto.
 - FAB contextual en Espacios.
 - “Pagado desde” solo cuando el pagador es el usuario actual.
@@ -78,23 +78,23 @@ Hacer que saldar deudas sea más cómodo, descriptivo y unificado.
 
 Incluye:
 - Un único `SpaceSettlementDialog` accesible desde:
-  - CTA general de Balance.
-  - Pago recomendado.
-  - Estado personal Debés / Te deben.
-  - Últimos pagos registrados.
+    - CTA general de Balance.
+    - Pago recomendado.
+    - Estado personal Debés / Te deben.
+    - Últimos pagos registrados.
 - Prefill desde pago recomendado.
 - Opciones rápidas:
-  - Total pendiente.
-  - 50%.
-  - Otro monto.
+    - Total pendiente.
+    - 50%.
+    - Otro monto.
 - Mostrar:
-  - saldo actual;
-  - monto a pagar;
-  - saldo restante después del pago.
+    - saldo actual;
+    - monto a pagar;
+    - saldo restante después del pago.
 - Mensajes claros:
-  - “Roro le debe a Gonzalo $60.000”.
-  - “Después de este pago quedarán $20.000”.
-  - “Con este pago queda saldado”.
+    - “Roro le debe a Gonzalo $60.000”.
+    - “Después de este pago quedarán $20.000”.
+    - “Con este pago queda saldado”.
 - Preparar pago múltiple, pero no necesariamente implementarlo todavía.
 
 ---
@@ -180,13 +180,13 @@ Incluye:
 - Permitir sugerir categoría personal a partir de la categoría del espacio, si existe coincidencia por nombre o mapeo futuro.
 - Si no se elige categoría personal, mostrarlo como “Sin categoría” en Finp personal, pero con posibilidad de corregir.
 - Agregar metadata de origen en la transacción personal:
-  - origen: `space`;
-  - `spaceId`;
-  - `spaceEntryId`;
-  - nombre del espacio opcional como snapshot.
+    - origen: `space`;
+    - `spaceId`;
+    - `spaceEntryId`;
+    - nombre del espacio opcional como snapshot.
 - En la lista/detalle de transacciones personales, mostrar badge o referencia:
-  - “Espacio: Casa con Roro”;
-  - o “Desde Espacios”.
+    - “Espacio: Casa con Roro”;
+    - o “Desde Espacios”.
 - Permitir navegar desde la transacción personal al movimiento del espacio, si el usuario tiene acceso.
 - En el movimiento del espacio, mostrar si fue impactado en Finp personal del usuario actual.
 
@@ -200,7 +200,7 @@ No incluye todavía:
 ---
 
 ### Fase 4.1 — Ajustes post-Fase 4
-**Estado:** pendiente inmediato.
+**Estado:** en QA / ajustes finales pendientes.
 
 Objetivo:
 Cerrar inconsistencias detectadas en QA de Fase 4 antes de avanzar a nuevas funciones.
@@ -216,19 +216,29 @@ Incluye:
 - Identificar transacciones personales creadas desde Espacios con badge/origen.
 - Corregir selector de moneda de movimiento para usar monedas admitidas por el espacio.
 - Bloquear o explicar impacto personal cuando la moneda del espacio no es compatible con cuentas personales de Finp.
+- Corregir borrado de comprobantes cuando el endpoint devuelve 404 HTML o no matchea la ruta esperada.
+- Ajustar diseño del badge “Espacio” en transacciones personales para que no quede perdido en el medio de la fila.
+- Mostrar badge/origen “Espacio” también en transacciones recientes del dashboard.
+- Mejorar affordance del link “Espacio” para que se perciba como navegable.
 - Evaluar URL amigable para espacios mediante slug en vez de exponer solo ObjectId.
 - Reacomodar configuración desktop aprovechando mejor el ancho disponible.
 - Mejorar UX/UI de movimientos con patrón similar a Transacciones de Finp personal, adaptado a Espacios.
 
 ---
 
-### Fase 5 — Visualización y edición de movimientos
+### Fase 5 — Saldos, movimientos y edición controlada
 **Estado:** pendiente.
 
 Objetivo:
-Mejorar la operación diaria sobre movimientos ya cargados.
+Unificar la experiencia de saldar deudas y mejorar la operación diaria sobre movimientos ya cargados.
 
 Incluye:
+- UX avanzada para saldar saldos:
+    - acceso unificado a `SpaceSettlementDialog` desde Balance, pagos recomendados, estado personal y últimos pagos;
+    - opciones rápidas: pagar total, 50%, otro monto;
+    - saldo antes, monto a pagar y saldo restante;
+    - copy claro para deuda actual y pago parcial/total.
+- Preparar pago múltiple como diseño, sin implementarlo necesariamente en esta primera entrega.
 - Detalle de movimiento en sheet.
 - Editar movimiento.
 - Editar categoría del espacio.
@@ -241,6 +251,10 @@ Incluye:
 - Mostrar tag “Editado” y acceso a versión anterior.
 - Si se elimina un movimiento, no borrarlo físicamente: marcarlo como eliminado, mostrarlo en gris y excluirlo de cálculos operativos.
 - Llevar aprobaciones/rechazos a notificaciones.
+
+Notas:
+- La edición/eliminación con aprobación puede dividirse en una subfase posterior si se vuelve grande.
+- El rediseño visual de Movimientos debe tomar como referencia Transacciones de Finp personal, pero adaptado a Espacios.
 
 Reglas:
 - Editar un movimiento recalcula balance.
@@ -264,13 +278,13 @@ Principio de diseño:
 Al cargar un gasto en cuotas, el usuario debe elegir cómo se reconoce dentro del espacio:
 
 1. **Por cuota mensual** — recomendado para pareja, hogar y compras grandes.
-   - El espacio reconoce cada cuota cuando corresponde.
-   - El balance actual solo exige la cuota vigente o vencida.
-   - Las cuotas futuras se muestran como compromiso futuro, no como deuda exigible.
+    - El espacio reconoce cada cuota cuando corresponde.
+    - El balance actual solo exige la cuota vigente o vencida.
+    - Las cuotas futuras se muestran como compromiso futuro, no como deuda exigible.
 
 2. **Total ahora** — útil para viajes, compras puntuales o cuando se quiere saldar todo de una vez.
-   - El espacio reconoce la deuda completa desde la fecha del gasto.
-   - El balance puede reclamar la totalidad de la parte correspondiente.
+    - El espacio reconoce la deuda completa desde la fecha del gasto.
+    - El balance puede reclamar la totalidad de la parte correspondiente.
 
 #### Vista específica de cuotas
 
@@ -292,11 +306,11 @@ Debe mostrar:
 - Quién pagó.
 - Quién debe.
 - Estado:
-  - futura;
-  - vigente;
-  - vencida;
-  - saldada;
-  - parcialmente saldada.
+    - futura;
+    - vigente;
+    - vencida;
+    - saldada;
+    - parcialmente saldada.
 
 No debe mostrar:
 - proyecciones financieras completas;
@@ -359,8 +373,8 @@ Flujo futuro:
 3. Selecciona espacio.
 4. Define split.
 5. Define reconocimiento en el espacio:
-   - por cuota mensual;
-   - total ahora.
+    - por cuota mensual;
+    - total ahora.
 6. El movimiento del espacio queda vinculado a la transacción personal.
 
 #### Integración Espacios → Finp personal
@@ -374,13 +388,13 @@ Si el usuario crea el gasto desde Espacios y elige “Pagado desde” una tarjet
 
 ```ts
 SpaceEntry.installmentPlan?: {
-  source: 'linked_transaction' | 'manual'
-  linkedTransactionId?: string
-  totalAmount: number
-  installments: number
-  firstInstallmentMonth: string
-  currentInstallment?: number
-  recognitionMode: 'monthly' | 'upfront'
+    source: 'linked_transaction' | 'manual'
+    linkedTransactionId?: string
+    totalAmount: number
+    installments: number
+    firstInstallmentMonth: string
+    currentInstallment?: number
+    recognitionMode: 'monthly' | 'upfront'
 }
 ```
 
@@ -467,11 +481,11 @@ Incluye:
 - “A cobrar / A pagar” global.
 - Pendientes de impacto personal.
 - Reportes separando:
-  - gasto propio;
-  - adelantos;
-  - reintegros.
+    - gasto propio;
+    - adelantos;
+    - reintegros.
 - Sugerencias inteligentes:
-  - “Compartiste 5 gastos con Roro, ¿querés crear un espacio?”.
+    - “Compartiste 5 gastos con Roro, ¿querés crear un espacio?”.
 
 ---
 
