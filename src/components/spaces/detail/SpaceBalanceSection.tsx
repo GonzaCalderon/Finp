@@ -32,7 +32,7 @@ function buildDirectPayments(balances: SpaceBalanceItem[]) {
     return payments
 }
 
-function buildRecommendedPayments(balances: SpaceBalanceItem[]) {
+export function buildRecommendedPayments(balances: SpaceBalanceItem[]) {
     const debtors = balances
         .filter((item) => item.balanceReporting < 0)
         .map((item) => ({ ...item, pending: Math.abs(item.balanceReporting) }))
@@ -450,6 +450,16 @@ export function SpaceBalanceSection({
                             />
                             <p className="mt-2 text-sm text-muted-foreground">{userSummary.detail}</p>
                         </div>
+                        {onRegisterSettlement ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-3 w-full rounded-full"
+                                onClick={() => onRegisterSettlement()}
+                            >
+                                Registrar pago
+                            </Button>
+                        ) : null}
                     </div>
                 </SpaceSurface>
 

@@ -34,7 +34,7 @@ import {
     SpaceStatusBadge,
     SpaceTypeBadge,
 } from '@/components/spaces/SpaceUi'
-import { SpaceBalanceSection } from '@/components/spaces/detail/SpaceBalanceSection'
+import { SpaceBalanceSection, buildRecommendedPayments } from '@/components/spaces/detail/SpaceBalanceSection'
 import {
     SpaceCategoryBreakdown,
     SpaceEvolutionChart,
@@ -284,6 +284,8 @@ export default function SpaceDetailPage() {
             ) ?? [],
         [data?.pendingActions]
     )
+
+    const suggestedPayments = data?.summary.balances ? buildRecommendedPayments(data.summary.balances) : []
 
     const handleCreateEntry = async (payload: Parameters<typeof entriesApi.createEntry>[0]) => {
         const entry = await entriesApi.createEntry(payload)
@@ -642,6 +644,7 @@ export default function SpaceDetailPage() {
                 defaultCurrency={data.space.reportingCurrency}
                 reportingCurrency={data.space.reportingCurrency}
                 prefill={settlementPrefill}
+                suggestedPayments={suggestedPayments}
             />
 
             <SpacesPendingSheet

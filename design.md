@@ -1419,3 +1419,29 @@ Pulir la experiencia de creación de movimientos y la gestión de pagos en espac
 - Pago múltiple.
 - Cuotas y reintegros.
 - Slug de espacios.
+
+## Balance — Dos flujos de pago (adenda Fase 5C)
+
+### Flujo 1: Pago rápido (recomendaciones)
+- Cada fila de pago recomendado tiene un botón "Pagar" (toggle).
+- Al tocarlo: muestra panel de confirmación inline con payer → receiver y monto.
+- Confirmar: crea el settlement directamente sin abrir ningún dialog.
+- Ideal para aceptar la sugerencia tal como viene.
+
+### Flujo 2: Registrar pago manual/avanzado
+- Botón "Registrar pago" en el aside Resumen de la pestaña Balance.
+- Abre `SpaceSettlementDialog` con funcionalidades avanzadas:
+  - **Panel de sugerencias**: lista de pagos recomendados seleccionables.
+    Al seleccionar una: precarga pagador, receptor y monto (total).
+  - **Selectores de participante**: payer y receiver editables manualmente.
+  - **Presets de monto**: Total / 50% / Otro (activos cuando hay contexto o sugerencia seleccionada).
+  - **Preview saldo**: saldo pendiente, este pago, saldo restante.
+  - **Moneda y fecha** seleccionables.
+  - **Comentario** opcional.
+- Permite pago parcial: usuario modifica el monto libremente.
+- Permite pago manual: ignora sugerencias y completa todos los campos.
+
+### Preparación para pago múltiple (diferido)
+- La estructura `SuggestedPayment[]` está lista para recibir múltiples pagos.
+- El dialog tiene sección "Sugerencias" que puede extenderse a selección múltiple.
+- Pago múltiple completo no implementado: requiere cambios de modelo y flujo de confirmación.

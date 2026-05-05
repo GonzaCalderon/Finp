@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import {
     spaceSettlementSchema,
@@ -31,6 +32,7 @@ import {
     formatDateInput,
     SpaceDialogField,
     SpaceDialogPanel,
+    SpaceDialogSectionEyebrow,
     SpaceDialogTextArea,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { cn } from '@/lib/utils'
@@ -39,6 +41,18 @@ export interface SettlementPrefill {
     payerId?: string
     receiverId?: string
     amount?: number
+}
+
+export type SuggestedPayment = {
+    from: { participantId: string; displayName: string }
+    to: { participantId: string; displayName: string }
+    amount: number
+}
+
+type ActiveContext = {
+    from: { participantId: string; displayName: string }
+    to: { participantId: string; displayName: string }
+    amount: number
 }
 
 type FormState = {
@@ -55,16 +69,20 @@ type AmountPreset = 'total' | 'half' | 'custom' | null
 function buildDefaultForm(
     participants: ISpaceParticipant[],
     defaultCurrency: string,
-    prefill?: SettlementPrefill
+    prefill?: SettlementPrefill,
+    hasSuggestions?: boolean
 ): FormState {
     const activeIds = participants
         .filter((p) => p.isActive)
         .map((p) => extractId(p._id) ?? '')
         .filter(Boolean)
 
+    // When opened with suggestions but no prefill, start empty so user picks a suggestion
+    const startEmpty = hasSuggestions && !prefill?.payerId
+
     return {
-        payerId: prefill?.payerId ?? activeIds[0] ?? '',
-        receiverId: prefill?.receiverId ?? activeIds[1] ?? '',
+        payerId: prefill?.payerId ?? (startEmpty ? '' : (activeIds[0] ?? '')),
+        receiverId: prefill?.receiverId ?? (startEmpty ? '' : (activeIds[1] ?? '')),
         amount: prefill?.amount != null ? String(prefill.amount) : '',
         currency: defaultCurrency,
         date: formatDateInput(),
@@ -80,30 +98,35 @@ export function SpaceSettlementDialog({
     defaultCurrency,
     reportingCurrency,
     prefill,
+    suggestedPayments,
 }: DialogProps & {
     onSubmit: (data: SpaceEntryFormData) => Promise<unknown>
     participants: ISpaceParticipant[]
     defaultCurrency: string
     reportingCurrency: string
     prefill?: SettlementPrefill
+    suggestedPayments?: SuggestedPayment[]
 }) {
     const { error: toastError } = useToast()
     const activeParticipants = participants.filter((p) => p.isActive)
     const amountInputRef = useRef<HTMLInputElement>(null)
+    const hasSuggestions = Boolean(suggestedPayments && suggestedPayments.length > 0)
 
     const [form, setForm] = useState<FormState>(() =>
-        buildDefaultForm(activeParticipants, defaultCurrency, prefill)
+        buildDefaultForm(activeParticipants, defaultCurrency, prefill, hasSuggestions)
     )
     const [submitting, setSubmitting] = useState(false)
     const [errors, setErrors] = useState<Partial<Record<keyof SpaceSettlementData | 'form', string>>>({})
     const [preset, setPreset] = useState<AmountPreset>(prefill?.amount != null ? 'total' : null)
+    const [selectedSuggestion, setSelectedSuggestion] = useState<SuggestedPayment | null>(null)
 
     useEffect(() => {
         if (!open) return
-        setForm(buildDefaultForm(activeParticipants, defaultCurrency, prefill))
+        setForm(buildDefaultForm(activeParticipants, defaultCurrency, prefill, hasSuggestions))
         setErrors({})
         setSubmitting(false)
         setPreset(prefill?.amount != null ? 'total' : null)
+        setSelectedSuggestion(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open])
 
@@ -114,6 +137,7 @@ export function SpaceSettlementDialog({
     const receiverName =
         activeParticipants.find((p) => extractId(p._id) === form.receiverId)?.displayName ?? ''
 
+    // Build prefill context from the explicit prefill prop
     const prefillPayer = prefill?.payerId
         ? activeParticipants.find((p) => extractId(p._id) === prefill.payerId) ?? null
         : null
@@ -123,20 +147,49 @@ export function SpaceSettlementDialog({
     const prefillAmount = prefill?.amount ?? 0
     const hasPrefillContext = Boolean(prefillPayer && prefillReceiver && prefillAmount > 0)
 
+    // Active context: prefer explicit prefill, then selected suggestion
+    const activeContext: ActiveContext | null = hasPrefillContext
+        ? {
+              from: { participantId: extractId(prefillPayer!._id) ?? '', displayName: prefillPayer!.displayName },
+              to: { participantId: extractId(prefillReceiver!._id) ?? '', displayName: prefillReceiver!.displayName },
+              amount: prefillAmount,
+          }
+        : selectedSuggestion ?? null
+
+    const effectiveAmount = activeContext?.amount ?? 0
     const parsedAmount = parseFloat(form.amount) || 0
     const sameCurrency = !form.currency || form.currency === reportingCurrency
-    const remaining = hasPrefillContext && sameCurrency
-        ? Math.max(0, prefillAmount - parsedAmount)
-        : null
-    const isFullPayment = hasPrefillContext && parsedAmount >= prefillAmount - 0.01
-    const showPreview = hasPrefillContext && parsedAmount > 0.01
+    const remaining = activeContext && sameCurrency ? Math.max(0, effectiveAmount - parsedAmount) : null
+    const isFullPayment = activeContext != null && parsedAmount >= effectiveAmount - 0.01
+    const showPreview = activeContext != null && parsedAmount > 0.01
+    const showSuggestionsPanel = !hasPrefillContext && hasSuggestions
+
+    function applySuggestion(suggestion: SuggestedPayment) {
+        const isAlreadySelected =
+            selectedSuggestion?.from.participantId === suggestion.from.participantId &&
+            selectedSuggestion?.to.participantId === suggestion.to.participantId
+        if (isAlreadySelected) {
+            setSelectedSuggestion(null)
+            setForm((prev) => ({ ...prev, payerId: '', receiverId: '', amount: '' }))
+            setPreset(null)
+            return
+        }
+        setSelectedSuggestion(suggestion)
+        setForm((prev) => ({
+            ...prev,
+            payerId: suggestion.from.participantId,
+            receiverId: suggestion.to.participantId,
+            amount: String(suggestion.amount),
+        }))
+        setPreset('total')
+    }
 
     function applyPreset(p: AmountPreset) {
         setPreset(p)
         if (p === 'total') {
-            setForm((prev) => ({ ...prev, amount: String(prefillAmount) }))
+            setForm((prev) => ({ ...prev, amount: String(effectiveAmount) }))
         } else if (p === 'half') {
-            const half = Math.round((prefillAmount / 2) * 100) / 100
+            const half = Math.round((effectiveAmount / 2) * 100) / 100
             setForm((prev) => ({ ...prev, amount: String(half) }))
         } else {
             setTimeout(() => amountInputRef.current?.focus(), 0)
@@ -200,22 +253,77 @@ export function SpaceSettlementDialog({
                 <div className="overflow-y-auto px-5 py-5">
                     <div className="space-y-4">
 
-                        {/* Contexto de deuda cuando viene de un pago recomendado */}
+                        {/* Contexto de deuda cuando viene de un pago recomendado (prefill) */}
                         {hasPrefillContext ? (
-                            <div className="rounded-[20px] border border-primary/20 bg-primary/6 px-4 py-3 space-y-1">
+                            <div className="space-y-1 rounded-[20px] border border-primary/20 bg-primary/6 px-4 py-3">
                                 <div className="flex items-center gap-2">
                                     <SpaceInitialsAvatar
-                                        name={prefillPayer!.displayName}
+                                        name={activeContext!.from.displayName}
                                         className="h-6 w-6 text-[10px]"
                                     />
                                     <p className="text-sm font-semibold text-foreground">
-                                        {prefillPayer!.displayName} le debe a {prefillReceiver!.displayName}
+                                        {activeContext!.from.displayName} le debe a {activeContext!.to.displayName}
                                     </p>
                                 </div>
                                 <p className="pl-8 text-xs text-muted-foreground">
-                                    Saldo pendiente: {formatCurrencyAmount(prefillAmount, reportingCurrency)}
+                                    Saldo pendiente: {formatCurrencyAmount(effectiveAmount, reportingCurrency)}
                                 </p>
                             </div>
+                        ) : null}
+
+                        {/* Panel de sugerencias (solo cuando se abre sin prefill) */}
+                        {showSuggestionsPanel ? (
+                            <SpaceDialogPanel>
+                                <SpaceDialogSectionEyebrow>Sugerencias</SpaceDialogSectionEyebrow>
+                                <div className="mt-2 space-y-1">
+                                    {suggestedPayments!.map((payment) => {
+                                        const isSelected =
+                                            selectedSuggestion?.from.participantId === payment.from.participantId &&
+                                            selectedSuggestion?.to.participantId === payment.to.participantId
+                                        return (
+                                            <button
+                                                key={`${payment.from.participantId}-${payment.to.participantId}`}
+                                                type="button"
+                                                onClick={() => applySuggestion(payment)}
+                                                className={cn(
+                                                    'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors',
+                                                    isSelected
+                                                        ? 'bg-primary/10 text-primary'
+                                                        : 'text-foreground hover:bg-muted/60'
+                                                )}
+                                            >
+                                                <SpaceInitialsAvatar
+                                                    name={payment.from.displayName}
+                                                    className="h-6 w-6 shrink-0 text-[10px]"
+                                                />
+                                                <span className="min-w-0 max-w-[5rem] truncate font-medium">
+                                                    {payment.from.displayName}
+                                                </span>
+                                                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                <SpaceInitialsAvatar
+                                                    name={payment.to.displayName}
+                                                    className="h-6 w-6 shrink-0 text-[10px]"
+                                                />
+                                                <span className="min-w-0 max-w-[5rem] truncate font-medium">
+                                                    {payment.to.displayName}
+                                                </span>
+                                                <span className="ml-auto shrink-0 font-semibold">
+                                                    {formatCurrencyAmount(payment.amount, defaultCurrency)}
+                                                </span>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                                {selectedSuggestion ? (
+                                    <p className="mt-3 text-center text-xs text-muted-foreground">
+                                        Podés ajustar el monto abajo para hacer un pago parcial.
+                                    </p>
+                                ) : (
+                                    <p className="mt-3 text-center text-xs text-muted-foreground">
+                                        Seleccioná una sugerencia o completá los campos manualmente.
+                                    </p>
+                                )}
+                            </SpaceDialogPanel>
                         ) : null}
 
                         {/* Participantes */}
@@ -230,6 +338,7 @@ export function SpaceSettlementDialog({
                                                 payerId: value,
                                                 receiverId: prev.receiverId === value ? prev.payerId : prev.receiverId,
                                             }))
+                                            if (selectedSuggestion) setSelectedSuggestion(null)
                                         }}
                                     >
                                         <SelectTrigger className="w-full">
@@ -260,9 +369,10 @@ export function SpaceSettlementDialog({
                                 <SpaceDialogField label="A quién le pagó">
                                     <Select
                                         value={form.receiverId}
-                                        onValueChange={(value) =>
+                                        onValueChange={(value) => {
                                             setForm((prev) => ({ ...prev, receiverId: value }))
-                                        }
+                                            if (selectedSuggestion) setSelectedSuggestion(null)
+                                        }}
                                     >
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Elegí un participante" />
@@ -295,16 +405,16 @@ export function SpaceSettlementDialog({
 
                         {/* Monto */}
                         <SpaceDialogPanel>
-                            {/* Opciones rápidas: solo cuando hay un monto sugerido */}
-                            {prefillAmount > 0 ? (
+                            {/* Presets: visibles cuando hay contexto activo (prefill o sugerencia seleccionada) */}
+                            {effectiveAmount > 0 ? (
                                 <div className="mb-4 grid grid-cols-3 gap-2">
                                     {(
                                         [
-                                            { id: 'total' as const, label: 'Total', value: prefillAmount },
+                                            { id: 'total' as const, label: 'Total', value: effectiveAmount },
                                             {
                                                 id: 'half' as const,
                                                 label: '50%',
-                                                value: Math.round((prefillAmount / 2) * 100) / 100,
+                                                value: Math.round((effectiveAmount / 2) * 100) / 100,
                                             },
                                             { id: 'custom' as const, label: 'Otro', value: null },
                                         ] as const
@@ -393,9 +503,9 @@ export function SpaceSettlementDialog({
                             <SpaceDialogPanel>
                                 <div className="space-y-2.5">
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-muted-foreground">Saldo actual</span>
+                                        <span className="text-muted-foreground">Saldo pendiente</span>
                                         <span className="font-semibold text-foreground">
-                                            {formatCurrencyAmount(prefillAmount, reportingCurrency)}
+                                            {formatCurrencyAmount(effectiveAmount, reportingCurrency)}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between border-b border-border/60 pb-2.5 text-sm">
