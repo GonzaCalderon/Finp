@@ -88,7 +88,6 @@ export function SpaceKpiRow({
                         accent={item.accent}
                         footer={item.desktopFooter}
                         compact
-                        className="bg-card"
                     />
                 ))}
             </div>

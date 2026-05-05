@@ -447,7 +447,8 @@ export function SpaceSettingsPanel({
     }
 
     return (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.42fr)]">
+        <div className="mx-auto w-full max-w-5xl">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-4">
             <SpaceSurface>
                 <div className="flex items-center justify-between gap-3">
@@ -637,7 +638,7 @@ export function SpaceSettingsPanel({
                     ) : null}
                 </div>
 
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="mt-4 grid gap-3">
                     {participants.map((participant) => {
                         const participantId = extractId(participant._id) ?? ''
                         const editableRole = canEditParticipantRole(participant)
@@ -719,6 +720,7 @@ export function SpaceSettingsPanel({
                 ) : null}
             </SpaceSurface>
             </div>
+        </div>
         </div>
     )
 }

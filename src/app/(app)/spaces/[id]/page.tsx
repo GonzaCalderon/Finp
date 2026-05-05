@@ -200,8 +200,7 @@ function SpaceMovementsKpiRow({
             {items.map(([label, value, footer, accent], index) => (
                 <div
                     key={label}
-                    className="rounded-2xl border border-foreground/[0.08] bg-card p-3.5"
-                    style={{ boxShadow: 'var(--card-shadow)' }}
+                    className="rounded-[22px] border border-foreground/[0.07] bg-background/78 p-3.5 backdrop-blur-sm"
                 >
                     <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
                     {index < 2 ? (

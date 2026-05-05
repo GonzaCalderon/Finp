@@ -15,6 +15,23 @@ import {
 import { extractId, formatSpaceDate } from '@/lib/utils/spaces'
 import type { ISpaceEntry, SpaceBalanceItem } from '@/types'
 
+function buildDirectPayments(balances: SpaceBalanceItem[]) {
+    const debtors = balances.filter((b) => b.balanceReporting < -0.01)
+    const creditors = balances.filter((b) => b.balanceReporting > 0.01)
+    const totalCredit = creditors.reduce((sum, c) => sum + c.balanceReporting, 0)
+    const payments: Array<{ from: SpaceBalanceItem; to: SpaceBalanceItem; amount: number }> = []
+    if (totalCredit <= 0) return payments
+    for (const debtor of debtors) {
+        const debt = Math.abs(debtor.balanceReporting)
+        for (const creditor of creditors) {
+            const proportion = creditor.balanceReporting / totalCredit
+            const amount = Math.round(debt * proportion * 100) / 100
+            if (amount > 0.01) payments.push({ from: debtor, to: creditor, amount })
+        }
+    }
+    return payments
+}
+
 function buildRecommendedPayments(balances: SpaceBalanceItem[]) {
     const debtors = balances
         .filter((item) => item.balanceReporting < 0)
@@ -108,9 +125,10 @@ export function SpaceBalanceSection({
     } | null>(null)
     const [confirmingBusy, setConfirmingBusy] = useState(false)
     const recommendedPayments = buildRecommendedPayments(balances)
+    const directPayments = buildDirectPayments(balances)
     const settlementEntries = entries.filter((entry) => entry.type === 'settlement').slice(0, 5)
     const userSummary = buildUserBalanceSummary(balances, currentUserId)
-    const anyDebt = balances.some((b) => Math.abs(b.balanceReporting) > 0.01)
+
 
     async function handleConfirmDirect() {
         if (!confirmingPayment || !onCreateSettlementDirect) return
@@ -162,9 +180,36 @@ export function SpaceBalanceSection({
                         </p>
                     ) : null}
                     <div className={`mt-4 space-y-1 ${recommendedPayments.length >= 4 ? 'max-h-60 overflow-y-auto pr-1' : ''}`}>
-                        {!showSimplified ? (
+                        {!showSimplified ? directPayments.length > 0 ? (
+                            <>
+                                {directPayments.map((payment) => (
+                                    <div
+                                        key={`d-${payment.from.participantId}-${payment.to.participantId}`}
+                                        className="flex items-center gap-2 rounded-xl px-2 py-2"
+                                    >
+                                        <SpaceInitialsAvatar name={payment.from.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                        <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
+                                            {payment.from.displayName}
+                                        </span>
+                                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                        <SpaceInitialsAvatar name={payment.to.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                        <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
+                                            {payment.to.displayName}
+                                        </span>
+                                        <div className="ml-auto shrink-0">
+                                            <SpaceAmountInline
+                                                amount={payment.amount}
+                                                currency={currency}
+                                                hidden={hidden}
+                                                className="text-sm font-semibold"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </>
+                        ) : (
                             <div className="rounded-[24px] border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                                Vista directa: revisá el balance individual de cada participante en la sección de abajo.
+                                No hay deudas directas para mostrar.
                             </div>
                         ) : recommendedPayments.length > 0 ? (
                             <>
@@ -405,14 +450,6 @@ export function SpaceBalanceSection({
                             />
                             <p className="mt-2 text-sm text-muted-foreground">{userSummary.detail}</p>
                         </div>
-                        {anyDebt && onRegisterSettlement ? (
-                            <Button
-                                className="w-full"
-                                onClick={() => onRegisterSettlement()}
-                            >
-                                Registrar pago
-                            </Button>
-                        ) : null}
                     </div>
                 </SpaceSurface>
 
