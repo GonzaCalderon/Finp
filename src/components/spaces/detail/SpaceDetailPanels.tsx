@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
 import { ArrowRight, CalendarRange, Coins, FileBadge2, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -56,6 +56,10 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
     return { name: 'Sin categoría', color: undefined, isArchived: false }
 }
 
+function MetaSeparator() {
+    return <span className="select-none text-[10px] leading-none text-muted-foreground/30">·</span>
+}
+
 function MovementCard({
     entry,
     hidden,
@@ -90,6 +94,27 @@ function MovementCard({
         ? participants.find((p) => extractId(p._id) === settlementReceiverId)
         : null
 
+    // Build metadata as a typed array so each part renders as an independent element
+    type MetaPart = { key: string; label: string; accent?: boolean }
+    const metaParts: MetaPart[] = []
+
+    if (entry.type === 'settlement') {
+        metaParts.push({ key: 'date', label: formatSpaceDate(entry.date) })
+    } else {
+        metaParts.push({ key: 'date', label: formatSpaceDate(entry.date) })
+        if (payer) metaParts.push({ key: 'payer', label: `Pagó ${payer.displayName}` })
+        if (includedCount > 0) {
+            metaParts.push({ key: 'participants', label: `${includedCount} participante${includedCount === 1 ? '' : 's'}` })
+        }
+        metaParts.push({ key: 'category', label: category.name })
+        if (attachments > 0) {
+            metaParts.push({ key: 'attachments', label: `${attachments} adjunto${attachments === 1 ? '' : 's'}` })
+        }
+        if (impactsCurrentUser) {
+            metaParts.push({ key: 'finp', label: 'En tu Finp', accent: true })
+        }
+    }
+
     return (
         <div
             role={clickable ? 'button' : undefined}
@@ -103,58 +128,58 @@ function MovementCard({
                 }
             }}
             className={cn(
-                'flex items-start justify-between gap-3 rounded-2xl border border-foreground/[0.07] bg-background/74 px-4 py-3.5 transition-colors',
-                clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/5' : ''
+                'flex items-start justify-between gap-4 rounded-2xl border border-foreground/[0.07] bg-background/74 px-4 py-4 transition-colors',
+                clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40' : ''
             )}
         >
+            {/* Left: color dot + title + metadata */}
             <div className="flex min-w-0 flex-1 items-start gap-3">
                 <div
-                    className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                    className="mt-[5px] h-2 w-2 shrink-0 rounded-full"
                     style={{ backgroundColor: category.color ?? 'var(--muted-foreground)' }}
                 />
-                <div className="min-w-0 flex-1 space-y-1">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                    {/* Title / settlement direction */}
                     {entry.type === 'settlement' && payer ? (
-                        <div className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-foreground">
-                            <span className="truncate">{payer.displayName}</span>
-                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{settlementReceiver?.displayName ?? 'Receptor'}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-sm font-semibold text-foreground">{payer.displayName}</span>
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                            <span className="text-sm font-semibold text-foreground">
+                                {settlementReceiver?.displayName ?? 'Receptor'}
+                            </span>
                         </div>
                     ) : (
-                        <p className="truncate text-sm font-semibold text-foreground">{entry.title}</p>
+                        <p className="truncate text-sm font-semibold leading-snug text-foreground">{entry.title}</p>
                     )}
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                        <span>{formatSpaceDate(entry.date)}</span>
-                        <span>·</span>
-                        <span>{payer?.displayName ?? 'Sin pagador'}</span>
-                        {includedCount > 0 ? (
-                            <>
-                                <span>·</span>
-                                <span>{includedCount} incluido{includedCount === 1 ? '' : 's'}</span>
-                            </>
-                        ) : null}
-                        <span>·</span>
-                        <span>{category.name}</span>
-                        {attachments > 0 ? (
-                            <>
-                                <span>·</span>
-                                <span>{attachments} adj.</span>
-                            </>
-                        ) : null}
-                        {impactsCurrentUser ? (
-                            <>
-                                <span>·</span>
-                                <span className="font-medium text-primary">En tu Finp</span>
-                            </>
-                        ) : null}
-                    </div>
+                    {/* Metadata row — each part is an independent element, not a joined string */}
+                    {metaParts.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            {metaParts.map((part, i) => (
+                                <Fragment key={part.key}>
+                                    {i > 0 && <MetaSeparator />}
+                                    <span
+                                        className={cn(
+                                            'text-xs leading-snug',
+                                            part.accent
+                                                ? 'font-medium text-primary'
+                                                : 'text-muted-foreground'
+                                        )}
+                                    >
+                                        {part.label}
+                                    </span>
+                                </Fragment>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
+            {/* Right: amount + status */}
+            <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
                 <SpaceAmountInline
                     amount={entry.amount}
                     currency={entry.currency}
                     hidden={hidden}
-                    className="text-sm font-semibold"
+                    className="text-sm font-semibold tabular-nums"
                 />
                 <SpaceEntryStatusBadge status={entry.status} />
             </div>
@@ -257,7 +282,7 @@ export function SpaceMovementsPanel({
                 </div>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 space-y-2">
                 {sortedEntries.length === 0 ? (
                     <EmptyState
                         icon={Sparkles}
