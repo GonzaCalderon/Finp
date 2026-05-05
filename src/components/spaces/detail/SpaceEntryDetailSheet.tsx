@@ -160,6 +160,9 @@ export function SpaceEntryDetailSheet({
                                 ) : null}
                             </SpaceMetaBadge>
                         ) : null}
+                        {currentEntry.linkedTransactionId ? (
+                            <SpaceMetaBadge icon={Coins}>En Finp personal</SpaceMetaBadge>
+                        ) : null}
                     </div>
 
                     <section className="space-y-3">
@@ -178,7 +181,7 @@ export function SpaceEntryDetailSheet({
                     {sharedParticipants.length > 0 ? (
                         <section className="space-y-3">
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Incluidos
+                                {currentEntry.type === 'settlement' ? 'Recibió' : 'Incluidos'}
                             </p>
                             <div className="flex flex-wrap gap-2">
                                 {sharedParticipants.map((participant) => (

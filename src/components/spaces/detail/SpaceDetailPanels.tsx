@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { CalendarRange, Coins, FileBadge2, FileImage, FileText, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowRight, CalendarRange, Coins, FileBadge2, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -16,7 +16,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
-import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
+import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
 import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
@@ -58,7 +58,6 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
 
 function MovementCard({
     entry,
-    reportingCurrency,
     hidden,
     participants,
     currentUserId,
@@ -76,10 +75,6 @@ function MovementCard({
     )
     const attachments = entry.attachments?.length ?? 0
     const category = resolveCategoryInfo(entry)
-    const hasImageAttachment = (entry.attachments ?? []).some((attachment) =>
-        attachment.mimeType.startsWith('image/')
-    )
-    const AttachmentIcon = hasImageAttachment ? FileImage : FileText
     const clickable = Boolean(onEntryClick)
     const includedCount = entry.sharedWithParticipantIds?.length ?? 0
     const impactsCurrentUser = Boolean(
@@ -88,6 +83,12 @@ function MovementCard({
         payer &&
         extractId(payer.userId) === currentUserId
     )
+    const settlementReceiverId = entry.type === 'settlement'
+        ? extractId(entry.sharedWithParticipantIds?.[0])
+        : null
+    const settlementReceiver = settlementReceiverId
+        ? participants.find((p) => extractId(p._id) === settlementReceiverId)
+        : null
 
     return (
         <div
@@ -102,77 +103,60 @@ function MovementCard({
                 }
             }}
             className={cn(
-                'rounded-2xl border border-foreground/[0.07] bg-background/74 p-3.5 transition-colors sm:p-4',
+                'flex items-start justify-between gap-3 rounded-2xl border border-foreground/[0.07] bg-background/74 px-4 py-3.5 transition-colors',
                 clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/5' : ''
             )}
         >
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <SpaceEntryTypeBadge type={entry.type} />
-                        <SpaceEntryStatusBadge status={entry.status} />
-                        {impactsCurrentUser ? (
-                            <SpaceMetaBadge icon={Coins}>En tu Finp</SpaceMetaBadge>
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div
+                    className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: category.color ?? 'var(--muted-foreground)' }}
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                    {entry.type === 'settlement' && payer ? (
+                        <div className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-foreground">
+                            <span className="truncate">{payer.displayName}</span>
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{settlementReceiver?.displayName ?? 'Receptor'}</span>
+                        </div>
+                    ) : (
+                        <p className="truncate text-sm font-semibold text-foreground">{entry.title}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                        <span>{formatSpaceDate(entry.date)}</span>
+                        <span>·</span>
+                        <span>{payer?.displayName ?? 'Sin pagador'}</span>
+                        {includedCount > 0 ? (
+                            <>
+                                <span>·</span>
+                                <span>{includedCount} incluido{includedCount === 1 ? '' : 's'}</span>
+                            </>
                         ) : null}
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <p className="truncate text-base font-semibold tracking-tight text-foreground sm:text-lg">
-                            {entry.title}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                            {entry.description || entry.notes || 'Sin detalle adicional.'}
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                        <SpaceMetaBadge icon={CalendarRange}>{formatSpaceDate(entry.date)}</SpaceMetaBadge>
-                        <SpaceMetaBadge icon={Users}>{payer?.displayName ?? 'Sin pagador'}</SpaceMetaBadge>
-                        <SpaceMetaBadge icon={Users}>
-                            {includedCount > 0
-                                ? `${includedCount} incluido${includedCount === 1 ? '' : 's'}`
-                                : 'Sin split'}
-                        </SpaceMetaBadge>
-                        <SpaceMetaBadge icon={FileBadge2}>
-                            {category.color ? (
-                                <span
-                                    className="h-2 w-2 rounded-full"
-                                    style={{ backgroundColor: category.color }}
-                                />
-                            ) : null}
-                            {category.name}
-                            {category.isArchived ? (
-                                <span className="ml-1 text-[10px] text-muted-foreground">Archivada</span>
-                            ) : null}
-                        </SpaceMetaBadge>
+                        <span>·</span>
+                        <span>{category.name}</span>
                         {attachments > 0 ? (
-                            <SpaceMetaBadge icon={AttachmentIcon}>
-                                {attachments} adjunto{attachments === 1 ? '' : 's'}
-                            </SpaceMetaBadge>
+                            <>
+                                <span>·</span>
+                                <span>{attachments} adj.</span>
+                            </>
+                        ) : null}
+                        {impactsCurrentUser ? (
+                            <>
+                                <span>·</span>
+                                <span className="font-medium text-primary">En tu Finp</span>
+                            </>
                         ) : null}
                     </div>
                 </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[300px]">
-                    <div className="rounded-2xl border border-foreground/[0.06] bg-card/70 p-3">
-                        <p className="text-xs text-muted-foreground">Monto original</p>
-                        <SpaceAmountInline
-                            amount={entry.amount}
-                            currency={entry.currency}
-                            hidden={hidden}
-                            className="mt-1 text-base font-semibold"
-                        />
-                    </div>
-                    <div className="rounded-2xl border border-foreground/[0.06] bg-card/70 p-3">
-                        <p className="text-xs text-muted-foreground">Reporte</p>
-                        <SpaceAmountInline
-                            amount={entry.reportingAmount}
-                            currency={reportingCurrency}
-                            hidden={hidden}
-                            className="mt-1 text-base font-semibold"
-                        />
-                    </div>
-                </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <SpaceAmountInline
+                    amount={entry.amount}
+                    currency={entry.currency}
+                    hidden={hidden}
+                    className="text-sm font-semibold"
+                />
+                <SpaceEntryStatusBadge status={entry.status} />
             </div>
         </div>
     )
@@ -245,7 +229,7 @@ export function SpaceMovementsPanel({
                                     : 'border-border bg-background/80 text-muted-foreground hover:text-foreground',
                             ].join(' ')}
                         >
-                            <span>{filter === 'all' ? 'Todos' : filter === 'expense' ? 'Gastos' : 'Liquidaciones'}</span>
+                            <span>{filter === 'all' ? 'Todos' : filter === 'expense' ? 'Gastos' : 'Pagos'}</span>
                             <span
                                 className={[
                                     'rounded-full px-2 py-0.5 text-[11px]',

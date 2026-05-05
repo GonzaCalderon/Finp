@@ -1347,13 +1347,16 @@ Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visua
 - Eliminar es lógico: el movimiento queda gris y marcado como eliminado, no desaparece.
 - Las aprobaciones/rechazos se gestionan por notificaciones.
 
-## Componentes nuevos / modificados
+## Componentes implementados / diferidos
 
 | Componente | Estado |
 |---|---|
-| `SpaceSettlementDialog` | Modificar — opciones rápidas y preview de saldo |
-| `SpaceEntryList` (nuevo) | Nuevo — lista de movimientos estilo Transacciones |
-| `SpaceEntryRow` (nuevo) | Nuevo — fila de movimiento con estado y participantes |
+| `SpaceSettlementDialog` | ✅ Implementado — header de contexto deuda, presets rápidos, preview saldo antes/después |
+| `SpaceBalanceSection` | ✅ Implementado — títulos "Debés"/"Te deben", descripción corta, hint simplificación |
+| `MovementCard` (en `SpaceDetailPanels`) | ✅ Implementado — layout denso tipo Transacciones, dot de color, settlement Pagador→Receptor |
+| `SpaceEntryDetailSheet` | ✅ Implementado — "Recibió" para settlements, badge "En Finp personal" |
+| `SpaceEntryList` (nuevo) | Diferido |
+| `SpaceEntryRow` (nuevo) | Diferido |
 | `SpaceEditRequestDialog` (futuro) | Futuro — flujo de aprobación |
 
 ## No implementar todavía

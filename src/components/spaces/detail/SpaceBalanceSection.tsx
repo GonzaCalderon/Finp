@@ -64,7 +64,7 @@ function buildUserBalanceSummary(balances: SpaceBalanceItem[], currentUserId: st
 
     return {
         eyebrow: isDebt ? 'Por pagar' : 'Por cobrar',
-        title: isDebt ? 'Tenés un pago pendiente' : 'Tenés un cobro pendiente',
+        title: isDebt ? 'Debés' : 'Te deben',
         amount,
         tone: isDebt ? ('negative' as const) : ('positive' as const),
         detail: isDebt
@@ -112,7 +112,7 @@ export function SpaceBalanceSection({
                         <SpaceSectionHeading
                             eyebrow="Pagos recomendados"
                             title="Cómo saldar el espacio"
-                            description="Pagos mínimos sugeridos para equilibrar lo que cada participante tiene pendiente o por cobrar."
+                            description="Pagos sugeridos para saldar el espacio."
                         />
                         {activeParticipantCount >= 3 ? (
                             <div className="flex shrink-0 overflow-hidden rounded-full border border-border bg-background/80 text-xs font-medium">
@@ -133,6 +133,11 @@ export function SpaceBalanceSection({
                             </div>
                         ) : null}
                     </div>
+                    {activeParticipantCount >= 3 ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Finp minimiza pagos cuando la simplificación está activada.
+                        </p>
+                    ) : null}
                     <div className="mt-4 space-y-2">
                         {!showSimplified ? (
                             <div className="rounded-[24px] border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
