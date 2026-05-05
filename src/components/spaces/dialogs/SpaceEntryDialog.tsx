@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
     Banknote,
     Building2,
-    CalendarIcon,
     CalendarRange,
     CircleDollarSign,
     Coins,
@@ -36,9 +35,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
     Select,
     SelectContent,
@@ -65,6 +62,7 @@ import {
     SpaceAttachmentsUploader,
 } from '@/components/spaces/dialogs/SpaceAttachmentsUploader'
 import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitConfigurator'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 
 // ── Account type helpers ──────────────────────────────────────────────────────
 
@@ -800,35 +798,20 @@ export function SpaceEntryDialog({
                                                     </Select>
                                                 </SpaceDialogField>
 
-                                                <SpaceDialogField label="Fecha" error={fieldErrors.date}>
-                                                    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                                                        <PopoverTrigger asChild>
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                className="h-10 w-full justify-start rounded-[1rem] text-left font-medium"
-                                                                onClick={() => clearFieldError('date')}
-                                                            >
-                                                                <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                                                                {form.date instanceof Date
-                                                                    ? form.date.toLocaleDateString('es-AR')
-                                                                    : 'Seleccionar fecha'}
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-auto p-0" align="start">
-                                                            <Calendar
-                                                                mode="single"
-                                                                selected={form.date instanceof Date ? form.date : undefined}
-                                                                onSelect={(date) => {
-                                                                    if (date) {
-                                                                        setForm((previous) => ({ ...previous, date }))
-                                                                        setDatePickerOpen(false)
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                </SpaceDialogField>
+                                                <DatePickerField
+                                                    label="Fecha"
+                                                    value={form.date instanceof Date ? form.date : undefined}
+                                                    isOpen={datePickerOpen}
+                                                    onOpenChange={(open) => {
+                                                        if (open) clearFieldError('date')
+                                                        setDatePickerOpen(open)
+                                                    }}
+                                                    onChange={(date) => {
+                                                        if (date) setForm((previous) => ({ ...previous, date }))
+                                                    }}
+                                                    error={fieldErrors.date}
+                                                    showErrors={Boolean(fieldErrors.date)}
+                                                />
                                             </div>
 
                                             <SpaceDialogField label="Descripción" error={fieldErrors.title}>

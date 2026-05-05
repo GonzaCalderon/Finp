@@ -30,11 +30,13 @@ import { SpaceInitialsAvatar } from '@/components/spaces/SpaceUi'
 import {
     type DialogProps,
     formatDateInput,
+    normalizeDialogDate,
     SpaceDialogField,
     SpaceDialogPanel,
     SpaceDialogSectionEyebrow,
     SpaceDialogTextArea,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { cn } from '@/lib/utils'
 
 export interface SettlementPrefill {
@@ -119,6 +121,7 @@ export function SpaceSettlementDialog({
     const [errors, setErrors] = useState<Partial<Record<keyof SpaceSettlementData | 'form', string>>>({})
     const [preset, setPreset] = useState<AmountPreset>(prefill?.amount != null ? 'total' : null)
     const [selectedSuggestion, setSelectedSuggestion] = useState<SuggestedPayment | null>(null)
+    const [datePickerOpen, setDatePickerOpen] = useState(false)
 
     useEffect(() => {
         if (!open) return
@@ -245,12 +248,13 @@ export function SpaceSettlementDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-lg">
-                <DialogHeader className="border-b border-border/60 px-5 py-4">
+            <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+                <div className="flex h-full min-h-0 flex-col">
+                <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4">
                     <DialogTitle className="text-base font-semibold">Registrar pago</DialogTitle>
                 </DialogHeader>
 
-                <div className="overflow-y-auto px-5 py-5">
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
                     <div className="space-y-4">
 
                         {/* Contexto de deuda cuando viene de un pago recomendado (prefill) */}
@@ -483,18 +487,17 @@ export function SpaceSettlementDialog({
                             </div>
 
                             <div className="mt-4">
-                                <SpaceDialogField label="Fecha del pago">
-                                    <Input
-                                        type="date"
-                                        value={form.date}
-                                        onChange={(e) =>
-                                            setForm((prev) => ({ ...prev, date: e.target.value }))
-                                        }
-                                    />
-                                    {errors.date ? (
-                                        <p className="text-xs text-destructive">{errors.date}</p>
-                                    ) : null}
-                                </SpaceDialogField>
+                                <DatePickerField
+                                    label="Fecha del pago"
+                                    value={normalizeDialogDate(form.date)}
+                                    isOpen={datePickerOpen}
+                                    onOpenChange={setDatePickerOpen}
+                                    onChange={(date) =>
+                                        setForm((prev) => ({ ...prev, date: formatDateInput(date) }))
+                                    }
+                                    error={errors.date}
+                                    showErrors={Boolean(errors.date)}
+                                />
                             </div>
                         </SpaceDialogPanel>
 
@@ -559,7 +562,7 @@ export function SpaceSettlementDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="border-t border-border/60 px-5 py-4">
+                <DialogFooter className="shrink-0 border-t border-border/60 px-5 py-4">
                     <Button
                         variant="outline"
                         onClick={() => onOpenChange(false)}
@@ -571,6 +574,7 @@ export function SpaceSettlementDialog({
                         {submitting ? 'Guardando…' : 'Guardar pago'}
                     </Button>
                 </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     )
