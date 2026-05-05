@@ -1367,3 +1367,11 @@ Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visua
 - Pago múltiple.
 - Slug de espacios.
 - Mejoras a categorías personales (archivar, restaurar).
+
+## Pendiente verificación / Fase 5C
+
+- **DatePicker y validaciones de Nuevo movimiento** — revisar que la fecha, monto y campos requeridos tengan validación robusta en el formulario de creación de movimientos.
+- **Resumen con deuda total y CTA a Balance** — panel o card en la vista del espacio que muestre la deuda total del usuario con un acceso directo a la pestaña Balance.
+- **Acción rápida "Registrar pago recomendado"** — en la sección de pagos recomendados, permitir confirmar el pago total con un solo click (con modal de confirmación) sin abrir el diálogo completo.
+- **Compactación visual de pagos recomendados** — reducir el tamaño de cada fila de pago recomendado en SpaceBalanceSection para que quepan más items sin scroll.
+- **Verificar que Balance usa la versión actualizada del dialog** — confirmar que el botón "Registrar pago" en SpaceBalanceSection abre `SpaceSettlementDialog` con el prefill correcto (no una versión vieja o sin contexto).
