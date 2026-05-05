@@ -297,6 +297,21 @@ export default function SpaceDetailPage() {
         setSettlementDialogOpen(true)
     }
 
+    async function handleCreateSettlementDirect(payerId: string, receiverId: string, amount: number) {
+        const payerParticipant = data?.participants.find((p) => extractId(p._id) === payerId)
+        const receiverParticipant = data?.participants.find((p) => extractId(p._id) === receiverId)
+        await handleCreateEntry({
+            type: 'settlement',
+            title: `Pago de ${payerParticipant?.displayName ?? 'participante'} a ${receiverParticipant?.displayName ?? 'participante'}`,
+            amount,
+            currency: data?.space.reportingCurrency ?? '',
+            date: new Date(),
+            paidByParticipantId: payerId,
+            sharedWithParticipantIds: [receiverId],
+            splitMode: 'none',
+        })
+    }
+
     const handleAddParticipant = async (
         payload: Parameters<typeof participantsApi.addParticipant>[0]
     ) => {
@@ -509,7 +524,7 @@ export default function SpaceDetailPage() {
                             currency={data.space.reportingCurrency}
                             hidden={hidden}
                             currentUserId={currentUserId}
-                            onCreateEntry={() => handleRegisterSettlement()}
+                            onGoToBalance={() => setActiveTab('balance')}
                         />
 
                         {/* Charts: visible on mobile and desktop */}
@@ -574,6 +589,7 @@ export default function SpaceDetailPage() {
                         currentUserId={currentUserId}
                         simplifyDebts={data.space.simplifyDebts ?? undefined}
                         onRegisterSettlement={handleRegisterSettlement}
+                        onCreateSettlementDirect={handleCreateSettlementDirect}
                         onViewAllSettlements={() => {
                             setActiveTab('entries')
                             setEntryFilter('settlement')

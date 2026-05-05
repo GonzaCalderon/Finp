@@ -1375,3 +1375,47 @@ Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visua
 - **Acción rápida "Registrar pago recomendado"** — en la sección de pagos recomendados, permitir confirmar el pago total con un solo click (con modal de confirmación) sin abrir el diálogo completo.
 - **Compactación visual de pagos recomendados** — reducir el tamaño de cada fila de pago recomendado en SpaceBalanceSection para que quepan más items sin scroll.
 - **Verificar que Balance usa la versión actualizada del dialog** — confirmar que el botón "Registrar pago" en SpaceBalanceSection abre `SpaceSettlementDialog` con el prefill correcto (no una versión vieja o sin contexto).
+
+# Fase 5C — Pulido UX: validación, datepicker, saldo rápido
+
+## Propósito
+
+Pulir la experiencia de creación de movimientos y la gestión de pagos en espacios.
+
+## Cambios implementados
+
+### SpaceEntryDialog — DatePicker consistente
+- Reemplaza `<Input type="date">` por `Popover + Calendar` (mismo patrón que Transacciones personales).
+- Muestra la fecha en formato `es-AR` (localeDateString).
+
+### SpaceEntryDialog — Validación inline por campo
+- Errores Zod se mapean por `path[0]` a `fieldErrors: Record<string, string>`.
+- Cada `SpaceDialogField` recibe `error={fieldErrors.campo}` y muestra el mensaje en rojo debajo del input.
+- Al interactuar con un campo, su error se limpia (`clearFieldError`).
+- Al enviar con errores, hace scroll automático al primer error visible.
+
+### SpaceSettlementPanel — Deuda total + CTA Ver balance
+- Muestra saldo neto del usuario ("Debés en total" / "Te deben en total" / "Todo saldado").
+- CTA redirige a la pestaña Balance en lugar de abrir el dialog de liquidación.
+
+### SpaceBalanceSection — Pagos recomendados compactos con confirmación rápida
+- Layout compacto: avatar pequeño (h-7 w-7) + nombre truncado + flecha + avatar + nombre + monto + botón.
+- Scroll vertical (`max-h-60 overflow-y-auto`) cuando hay 4 o más pagos recomendados.
+- Click en "Pagar" actúa como toggle: muestra panel de confirmación inline (sin abrir dialog completo); click de nuevo cancela.
+- Panel de confirmación: payer → receiver, monto, botones Cancelar / Confirmar pago.
+- Confirmar llama `onCreateSettlementDirect` directamente, crea el settlement sin abrir ningún dialog.
+
+## Componentes modificados
+
+| Componente | Cambio |
+|---|---|
+| `SpaceEntryDialog` | DatePicker (Popover+Calendar), validación inline por campo, scroll al primer error |
+| `SpaceDialogPrimitives` → `SpaceDialogField` | Prop `error?: string` para mensaje de error por campo |
+| `SpaceSettlementPanel` | Deuda total neta, CTA "Ver balance" → navega a tab Balance |
+| `SpaceBalanceSection` | Filas compactas, scroll 4+, confirmación rápida inline sin dialog |
+
+## No implementado en esta fase
+- Edición/anulación de movimientos con aprobación.
+- Pago múltiple.
+- Cuotas y reintegros.
+- Slug de espacios.

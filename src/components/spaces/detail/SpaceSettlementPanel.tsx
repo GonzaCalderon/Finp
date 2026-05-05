@@ -1,24 +1,17 @@
 'use client'
 
-import { Check, HandCoins } from 'lucide-react'
+import { Check, HandCoins, Scale } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SpaceAmountInline } from '@/components/spaces/SpaceUi'
 import type { SpaceBalanceItem } from '@/types'
 
 function buildSettlementPreview(balances: SpaceBalanceItem[], currentUserId: string) {
     const current = balances.find((balance) => balance.userId === currentUserId)
-    if (!current || current.balanceReporting === 0) return null
-
-    const isDebt = current.balanceReporting < 0
-    const counterpart = balances.find((balance) =>
-        isDebt ? balance.balanceReporting > 0 : balance.balanceReporting < 0
-    )
-    if (!counterpart) return null
+    if (!current || Math.abs(current.balanceReporting) <= 0.01) return null
 
     return {
-        isDebt,
-        counterpart,
-        amount: Math.min(Math.abs(current.balanceReporting), Math.abs(counterpart.balanceReporting)),
+        isDebt: current.balanceReporting < 0,
+        amount: Math.abs(current.balanceReporting),
     }
 }
 
@@ -27,13 +20,13 @@ export function SpaceSettlementPanel({
     currency,
     currentUserId,
     hidden,
-    onCreateEntry,
+    onGoToBalance,
 }: {
     balances: SpaceBalanceItem[]
     currency: string
     currentUserId: string
     hidden: boolean
-    onCreateEntry: () => void
+    onGoToBalance: () => void
 }) {
     const settlement = buildSettlementPreview(balances, currentUserId)
     if (!settlement) {
@@ -46,10 +39,13 @@ export function SpaceSettlementPanel({
                     >
                         <Check className="h-4 w-4" style={{ color: 'var(--chart-3)' }} />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-foreground">Todo saldado</p>
                         <p className="text-xs text-muted-foreground">No tenés pagos pendientes en este espacio.</p>
                     </div>
+                    <Button variant="ghost" size="sm" className="shrink-0 rounded-full text-xs" onClick={onGoToBalance}>
+                        Ver balance
+                    </Button>
                 </div>
             </section>
         )
@@ -78,10 +74,11 @@ export function SpaceSettlementPanel({
                         <HandCoins className="h-4 w-4" style={{ color: accent }} />
                     </div>
                     <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: accent }}>
+                            {settlement.isDebt ? 'Por pagar' : 'Por cobrar'}
+                        </p>
                         <p className="truncate text-sm font-semibold text-foreground">
-                            {settlement.isDebt
-                                ? `Debés a ${settlement.counterpart.displayName}`
-                                : `${settlement.counterpart.displayName} te debe`}
+                            {settlement.isDebt ? 'Debés en total' : 'Te deben en total'}
                         </p>
                         <SpaceAmountInline
                             amount={settlement.amount}
@@ -94,9 +91,9 @@ export function SpaceSettlementPanel({
                 </div>
 
                 <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                    <Button variant="outline" size="sm" className="rounded-full" onClick={onCreateEntry}>
-                        <HandCoins className="h-4 w-4" />
-                        Registrar pago
+                    <Button variant="outline" size="sm" className="rounded-full" onClick={onGoToBalance}>
+                        <Scale className="h-4 w-4" />
+                        Ver balance
                     </Button>
                 </div>
             </div>

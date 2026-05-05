@@ -36,10 +36,12 @@ export function SpaceDialogSectionEyebrow({ children }: { children: ReactNode })
 export function SpaceDialogField({
     label,
     hint,
+    error,
     children,
 }: {
     label: string
     hint?: string
+    error?: string
     children: ReactNode
 }) {
     return (
@@ -49,6 +51,7 @@ export function SpaceDialogField({
                 {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
             </div>
             {children}
+            {error ? <p className="text-xs font-medium text-destructive">{error}</p> : null}
         </div>
     )
 }

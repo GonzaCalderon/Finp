@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
     Banknote,
     Building2,
+    CalendarIcon,
     CalendarRange,
     CircleDollarSign,
     Coins,
@@ -35,7 +36,9 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
     Select,
     SelectContent,
@@ -322,7 +325,10 @@ export function SpaceEntryDialog({
     const [attachments, setAttachments] = useState<SpaceAttachmentDraft[]>([])
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+    const [datePickerOpen, setDatePickerOpen] = useState(false)
     const attachmentsRef = useRef<SpaceAttachmentDraft[]>([])
+    const scrollContainerRef = useRef<HTMLDivElement>(null)
 
     const draftStorageKey = draftKey ? `finp:space-entry-draft:${draftKey}` : undefined
 
@@ -579,6 +585,15 @@ export function SpaceEntryDialog({
         })
     }
 
+    const clearFieldError = (field: string) => {
+        setFieldErrors((prev) => {
+            if (!prev[field]) return prev
+            const next = { ...prev }
+            delete next[field]
+            return next
+        })
+    }
+
     const clearDraft = () => {
         if (!draftStorageKey || typeof window === 'undefined') return
         window.sessionStorage.removeItem(draftStorageKey)
@@ -665,12 +680,25 @@ export function SpaceEntryDialog({
         })
 
         if (!parsed.success) {
-            setError(parsed.error.issues[0]?.message ?? 'Revisá los datos del movimiento.')
+            const nextFieldErrors: Record<string, string> = {}
+            for (const issue of parsed.error.issues) {
+                const key = String(issue.path[0] ?? '')
+                if (key && !nextFieldErrors[key]) nextFieldErrors[key] = issue.message
+            }
+            setFieldErrors(nextFieldErrors)
+            setError(null)
+            // Scroll to first inline error after render
+            requestAnimationFrame(() => {
+                scrollContainerRef.current
+                    ?.querySelector<HTMLElement>('.text-destructive')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            })
             return
         }
 
         setSubmitting(true)
         setError(null)
+        setFieldErrors({})
 
         try {
             const entry = await onSubmit({
@@ -720,7 +748,7 @@ export function SpaceEntryDialog({
                     </div>
 
                     {/* ── Body ── */}
-                    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                    <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
                         <div className="space-y-5">
                             <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
 
@@ -731,32 +759,33 @@ export function SpaceEntryDialog({
                                     <SpaceDialogPanel>
                                         <div className="grid gap-4">
                                             <div className="grid gap-4 lg:grid-cols-[1.1fr_0.55fr_0.7fr]">
-                                                <SpaceDialogField label="Monto">
+                                                <SpaceDialogField label="Monto" error={fieldErrors.amount}>
                                                     <Input
                                                         value={form.amount === 0 ? '' : String(form.amount)}
-                                                        onChange={(event) =>
+                                                        onChange={(event) => {
                                                             setForm((previous) => ({
                                                                 ...previous,
-                                                                amount: Number(
-                                                                    event.target.value.replace(',', '.')
-                                                                ),
+                                                                amount: Number(event.target.value.replace(',', '.')),
                                                             }))
-                                                        }
+                                                            clearFieldError('amount')
+                                                        }}
                                                         placeholder="45000"
+                                                        className={fieldErrors.amount ? 'border-destructive focus-visible:ring-destructive/25' : ''}
                                                     />
                                                 </SpaceDialogField>
 
-                                                <SpaceDialogField label="Moneda">
+                                                <SpaceDialogField label="Moneda" error={fieldErrors.currency}>
                                                     <Select
                                                         value={form.currency}
-                                                        onValueChange={(value) =>
+                                                        onValueChange={(value) => {
                                                             setForm((previous) => ({
                                                                 ...previous,
                                                                 currency: value,
                                                                 personalAccountId: undefined,
                                                                 categoryId: undefined,
                                                             }))
-                                                        }
+                                                            clearFieldError('currency')
+                                                        }}
                                                     >
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue />
@@ -771,38 +800,55 @@ export function SpaceEntryDialog({
                                                     </Select>
                                                 </SpaceDialogField>
 
-                                                <SpaceDialogField label="Fecha">
-                                                    <Input
-                                                        type="date"
-                                                        value={formatDateInput(form.date)}
-                                                        onChange={(event) =>
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                date: new Date(event.target.value),
-                                                            }))
-                                                        }
-                                                    />
+                                                <SpaceDialogField label="Fecha" error={fieldErrors.date}>
+                                                    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                className="h-10 w-full justify-start rounded-[1rem] text-left font-medium"
+                                                                onClick={() => clearFieldError('date')}
+                                                            >
+                                                                <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                                                                {form.date instanceof Date
+                                                                    ? form.date.toLocaleDateString('es-AR')
+                                                                    : 'Seleccionar fecha'}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={form.date instanceof Date ? form.date : undefined}
+                                                                onSelect={(date) => {
+                                                                    if (date) {
+                                                                        setForm((previous) => ({ ...previous, date }))
+                                                                        setDatePickerOpen(false)
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
                                                 </SpaceDialogField>
                                             </div>
 
-                                            <SpaceDialogField label="Descripción">
+                                            <SpaceDialogField label="Descripción" error={fieldErrors.title}>
                                                 <Input
                                                     value={form.title}
-                                                    onChange={(event) =>
-                                                        setForm((previous) => ({
-                                                            ...previous,
-                                                            title: event.target.value,
-                                                        }))
-                                                    }
+                                                    onChange={(event) => {
+                                                        setForm((previous) => ({ ...previous, title: event.target.value }))
+                                                        clearFieldError('title')
+                                                    }}
                                                     placeholder="Ej. Almuerzo equipo en Santiago"
+                                                    className={fieldErrors.title ? 'border-destructive focus-visible:ring-destructive/25' : ''}
                                                 />
                                             </SpaceDialogField>
 
                                             <div className="grid gap-4 lg:grid-cols-2">
-                                                <SpaceDialogField label="Pagó">
+                                                <SpaceDialogField label="Pagó" error={fieldErrors.paidByParticipantId}>
                                                     <Select
                                                         value={form.paidByParticipantId}
-                                                        onValueChange={(value) =>
+                                                        onValueChange={(value) => {
+                                                            clearFieldError('paidByParticipantId')
                                                             setForm((previous) => {
                                                                 const nextIsCurrentUser =
                                                                     extractId(
@@ -828,7 +874,7 @@ export function SpaceEntryDialog({
                                                                         : undefined,
                                                                 }
                                                             })
-                                                        }
+                                                        }}
                                                     >
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Elegí un participante" />
@@ -884,19 +930,19 @@ export function SpaceEntryDialog({
                                                 <SpaceDialogField
                                                     label={`Cotización a ${reportingCurrency}`}
                                                     hint="Necesaria para reflejar el movimiento correctamente en la moneda de reporte."
+                                                    error={fieldErrors.exchangeRate}
                                                 >
                                                     <Input
                                                         value={form.exchangeRate ? String(form.exchangeRate) : ''}
-                                                        onChange={(event) =>
+                                                        onChange={(event) => {
                                                             setForm((previous) => ({
                                                                 ...previous,
                                                                 exchangeRate: event.target.value
-                                                                    ? Number(
-                                                                          event.target.value.replace(',', '.')
-                                                                      )
+                                                                    ? Number(event.target.value.replace(',', '.'))
                                                                     : undefined,
                                                             }))
-                                                        }
+                                                            clearFieldError('exchangeRate')
+                                                        }}
                                                         placeholder={`Ingresá cuánto vale 1 ${form.currency} en ${reportingCurrency}`}
                                                     />
                                                 </SpaceDialogField>
@@ -906,19 +952,36 @@ export function SpaceEntryDialog({
 
                                     {/* Split configurator */}
                                     {spaceMode !== 'solo' ? (
-                                        <SpaceSplitConfigurator
-                                            participants={activeParticipants}
-                                            amount={Number.isFinite(form.amount) ? form.amount : 0}
-                                            currency={form.currency}
-                                            paidByParticipantId={form.paidByParticipantId}
-                                            selectedParticipantIds={form.sharedWithParticipantIds ?? []}
-                                            splitMode={form.splitMode}
-                                            allocations={form.splitAllocations}
-                                            onToggleParticipant={toggleSharedParticipant}
-                                            onResponsibleChange={setResponsibleParticipant}
-                                            onApplyPreset={applySplitPreset}
-                                            onAllocationsChange={updateSplitAllocations}
-                                        />
+                                        <div>
+                                            <SpaceSplitConfigurator
+                                                participants={activeParticipants}
+                                                amount={Number.isFinite(form.amount) ? form.amount : 0}
+                                                currency={form.currency}
+                                                paidByParticipantId={form.paidByParticipantId}
+                                                selectedParticipantIds={form.sharedWithParticipantIds ?? []}
+                                                splitMode={form.splitMode}
+                                                allocations={form.splitAllocations}
+                                                onToggleParticipant={(id) => {
+                                                    toggleSharedParticipant(id)
+                                                    clearFieldError('sharedWithParticipantIds')
+                                                    clearFieldError('splitAllocations')
+                                                }}
+                                                onResponsibleChange={setResponsibleParticipant}
+                                                onApplyPreset={(preset) => {
+                                                    applySplitPreset(preset)
+                                                    clearFieldError('splitAllocations')
+                                                }}
+                                                onAllocationsChange={(allocs) => {
+                                                    updateSplitAllocations(allocs)
+                                                    clearFieldError('splitAllocations')
+                                                }}
+                                            />
+                                            {(fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations) ? (
+                                                <p className="mt-2 text-xs font-medium text-destructive">
+                                                    {fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations}
+                                                </p>
+                                            ) : null}
+                                        </div>
                                     ) : null}
                                 </div>
 

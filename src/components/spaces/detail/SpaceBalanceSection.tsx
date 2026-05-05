@@ -86,6 +86,7 @@ export function SpaceBalanceSection({
     simplifyDebts,
     onRegisterSettlement,
     onViewAllSettlements,
+    onCreateSettlementDirect,
 }: {
     balances: SpaceBalanceItem[]
     entries?: ISpaceEntry[]
@@ -95,14 +96,36 @@ export function SpaceBalanceSection({
     simplifyDebts?: boolean
     onRegisterSettlement?: (prefill?: { payerId: string; receiverId: string; amount: number }) => void
     onViewAllSettlements?: () => void
+    onCreateSettlementDirect?: (payerId: string, receiverId: string, amount: number) => Promise<void>
 }) {
     const activeParticipantCount = balances.length
     const defaultSimplified = simplifyDebts === true || (simplifyDebts === undefined && activeParticipantCount >= 3)
     const [showSimplified, setShowSimplified] = useState(defaultSimplified)
+    const [confirmingPayment, setConfirmingPayment] = useState<{
+        from: SpaceBalanceItem
+        to: SpaceBalanceItem
+        amount: number
+    } | null>(null)
+    const [confirmingBusy, setConfirmingBusy] = useState(false)
     const recommendedPayments = buildRecommendedPayments(balances)
     const settlementEntries = entries.filter((entry) => entry.type === 'settlement').slice(0, 5)
     const userSummary = buildUserBalanceSummary(balances, currentUserId)
     const anyDebt = balances.some((b) => Math.abs(b.balanceReporting) > 0.01)
+
+    async function handleConfirmDirect() {
+        if (!confirmingPayment || !onCreateSettlementDirect) return
+        setConfirmingBusy(true)
+        try {
+            await onCreateSettlementDirect(
+                confirmingPayment.from.participantId,
+                confirmingPayment.to.participantId,
+                confirmingPayment.amount,
+            )
+            setConfirmingPayment(null)
+        } finally {
+            setConfirmingBusy(false)
+        }
+    }
 
     return (
         <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
@@ -138,52 +161,104 @@ export function SpaceBalanceSection({
                             Finp minimiza pagos cuando la simplificación está activada.
                         </p>
                     ) : null}
-                    <div className="mt-4 space-y-2">
+                    <div className={`mt-4 space-y-1 ${recommendedPayments.length >= 4 ? 'max-h-60 overflow-y-auto pr-1' : ''}`}>
                         {!showSimplified ? (
                             <div className="rounded-[24px] border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                                 Vista directa: revisá el balance individual de cada participante en la sección de abajo.
                             </div>
                         ) : recommendedPayments.length > 0 ? (
-                            recommendedPayments.map((payment) => (
-                                <div
-                                    key={`${payment.from.participantId}-${payment.to.participantId}`}
-                                    className="flex flex-col gap-3 border-b border-border/70 pb-3 last:border-b-0 md:flex-row md:items-center md:justify-between"
-                                >
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        <SpaceInitialsAvatar name={payment.from.displayName} className="h-9 w-9" />
-                                        <span className="truncate text-sm font-semibold text-foreground">
-                                            {payment.from.displayName}
-                                        </span>
-                                        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                        <SpaceInitialsAvatar name={payment.to.displayName} className="h-9 w-9" />
-                                        <span className="truncate text-sm font-semibold text-foreground">
-                                            {payment.to.displayName}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3 md:justify-end">
-                                        <SpaceAmountInline
-                                            amount={payment.amount}
-                                            currency={currency}
-                                            hidden={hidden}
-                                            className="text-sm font-semibold"
-                                        />
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="rounded-full"
-                                            onClick={() =>
-                                                onRegisterSettlement?.({
-                                                    payerId: payment.from.participantId,
-                                                    receiverId: payment.to.participantId,
-                                                    amount: payment.amount,
-                                                })
-                                            }
+                            <>
+                                {recommendedPayments.map((payment) => {
+                                    const isConfirming =
+                                        confirmingPayment?.from.participantId === payment.from.participantId &&
+                                        confirmingPayment?.to.participantId === payment.to.participantId
+                                    return (
+                                        <div
+                                            key={`${payment.from.participantId}-${payment.to.participantId}`}
+                                            className={`flex items-center gap-2 rounded-xl px-2 py-2 transition-colors ${isConfirming ? 'bg-primary/5' : 'hover:bg-muted/40'}`}
                                         >
-                                            Registrar
-                                        </Button>
+                                            <SpaceInitialsAvatar name={payment.from.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                            <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
+                                                {payment.from.displayName}
+                                            </span>
+                                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                            <SpaceInitialsAvatar name={payment.to.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                            <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
+                                                {payment.to.displayName}
+                                            </span>
+                                            <div className="ml-auto flex shrink-0 items-center gap-2">
+                                                <SpaceAmountInline
+                                                    amount={payment.amount}
+                                                    currency={currency}
+                                                    hidden={hidden}
+                                                    className="text-sm font-semibold"
+                                                />
+                                                {onCreateSettlementDirect ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-7 rounded-full px-3 text-xs"
+                                                        disabled={confirmingBusy}
+                                                        onClick={() => setConfirmingPayment(isConfirming ? null : payment)}
+                                                    >
+                                                        {isConfirming ? 'Cancelar' : 'Pagar'}
+                                                    </Button>
+                                                ) : onRegisterSettlement ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-7 rounded-full px-3 text-xs"
+                                                        onClick={() => onRegisterSettlement({
+                                                            payerId: payment.from.participantId,
+                                                            receiverId: payment.to.participantId,
+                                                            amount: payment.amount,
+                                                        })}
+                                                    >
+                                                        Registrar
+                                                    </Button>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                                {confirmingPayment ? (
+                                    <div className="mt-2 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                                        <p className="text-sm font-semibold text-foreground">Confirmar pago</p>
+                                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                            <span className="font-medium text-foreground">{confirmingPayment.from.displayName}</span>
+                                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                            <span className="font-medium text-foreground">{confirmingPayment.to.displayName}</span>
+                                            <span className="ml-auto">
+                                                <SpaceAmountInline
+                                                    amount={confirmingPayment.amount}
+                                                    currency={currency}
+                                                    hidden={hidden}
+                                                    className="text-sm font-semibold"
+                                                />
+                                            </span>
+                                        </div>
+                                        <div className="mt-3 flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="rounded-full"
+                                                onClick={() => setConfirmingPayment(null)}
+                                                disabled={confirmingBusy}
+                                            >
+                                                Cancelar
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="rounded-full"
+                                                onClick={handleConfirmDirect}
+                                                disabled={confirmingBusy}
+                                            >
+                                                {confirmingBusy ? 'Registrando…' : 'Confirmar pago'}
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                ) : null}
+                            </>
                         ) : (
                             <div className="rounded-[24px] border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                                 No hay pagos recomendados por ahora.
