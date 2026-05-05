@@ -248,8 +248,8 @@ export function SpaceSettlementDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
-                <div className="flex h-full min-h-0 flex-col">
+            <DialogContent variant="fullscreen-mobile" className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+                <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                 <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4">
                     <DialogTitle className="text-base font-semibold">Registrar pago</DialogTitle>
                 </DialogHeader>
