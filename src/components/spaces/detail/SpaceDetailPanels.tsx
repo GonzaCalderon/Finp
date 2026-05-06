@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
 import { ArrowRight, Ban, CalendarRange, ChevronRight, Coins, FileBadge2, History, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -57,9 +57,6 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
     return { name: 'Sin categoría', color: undefined, isArchived: false }
 }
 
-function MetaSeparator() {
-    return <span className="select-none text-[10px] leading-none text-muted-foreground/30">·</span>
-}
 
 function MovementCard({
     entry,
@@ -178,23 +175,24 @@ function MovementCard({
                     ) : (
                         <p className={cn('truncate text-sm font-semibold leading-snug', isVoided ? 'text-muted-foreground line-through' : 'text-foreground')}>{entry.title}</p>
                     )}
-                    {/* Metadata row — each part is an independent element, not a joined string */}
+                    {/* Metadata row — each (separator + label) is a single no-wrap flex item */}
                     {metaParts.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <div className="flex flex-wrap items-baseline gap-y-0.5">
                             {metaParts.map((part, i) => (
-                                <Fragment key={part.key}>
-                                    {i > 0 && <MetaSeparator />}
-                                    <span
-                                        className={cn(
-                                            'text-xs leading-snug',
-                                            part.accent
-                                                ? 'font-medium text-primary'
-                                                : 'text-muted-foreground'
-                                        )}
-                                    >
-                                        {part.label}
-                                    </span>
-                                </Fragment>
+                                <span
+                                    key={part.key}
+                                    className={cn(
+                                        'inline-flex items-center whitespace-nowrap text-xs leading-snug',
+                                        part.accent
+                                            ? 'font-medium text-primary'
+                                            : 'text-muted-foreground'
+                                    )}
+                                >
+                                    {i > 0 && (
+                                        <span className="mx-1.5 select-none text-[10px] leading-none text-muted-foreground/30" aria-hidden>·</span>
+                                    )}
+                                    {part.label}
+                                </span>
                             ))}
                         </div>
                     )}
