@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { ArrowRight, Ban, CalendarRange, Coins, FileBadge2, History, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowRight, Ban, CalendarRange, ChevronRight, Coins, FileBadge2, History, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -208,7 +208,7 @@ function MovementCard({
                     hidden={hidden}
                     className={cn('text-sm font-semibold tabular-nums', isVoided ? 'text-muted-foreground line-through' : '')}
                 />
-                {/* Badges + quick action buttons — single horizontal row */}
+                {/* Badges + desktop quick actions + mobile tap affordance — single row */}
                 <div className="flex items-center gap-1.5">
                     {isVoided ? (
                         <Badge variant="destructive" className="gap-1 text-[10px]">
@@ -226,8 +226,9 @@ function MovementCard({
                             ) : null}
                         </>
                     )}
+                    {/* Desktop only: hover-visible quick actions */}
                     {hasActions ? (
-                        <div className="flex items-center gap-0.5 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100">
+                        <div className="hidden items-center gap-0.5 transition-opacity lg:flex lg:opacity-0 lg:group-hover:opacity-100">
                             {canEditEntry ? (
                                 <button
                                     type="button"
@@ -255,6 +256,10 @@ function MovementCard({
                                 </button>
                             ) : null}
                         </div>
+                    ) : null}
+                    {/* Mobile only: subtle chevron affordance — edit/void available in detail sheet */}
+                    {clickable ? (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 lg:hidden" />
                     ) : null}
                 </div>
             </div>
