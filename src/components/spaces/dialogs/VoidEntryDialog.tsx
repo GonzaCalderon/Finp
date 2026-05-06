@@ -70,7 +70,7 @@ export function VoidEntryDialog({
                         <div className="flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                             <span>
-                                Hay pagos registrados después de este movimiento. Al anularlo el balance puede verse afectado.
+                                Hay pagos registrados después de este movimiento. Si lo anulás, el balance puede cambiar y esos pagos seguirán registrados.
                             </span>
                         </div>
                     ) : null}
@@ -79,7 +79,7 @@ export function VoidEntryDialog({
                         <div className="flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                             <span>
-                                Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada.
+                                Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada para mantener tus finanzas consistentes.
                             </span>
                         </div>
                     ) : null}

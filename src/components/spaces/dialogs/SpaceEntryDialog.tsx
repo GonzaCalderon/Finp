@@ -293,6 +293,7 @@ export function SpaceEntryDialog({
     draftKey,
     mode = 'create',
     initialData,
+    initialHasSubsequentSettlement,
 }: DialogProps & {
     onSubmit: (data: SpaceEntryFormData) => Promise<ISpaceEntry>
     onEditComplete?: (entry: ISpaceEntry) => void
@@ -307,6 +308,7 @@ export function SpaceEntryDialog({
     draftKey?: string
     mode?: 'create' | 'edit'
     initialData?: ISpaceEntry
+    initialHasSubsequentSettlement?: boolean
 }) {
     const { categories } = useSpaceCategories(spaceId)
     const { categories: personalCategories } = useCategories()
@@ -391,6 +393,7 @@ export function SpaceEntryDialog({
                 personalAccountId: undefined,
                 linkedTransactionId: undefined,
             })
+            setHasSubsequentSettlementWarning(initialHasSubsequentSettlement ?? false)
             setAttachments((previous) => {
                 previous.forEach(revokeAttachment)
                 return []
@@ -431,6 +434,7 @@ export function SpaceEntryDialog({
         defaultSplitMode,
         draftStorageKey,
         initialData,
+        initialHasSubsequentSettlement,
         mode,
         open,
         spaceMode,
@@ -744,6 +748,11 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
+            requestAnimationFrame(() => {
+                scrollContainerRef.current
+                    ?.querySelector<HTMLElement>('.text-destructive')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            })
             return
         }
 
@@ -766,7 +775,7 @@ export function SpaceEntryDialog({
             }
 
             if (json.hasSubsequentSettlement) {
-                setHasSubsequentSettlementWarning(true)
+                warning('Hay pagos registrados después de este movimiento. El balance fue actualizado.')
             }
 
             onEditComplete?.(json.entry!)
@@ -857,7 +866,7 @@ export function SpaceEntryDialog({
                 variant="fullscreen-mobile"
                 className="max-w-[1120px] gap-0 overflow-hidden p-0 sm:max-h-[94vh] sm:max-w-[1120px]"
             >
-                <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
+                <div className="flex h-full min-h-0 flex-col sm:h-[94vh]">
                     {/* ── Header ── */}
                     <div className="border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
                         <DialogHeader className="space-y-3">
@@ -879,7 +888,7 @@ export function SpaceEntryDialog({
                             <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>
-                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada.
+                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada para mantener tus finanzas consistentes.
                                 </span>
                             </div>
                         ) : null}
@@ -887,7 +896,7 @@ export function SpaceEntryDialog({
                             <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>
-                                    Hay pagos registrados después de este movimiento. El balance puede verse afectado.
+                                    Hay pagos registrados después de este movimiento. Si lo editás, el balance puede cambiar y esos pagos seguirán registrados.
                                 </span>
                             </div>
                         ) : null}

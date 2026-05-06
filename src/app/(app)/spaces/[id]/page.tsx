@@ -49,6 +49,7 @@ import { SpaceDetailMobileHeader } from '@/components/spaces/detail/SpaceDetailM
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
 import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobileSettingsSheet'
 import { SpaceEntryDetailSheet } from '@/components/spaces/detail/SpaceEntryDetailSheet'
+import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
 import { SpaceSettlementPanel } from '@/components/spaces/detail/SpaceSettlementPanel'
 import {
     RecentSpaceMovementsCard,
@@ -237,6 +238,10 @@ export default function SpaceDetailPage() {
     const [detailEntry, setDetailEntry] = useState<ISpaceEntry | null>(null)
     const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
     const [editingEntry, setEditingEntry] = useState<ISpaceEntry | null>(null)
+    const [editEntryHasSubsequentSettlement, setEditEntryHasSubsequentSettlement] = useState(false)
+    const [voidingEntry, setVoidingEntry] = useState<ISpaceEntry | null>(null)
+    const [voidEntryDialogOpen, setVoidEntryDialogOpen] = useState(false)
+    const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false })
     const [settlementDialogOpen, setSettlementDialogOpen] = useState(false)
     const [settlementPrefill, setSettlementPrefill] = useState<SettlementPrefill | undefined>()
 
@@ -429,6 +434,39 @@ export default function SpaceDetailPage() {
         success('Movimiento confirmado')
     }
 
+    async function handleQuickVoid(entry: ISpaceEntry) {
+        const entryId = extractId(entry._id)
+        setVoidingEntry(entry)
+        let hasLinkedTransaction = false
+        let hasSubsequentSettlement = false
+        try {
+            const res = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`)
+            if (res.ok) {
+                const json = await res.json() as { hasLinkedTransaction: boolean; hasSubsequentSettlement: boolean }
+                hasLinkedTransaction = json.hasLinkedTransaction
+                hasSubsequentSettlement = json.hasSubsequentSettlement
+            }
+        } catch {
+            // proceed without warning
+        }
+        setVoidContext({ hasLinkedTransaction, hasSubsequentSettlement })
+        setVoidEntryDialogOpen(true)
+    }
+
+    async function handleStandaloneVoidConfirm(voidReason?: string) {
+        const entryId = extractId(voidingEntry?._id)
+        if (!entryId) return
+        const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}/void`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voidReason }),
+        })
+        const json = await response.json() as { entry?: ISpaceEntry; error?: string }
+        if (!response.ok) throw new Error(json.error ?? 'No se pudo anular el movimiento.')
+        invalidateData(SPACE_INVALIDATION_TAGS)
+        success('Movimiento anulado')
+    }
+
     if (loading) {
         return <DetailSkeleton />
     }
@@ -573,12 +611,19 @@ export default function SpaceDetailPage() {
                             entries={data.entries}
                             participants={data.participants}
                             currentUserId={currentUserId}
+                            canManage={canManage}
                             entryFilter={entryFilter}
                             onFilterChange={setEntryFilter}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
                             onCreate={() => setEntryDialogOpen(true)}
                             onEntryClick={setDetailEntry}
+                            onEdit={(entry) => {
+                                setEditingEntry(entry)
+                                setEditEntryHasSubsequentSettlement(false)
+                                setEditEntryDialogOpen(true)
+                            }}
+                            onVoid={handleQuickVoid}
                         />
                     </div>
                 ) : null}
@@ -714,8 +759,9 @@ export default function SpaceDetailPage() {
                         currentParticipant?.role === 'admin'
                     )
                 )}
-                onEdit={(entry) => {
+                onEdit={(entry, hasSubsequentSettlement) => {
                     setEditingEntry(entry)
+                    setEditEntryHasSubsequentSettlement(hasSubsequentSettlement)
                     setEditEntryDialogOpen(true)
                 }}
                 onVoided={(voidedEntry) => {
@@ -745,7 +791,20 @@ export default function SpaceDetailPage() {
                 spaceMode={data.space.mode}
                 mode="edit"
                 initialData={editingEntry ?? undefined}
+                initialHasSubsequentSettlement={editEntryHasSubsequentSettlement}
             />
+
+            {/* Dialog anulación rápida desde MovementCard */}
+            {voidingEntry ? (
+                <VoidEntryDialog
+                    open={voidEntryDialogOpen}
+                    onOpenChange={setVoidEntryDialogOpen}
+                    entry={voidingEntry}
+                    hasLinkedTransaction={voidContext.hasLinkedTransaction}
+                    hasSubsequentSettlement={voidContext.hasSubsequentSettlement}
+                    onConfirm={handleStandaloneVoidConfirm}
+                />
+            ) : null}
 
             {/* Mobile settings sheet: gear button → participantes + configuración + cierre */}
             <SpaceMobileSettingsSheet

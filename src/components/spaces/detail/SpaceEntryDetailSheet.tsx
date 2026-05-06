@@ -76,7 +76,7 @@ export function SpaceEntryDetailSheet({
     currency: string
     canEdit?: boolean
     canVoid?: boolean
-    onEdit?: (entry: ISpaceEntry) => void
+    onEdit?: (entry: ISpaceEntry, hasSubsequentSettlement: boolean) => void
     onVoided?: (entry: ISpaceEntry) => void
 }) {
     const [currentEntry, setCurrentEntry] = useState<ISpaceEntry | null>(entry)
@@ -94,6 +94,14 @@ export function SpaceEntryDetailSheet({
         [participants]
     )
 
+    // Resolve user by userId (not participantId) for void/edit attribution
+    function resolveUserByUserId(userId: unknown): string {
+        if (!userId) return 'Un participante'
+        const uid = extractId(userId as Parameters<typeof extractId>[0])
+        const found = participants.find((p) => extractId(p.userId) === uid)
+        return found?.displayName ?? 'Un participante'
+    }
+
     if (!currentEntry) {
         return (
             <Sheet open={open} onOpenChange={onOpenChange}>
@@ -110,7 +118,8 @@ export function SpaceEntryDetailSheet({
     const category = resolveCategory(currentEntry)
     const isVoided = currentEntry.isVoided === true
     const isEdited = (currentEntry.editCount ?? 0) > 0
-    const hasPreviousVersions = (currentEntry.previousVersions ?? []).length > 0
+    const previousVersions = currentEntry.previousVersions ?? []
+    const hasPreviousVersions = previousVersions.length > 0
 
     const updateAttachments = (updater: (attachments: ISpaceEntryAttachment[]) => ISpaceEntryAttachment[]) => {
         setCurrentEntry((previous) => {
@@ -123,14 +132,18 @@ export function SpaceEntryDetailSheet({
     }
 
     async function handleOpenVoidDialog() {
-        // Pre-fetch context for warnings
+        // Pre-fetch context for warnings (subsequent settlements + linked transaction)
         try {
             const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`)
             if (response.ok) {
-                const json = await response.json() as { entry: ISpaceEntry }
+                const json = await response.json() as {
+                    entry: ISpaceEntry
+                    hasLinkedTransaction: boolean
+                    hasSubsequentSettlement: boolean
+                }
                 setVoidContext({
-                    hasLinkedTransaction: Boolean(json.entry.linkedTransactionId),
-                    hasSubsequentSettlement: false,
+                    hasLinkedTransaction: json.hasLinkedTransaction,
+                    hasSubsequentSettlement: json.hasSubsequentSettlement,
                 })
             }
         } catch {
@@ -156,10 +169,26 @@ export function SpaceEntryDetailSheet({
         onVoided?.(json.entry)
     }
 
+    async function handleEditClick() {
+        let hasSubsequentSettlement = false
+        try {
+            const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`)
+            if (response.ok) {
+                const json = await response.json() as { hasSubsequentSettlement: boolean }
+                hasSubsequentSettlement = json.hasSubsequentSettlement
+            }
+        } catch {
+            // proceed without warning
+        }
+        if (currentEntry) onEdit?.(currentEntry, hasSubsequentSettlement)
+    }
+
     function handleViewRevision(snapshot: ISpaceEntrySnapshot) {
         setSelectedSnapshot(snapshot)
         setRevisionSheetOpen(true)
     }
+
+    const voidedByName = resolveUserByUserId(currentEntry.voidedByUserId)
 
     return (
         <>
@@ -198,7 +227,7 @@ export function SpaceEntryDetailSheet({
                                         variant="outline"
                                         size="sm"
                                         className="rounded-full"
-                                        onClick={() => onEdit(currentEntry)}
+                                        onClick={() => void handleEditClick()}
                                     >
                                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                                         Editar
@@ -218,21 +247,32 @@ export function SpaceEntryDetailSheet({
                             </div>
                         ) : null}
 
-                        {/* Motivo de anulación */}
-                        {isVoided && currentEntry.voidReason ? (
-                            <p className="mt-1 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground">
-                                <span className="font-medium">Motivo:</span> {currentEntry.voidReason}
-                            </p>
+                        {/* Info de anulación */}
+                        {isVoided ? (
+                            <div className="mt-1 space-y-1.5">
+                                <p className="text-xs text-muted-foreground">
+                                    Anulado por{' '}
+                                    <span className="font-medium text-foreground">{voidedByName}</span>
+                                    {currentEntry.voidedAt ? (
+                                        <> el{' '}<span className="font-medium text-foreground">{formatSpaceDate(currentEntry.voidedAt)}</span></>
+                                    ) : null}
+                                </p>
+                                {currentEntry.voidReason ? (
+                                    <p className="rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground">
+                                        <span className="font-medium">Motivo:</span> {currentEntry.voidReason}
+                                    </p>
+                                ) : null}
+                            </div>
                         ) : null}
                     </SheetHeader>
 
                     <div className="space-y-5 px-5 py-5">
-                        {/* Advertencia linkedTransaction en modo lectura si anulado */}
+                        {/* Advertencia linkedTransaction cuando anulado */}
                         {isVoided && currentEntry.linkedTransactionId ? (
                             <div className="flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>
-                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada.
+                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada para mantener tus finanzas consistentes.
                                 </span>
                             </div>
                         ) : null}
@@ -328,17 +368,41 @@ export function SpaceEntryDetailSheet({
                                 <SpaceMetaBadge icon={Users}>
                                     {sharedParticipants.length} incluido{sharedParticipants.length === 1 ? '' : 's'}
                                 </SpaceMetaBadge>
-                                {hasPreviousVersions ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleViewRevision((currentEntry.previousVersions ?? [])[0]!)}
-                                        className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-                                    >
-                                        <History className="h-3 w-3" />
-                                        Ver versión anterior
-                                    </button>
-                                ) : null}
                             </div>
+
+                            {/* Historial de cambios — lista de todas las versiones */}
+                            {hasPreviousVersions ? (
+                                <div className="space-y-2">
+                                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                        <History className="h-3.5 w-3.5" />
+                                        Historial de cambios
+                                    </p>
+                                    <div className="space-y-1.5">
+                                        {previousVersions.map((snapshot, index) => {
+                                            const editorName = resolveUserByUserId(snapshot.editedByUserId)
+                                            return (
+                                                <button
+                                                    key={index}
+                                                    type="button"
+                                                    onClick={() => handleViewRevision(snapshot)}
+                                                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-2.5 text-left text-xs transition-colors hover:border-primary/30 hover:bg-primary/[0.03]"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <p className="truncate font-medium text-foreground">
+                                                            Versión {previousVersions.length - index}
+                                                        </p>
+                                                        <p className="mt-0.5 truncate text-muted-foreground">
+                                                            {formatSpaceDate(snapshot.snapshotAt)} · {editorName}
+                                                        </p>
+                                                    </div>
+                                                    <span className="shrink-0 text-muted-foreground/50">→</span>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            ) : null}
+
                             {!isVoided ? (
                                 <SpaceAttachmentsUploader
                                     spaceId={spaceId}

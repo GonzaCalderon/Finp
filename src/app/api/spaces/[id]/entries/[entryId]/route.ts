@@ -39,7 +39,20 @@ export async function GET(request: Request, { params }: { params: Params }) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
         }
 
-        return NextResponse.json({ entry })
+        // Detectar settlements posteriores para warning pre-acción (edit / void)
+        const laterSettlements = await SpaceEntry.countDocuments({
+            spaceId: id,
+            type: 'settlement',
+            isVoided: { $ne: true },
+            status: { $nin: ['rejected', 'pending_confirmation'] },
+            createdAt: { $gt: entry.createdAt },
+        })
+
+        return NextResponse.json({
+            entry,
+            hasLinkedTransaction: Boolean(entry.linkedTransactionId),
+            hasSubsequentSettlement: laterSettlements > 0,
+        })
     } catch (error) {
         console.error('Error al obtener movimiento:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

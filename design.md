@@ -1565,3 +1565,81 @@ Flujo de aprobación previsto:
 | `SpaceDetailPanels` — `MovementCard` visual anulado/editado | ✅ Implementado |
 | `SpaceEntryDialog mode='edit'` | ✅ Implementado |
 | `SpaceEditRequestDialog` — flujo de aprobación | Diferido — Fase 5E+ |
+
+---
+
+## Fase 5E+ — Notificaciones y eventos de actividad en Espacios
+
+### Contexto
+
+Cuando un movimiento es editado o anulado, los demás participantes del espacio no reciben
+ninguna señal. En producción esto puede generar confusión si alguien nota que el balance
+cambió sin entender por qué. Esta sección documenta el sistema de notificaciones diferido.
+
+**No implementado en Fase 5D.** Solo se documenta el diseño aquí para orientar la implementación futura.
+
+---
+
+### Eventos a notificar
+
+| Evento | Disparo | Destinatarios |
+|---|---|---|
+| `space.entry.edited` | Al completarse `PATCH /entries/[entryId]` exitosamente | Todos los participantes activos, excepto quien editó |
+| `space.entry.voided` | Al completarse `POST /entries/[entryId]/void` exitosamente | Todos los participantes activos, excepto quien anuló |
+
+---
+
+### Payload mínimo por evento
+
+```typescript
+interface SpaceEntryEditedEvent {
+  type: 'space.entry.edited'
+  spaceId: string
+  entryId: string
+  entryTitle: string
+  editedByUserId: string
+  editedByDisplayName: string
+  editedAt: Date
+  // qué cambió (opcional, para notificación enriquecida):
+  changedFields?: Array<'amount' | 'currency' | 'date' | 'paidByParticipantId' | 'splitMode' | 'spaceCategoryId' | 'title' | 'notes'>
+}
+
+interface SpaceEntryVoidedEvent {
+  type: 'space.entry.voided'
+  spaceId: string
+  entryId: string
+  entryTitle: string
+  voidedByUserId: string
+  voidedByDisplayName: string
+  voidedAt: Date
+  voidReason?: string
+}
+```
+
+---
+
+### Canales de entrega previstos
+
+- **In-app**: badge en el header + centro de notificaciones (no existe aún, Fase 5F+).
+- **Email**: resumen diario o push inmediato según preferencias del usuario.
+- **Push nativa**: si se implementa la PWA con Service Workers.
+
+---
+
+### Consideraciones de implementación
+
+- Disparar los eventos desde la API route, después del `$set` exitoso (no dentro del model hook).
+- Usar una cola de trabajo (job queue) para evitar bloquear la respuesta HTTP mientras se envían notificaciones.
+- Si no hay sistema de cola, un `Promise.allSettled` con `fetch` fire-and-forget es aceptable para MVP.
+- Respetar preferencias de notificación por usuario (`notificationPreferences` — campo diferido en `IUser`).
+- No notificar al propio ejecutor (quien editó / anuló).
+- Batching: si múltiples cambios ocurren en menos de N minutos, agrupar en una sola notificación.
+
+---
+
+### Relación con aprobaciones (Fase 5E+)
+
+Si se implementa `SpaceEntryChangeRequest` (flujo de aprobación), los eventos de notificación
+se disparan también cuando:
+- Se crea una solicitud de cambio pendiente → notificar a los aprobadores requeridos.
+- Se aprueba/rechaza una solicitud → notificar al solicitante.

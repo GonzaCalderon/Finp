@@ -66,14 +66,20 @@ function MovementCard({
     hidden,
     participants,
     currentUserId,
+    canManage,
     onEntryClick,
+    onEdit,
+    onVoid,
 }: {
     entry: ISpaceEntry
     reportingCurrency: string
     hidden: boolean
     participants: ISpaceParticipant[]
     currentUserId?: string
+    canManage?: boolean
     onEntryClick?: (entry: ISpaceEntry) => void
+    onEdit?: (entry: ISpaceEntry) => void
+    onVoid?: (entry: ISpaceEntry) => void
 }) {
     const payer = participants.find(
         (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
@@ -95,11 +101,30 @@ function MovementCard({
         ? participants.find((p) => extractId(p._id) === settlementReceiverId)
         : null
 
+    const isVoided = entry.isVoided === true
+    const isEdited = (entry.editCount ?? 0) > 0
+
+    // Permission to edit/void per entry
+    const entryCreatorId = extractId(entry.createdByUserId)
+    const isCreator = Boolean(currentUserId && entryCreatorId && entryCreatorId === currentUserId)
+    const canEditEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onEdit)
+    const canVoidEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onVoid)
+    const hasActions = canEditEntry || canVoidEntry
+
+    // Resolve who voided
+    const voidedBy = isVoided && entry.voidedByUserId
+        ? participants.find((p) => extractId(p.userId) === extractId(entry.voidedByUserId))
+        : null
+
     // Build metadata as a typed array so each part renders as an independent element
     type MetaPart = { key: string; label: string; accent?: boolean }
     const metaParts: MetaPart[] = []
 
-    if (entry.type === 'settlement') {
+    if (isVoided) {
+        metaParts.push({ key: 'date', label: formatSpaceDate(entry.date) })
+        const voidedByName = voidedBy?.displayName ?? 'Un participante'
+        metaParts.push({ key: 'voided-by', label: `Anulado por ${voidedByName}` })
+    } else if (entry.type === 'settlement') {
         metaParts.push({ key: 'date', label: formatSpaceDate(entry.date) })
     } else {
         metaParts.push({ key: 'date', label: formatSpaceDate(entry.date) })
@@ -116,9 +141,6 @@ function MovementCard({
         }
     }
 
-    const isVoided = entry.isVoided === true
-    const isEdited = (entry.editCount ?? 0) > 0
-
     return (
         <div
             role={clickable ? 'button' : undefined}
@@ -132,7 +154,7 @@ function MovementCard({
                 }
             }}
             className={cn(
-                'flex items-start justify-between gap-4 rounded-2xl border border-foreground/[0.07] bg-background/74 px-4 py-4 transition-colors',
+                'group flex items-start justify-between gap-4 rounded-2xl border border-foreground/[0.07] bg-background/74 px-4 py-4 transition-colors',
                 isVoided ? 'opacity-60' : '',
                 clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40' : ''
             )}
@@ -178,7 +200,7 @@ function MovementCard({
                     )}
                 </div>
             </div>
-            {/* Right: amount + status */}
+            {/* Right: amount + status + quick actions */}
             <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
                 <SpaceAmountInline
                     amount={entry.amount}
@@ -202,6 +224,38 @@ function MovementCard({
                         ) : null}
                     </>
                 )}
+
+                {/* Quick action buttons */}
+                {hasActions ? (
+                    <div className="flex items-center gap-0.5 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100">
+                        {canEditEntry ? (
+                            <button
+                                type="button"
+                                aria-label="Editar movimiento"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    onEdit!(entry)
+                                }}
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                        ) : null}
+                        {canVoidEntry ? (
+                            <button
+                                type="button"
+                                aria-label="Anular movimiento"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    onVoid!(entry)
+                                }}
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            >
+                                <Ban className="h-3.5 w-3.5" />
+                            </button>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </div>
     )
@@ -211,22 +265,28 @@ export function SpaceMovementsPanel({
     entries,
     participants,
     currentUserId,
+    canManage,
     entryFilter,
     onFilterChange,
     reportingCurrency,
     hidden,
     onCreate,
     onEntryClick,
+    onEdit,
+    onVoid,
 }: {
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
     currentUserId?: string
+    canManage?: boolean
     entryFilter: SpaceEntryFilter
     onFilterChange: (filter: SpaceEntryFilter) => void
     reportingCurrency: string
     hidden: boolean
     onCreate: () => void
     onEntryClick?: (entry: ISpaceEntry) => void
+    onEdit?: (entry: ISpaceEntry) => void
+    onVoid?: (entry: ISpaceEntry) => void
 }) {
     const [sort, setSort] = useState<SpaceEntrySort>('recent')
     const filters: SpaceEntryFilter[] = ['all', 'expense', 'settlement']
@@ -320,7 +380,10 @@ export function SpaceMovementsPanel({
                             hidden={hidden}
                             participants={participants}
                             currentUserId={currentUserId}
+                            canManage={canManage}
                             onEntryClick={onEntryClick}
+                            onEdit={onEdit}
+                            onVoid={onVoid}
                         />
                     ))
                 )}

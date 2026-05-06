@@ -55,7 +55,7 @@ export function RecentSpaceMovementsCard({
     onViewAll: () => void
     spaceId: string
 }) {
-    const recentEntries = entries.slice(0, 2)
+    const recentEntries = entries.filter((e) => !e.isVoided).slice(0, 5)
     const participantsById = new Map(
         participants.map((participant) => [extractId(participant._id) ?? '', participant])
     )
