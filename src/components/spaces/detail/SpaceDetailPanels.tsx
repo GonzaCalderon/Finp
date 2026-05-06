@@ -200,62 +200,63 @@ function MovementCard({
                     )}
                 </div>
             </div>
-            {/* Right: amount + status + quick actions */}
-            <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
+            {/* Right: amount (top) + badges & quick actions on the same row (bottom) */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
                 <SpaceAmountInline
                     amount={entry.amount}
                     currency={entry.currency}
                     hidden={hidden}
                     className={cn('text-sm font-semibold tabular-nums', isVoided ? 'text-muted-foreground line-through' : '')}
                 />
-                {isVoided ? (
-                    <Badge variant="destructive" className="gap-1 text-[10px]">
-                        <Ban className="h-2.5 w-2.5" />
-                        Anulado
-                    </Badge>
-                ) : (
-                    <>
-                        <SpaceEntryStatusBadge status={entry.status} />
-                        {isEdited ? (
-                            <Badge variant="secondary" className="gap-1 text-[10px]">
-                                <History className="h-2.5 w-2.5" />
-                                Editado
-                            </Badge>
-                        ) : null}
-                    </>
-                )}
-
-                {/* Quick action buttons */}
-                {hasActions ? (
-                    <div className="flex items-center gap-0.5 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100">
-                        {canEditEntry ? (
-                            <button
-                                type="button"
-                                aria-label="Editar movimiento"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onEdit!(entry)
-                                }}
-                                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                            >
-                                <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                        ) : null}
-                        {canVoidEntry ? (
-                            <button
-                                type="button"
-                                aria-label="Anular movimiento"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onVoid!(entry)
-                                }}
-                                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                            >
-                                <Ban className="h-3.5 w-3.5" />
-                            </button>
-                        ) : null}
-                    </div>
-                ) : null}
+                {/* Badges + quick action buttons — single horizontal row */}
+                <div className="flex items-center gap-1.5">
+                    {isVoided ? (
+                        <Badge variant="destructive" className="gap-1 text-[10px]">
+                            <Ban className="h-2.5 w-2.5" />
+                            Anulado
+                        </Badge>
+                    ) : (
+                        <>
+                            <SpaceEntryStatusBadge status={entry.status} />
+                            {isEdited ? (
+                                <Badge variant="secondary" className="gap-1 text-[10px]">
+                                    <History className="h-2.5 w-2.5" />
+                                    Editado
+                                </Badge>
+                            ) : null}
+                        </>
+                    )}
+                    {hasActions ? (
+                        <div className="flex items-center gap-0.5 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100">
+                            {canEditEntry ? (
+                                <button
+                                    type="button"
+                                    aria-label="Editar movimiento"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        onEdit!(entry)
+                                    }}
+                                    className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                                >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                            ) : null}
+                            {canVoidEntry ? (
+                                <button
+                                    type="button"
+                                    aria-label="Anular movimiento"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        onVoid!(entry)
+                                    }}
+                                    className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                    <Ban className="h-3.5 w-3.5" />
+                                </button>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
             </div>
         </div>
     )
