@@ -235,6 +235,8 @@ export default function SpaceDetailPage() {
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
     const [detailEntry, setDetailEntry] = useState<ISpaceEntry | null>(null)
+    const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
+    const [editingEntry, setEditingEntry] = useState<ISpaceEntry | null>(null)
     const [settlementDialogOpen, setSettlementDialogOpen] = useState(false)
     const [settlementPrefill, setSettlementPrefill] = useState<SettlementPrefill | undefined>()
 
@@ -698,6 +700,51 @@ export default function SpaceDetailPage() {
                 participants={data.participants}
                 spaceId={spaceId}
                 currency={data.space.reportingCurrency}
+                canEdit={Boolean(
+                    detailEntry && (
+                        extractId(detailEntry.createdByUserId) === currentUserId ||
+                        currentParticipant?.role === 'owner' ||
+                        currentParticipant?.role === 'admin'
+                    )
+                )}
+                canVoid={Boolean(
+                    detailEntry && !detailEntry.isVoided && (
+                        extractId(detailEntry.createdByUserId) === currentUserId ||
+                        currentParticipant?.role === 'owner' ||
+                        currentParticipant?.role === 'admin'
+                    )
+                )}
+                onEdit={(entry) => {
+                    setEditingEntry(entry)
+                    setEditEntryDialogOpen(true)
+                }}
+                onVoided={(voidedEntry) => {
+                    setDetailEntry(voidedEntry)
+                    invalidateData(SPACE_INVALIDATION_TAGS)
+                    success('Movimiento anulado')
+                }}
+            />
+
+            {/* Dialog edición de movimiento */}
+            <SpaceEntryDialog
+                open={editEntryDialogOpen}
+                onOpenChange={setEditEntryDialogOpen}
+                onSubmit={handleCreateEntry}
+                onEditComplete={(updatedEntry) => {
+                    setDetailEntry(updatedEntry)
+                    invalidateData(SPACE_INVALIDATION_TAGS)
+                    success('Movimiento actualizado')
+                }}
+                spaceId={spaceId}
+                participants={data.participants}
+                currentUserId={currentUserId}
+                defaultCurrency={data.space.reportingCurrency}
+                reportingCurrency={data.space.reportingCurrency}
+                spaceCurrencies={data.space.currencies}
+                defaultSplitMode={data.space.defaultSplitMode}
+                spaceMode={data.space.mode}
+                mode="edit"
+                initialData={editingEntry ?? undefined}
             />
 
             {/* Mobile settings sheet: gear button → participantes + configuración + cierre */}

@@ -310,6 +310,83 @@ export const spaceSettlementSchema = z
         path: ['receiverId'],
     })
 
+export const spaceEntryEditSchema = z
+    .object({
+        title: z.string().trim().min(2, 'La descripción breve es obligatoria').max(120).optional(),
+        description: optionalTrimmedString.refine(
+            (value) => value === undefined || value.length <= 240,
+            'La descripción no puede superar los 240 caracteres'
+        ),
+        amount: amountSchema.optional(),
+        currency: currencySchema.optional(),
+        exchangeRate: optionalAmountSchema.refine(
+            (value) => value === undefined || value > 0,
+            'La cotización debe ser mayor a 0'
+        ),
+        date: dateSchema.optional(),
+        spaceCategoryId: optionalMongoId,
+        paidByParticipantId: optionalObjectIdString,
+        sharedWithParticipantIds: z.array(z.string().min(1)).optional(),
+        splitMode: z.enum(['none', 'equal', 'percentage', 'fixed']).optional(),
+        splitAllocations: z.array(splitAllocationSchema).optional(),
+        notes: optionalTrimmedString.refine(
+            (value) => value === undefined || value.length <= 400,
+            'Las notas no pueden superar los 400 caracteres'
+        ),
+    })
+    .superRefine((data, ctx) => {
+        if (data.splitMode && data.splitMode !== 'none') {
+            const participantCount = data.sharedWithParticipantIds?.length ?? 0
+            if (participantCount === 0) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Seleccioná al menos un participante para el split',
+                    path: ['sharedWithParticipantIds'],
+                })
+            }
+        }
+
+        if (data.splitMode === 'percentage' && data.splitAllocations) {
+            const total = data.splitAllocations.reduce(
+                (acc, allocation) => acc + (allocation.percentage ?? 0),
+                0
+            )
+            if (Math.abs(total - 100) > 0.01) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Los porcentajes deben sumar 100%',
+                    path: ['splitAllocations'],
+                })
+            }
+        }
+
+        if (data.splitMode === 'fixed' && data.splitAllocations && data.amount !== undefined) {
+            const total = data.splitAllocations.reduce(
+                (acc, allocation) => acc + (allocation.amount ?? 0),
+                0
+            )
+            if (Math.abs(total - data.amount) > 0.01) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Los montos fijos deben sumar el total del movimiento',
+                    path: ['splitAllocations'],
+                })
+            }
+        }
+    })
+
+export const spaceEntryVoidSchema = z.object({
+    voidReason: optionalTrimmedString.refine(
+        (value) => value === undefined || value.length <= 200,
+        'El motivo no puede superar los 200 caracteres'
+    ),
+})
+
+export type SpaceEntryEditInput = z.input<typeof spaceEntryEditSchema>
+export type SpaceEntryEditData = z.output<typeof spaceEntryEditSchema>
+export type SpaceEntryVoidInput = z.input<typeof spaceEntryVoidSchema>
+export type SpaceEntryVoidData = z.output<typeof spaceEntryVoidSchema>
+
 export type SpaceSettlementInput = z.input<typeof spaceSettlementSchema>
 export type SpaceSettlementData = z.output<typeof spaceSettlementSchema>
 

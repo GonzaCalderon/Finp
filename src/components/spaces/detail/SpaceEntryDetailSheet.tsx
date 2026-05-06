@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, Coins, FileBadge2, Users } from 'lucide-react'
+import { AlertTriangle, Ban, CalendarRange, Coins, FileBadge2, History, Pencil, Users } from 'lucide-react'
 import {
     Sheet,
     SheetContent,
@@ -9,6 +9,8 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
     SpaceAmountInline,
     SpaceEntryStatusBadge,
@@ -17,8 +19,10 @@ import {
     SpaceMetaBadge,
 } from '@/components/spaces/SpaceUi'
 import { SpaceAttachmentsUploader } from '@/components/spaces/dialogs/SpaceAttachmentsUploader'
+import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
+import { SpaceEntryRevisionSheet } from '@/components/spaces/detail/SpaceEntryRevisionSheet'
 import { extractId, formatSpaceDate } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpaceEntryAttachment, ISpaceParticipant } from '@/types'
+import type { ISpaceEntry, ISpaceEntryAttachment, ISpaceEntrySnapshot, ISpaceParticipant } from '@/types'
 
 function resolveCategory(entry: ISpaceEntry | null) {
     if (!entry) return null
@@ -59,6 +63,10 @@ export function SpaceEntryDetailSheet({
     participants,
     spaceId,
     currency,
+    canEdit,
+    canVoid,
+    onEdit,
+    onVoided,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -66,10 +74,16 @@ export function SpaceEntryDetailSheet({
     participants: ISpaceParticipant[]
     spaceId: string
     currency: string
-    canDelete?: boolean
-    onDelete?: (entryId: string) => void
+    canEdit?: boolean
+    canVoid?: boolean
+    onEdit?: (entry: ISpaceEntry) => void
+    onVoided?: (entry: ISpaceEntry) => void
 }) {
     const [currentEntry, setCurrentEntry] = useState<ISpaceEntry | null>(entry)
+    const [voidDialogOpen, setVoidDialogOpen] = useState(false)
+    const [revisionSheetOpen, setRevisionSheetOpen] = useState(false)
+    const [selectedSnapshot, setSelectedSnapshot] = useState<ISpaceEntrySnapshot | null>(null)
+    const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false })
 
     useEffect(() => {
         setCurrentEntry(entry)
@@ -94,6 +108,9 @@ export function SpaceEntryDetailSheet({
         .map((participantId) => participantsById.get(extractId(participantId) ?? ''))
         .filter((participant): participant is ISpaceParticipant => Boolean(participant))
     const category = resolveCategory(currentEntry)
+    const isVoided = currentEntry.isVoided === true
+    const isEdited = (currentEntry.editCount ?? 0) > 0
+    const hasPreviousVersions = (currentEntry.previousVersions ?? []).length > 0
 
     const updateAttachments = (updater: (attachments: ISpaceEntryAttachment[]) => ISpaceEntryAttachment[]) => {
         setCurrentEntry((previous) => {
@@ -105,131 +122,268 @@ export function SpaceEntryDetailSheet({
         })
     }
 
+    async function handleOpenVoidDialog() {
+        // Pre-fetch context for warnings
+        try {
+            const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`)
+            if (response.ok) {
+                const json = await response.json() as { entry: ISpaceEntry }
+                setVoidContext({
+                    hasLinkedTransaction: Boolean(json.entry.linkedTransactionId),
+                    hasSubsequentSettlement: false,
+                })
+            }
+        } catch {
+            // use defaults
+        }
+        setVoidDialogOpen(true)
+    }
+
+    async function handleVoidConfirm(voidReason?: string) {
+        const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}/void`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voidReason }),
+        })
+
+        if (!response.ok) {
+            const json = await response.json() as { error?: string }
+            throw new Error(json.error ?? 'Error al anular el movimiento')
+        }
+
+        const json = await response.json() as { entry: ISpaceEntry; hasLinkedTransaction: boolean; hasSubsequentSettlement: boolean }
+        setCurrentEntry(json.entry)
+        onVoided?.(json.entry)
+    }
+
+    function handleViewRevision(snapshot: ISpaceEntrySnapshot) {
+        setSelectedSnapshot(snapshot)
+        setRevisionSheetOpen(true)
+    }
+
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-xl">
-                <SheetHeader className="border-b border-border/70 px-5 py-5">
-                    <div className="flex flex-wrap gap-2 pr-8">
-                        <SpaceEntryTypeBadge type={currentEntry.type} />
-                        <SpaceEntryStatusBadge status={currentEntry.status} />
-                    </div>
-                    <SheetTitle className="pr-8 text-2xl font-semibold tracking-tight">
-                        {currentEntry.title}
-                    </SheetTitle>
-                    <SheetDescription>
-                        {currentEntry.description || 'Movimiento del espacio'}
-                    </SheetDescription>
-                </SheetHeader>
-
-                <div className="space-y-5 px-5 py-5">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-[20px] border border-foreground/[0.07] bg-card/70 p-4">
-                            <p className="text-xs text-muted-foreground">Monto original</p>
-                            <SpaceAmountInline
-                                amount={currentEntry.amount}
-                                currency={currentEntry.currency}
-                                hidden={false}
-                                className="mt-1 text-lg font-semibold"
-                            />
+        <>
+            <Sheet open={open} onOpenChange={onOpenChange}>
+                <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-xl">
+                    <SheetHeader className="border-b border-border/70 px-5 py-5">
+                        <div className="flex flex-wrap gap-2 pr-8">
+                            <SpaceEntryTypeBadge type={currentEntry.type} />
+                            {isVoided ? (
+                                <Badge variant="destructive" className="gap-1">
+                                    <Ban className="h-3 w-3" />
+                                    Anulado
+                                </Badge>
+                            ) : (
+                                <SpaceEntryStatusBadge status={currentEntry.status} />
+                            )}
+                            {isEdited && !isVoided ? (
+                                <Badge variant="secondary" className="gap-1 text-xs">
+                                    <History className="h-3 w-3" />
+                                    Editado
+                                </Badge>
+                            ) : null}
                         </div>
-                        <div className="rounded-[20px] border border-foreground/[0.07] bg-card/70 p-4">
-                            <p className="text-xs text-muted-foreground">Reporte</p>
-                            <SpaceAmountInline
-                                amount={currentEntry.reportingAmount}
-                                currency={currency}
-                                hidden={false}
-                                className="mt-1 text-lg font-semibold"
-                            />
-                        </div>
-                    </div>
+                        <SheetTitle className="pr-8 text-2xl font-semibold tracking-tight">
+                            {currentEntry.title}
+                        </SheetTitle>
+                        <SheetDescription>
+                            {currentEntry.description || 'Movimiento del espacio'}
+                        </SheetDescription>
 
-                    <div className="flex flex-wrap gap-2">
-                        <SpaceMetaBadge icon={CalendarRange}>{formatSpaceDate(currentEntry.date)}</SpaceMetaBadge>
-                        <SpaceMetaBadge icon={Coins}>{currentEntry.currency}</SpaceMetaBadge>
-                        {category ? (
-                            <SpaceMetaBadge icon={FileBadge2}>
-                                {category.color ? (
-                                    <span
-                                        className="h-2 w-2 rounded-full"
-                                        style={{ backgroundColor: category.color }}
-                                    />
-                                ) : null}
-                                {category.name}
-                                {category.isArchived ? (
-                                    <span className="ml-1 text-[10px] text-muted-foreground">Archivada</span>
-                                ) : null}
-                            </SpaceMetaBadge>
-                        ) : null}
-                        {currentEntry.linkedTransactionId ? (
-                            <SpaceMetaBadge icon={Coins}>En Finp personal</SpaceMetaBadge>
-                        ) : null}
-                    </div>
-
-                    <section className="space-y-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                            Pagador
-                        </p>
-                        <div className="flex items-center gap-3 rounded-[20px] border border-foreground/[0.07] bg-background/72 p-3">
-                            <SpaceInitialsAvatar name={payer?.displayName ?? 'Sin pagador'} />
-                            <div>
-                                <p className="font-semibold text-foreground">{payer?.displayName ?? 'Sin pagador'}</p>
-                                <p className="text-xs text-muted-foreground">{payer?.email ?? 'Participante del espacio'}</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    {sharedParticipants.length > 0 ? (
-                        <section className="space-y-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                {currentEntry.type === 'settlement' ? 'Recibió' : 'Incluidos'}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {sharedParticipants.map((participant) => (
-                                    <span
-                                        key={extractId(participant._id)}
-                                        className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1.5 text-sm font-medium"
+                        {/* Acciones */}
+                        {!isVoided ? (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                {canEdit && onEdit ? (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-full"
+                                        onClick={() => onEdit(currentEntry)}
                                     >
-                                        <SpaceInitialsAvatar name={participant.displayName} className="h-6 w-6 text-[10px]" />
-                                        {participant.displayName}
-                                    </span>
-                                ))}
+                                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                        Editar
+                                    </Button>
+                                ) : null}
+                                {canVoid ? (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-full text-destructive hover:text-destructive"
+                                        onClick={() => void handleOpenVoidDialog()}
+                                    >
+                                        <Ban className="mr-1.5 h-3.5 w-3.5" />
+                                        Anular
+                                    </Button>
+                                ) : null}
                             </div>
-                        </section>
-                    ) : null}
+                        ) : null}
 
-                    {currentEntry.notes ? (
+                        {/* Motivo de anulación */}
+                        {isVoided && currentEntry.voidReason ? (
+                            <p className="mt-1 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground">
+                                <span className="font-medium">Motivo:</span> {currentEntry.voidReason}
+                            </p>
+                        ) : null}
+                    </SheetHeader>
+
+                    <div className="space-y-5 px-5 py-5">
+                        {/* Advertencia linkedTransaction en modo lectura si anulado */}
+                        {isVoided && currentEntry.linkedTransactionId ? (
+                            <div className="flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span>
+                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada.
+                                </span>
+                            </div>
+                        ) : null}
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-[20px] border border-foreground/[0.07] bg-card/70 p-4">
+                                <p className="text-xs text-muted-foreground">Monto original</p>
+                                <SpaceAmountInline
+                                    amount={currentEntry.amount}
+                                    currency={currentEntry.currency}
+                                    hidden={false}
+                                    className="mt-1 text-lg font-semibold"
+                                />
+                            </div>
+                            <div className="rounded-[20px] border border-foreground/[0.07] bg-card/70 p-4">
+                                <p className="text-xs text-muted-foreground">Reporte</p>
+                                <SpaceAmountInline
+                                    amount={currentEntry.reportingAmount}
+                                    currency={currency}
+                                    hidden={false}
+                                    className="mt-1 text-lg font-semibold"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            <SpaceMetaBadge icon={CalendarRange}>{formatSpaceDate(currentEntry.date)}</SpaceMetaBadge>
+                            <SpaceMetaBadge icon={Coins}>{currentEntry.currency}</SpaceMetaBadge>
+                            {category ? (
+                                <SpaceMetaBadge icon={FileBadge2}>
+                                    {category.color ? (
+                                        <span
+                                            className="h-2 w-2 rounded-full"
+                                            style={{ backgroundColor: category.color }}
+                                        />
+                                    ) : null}
+                                    {category.name}
+                                    {category.isArchived ? (
+                                        <span className="ml-1 text-[10px] text-muted-foreground">Archivada</span>
+                                    ) : null}
+                                </SpaceMetaBadge>
+                            ) : null}
+                            {currentEntry.linkedTransactionId ? (
+                                <SpaceMetaBadge icon={Coins}>En Finp personal</SpaceMetaBadge>
+                            ) : null}
+                        </div>
+
                         <section className="space-y-3">
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Notas
+                                Pagador
                             </p>
-                            <p className="rounded-[20px] border border-foreground/[0.07] bg-background/72 p-4 text-sm text-secondary-foreground">
-                                {currentEntry.notes}
-                            </p>
+                            <div className="flex items-center gap-3 rounded-[20px] border border-foreground/[0.07] bg-background/72 p-3">
+                                <SpaceInitialsAvatar name={payer?.displayName ?? 'Sin pagador'} />
+                                <div>
+                                    <p className="font-semibold text-foreground">{payer?.displayName ?? 'Sin pagador'}</p>
+                                    <p className="text-xs text-muted-foreground">{payer?.email ?? 'Participante del espacio'}</p>
+                                </div>
+                            </div>
                         </section>
-                    ) : null}
 
-                    <section className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <SpaceMetaBadge icon={Users}>
-                                {sharedParticipants.length} incluido{sharedParticipants.length === 1 ? '' : 's'}
-                            </SpaceMetaBadge>
-                        </div>
-                        <SpaceAttachmentsUploader
-                            spaceId={spaceId}
-                            entryId={entryId}
-                            existingAttachments={currentEntry.attachments ?? []}
-                            onAttachmentUploaded={(attachment) =>
-                                updateAttachments((attachments) => [...attachments, attachment])
-                            }
-                            onAttachmentDeleted={(attachmentId) =>
-                                updateAttachments((attachments) =>
-                                    attachments.filter((attachment) => extractId(attachment._id) !== attachmentId)
-                                )
-                            }
-                        />
-                    </section>
-                </div>
-            </SheetContent>
-        </Sheet>
+                        {sharedParticipants.length > 0 ? (
+                            <section className="space-y-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                    {currentEntry.type === 'settlement' ? 'Recibió' : 'Incluidos'}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {sharedParticipants.map((participant) => (
+                                        <span
+                                            key={extractId(participant._id)}
+                                            className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1.5 text-sm font-medium"
+                                        >
+                                            <SpaceInitialsAvatar name={participant.displayName} className="h-6 w-6 text-[10px]" />
+                                            {participant.displayName}
+                                        </span>
+                                    ))}
+                                </div>
+                            </section>
+                        ) : null}
+
+                        {currentEntry.notes ? (
+                            <section className="space-y-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                    Notas
+                                </p>
+                                <p className="rounded-[20px] border border-foreground/[0.07] bg-background/72 p-4 text-sm text-secondary-foreground">
+                                    {currentEntry.notes}
+                                </p>
+                            </section>
+                        ) : null}
+
+                        <section className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <SpaceMetaBadge icon={Users}>
+                                    {sharedParticipants.length} incluido{sharedParticipants.length === 1 ? '' : 's'}
+                                </SpaceMetaBadge>
+                                {hasPreviousVersions ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleViewRevision((currentEntry.previousVersions ?? [])[0]!)}
+                                        className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                                    >
+                                        <History className="h-3 w-3" />
+                                        Ver versión anterior
+                                    </button>
+                                ) : null}
+                            </div>
+                            {!isVoided ? (
+                                <SpaceAttachmentsUploader
+                                    spaceId={spaceId}
+                                    entryId={entryId}
+                                    existingAttachments={currentEntry.attachments ?? []}
+                                    onAttachmentUploaded={(attachment) =>
+                                        updateAttachments((attachments) => [...attachments, attachment])
+                                    }
+                                    onAttachmentDeleted={(attachmentId) =>
+                                        updateAttachments((attachments) =>
+                                            attachments.filter((attachment) => extractId(attachment._id) !== attachmentId)
+                                        )
+                                    }
+                                />
+                            ) : (
+                                // Adjuntos en solo lectura cuando anulado
+                                (currentEntry.attachments ?? []).length > 0 ? (
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-muted-foreground">
+                                            {currentEntry.attachments!.length} adjunto{currentEntry.attachments!.length === 1 ? '' : 's'} (evidencia histórica)
+                                        </p>
+                                    </div>
+                                ) : null
+                            )}
+                        </section>
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            <VoidEntryDialog
+                open={voidDialogOpen}
+                onOpenChange={setVoidDialogOpen}
+                entry={currentEntry}
+                hasLinkedTransaction={voidContext.hasLinkedTransaction}
+                hasSubsequentSettlement={voidContext.hasSubsequentSettlement}
+                onConfirm={handleVoidConfirm}
+            />
+
+            <SpaceEntryRevisionSheet
+                open={revisionSheetOpen}
+                onOpenChange={setRevisionSheetOpen}
+                snapshot={selectedSnapshot}
+                participants={participants}
+                reportingCurrency={currency}
+            />
+        </>
     )
 }

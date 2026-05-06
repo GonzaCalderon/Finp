@@ -86,6 +86,24 @@ export interface ISpaceEntrySplitAllocation {
     amount?: number
 }
 
+export interface ISpaceEntrySnapshot {
+    snapshotAt: Date
+    editedByUserId: Types.ObjectId
+    title: string
+    description?: string
+    amount: number
+    currency: string
+    reportingAmount: number
+    exchangeRate?: number
+    date: Date
+    spaceCategoryId?: Types.ObjectId
+    paidByParticipantId?: Types.ObjectId
+    sharedWithParticipantIds?: Types.ObjectId[]
+    splitMode: string
+    splitAllocations?: ISpaceEntrySplitAllocation[]
+    notes?: string
+}
+
 export interface ISpaceEntry {
     _id: Types.ObjectId
     spaceId: Types.ObjectId
@@ -113,6 +131,16 @@ export interface ISpaceEntry {
     confirmedAt?: Date
     rejectedAt?: Date
     attachments?: ISpaceEntryAttachment[]
+    // Anulación lógica
+    isVoided?: boolean
+    voidedAt?: Date
+    voidedByUserId?: Types.ObjectId
+    voidReason?: string
+    // Edición con historial
+    editedAt?: Date
+    editedByUserId?: Types.ObjectId
+    editCount?: number
+    previousVersions?: ISpaceEntrySnapshot[]
     createdAt: Date
     updatedAt: Date
 }

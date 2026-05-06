@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+    AlertTriangle,
     Banknote,
     Building2,
     CalendarRange,
@@ -22,7 +23,7 @@ import {
     invalidateData,
     SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
-import { spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
+import { spaceEntryEditSchema, spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
 import type { AccountType } from '@/lib/constants'
 import type { IAccount, ICategory, ISpaceCategory, ISpaceEntry, ISpaceParticipant } from '@/types'
@@ -280,6 +281,7 @@ export function SpaceEntryDialog({
     open,
     onOpenChange,
     onSubmit,
+    onEditComplete,
     spaceId,
     participants,
     currentUserId,
@@ -289,8 +291,11 @@ export function SpaceEntryDialog({
     defaultSplitMode,
     spaceMode,
     draftKey,
+    mode = 'create',
+    initialData,
 }: DialogProps & {
     onSubmit: (data: SpaceEntryFormData) => Promise<ISpaceEntry>
+    onEditComplete?: (entry: ISpaceEntry) => void
     spaceId: string
     participants: ISpaceParticipant[]
     currentUserId: string
@@ -300,6 +305,8 @@ export function SpaceEntryDialog({
     defaultSplitMode: SpaceEntryFormData['splitMode']
     spaceMode: SpaceFormData['mode']
     draftKey?: string
+    mode?: 'create' | 'edit'
+    initialData?: ISpaceEntry
 }) {
     const { categories } = useSpaceCategories(spaceId)
     const { categories: personalCategories } = useCategories()
@@ -325,6 +332,7 @@ export function SpaceEntryDialog({
     const [error, setError] = useState<string | null>(null)
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [datePickerOpen, setDatePickerOpen] = useState(false)
+    const [hasSubsequentSettlementWarning, setHasSubsequentSettlementWarning] = useState(false)
     const attachmentsRef = useRef<SpaceAttachmentDraft[]>([])
     const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -350,6 +358,45 @@ export function SpaceEntryDialog({
 
     useEffect(() => {
         if (!open) return
+
+        setSubmitting(false)
+        setError(null)
+        setHasSubsequentSettlementWarning(false)
+
+        // Edit mode: pre-populate form from initialData
+        if (mode === 'edit' && initialData) {
+            const activeIds = new Set(activeParticipants.map((p) => extractId(p._id) ?? ''))
+            setForm({
+                type: 'expense',
+                title: initialData.title,
+                description: initialData.description ?? '',
+                amount: initialData.amount,
+                currency: initialData.currency,
+                exchangeRate: initialData.exchangeRate,
+                date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
+                spaceCategoryId: extractId(initialData.spaceCategoryId) ?? undefined,
+                paidByParticipantId: extractId(initialData.paidByParticipantId) ?? undefined,
+                sharedWithParticipantIds: (initialData.sharedWithParticipantIds ?? [])
+                    .map((id) => extractId(id) ?? '')
+                    .filter((id) => id && activeIds.has(id)),
+                splitMode: spaceMode === 'solo' ? 'none' : initialData.splitMode,
+                splitAllocations: (initialData.splitAllocations ?? [])
+                    .map((a) => ({
+                        participantId: extractId(a.participantId) ?? '',
+                        percentage: a.percentage,
+                        amount: a.amount,
+                    }))
+                    .filter((a) => a.participantId),
+                notes: initialData.notes ?? '',
+                personalAccountId: undefined,
+                linkedTransactionId: undefined,
+            })
+            setAttachments((previous) => {
+                previous.forEach(revokeAttachment)
+                return []
+            })
+            return
+        }
 
         const defaults = buildDefaultForm({
             activeParticipants,
@@ -377,14 +424,14 @@ export function SpaceEntryDialog({
             previous.forEach(revokeAttachment)
             return []
         })
-        setSubmitting(false)
-        setError(null)
     }, [
         activeParticipants,
         currentUserId,
         defaultCurrency,
         defaultSplitMode,
         draftStorageKey,
+        initialData,
+        mode,
         open,
         spaceMode,
     ])
@@ -655,7 +702,88 @@ export function SpaceEntryDialog({
         return allUploaded
     }
 
+    const handleEditSubmit = async () => {
+        if (!initialData) return
+
+        const entryId = extractId(initialData._id)
+        if (!entryId) return
+
+        const normalizedAllocations =
+            form.splitMode === 'fixed' && (form.sharedWithParticipantIds?.length ?? 0) === 1
+                ? form.sharedWithParticipantIds?.map((id) => ({
+                      participantId: id,
+                      amount: Number.isFinite(form.amount) ? form.amount : 0,
+                  }))
+                : form.splitAllocations
+
+        const payload = {
+            title: form.title || undefined,
+            description: form.description || undefined,
+            amount: Number.isFinite(form.amount) && form.amount > 0 ? form.amount : undefined,
+            currency: form.currency || undefined,
+            exchangeRate: form.exchangeRate || undefined,
+            date: form.date,
+            spaceCategoryId: form.spaceCategoryId ?? null,
+            paidByParticipantId: form.paidByParticipantId || undefined,
+            sharedWithParticipantIds: spaceMode === 'solo' ? undefined : form.sharedWithParticipantIds,
+            splitMode: spaceMode === 'solo' ? 'none' : form.splitMode,
+            splitAllocations:
+                form.splitMode === 'percentage' || form.splitMode === 'fixed'
+                    ? normalizedAllocations
+                    : undefined,
+            notes: form.notes || undefined,
+        }
+
+        const parsed = spaceEntryEditSchema.safeParse(payload)
+
+        if (!parsed.success) {
+            const nextFieldErrors: Record<string, string> = {}
+            for (const issue of parsed.error.issues) {
+                const key = String(issue.path[0] ?? '')
+                if (key && !nextFieldErrors[key]) nextFieldErrors[key] = issue.message
+            }
+            setFieldErrors(nextFieldErrors)
+            setError(null)
+            return
+        }
+
+        setSubmitting(true)
+        setError(null)
+        setFieldErrors({})
+
+        try {
+            const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsed.data),
+            })
+
+            const json = await response.json() as { entry?: ISpaceEntry; error?: string; hasSubsequentSettlement?: boolean }
+
+            if (!response.ok) {
+                setError(json.error ?? 'No pudimos guardar los cambios.')
+                return
+            }
+
+            if (json.hasSubsequentSettlement) {
+                setHasSubsequentSettlementWarning(true)
+            }
+
+            onEditComplete?.(json.entry!)
+            onOpenChange(false)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'No pudimos guardar los cambios.')
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     const handleSubmit = async () => {
+        if (mode === 'edit') {
+            await handleEditSubmit()
+            return
+        }
+
         // Normalize 1-participant fixed mode: allocation should equal full amount
         const normalizedAllocations =
             form.splitMode === 'fixed' && (form.sharedWithParticipantIds?.length ?? 0) === 1
@@ -737,12 +865,32 @@ export function SpaceEntryDialog({
                                 Movimiento del espacio
                             </div>
                             <div className="space-y-1">
-                                <DialogTitle className="text-2xl tracking-tight">Nuevo gasto</DialogTitle>
+                                <DialogTitle className="text-2xl tracking-tight">
+                                    {mode === 'edit' ? 'Editar movimiento' : 'Nuevo gasto'}
+                                </DialogTitle>
                                 <DialogDescription>
-                                    Monto, pagador y reparto. Los comprobantes y notas son opcionales.
+                                    {mode === 'edit'
+                                        ? 'Modificá los campos que necesitás. Los adjuntos se gestionan desde el detalle del movimiento.'
+                                        : 'Monto, pagador y reparto. Los comprobantes y notas son opcionales.'}
                                 </DialogDescription>
                             </div>
                         </DialogHeader>
+                        {mode === 'edit' && initialData?.linkedTransactionId ? (
+                            <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span>
+                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada.
+                                </span>
+                            </div>
+                        ) : null}
+                        {hasSubsequentSettlementWarning ? (
+                            <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span>
+                                    Hay pagos registrados después de este movimiento. El balance puede verse afectado.
+                                </span>
+                            </div>
+                        ) : null}
                     </div>
 
                     {/* ── Body ── */}
@@ -1010,8 +1158,8 @@ export function SpaceEntryDialog({
                                         </div>
                                     </SpaceDialogPanel>
 
-                                    {/* Pagado desde */}
-                                    {isCurrentUserPayer ? (
+                                    {/* Pagado desde — solo en modo crear */}
+                                    {mode === 'create' && isCurrentUserPayer ? (
                                         <SpaceDialogPanel>
                                             <div className="space-y-3">
                                                 <div className="space-y-1">
@@ -1122,14 +1270,17 @@ export function SpaceEntryDialog({
                                         </SpaceDialogPanel>
                                     ) : null}
 
-                                    {/* Adjuntos */}
-                                    <SpaceAttachmentsUploader
-                                        attachments={attachments}
-                                        onFilesSelected={handleFilesSelected}
-                                        onRemove={handleRemoveAttachment}
-                                    />
+                                    {/* Adjuntos — solo en modo crear */}
+                                    {mode === 'create' ? (
+                                        <SpaceAttachmentsUploader
+                                            attachments={attachments}
+                                            onFilesSelected={handleFilesSelected}
+                                            onRemove={handleRemoveAttachment}
+                                        />
+                                    ) : null}
 
-                                    {/* Borrador */}
+                                    {/* Borrador — solo en modo crear */}
+                                    {mode === 'create' ? (
                                     <SpaceDialogPanel>
                                         <div className="space-y-3">
                                             <SpaceDialogSectionEyebrow>Borrador</SpaceDialogSectionEyebrow>
@@ -1146,6 +1297,7 @@ export function SpaceEntryDialog({
                                             </Button>
                                         </div>
                                     </SpaceDialogPanel>
+                                    ) : null}
                                 </div>
                             </div>
 
@@ -1182,8 +1334,10 @@ export function SpaceEntryDialog({
 
                     {/* ── Footer ── */}
                     <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
-                        <Button className="rounded-full" onClick={handleSubmit} disabled={submitting}>
-                            {submitting ? 'Guardando...' : 'Guardar gasto'}
+                        <Button className="rounded-full" onClick={() => void handleSubmit()} disabled={submitting}>
+                            {submitting
+                                ? (mode === 'edit' ? 'Guardando cambios...' : 'Guardando...')
+                                : (mode === 'edit' ? 'Guardar cambios' : 'Guardar gasto')}
                         </Button>
                         <Button
                             variant="ghost"

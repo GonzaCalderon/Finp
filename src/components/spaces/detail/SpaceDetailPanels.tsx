@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { ArrowRight, CalendarRange, Coins, FileBadge2, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowRight, Ban, CalendarRange, Coins, FileBadge2, History, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
 import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
+import { Badge } from '@/components/ui/badge'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
 import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
@@ -115,6 +116,9 @@ function MovementCard({
         }
     }
 
+    const isVoided = entry.isVoided === true
+    const isEdited = (entry.editCount ?? 0) > 0
+
     return (
         <div
             role={clickable ? 'button' : undefined}
@@ -129,6 +133,7 @@ function MovementCard({
             }}
             className={cn(
                 'flex items-start justify-between gap-4 rounded-2xl border border-foreground/[0.07] bg-background/74 px-4 py-4 transition-colors',
+                isVoided ? 'opacity-60' : '',
                 clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40' : ''
             )}
         >
@@ -136,20 +141,20 @@ function MovementCard({
             <div className="flex min-w-0 flex-1 items-start gap-3">
                 <div
                     className="mt-[5px] h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: category.color ?? 'var(--muted-foreground)' }}
+                    style={{ backgroundColor: isVoided ? 'var(--muted-foreground)' : (category.color ?? 'var(--muted-foreground)') }}
                 />
                 <div className="min-w-0 flex-1 space-y-1.5">
                     {/* Title / settlement direction */}
                     {entry.type === 'settlement' && payer ? (
                         <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-sm font-semibold text-foreground">{payer.displayName}</span>
+                            <span className={cn('text-sm font-semibold', isVoided ? 'text-muted-foreground line-through' : 'text-foreground')}>{payer.displayName}</span>
                             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-                            <span className="text-sm font-semibold text-foreground">
+                            <span className={cn('text-sm font-semibold', isVoided ? 'text-muted-foreground line-through' : 'text-foreground')}>
                                 {settlementReceiver?.displayName ?? 'Receptor'}
                             </span>
                         </div>
                     ) : (
-                        <p className="truncate text-sm font-semibold leading-snug text-foreground">{entry.title}</p>
+                        <p className={cn('truncate text-sm font-semibold leading-snug', isVoided ? 'text-muted-foreground line-through' : 'text-foreground')}>{entry.title}</p>
                     )}
                     {/* Metadata row — each part is an independent element, not a joined string */}
                     {metaParts.length > 0 && (
@@ -179,9 +184,24 @@ function MovementCard({
                     amount={entry.amount}
                     currency={entry.currency}
                     hidden={hidden}
-                    className="text-sm font-semibold tabular-nums"
+                    className={cn('text-sm font-semibold tabular-nums', isVoided ? 'text-muted-foreground line-through' : '')}
                 />
-                <SpaceEntryStatusBadge status={entry.status} />
+                {isVoided ? (
+                    <Badge variant="destructive" className="gap-1 text-[10px]">
+                        <Ban className="h-2.5 w-2.5" />
+                        Anulado
+                    </Badge>
+                ) : (
+                    <>
+                        <SpaceEntryStatusBadge status={entry.status} />
+                        {isEdited ? (
+                            <Badge variant="secondary" className="gap-1 text-[10px]">
+                                <History className="h-2.5 w-2.5" />
+                                Editado
+                            </Badge>
+                        ) : null}
+                    </>
+                )}
             </div>
         </div>
     )

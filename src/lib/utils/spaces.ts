@@ -279,6 +279,7 @@ export function buildSpaceBalances(entries: ISpaceEntry[], participants: ISpaceP
 
     entries
         .filter((entry) => {
+            if (entry.isVoided) return false
             if (entry.status === 'rejected') return false
             if (entry.type === 'settlement' && entry.status === 'pending_confirmation') return false
             return true
@@ -363,7 +364,7 @@ export function buildSpaceSummary({
     participants: ISpaceParticipant[]
     currentUserId?: string
 }): SpaceSummarySnapshot {
-    const relevantEntries = entries.filter((entry) => entry.status !== 'rejected')
+    const relevantEntries = entries.filter((entry) => !entry.isVoided && entry.status !== 'rejected')
     const spendingEntries = relevantEntries.filter(
         (entry) => entry.type === 'expense' || entry.type === 'adjustment'
     )

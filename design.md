@@ -1445,3 +1445,123 @@ Pulir la experiencia de creación de movimientos y la gestión de pagos en espac
 - La estructura `SuggestedPayment[]` está lista para recibir múltiples pagos.
 - El dialog tiene sección "Sugerencias" que puede extenderse a selección múltiple.
 - Pago múltiple completo no implementado: requiere cambios de modelo y flujo de confirmación.
+
+# Fase 5D — Edición y anulación de movimientos
+
+## Propósito
+
+Agregar edición controlada (con historial de versiones embebido) y anulación lógica de movimientos de espacios, sin eliminar físicamente ningún dato. Los movimientos anulados siguen visibles en el historial con badge "Anulado" pero no impactan en el balance.
+
+## Cambios implementados
+
+### Modelo de datos (`SpaceEntry`)
+
+Campos nuevos:
+
+```
+isVoided         boolean   default false — anulación lógica
+voidedAt         Date
+voidedByUserId   ObjectId
+voidReason       string    max 200 chars, opcional
+
+editedAt         Date      última edición
+editedByUserId   ObjectId
+editCount        number    default 0
+previousVersions ISpaceEntrySnapshot[]   embebidos, max 5, LIFO
+```
+
+`ISpaceEntrySnapshot` guarda un snapshot de los campos mutables antes de cada edición (title, description, amount, currency, reportingAmount, exchangeRate, date, spaceCategoryId, paidByParticipantId, sharedWithParticipantIds, splitMode, splitAllocations, notes). Los adjuntos se excluyen del snapshot porque se gestionan por endpoints propios.
+
+Índice nuevo: `{ spaceId: 1, isVoided: 1, date: -1 }`.
+
+### Reglas de visibilidad
+
+Los movimientos anulados (`isVoided: true`) se excluyen de `buildSpaceBalances()` y `buildSpaceSummary()`, pero `getSpaceEntries()` los retorna igual para que la UI los muestre en gris con badge "Anulado". No se eliminan físicamente.
+
+| Estado | Balance | Summaries | Lista visual |
+|---|---|---|---|
+| Normal | ✅ | ✅ | activo |
+| Anulado (`isVoided`) | ❌ | ❌ | gris + badge "Anulado" |
+| Editado (`editCount > 0`) | ✅ versión actual | ✅ versión actual | badge "Editado" |
+
+### API
+
+```
+GET   /api/spaces/[id]/entries/[entryId]          — detalle individual
+PATCH /api/spaces/[id]/entries/[entryId]          — editar (creador | owner | admin)
+POST  /api/spaces/[id]/entries/[entryId]/void     — anular (creador | owner | admin)
+GET   /api/spaces/[id]/entries/[entryId]/revisions — historial de versiones (todos)
+```
+
+- El PATCH recalcula `reportingAmount` server-side (ignora el valor enviado por el cliente), valida que `currency` pertenezca a `space.currencies`, y exige `exchangeRate` si `currency !== reportingCurrency`.
+- El PATCH y el POST de void incluyen el flag `hasSubsequentSettlement` en la respuesta cuando existe un settlement con `createdAt > entry.createdAt`.
+- La anulación no es reversible en MVP y no elimina adjuntos en Vercel Blob (quedan como evidencia histórica).
+- Se usan `entry.previousVersions ?? []` en toda la codebase para compatibilidad con documentos legacy.
+
+### UI
+
+- `VoidEntryDialog` — AlertDialog con textarea para motivo (opcional, max 200 chars) y advertencias amber si hay settlements posteriores o `linkedTransactionId`.
+- `SpaceEntryRevisionSheet` — sheet lateral read-only que muestra un snapshot previo con fecha y editor.
+- `SpaceEntryDetailSheet` — badges "Anulado" (destructive) y "Editado" (secondary), botones Editar / Anular con permisos, "Ver versión anterior" cuando hay snapshots.
+- `SpaceEntryDialog mode='edit'` — pre-carga el formulario desde `initialData`, oculta draft/adjuntos/sección de impacto personal, llama PATCH al guardar.
+- `MovementCard` — texto muted + monto tachado + badge "Anulado" para movimientos anulados; badge "Editado" para movimientos con `editCount > 0`.
+
+### Integración con Finp personal
+
+Al editar o anular un movimiento con `linkedTransactionId`, la transacción personal vinculada no se modifica automáticamente. Se muestra una advertencia clara en el dialog. La sincronización automática queda para Fase 5E+.
+
+## No implementado en esta fase (diferido a Fase 5E+)
+
+### Sistema de aprobaciones
+
+Actualmente editar o anular un movimiento no requiere aprobación de otros participantes. Para Fase 5E+, el modelo diseñado es:
+
+```typescript
+interface ISpaceEntryChangeRequest {
+  _id: ObjectId
+  spaceId: ObjectId
+  entryId: ObjectId
+  requestedByUserId: ObjectId
+  type: 'edit' | 'void'
+  proposedChanges?: Partial<ISpaceEntry>   // para type='edit'
+  voidReason?: string                       // para type='void'
+  status: 'pending' | 'approved' | 'rejected'
+  requiredApprovers: ObjectId[]
+  approvals: { userId: ObjectId; approvedAt: Date }[]
+  rejections: { userId: ObjectId; rejectedAt: Date; reason?: string }[]
+  createdAt: Date
+  resolvedAt?: Date
+}
+```
+
+Flujo de aprobación previsto:
+1. Creador solicita edición/anulación → se crea `SpaceEntryChangeRequest` en estado `pending`.
+2. Los participantes involucrados reciben notificación.
+3. Cada participante aprueba o rechaza.
+4. Cuando todos los `requiredApprovers` aprueban → se aplica el cambio; si alguno rechaza → se cancela.
+5. El movimiento muestra badge "Pendiente de aprobación" mientras espera.
+
+### Otros diferidos
+
+- **Sincronización automática con transacción personal**: al editar monto/moneda/fecha de un movimiento con `linkedTransactionId`, propagar el cambio a la transacción personal con confirmación previa.
+- **Reversa contable al anular**: al anular un movimiento con `linkedTransactionId`, crear una transacción de reversa en Finp personal.
+- **Desanular (undo void)**: no implementado. Requiere definir permisos y si la reversión necesita aprobación.
+- **Notificaciones a participantes**: notificar cuando un movimiento relevante es editado o anulado.
+- **Historial en colección separada**: si el volumen de ediciones lo justifica, migrar `previousVersions` de array embebido a una colección `SpaceEntryRevision`.
+
+## Componentes nuevos / modificados
+
+| Componente/Archivo | Estado |
+|---|---|
+| `SpaceEntry` model + `ISpaceEntrySnapshot` type | ✅ Implementado |
+| `spaceEntryEditSchema`, `spaceEntryVoidSchema` | ✅ Implementado |
+| `buildSpaceBalances()` + `buildSpaceSummary()` — filtro `isVoided` | ✅ Implementado |
+| `GET/PATCH /entries/[entryId]` | ✅ Implementado |
+| `POST /entries/[entryId]/void` | ✅ Implementado |
+| `GET /entries/[entryId]/revisions` | ✅ Implementado |
+| `VoidEntryDialog` | ✅ Implementado |
+| `SpaceEntryRevisionSheet` | ✅ Implementado |
+| `SpaceEntryDetailSheet` — badges, botones, warnings | ✅ Implementado |
+| `SpaceDetailPanels` — `MovementCard` visual anulado/editado | ✅ Implementado |
+| `SpaceEntryDialog mode='edit'` | ✅ Implementado |
+| `SpaceEditRequestDialog` — flujo de aprobación | Diferido — Fase 5E+ |

@@ -15,6 +15,27 @@ const splitAllocationSchema = new Schema(
     { _id: false }
 )
 
+const entrySnapshotSchema = new Schema(
+    {
+        snapshotAt: { type: Date, required: true },
+        editedByUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        title: { type: String, required: true },
+        description: { type: String },
+        amount: { type: Number, required: true },
+        currency: { type: String, required: true },
+        reportingAmount: { type: Number, required: true },
+        exchangeRate: { type: Number },
+        date: { type: Date, required: true },
+        spaceCategoryId: { type: Schema.Types.ObjectId },
+        paidByParticipantId: { type: Schema.Types.ObjectId },
+        sharedWithParticipantIds: [{ type: Schema.Types.ObjectId }],
+        splitMode: { type: String },
+        splitAllocations: [splitAllocationSchema],
+        notes: { type: String },
+    },
+    { _id: false }
+)
+
 const attachmentSchema = new Schema(
     {
         uploadedByUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -65,6 +86,16 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         confirmedAt: { type: Date },
         rejectedAt: { type: Date },
         attachments: [attachmentSchema],
+        // Anulación lógica
+        isVoided: { type: Boolean, required: true, default: false },
+        voidedAt: { type: Date },
+        voidedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+        voidReason: { type: String, trim: true, maxlength: 200 },
+        // Edición con historial
+        editedAt: { type: Date },
+        editedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+        editCount: { type: Number, required: true, default: 0 },
+        previousVersions: { type: [entrySnapshotSchema], default: undefined },
     },
     { timestamps: true }
 )
@@ -72,6 +103,7 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
 SpaceEntrySchema.index({ spaceId: 1, date: -1, createdAt: -1 })
 SpaceEntrySchema.index({ paidByParticipantId: 1, status: 1, createdAt: -1 })
 SpaceEntrySchema.index({ linkedTransactionId: 1 })
+SpaceEntrySchema.index({ spaceId: 1, isVoided: 1, date: -1 })
 
 const existingSpaceEntryModel = mongoose.models.SpaceEntry as mongoose.Model<ISpaceEntry> | undefined
 
