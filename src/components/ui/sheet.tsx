@@ -64,19 +64,19 @@ function SheetContent({
           "data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l",
           "data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b",
           "data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
-          // Open animations
+          // Open animations — small offset for a subtle, premium slide-in
           "data-[state=open]:animate-in data-[state=open]:fade-in-0",
-          "data-[side=bottom]:data-[state=open]:slide-in-from-bottom-6",
-          "data-[side=left]:data-[state=open]:slide-in-from-left-6",
-          "data-[side=right]:data-[state=open]:slide-in-from-right-6",
-          "data-[side=top]:data-[state=open]:slide-in-from-top-6",
-          // Close animations
+          "data-[side=bottom]:data-[state=open]:slide-in-from-bottom-3",
+          "data-[side=left]:data-[state=open]:slide-in-from-left-3",
+          "data-[side=right]:data-[state=open]:slide-in-from-right-3",
+          "data-[side=top]:data-[state=open]:slide-in-from-top-3",
+          // Close animations — slightly larger offset so exit reads clearly
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
-          "data-[side=bottom]:data-[state=closed]:slide-out-to-bottom-6",
-          "data-[side=left]:data-[state=closed]:slide-out-to-left-6",
-          "data-[side=right]:data-[state=closed]:slide-out-to-right-6",
-          "data-[side=top]:data-[state=closed]:slide-out-to-top-6",
-          "duration-260",
+          "data-[side=bottom]:data-[state=closed]:slide-out-to-bottom-4",
+          "data-[side=left]:data-[state=closed]:slide-out-to-left-4",
+          "data-[side=right]:data-[state=closed]:slide-out-to-right-4",
+          "data-[side=top]:data-[state=closed]:slide-out-to-top-4",
+          "duration-300",
           className
         )}
         {...props}

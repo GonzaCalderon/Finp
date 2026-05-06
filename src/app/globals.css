@@ -273,16 +273,23 @@ html[data-route-transition] main {
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-/* Sheet */
-[data-slot="sheet-content"] {
-  animation-duration: 260ms !important;
-  transition-duration: 260ms !important;
+/* Sheet — enter: decelera suave; exit: acelera rápido y corto */
+[data-slot="sheet-content"][data-state="open"] {
+  animation-duration: 300ms !important;
+  transition-duration: 300ms !important;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
-[data-slot="sheet-overlay"] {
+[data-slot="sheet-content"][data-state="closed"] {
   animation-duration: 200ms !important;
+  transition-duration: 200ms !important;
+  animation-timing-function: cubic-bezier(0.4, 0, 1, 1) !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 1, 1) !important;
+}
+
+[data-slot="sheet-overlay"] {
+  animation-duration: 220ms !important;
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
