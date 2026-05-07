@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Category, SpaceEntry, Transaction } from '@/lib/models'
+import { createPersonalImpactFromSpaceEntry } from '@/lib/server/space-personal-impact'
 import { getEntryConfirmationContext } from '@/lib/server/spaces'
 import { spaceEntryConfirmSchema } from '@/lib/validations'
+import { extractId } from '@/lib/utils/spaces'
 
 export async function POST(
     request: Request,
@@ -63,16 +65,28 @@ export async function POST(
             )
         }
 
+        await createPersonalImpactFromSpaceEntry({
+            spaceId: extractId(context.entry.spaceId) ?? '',
+            entry: context.entry,
+            participants: context.participants,
+            userId: session.user.id,
+            participantId: extractId(context.paidByParticipant._id) ?? '',
+            mode: 'link_existing',
+            categoryId: parsed.data.categoryId,
+            linkedTransactionId: parsed.data.linkedTransactionId,
+            spaceNameSnapshot: context.space.name,
+        })
+
         const entry = await SpaceEntry.findByIdAndUpdate(
             id,
             {
                 $set: {
-                    linkedTransactionId: linkedTransaction._id,
                     status:
-                        context.entry.status === 'pending_confirmation' ? 'linked' : context.entry.status,
+                        context.entry.status === 'pending_confirmation' || context.entry.status === 'linked'
+                            ? 'confirmed'
+                            : context.entry.status,
                     confirmedByUserId: session.user.id,
                     confirmedAt: new Date(),
-                    categoryId: parsed.data.categoryId ?? context.entry.categoryId,
                 },
             },
             { new: true }

@@ -1,13 +1,22 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
+    Ban,
     Bell,
     CheckCircle2,
     FileText,
     HandCoins,
     Paperclip,
+    Pencil,
+    Settings,
+    Shield,
     ShieldCheck,
+    Tag,
+    Trash2,
+    UserCheck,
+    UserMinus,
     UserPlus,
     Wallet,
 } from 'lucide-react'
@@ -27,6 +36,8 @@ import {
     SheetDescription,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useSpaceActivity } from '@/hooks/useSpaceActivity'
+import { fadeInFast, springButton, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import {
     SpaceAmountInline,
     SpaceCurrencyStack,
@@ -42,7 +53,8 @@ import {
     extractId,
     formatSpaceDate,
 } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpacePendingAction } from '@/types'
+import type { ISpaceActivityEvent, ISpaceEntry, ISpacePendingAction } from '@/types'
+import type { SpaceActivityEventType } from '@/lib/constants'
 
 export type PendingViewFilter = 'all' | 'invite' | 'confirmation' | 'settlement'
 
@@ -52,6 +64,8 @@ type PendingActionHandlers = {
     onReviewConfirmation: (action: Extract<ISpacePendingAction, { kind: 'confirmation' }>) => void
     onRejectConfirmation: (action: Extract<ISpacePendingAction, { kind: 'confirmation' }>) => void
 }
+
+type SheetTab = 'pending' | 'activity'
 
 const PENDING_FILTER_LABELS: Record<PendingViewFilter, string> = {
     all: 'Todos',
@@ -282,6 +296,151 @@ function PendingActionCard(props: { action: ISpacePendingAction; compact?: boole
     )
 }
 
+const ACTIVITY_ICON_BY_TYPE: Record<SpaceActivityEventType, typeof FileText> = {
+    entry_created: FileText,
+    entry_edited: Pencil,
+    entry_voided: Ban,
+    settlement_created: HandCoins,
+    attachment_uploaded: Paperclip,
+    attachment_deleted: Trash2,
+    category_created: Tag,
+    category_archived: Tag,
+    category_restored: Tag,
+    participant_invited: UserPlus,
+    participant_joined: UserCheck,
+    participant_removed: UserMinus,
+    role_changed: Shield,
+    space_updated: Settings,
+}
+
+function ActivityEventCard({
+    event,
+    currentUserId,
+}: {
+    event: ISpaceActivityEvent
+    currentUserId?: string
+}) {
+    const Icon = ACTIVITY_ICON_BY_TYPE[event.type] ?? FileText
+    const isUnread = Boolean(
+        currentUserId &&
+        !event.readByUserIds.some((userId) => extractId(userId) === currentUserId)
+    )
+    const metadata = event.metadata ?? {}
+    const amount = typeof metadata.amount === 'number' ? metadata.amount : undefined
+    const currency = typeof metadata.currency === 'string' ? metadata.currency : undefined
+    const fileName = typeof metadata.fileName === 'string' ? metadata.fileName : undefined
+
+    return (
+        <motion.div
+            layout
+            variants={staggerItem}
+            whileHover={{ y: -1, transition: { duration: 0.15 } }}
+            className="rounded-[20px] border border-foreground/[0.07] bg-background/72 p-3 transition-colors hover:border-primary/20 hover:bg-primary/[0.03]"
+        >
+            <div className="flex items-start gap-3">
+                <div className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" />
+                    <AnimatePresence>
+                        {isUnread ? (
+                            <motion.span
+                                key="unread"
+                                initial={{ opacity: 0, scale: 0.5 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.5 }}
+                                transition={springButton}
+                                className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-background"
+                            />
+                        ) : null}
+                    </AnimatePresence>
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-semibold tracking-tight text-foreground">
+                        {event.title}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {formatSpaceDate(event.createdAt)}
+                    </p>
+                    {event.description ? (
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                            {event.description}
+                        </p>
+                    ) : null}
+                    {amount !== undefined && currency ? (
+                        <p className="mt-2 text-xs font-medium text-foreground">
+                            <SpaceAmountInline amount={amount} currency={currency} hidden={false} />
+                        </p>
+                    ) : fileName ? (
+                        <p className="mt-2 truncate text-xs text-muted-foreground">{fileName}</p>
+                    ) : null}
+                </div>
+            </div>
+        </motion.div>
+    )
+}
+
+function ActivityList({
+    spaceId,
+    currentUserId,
+}: {
+    spaceId?: string
+    currentUserId?: string
+}) {
+    const activity = useSpaceActivity(spaceId)
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+                <div className="text-sm text-muted-foreground">
+                    {activity.unreadCount > 0 ? `${activity.unreadCount} sin leer` : 'Todo leído'}
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    disabled={activity.unreadCount === 0}
+                    onClick={() => void activity.markRead()}
+                >
+                    Marcar todo como leído
+                </Button>
+            </div>
+
+            {activity.loading ? (
+                <div className="space-y-3">
+                    <Skeleton className="h-24 rounded-[20px]" />
+                    <Skeleton className="h-24 rounded-[20px]" />
+                </div>
+            ) : activity.events.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                        <Bell className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-1">
+                        <p className="font-semibold tracking-tight">Sin actividad</p>
+                        <p className="text-sm text-muted-foreground">
+                            Los cambios relevantes de tus espacios van a aparecer acá.
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <motion.div
+                    className="space-y-3"
+                    variants={staggerContainer}
+                    initial="initial"
+                    animate="animate"
+                >
+                    {activity.events.map((event) => (
+                        <ActivityEventCard
+                            key={extractId(event._id)}
+                            event={event}
+                            currentUserId={currentUserId}
+                        />
+                    ))}
+                </motion.div>
+            )}
+        </div>
+    )
+}
+
 export function RecentPendingPanel({
     actions,
     loading,
@@ -417,14 +576,21 @@ export function SpacesPendingSheet({
     onOpenChange,
     actions,
     loading,
+    spaceId,
+    currentUserId,
+    initialTab = 'pending',
     ...handlers
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
     actions: ISpacePendingAction[]
     loading: boolean
+    spaceId?: string
+    currentUserId?: string
+    initialTab?: SheetTab
 } & PendingActionHandlers) {
     const [filter, setFilter] = useState<PendingViewFilter>('all')
+    const [tab, setTab] = useState<SheetTab>(initialTab)
     const filteredActions = useMemo(
         () => actions.filter((action) => matchesFilter(action, filter)),
         [actions, filter]
@@ -434,23 +600,60 @@ export function SpacesPendingSheet({
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[440px]">
                 <SheetHeader className="border-b border-border/70 px-5 pb-4 pt-5">
-                    <SheetTitle className="text-xl tracking-tight">Pendientes</SheetTitle>
+                    <SheetTitle className="text-xl tracking-tight">Notificaciones</SheetTitle>
                     <SheetDescription>
-                        Invitaciones, confirmaciones y liquidaciones que requieren una acción tuya.
+                        Pendientes que requieren acción y actividad informativa de tus espacios.
                     </SheetDescription>
                     <div className="pt-2">
-                        <PendingFilterBar actions={actions} value={filter} onChange={setFilter} />
+                        <div className="mb-3 grid grid-cols-2 gap-1 rounded-[16px] border border-border bg-background/80 p-1">
+                            {(['pending', 'activity'] as SheetTab[]).map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    onClick={() => setTab(item)}
+                                    className={[
+                                        'relative rounded-[12px] px-3 py-2 text-sm font-medium transition-colors',
+                                        tab === item
+                                            ? 'text-primary'
+                                            : 'text-muted-foreground hover:text-foreground',
+                                    ].join(' ')}
+                                >
+                                    {tab === item ? (
+                                        <motion.span
+                                            layoutId="spaces-pending-sheet-tab"
+                                            className="absolute inset-0 rounded-[12px] bg-primary/10"
+                                            transition={springButton}
+                                        />
+                                    ) : null}
+                                    <span className="relative">
+                                        {item === 'pending' ? 'Pendientes' : 'Actividad'}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                        <AnimatePresence mode="wait">
+                            {tab === 'pending' ? (
+                                <motion.div key="filters" {...fadeInFast}>
+                                    <PendingFilterBar actions={actions} value={filter} onChange={setFilter} />
+                                </motion.div>
+                            ) : null}
+                        </AnimatePresence>
                     </div>
                 </SheetHeader>
 
                 <div className="flex-1 overflow-y-auto px-5 py-5">
-                    {loading ? (
-                        <div className="space-y-3">
+                    <AnimatePresence mode="wait">
+                    {tab === 'activity' ? (
+                        <motion.div key="activity" {...fadeInFast}>
+                            <ActivityList spaceId={spaceId} currentUserId={currentUserId} />
+                        </motion.div>
+                    ) : loading ? (
+                        <motion.div key="loading" className="space-y-3" {...fadeInFast}>
                             <Skeleton className="h-28 rounded-[20px]" />
                             <Skeleton className="h-28 rounded-[20px]" />
-                        </div>
+                        </motion.div>
                     ) : filteredActions.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                        <motion.div key="empty" className="flex flex-col items-center justify-center gap-3 py-12 text-center" {...fadeInFast}>
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                                 <Bell className="h-5 w-5 text-muted-foreground" />
                             </div>
@@ -462,19 +665,29 @@ export function SpacesPendingSheet({
                                     Cuando aparezcan acciones nuevas dentro de tus espacios, las vas a ver acá.
                                 </p>
                             </div>
-                        </div>
+                        </motion.div>
                     ) : (
-                        <div className="space-y-3">
+                        <motion.div
+                            key="pending"
+                            className="space-y-3"
+                            variants={staggerContainer}
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                        >
                             {filteredActions.map((action) => (
-                                <PendingActionCard
+                                <motion.div key={pendingActionKey(action, 'sheet')} variants={staggerItem}>
+                                    <PendingActionCard
                                     key={pendingActionKey(action, 'sheet')}
                                     action={action}
                                     compact
                                     {...handlers}
-                                />
+                                    />
+                                </motion.div>
                             ))}
-                        </div>
+                        </motion.div>
                     )}
+                    </AnimatePresence>
                 </div>
             </SheetContent>
         </Sheet>

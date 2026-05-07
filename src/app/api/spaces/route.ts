@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Space, SpaceCategory, SpaceParticipant } from '@/lib/models'
+import { getUnreadActivityCount } from '@/lib/server/space-activity'
 import { buildSpaceListItems, getPendingSpaceActions } from '@/lib/server/spaces'
 import { spaceSchema } from '@/lib/validations'
 import { getDefaultSpaceCategories } from '@/lib/utils/space-categories'
@@ -16,15 +17,17 @@ export async function GET() {
 
         await connectDB()
 
-        const [spaces, pendingActions] = await Promise.all([
+        const [spaces, pendingActions, unreadActivityCount] = await Promise.all([
             buildSpaceListItems(session.user.id),
             getPendingSpaceActions(session.user.id),
+            getUnreadActivityCount(session.user.id),
         ])
 
         return NextResponse.json({
             spaces,
             pendingActions,
-            pendingCount: pendingActions.length,
+            pendingCount: pendingActions.length + unreadActivityCount,
+            unreadActivityCount,
             currentUserId: session.user.id,
         })
     } catch (error) {

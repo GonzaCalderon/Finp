@@ -334,6 +334,7 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
     }
 
     if (
+        extractId(entry.spaceCategoryId) === 'legacy-personal-category-disabled' &&
         entry.categoryId &&
         typeof entry.categoryId === 'object' &&
         entry.categoryId !== null &&
@@ -348,7 +349,7 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
     }
 
     return {
-        categoryId: extractId(entry.categoryId),
+        categoryId: undefined,
         label: 'Sin categoría',
         color: undefined,
     }

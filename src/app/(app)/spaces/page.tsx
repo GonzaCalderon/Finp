@@ -218,13 +218,13 @@ export default function SpacesPage() {
     useEffect(() => {
         setBreadcrumbAction(
             <SpacesPendingBell
-                pendingCount={pending.counts.total}
+                pendingCount={pending.counts.total + pending.counts.unreadActivityCount}
                 onShowPending={() => setPendingDialogOpen(true)}
             />
         )
 
         return () => clearBreadcrumbAction()
-    }, [clearBreadcrumbAction, pending.counts.total, setBreadcrumbAction])
+    }, [clearBreadcrumbAction, pending.counts.total, pending.counts.unreadActivityCount, setBreadcrumbAction])
 
     const filteredSpaces = useMemo(() => {
         const normalizedSearch = search.trim().toLowerCase()
@@ -460,6 +460,7 @@ export default function SpacesPage() {
                 onOpenChange={setPendingDialogOpen}
                 actions={pending.pendingActions}
                 loading={pending.loading}
+                currentUserId={currentUserId}
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
                 onReviewConfirmation={handleReviewConfirmation}

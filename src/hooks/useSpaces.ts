@@ -16,6 +16,7 @@ type SpacesResponse = {
     spaces: ISpaceListItem[]
     pendingActions: ISpacePendingAction[]
     pendingCount: number
+    unreadActivityCount?: number
     currentUserId: string
 }
 

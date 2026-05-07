@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceEntry } from '@/lib/models'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { extractId } from '@/lib/utils/spaces'
 import { sanitizeFileName } from '@/lib/utils/space-categories'
@@ -203,6 +204,20 @@ export async function DELETE(
             { _id: entryId, spaceId: id },
             { $pull: { attachments: { _id: new Types.ObjectId(attachmentId) } } }
         )
+
+        createSpaceActivityEvent({
+            spaceId: id,
+            actorUserId: session.user.id,
+            type: 'attachment_deleted',
+            entityType: 'attachment',
+            entityId: attachmentId,
+            title: `${session.user.name ?? 'Un participante'} eliminó un comprobante`,
+            metadata: {
+                entryId,
+                entryTitle: context.entry?.title,
+                fileName: context.attachment.fileName,
+            },
+        }).catch((err) => console.error('[space-activity]', err))
 
         return NextResponse.json({ success: true })
     } catch (error) {

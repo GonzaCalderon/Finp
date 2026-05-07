@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceInvite, SpaceParticipant } from '@/lib/models'
+import {
+    buildActivityAudience,
+    createSpaceActivityEvent,
+} from '@/lib/server/space-activity'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceParticipantResponseSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
@@ -49,6 +53,9 @@ export async function PATCH(
                 { status: 404 }
             )
         }
+
+        const previousInviteStatus = participant.inviteStatus
+        const previousRole = participant.role
 
         const canManage =
             context.isOwner ||
@@ -114,6 +121,37 @@ export async function PATCH(
             )
         }
 
+        if (previousInviteStatus !== 'accepted' && participant.inviteStatus === 'accepted') {
+            createSpaceActivityEvent({
+                spaceId: id,
+                actorUserId: session.user.id,
+                actorParticipantId: extractId(participant._id),
+                type: 'participant_joined',
+                entityType: 'participant',
+                entityId: extractId(participant._id),
+                title: `${participant.displayName} aceptó la invitación`,
+                metadata: {
+                    participantName: participant.displayName,
+                },
+            }).catch((err) => console.error('[space-activity]', err))
+        }
+
+        if (parsed.data.role && previousRole !== participant.role) {
+            createSpaceActivityEvent({
+                spaceId: id,
+                actorUserId: session.user.id,
+                actorParticipantId: extractId(context.currentParticipant?._id),
+                type: 'role_changed',
+                entityType: 'participant',
+                entityId: extractId(participant._id),
+                title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} cambió el rol de ${participant.displayName}`,
+                metadata: {
+                    previousRole,
+                    nextRole: participant.role,
+                },
+            }).catch((err) => console.error('[space-activity]', err))
+        }
+
         return NextResponse.json({ participant })
     } catch (error) {
         console.error('Error al responder invitación del espacio:', error)
@@ -172,9 +210,26 @@ export async function DELETE(
             )
         }
 
+        const visibleToUserIds = await buildActivityAudience(id)
+
         participant.isActive = false
         participant.inviteStatus = 'declined'
         await participant.save()
+
+        createSpaceActivityEvent({
+            spaceId: id,
+            actorUserId: session.user.id,
+            actorParticipantId: extractId(context.currentParticipant?._id),
+            type: 'participant_removed',
+            entityType: 'participant',
+            entityId: extractId(participant._id),
+            title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} removió a ${participant.displayName}`,
+            metadata: {
+                participantName: participant.displayName,
+                participantUserId: extractId(participant.userId),
+            },
+            visibleToUserIds,
+        }).catch((err) => console.error('[space-activity]', err))
 
         return NextResponse.json({ participant })
     } catch (error) {

@@ -3,6 +3,8 @@ import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceEntry } from '@/lib/models'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
+import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryVoidSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
@@ -68,6 +70,14 @@ export async function POST(request: Request, { params }: { params: Params }) {
             createdAt: { $gt: entry.createdAt },
         })
         const hasSubsequentSettlement = laterSettlements > 0
+        const personalImpactsByEntryId = await getPersonalImpactForEntries(
+            id,
+            session.user.id,
+            [entryId],
+            [entry],
+            context.participants
+        )
+        const hasPersonalImpact = Boolean(personalImpactsByEntryId[entryId])
 
         const voidedEntry = await SpaceEntry.findByIdAndUpdate(
             entryId,
@@ -85,9 +95,30 @@ export async function POST(request: Request, { params }: { params: Params }) {
             .populate('spaceCategoryId', 'name color type isArchived')
             .lean<ISpaceEntry | null>()
 
+        if (voidedEntry) {
+            createSpaceActivityEvent({
+                spaceId: id,
+                actorUserId: session.user.id,
+                actorParticipantId: extractId(context.currentParticipant?._id),
+                type: 'entry_voided',
+                entityType: 'entry',
+                entityId: extractId(voidedEntry._id),
+                title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} anuló ${voidedEntry.title}`,
+                description: 'El movimiento ya no impacta en el balance.',
+                metadata: {
+                    entryTitle: voidedEntry.title,
+                    amount: voidedEntry.amount,
+                    currency: voidedEntry.currency,
+                    voidReason: parsed.data.voidReason,
+                    hasLinkedTransaction: hasPersonalImpact,
+                    hasSubsequentSettlement,
+                },
+            }).catch((err) => console.error('[space-activity]', err))
+        }
+
         return NextResponse.json({
             entry: voidedEntry,
-            hasLinkedTransaction: Boolean(entry.linkedTransactionId),
+            hasLinkedTransaction: hasPersonalImpact,
             hasSubsequentSettlement,
         })
     } catch (error) {

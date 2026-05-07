@@ -13,6 +13,7 @@ type PendingResponse = {
     total: number
     invitations: number
     confirmations: number
+    unreadActivityCount: number
 }
 
 export function useSpacePendingActions() {
@@ -21,6 +22,7 @@ export function useSpacePendingActions() {
         total: 0,
         invitations: 0,
         confirmations: 0,
+        unreadActivityCount: 0,
     })
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
@@ -41,6 +43,7 @@ export function useSpacePendingActions() {
                 total: data.total,
                 invitations: data.invitations,
                 confirmations: data.confirmations,
+                unreadActivityCount: data.unreadActivityCount,
             })
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar pendientes')

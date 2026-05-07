@@ -13,6 +13,7 @@ import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useSpace } from '@/hooks/useSpace'
+import { useSpaceActivity } from '@/hooks/useSpaceActivity'
 import { useSpaceEntries } from '@/hooks/useSpaceEntries'
 import { useSpaceParticipants } from '@/hooks/useSpaceParticipants'
 import { useToast } from '@/hooks/useToast'
@@ -52,7 +53,7 @@ import { SpaceEntryDetailSheet } from '@/components/spaces/detail/SpaceEntryDeta
 import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
 import { SpaceSettlementPanel } from '@/components/spaces/detail/SpaceSettlementPanel'
 import {
-    RecentSpaceMovementsCard,
+    RecentSpaceActivityCard,
     SpacePendingConfirmationsCard,
 } from '@/components/spaces/detail/SpaceSummaryPanels'
 import { SpacesPendingBell } from '@/components/spaces/index/SpacesPageHeader'
@@ -72,6 +73,7 @@ import type {
 import type { SpaceFormData } from '@/lib/validations'
 
 type SpaceTab = 'summary' | 'entries' | 'balance' | 'settings'
+type PendingSheetTab = 'pending' | 'activity'
 
 const MOBILE_TABS: Array<{ value: SpaceTab; label: string }> = [
     { value: 'summary', label: 'Resumen' },
@@ -224,6 +226,7 @@ export default function SpaceDetailPage() {
     const { setAction: setBreadcrumbAction, clearAction: clearBreadcrumbAction } = useBreadcrumbAction()
     const { success, error: toastError } = useToast()
     const { data, loading, error, updateSpace } = useSpace(spaceId)
+    const spaceActivity = useSpaceActivity(spaceId)
     const entriesApi = useSpaceEntries(spaceId)
     const participantsApi = useSpaceParticipants(spaceId)
     const [activeTab, setActiveTab] = useState<SpaceTab>('summary')
@@ -233,6 +236,7 @@ export default function SpaceDetailPage() {
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
     const [pendingSheetOpen, setPendingSheetOpen] = useState(false)
+    const [pendingSheetTab, setPendingSheetTab] = useState<PendingSheetTab>('pending')
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
     const [detailEntry, setDetailEntry] = useState<ISpaceEntry | null>(null)
@@ -260,13 +264,16 @@ export default function SpaceDetailPage() {
     useEffect(() => {
         setBreadcrumbAction(
             <SpacesPendingBell
-                pendingCount={data?.pendingActions.length ?? 0}
-                onShowPending={() => setPendingSheetOpen(true)}
+                pendingCount={(data?.pendingActions.length ?? 0) + spaceActivity.unreadCount}
+                onShowPending={() => {
+                    setPendingSheetTab('pending')
+                    setPendingSheetOpen(true)
+                }}
             />
         )
 
         return () => clearBreadcrumbAction()
-    }, [clearBreadcrumbAction, data?.pendingActions.length, setBreadcrumbAction])
+    }, [clearBreadcrumbAction, data?.pendingActions.length, setBreadcrumbAction, spaceActivity.unreadCount])
 
     usePageTitle(data?.space.name ? `${data.space.name} · Espacios` : 'Espacios')
     useAppStartupReady(!loading)
@@ -439,11 +446,23 @@ export default function SpaceDetailPage() {
         setVoidingEntry(entry)
         let hasLinkedTransaction = false
         let hasSubsequentSettlement = false
+        const payer = data?.participants.find(
+            (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
+        )
+        const impactsCurrentUser = Boolean(
+            data?.personalImpactsByEntryId[entryId ?? '']?.status === 'linked' ||
+            (
+                entry.linkedTransactionId &&
+                currentUserId &&
+                payer &&
+                (extractId(entry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
+            )
+        )
         try {
             const res = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`)
             if (res.ok) {
                 const json = await res.json() as { hasLinkedTransaction: boolean; hasSubsequentSettlement: boolean }
-                hasLinkedTransaction = json.hasLinkedTransaction
+                hasLinkedTransaction = json.hasLinkedTransaction && impactsCurrentUser
                 hasSubsequentSettlement = json.hasSubsequentSettlement
             }
         } catch {
@@ -582,13 +601,13 @@ export default function SpaceDetailPage() {
                             />
                         </div>
 
-                        <RecentSpaceMovementsCard
-                            entries={data.entries}
+                        <RecentSpaceActivityCard
+                            events={spaceActivity.events}
                             participants={data.participants}
-                            reportingCurrency={data.space.reportingCurrency}
-                            hidden={hidden}
-                            spaceId={spaceId}
-                            onViewAll={() => setActiveTab('entries')}
+                            onViewAll={() => {
+                                setPendingSheetTab('activity')
+                                setPendingSheetOpen(true)
+                            }}
                         />
 
                         {pendingConfirmations.length > 0 ? (
@@ -611,6 +630,7 @@ export default function SpaceDetailPage() {
                             entries={data.entries}
                             participants={data.participants}
                             currentUserId={currentUserId}
+                            personalImpactsByEntryId={data.personalImpactsByEntryId}
                             canManage={canManage}
                             entryFilter={entryFilter}
                             onFilterChange={setEntryFilter}
@@ -695,10 +715,14 @@ export default function SpaceDetailPage() {
             />
 
             <SpacesPendingSheet
+                key={pendingSheetTab}
                 open={pendingSheetOpen}
                 onOpenChange={setPendingSheetOpen}
                 actions={data.pendingActions}
                 loading={false}
+                spaceId={spaceId}
+                currentUserId={currentUserId}
+                initialTab={pendingSheetTab}
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
                 onReviewConfirmation={handleReviewPending}
@@ -745,6 +769,9 @@ export default function SpaceDetailPage() {
                 participants={data.participants}
                 spaceId={spaceId}
                 currency={data.space.reportingCurrency}
+                currentUserId={currentUserId}
+                personalImpact={detailEntry ? data.personalImpactsByEntryId[extractId(detailEntry._id) ?? ''] : undefined}
+                activityEvents={spaceActivity.events}
                 canEdit={Boolean(
                     detailEntry && (
                         extractId(detailEntry.createdByUserId) === currentUserId ||
@@ -768,6 +795,10 @@ export default function SpaceDetailPage() {
                     setDetailEntry(voidedEntry)
                     invalidateData(SPACE_INVALIDATION_TAGS)
                     success('Movimiento anulado')
+                }}
+                onPersonalImpactCreated={() => {
+                    invalidateData(SPACE_INVALIDATION_TAGS)
+                    success('Registrado en tu Finp')
                 }}
             />
 

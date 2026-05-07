@@ -1,12 +1,16 @@
 import type { Types } from 'mongoose'
 import type {
     SpaceCurrency,
+    SpaceActivityEntityType,
+    SpaceActivityEventType,
     SpaceEntryStatus,
     SpaceEntryType,
     SpaceInviteStatus,
     SpaceMode,
     SpaceParticipantKind,
     SpaceParticipantRole,
+    SpacePersonalImpactKind,
+    SpacePersonalImpactStatus,
     SpaceSplitMode,
     SpaceStatus,
     SpaceType,
@@ -145,6 +149,39 @@ export interface ISpaceEntry {
     updatedAt: Date
 }
 
+export interface ISpaceEntryPersonalImpact {
+    _id: Types.ObjectId
+    spaceId: Types.ObjectId
+    entryId: Types.ObjectId
+    userId: Types.ObjectId
+    participantId: Types.ObjectId
+    transactionId?: Types.ObjectId
+    accountId?: Types.ObjectId
+    categoryId?: Types.ObjectId
+    impactKind: SpacePersonalImpactKind
+    amount: number
+    currency: SpaceCurrency
+    status: SpacePersonalImpactStatus
+    createdAt: Date
+    updatedAt: Date
+}
+
+export interface ISpaceActivityEvent {
+    _id: Types.ObjectId
+    spaceId: Types.ObjectId
+    actorUserId?: Types.ObjectId
+    actorParticipantId?: Types.ObjectId
+    type: SpaceActivityEventType
+    entityType: SpaceActivityEntityType
+    entityId?: Types.ObjectId
+    title: string
+    description?: string
+    metadata?: Record<string, unknown>
+    visibleToUserIds: Types.ObjectId[]
+    readByUserIds: Types.ObjectId[]
+    createdAt: Date
+}
+
 export interface ISpaceInvite {
     _id: Types.ObjectId
     spaceId: Types.ObjectId
@@ -228,6 +265,7 @@ export interface ISpaceDetailPayload {
     space: ISpace
     participants: ISpaceParticipant[]
     entries: ISpaceEntry[]
+    personalImpactsByEntryId: Record<string, ISpaceEntryPersonalImpact>
     summary: SpaceSummarySnapshot
     pendingActions: ISpacePendingAction[]
     currentUserId: string

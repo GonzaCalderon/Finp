@@ -5,7 +5,7 @@ import {
     SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
-import type { ISpaceEntry } from '@/types'
+import type { ISpaceEntry, ISpaceEntryPersonalImpact } from '@/types'
 import type { SpaceEntryFormData } from '@/lib/validations'
 
 type Filters = {
@@ -35,7 +35,10 @@ export function useSpaceEntries(spaceId?: string, filters: Filters = {}) {
             if (filters.status) params.set('status', filters.status)
 
             const query = params.toString()
-            const data = await apiJson<{ entries: ISpaceEntry[] }>(
+            const data = await apiJson<{
+                entries: ISpaceEntry[]
+                personalImpactsByEntryId?: Record<string, ISpaceEntryPersonalImpact>
+            }>(
                 `/api/spaces/${spaceId}/entries${query ? `?${query}` : ''}`
             )
 

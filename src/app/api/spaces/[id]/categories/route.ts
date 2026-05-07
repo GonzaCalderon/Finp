@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceCategory } from '@/lib/models'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { extractId } from '@/lib/utils/spaces'
 import { normalizeSpaceCategoryName } from '@/lib/utils/space-categories'
 import { spaceCategorySchema } from '@/lib/validations'
 
@@ -106,6 +108,19 @@ export async function POST(
             isDefault: false,
             isArchived: false,
         })
+
+        createSpaceActivityEvent({
+            spaceId: id,
+            actorUserId: session.user.id,
+            actorParticipantId: extractId(context.currentParticipant?._id),
+            type: 'category_created',
+            entityType: 'category',
+            entityId: extractId(category._id),
+            title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} creó la categoría ${category.name}`,
+            metadata: {
+                categoryName: category.name,
+            },
+        }).catch((err) => console.error('[space-activity]', err))
 
         return NextResponse.json({ category }, { status: 201 })
     } catch (error) {

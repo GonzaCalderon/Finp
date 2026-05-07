@@ -7,11 +7,15 @@ import {
     SpaceEntry,
     Transaction,
 } from '@/lib/models'
-import { createTransactionFromSpaceEntry } from '@/lib/server/space-transactions'
+import {
+    createPersonalImpactFromSpaceEntry,
+    getPersonalImpactForEntries,
+} from '@/lib/server/space-personal-impact'
 import {
     getAccessibleSpaceContext,
     getSpaceEntries,
 } from '@/lib/server/spaces'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { spaceEntrySchema } from '@/lib/validations'
 import {
     calculateReportingAmount,
@@ -43,13 +47,22 @@ export async function GET(
         }
 
         const entries = await getSpaceEntries(id)
+        const personalImpactsByEntryId = await getPersonalImpactForEntries(
+            id,
+            session.user.id,
+            entries.map((entry) => extractId(entry._id)).filter((entryId): entryId is string => Boolean(entryId)),
+            entries,
+            context.participants
+        )
         const filteredEntries = entries.filter((entry) => {
             if (type && entry.type !== type) return false
-            if (status && entry.status !== status) return false
+            if (status && entry.status !== status) {
+                if (!(status === 'confirmed' && entry.status === 'linked')) return false
+            }
             return true
         })
 
-        return NextResponse.json({ entries: filteredEntries })
+        return NextResponse.json({ entries: filteredEntries, personalImpactsByEntryId })
     } catch (error) {
         console.error('Error al obtener movimientos del espacio:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -221,7 +234,7 @@ export async function POST(
             payerUserId && payerUserId !== session.user.id
         )
 
-        const personalCategoryId = parsed.data.personalAccountId ? parsed.data.categoryId : undefined
+        const personalCategoryId = parsed.data.categoryId
 
         const entry = await SpaceEntry.create({
             spaceId: id,
@@ -244,7 +257,6 @@ export async function POST(
                     ? parsed.data.exchangeRate
                     : undefined,
             date: parsed.data.date,
-            categoryId: personalCategoryId,
             spaceCategoryId: parsed.data.spaceCategoryId,
             paidByParticipantId: parsed.data.paidByParticipantId,
             sharedWithParticipantIds: parsed.data.sharedWithParticipantIds,
@@ -254,7 +266,6 @@ export async function POST(
                     ? parsed.data.splitAllocations
                     : undefined,
             notes: parsed.data.notes,
-            linkedTransactionId: confirmationRequired ? undefined : parsed.data.linkedTransactionId,
             confirmationRequired,
             confirmedByUserId: confirmationRequired ? undefined : session.user.id,
             confirmedAt: confirmationRequired ? undefined : new Date(),
@@ -262,29 +273,23 @@ export async function POST(
 
         let updatedEntry: ISpaceEntry | null = null
 
-        if (!confirmationRequired && parsed.data.personalAccountId) {
+        if (!confirmationRequired && (parsed.data.personalAccountId || parsed.data.linkedTransactionId)) {
             try {
-                const transaction = await createTransactionFromSpaceEntry({
+                await createPersonalImpactFromSpaceEntry({
+                    spaceId: id,
                     entry: entry.toObject() as ISpaceEntry,
+                    participants: context.participants,
                     userId: session.user.id,
+                    participantId: extractId(context.currentParticipant._id) ?? '',
+                    mode: parsed.data.personalAccountId ? 'create_transaction' : 'link_existing',
                     accountId: parsed.data.personalAccountId,
-                    description: parsed.data.title,
                     categoryId: personalCategoryId,
+                    linkedTransactionId: parsed.data.linkedTransactionId,
+                    description: parsed.data.title,
                     spaceNameSnapshot: context.space.name,
                 })
 
-                updatedEntry = await SpaceEntry.findByIdAndUpdate(
-                    entry._id,
-                    {
-                        $set: {
-                            linkedTransactionId: transaction._id,
-                            status: 'linked',
-                            confirmedByUserId: session.user.id,
-                            confirmedAt: new Date(),
-                        },
-                    },
-                    { new: true }
-                )
+                updatedEntry = await SpaceEntry.findById(entry._id)
                     .populate('categoryId', 'name color type')
                     .populate('spaceCategoryId', 'name color type isArchived')
                     .lean<ISpaceEntry | null>()
@@ -302,24 +307,41 @@ export async function POST(
                 )
             }
         } else {
-            updatedEntry = await SpaceEntry.findByIdAndUpdate(
-                entry._id,
-                parsed.data.linkedTransactionId && !confirmationRequired
-                    ? {
-                        $set: {
-                            linkedTransactionId: parsed.data.linkedTransactionId,
-                            status: 'linked',
-                        },
-                    }
-                    : {},
-                { new: true }
-            )
+            updatedEntry = await SpaceEntry.findById(entry._id)
                 .populate('categoryId', 'name color type')
                 .populate('spaceCategoryId', 'name color type isArchived')
                 .lean<ISpaceEntry | null>()
         }
 
-        return NextResponse.json({ entry: updatedEntry ?? entry }, { status: 201 })
+        const savedEntry = updatedEntry ?? (entry.toObject() as ISpaceEntry)
+        const actor = context.currentParticipant.displayName
+        const isSettlement = savedEntry.type === 'settlement'
+
+        createSpaceActivityEvent({
+            spaceId: id,
+            actorUserId: session.user.id,
+            actorParticipantId: extractId(context.currentParticipant._id),
+            type: isSettlement ? 'settlement_created' : 'entry_created',
+            entityType: isSettlement ? 'settlement' : 'entry',
+            entityId: extractId(savedEntry._id),
+            title: isSettlement
+                ? `${actor} registro un pago`
+                : `${actor} registro ${savedEntry.title}`,
+            metadata: isSettlement
+                ? {
+                    amount: savedEntry.amount,
+                    currency: savedEntry.currency,
+                    payerParticipantId: extractId(savedEntry.paidByParticipantId),
+                    receiverParticipantId: extractId(savedEntry.sharedWithParticipantIds?.[0]),
+                }
+                : {
+                    entryTitle: savedEntry.title,
+                    amount: savedEntry.amount,
+                    currency: savedEntry.currency,
+                },
+        }).catch((err) => console.error('[space-activity]', err))
+
+        return NextResponse.json({ entry: savedEntry }, { status: 201 })
     } catch (error) {
         console.error('Error al crear movimiento del espacio:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

@@ -1,10 +1,27 @@
 'use client'
 
-import { Eye, FileText, Paperclip } from 'lucide-react'
+import { motion } from 'framer-motion'
+import {
+    Ban,
+    Eye,
+    FileText,
+    HandCoins,
+    Paperclip,
+    Pencil,
+    Settings,
+    Shield,
+    Tag,
+    Trash2,
+    UserCheck,
+    UserMinus,
+    UserPlus,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceMetaBadge, SpaceSectionHeading, SpaceSurface, SpaceTypeBadge } from '@/components/spaces/SpaceUi'
-import { formatSpaceDate, extractId } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpaceParticipant, ISpacePendingAction } from '@/types'
+import { staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { formatCurrencyAmount, formatSpaceDate, extractId } from '@/lib/utils/spaces'
+import type { ISpaceActivityEvent, ISpaceEntry, ISpaceParticipant, ISpacePendingAction } from '@/types'
+import type { SpaceActivityEventType } from '@/lib/constants'
 
 function resolveCategoryName(entry: ISpaceEntry) {
     if (
@@ -38,6 +55,120 @@ function formatAttachmentSize(size: number) {
     }
 
     return `${size} B`
+}
+
+const ACTIVITY_ICON_BY_TYPE: Record<SpaceActivityEventType, typeof FileText> = {
+    entry_created: FileText,
+    entry_edited: Pencil,
+    entry_voided: Ban,
+    settlement_created: HandCoins,
+    attachment_uploaded: Paperclip,
+    attachment_deleted: Trash2,
+    category_created: Tag,
+    category_archived: Tag,
+    category_restored: Tag,
+    participant_invited: UserPlus,
+    participant_joined: UserCheck,
+    participant_removed: UserMinus,
+    role_changed: Shield,
+    space_updated: Settings,
+}
+
+function formatActivityMetadata(event: ISpaceActivityEvent) {
+    const metadata = event.metadata ?? {}
+    const amount = typeof metadata.amount === 'number' ? metadata.amount : undefined
+    const currency = typeof metadata.currency === 'string' ? metadata.currency : undefined
+    const fileName = typeof metadata.fileName === 'string' ? metadata.fileName : undefined
+    const categoryName = typeof metadata.categoryName === 'string' ? metadata.categoryName : undefined
+
+    if (amount !== undefined && currency) return formatCurrencyAmount(amount, currency)
+    if (fileName) return fileName
+    if (categoryName) return categoryName
+    return undefined
+}
+
+export function RecentSpaceActivityCard({
+    events,
+    participants,
+    onViewAll,
+}: {
+    events: ISpaceActivityEvent[]
+    participants: ISpaceParticipant[]
+    onViewAll: () => void
+}) {
+    const visibleEvents = events.slice(0, 5)
+    const participantsById = new Map(
+        participants.map((participant) => [extractId(participant._id) ?? '', participant])
+    )
+
+    return (
+        <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                        Actividad
+                    </p>
+                    <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+                        Última actividad
+                    </h2>
+                </div>
+                <Button variant="ghost" className="rounded-full" onClick={onViewAll}>
+                    Ver actividad
+                </Button>
+            </div>
+
+            <motion.div
+                className="space-y-2"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+            >
+                {visibleEvents.length > 0 ? (
+                    visibleEvents.map((event, index) => {
+                        const Icon = ACTIVITY_ICON_BY_TYPE[event.type] ?? FileText
+                        const actor = participantsById.get(extractId(event.actorParticipantId) ?? '')
+                        const metadata = formatActivityMetadata(event)
+
+                        return (
+                            <motion.div
+                                key={extractId(event._id)}
+                                layout
+                                variants={staggerItem}
+                                whileHover={{ y: -1, transition: { duration: 0.15 } }}
+                                className={[
+                                    'items-start gap-3 rounded-2xl border border-foreground/[0.06] bg-card/55 px-3 py-3 transition-colors hover:border-primary/20 hover:bg-primary/[0.03]',
+                                    index >= 3 ? 'hidden md:flex' : 'flex',
+                                ].join(' ')}
+                            >
+                                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                    <Icon className="h-4 w-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="line-clamp-2 text-sm font-semibold text-foreground">
+                                        {event.title}
+                                    </p>
+                                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                                        {[actor?.displayName, formatSpaceDate(event.createdAt), metadata]
+                                            .filter(Boolean)
+                                            .join(' · ')}
+                                    </p>
+                                    {event.description ? (
+                                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground/80">
+                                            {event.description}
+                                        </p>
+                                    ) : null}
+                                </div>
+                            </motion.div>
+                        )
+                    })
+                ) : (
+                    <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                        Todavía no hay actividad registrada en este espacio.
+                    </div>
+                )}
+            </motion.div>
+        </section>
+    )
 }
 
 export function RecentSpaceMovementsCard({

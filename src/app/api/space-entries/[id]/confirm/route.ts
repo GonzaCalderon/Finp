@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Category, SpaceEntry, Transaction } from '@/lib/models'
-import { createTransactionFromSpaceEntry } from '@/lib/server/space-transactions'
+import { createPersonalImpactFromSpaceEntry } from '@/lib/server/space-personal-impact'
 import { getEntryConfirmationContext } from '@/lib/server/spaces'
 import { spaceEntryConfirmSchema } from '@/lib/validations'
+import { extractId } from '@/lib/utils/spaces'
 import type { ISpaceEntry } from '@/types'
 
 export async function POST(
@@ -73,15 +74,25 @@ export async function POST(
                 )
             }
 
+            await createPersonalImpactFromSpaceEntry({
+                spaceId: extractId(context.entry.spaceId) ?? '',
+                entry: context.entry,
+                participants: context.participants,
+                userId: session.user.id,
+                participantId: extractId(context.paidByParticipant._id) ?? '',
+                mode: 'link_existing',
+                categoryId: parsed.data.categoryId,
+                linkedTransactionId: parsed.data.linkedTransactionId,
+                spaceNameSnapshot: context.space.name,
+            })
+
             const entry = await SpaceEntry.findByIdAndUpdate(
                 id,
                 {
                     $set: {
-                        linkedTransactionId: linkedTransaction._id,
-                        status: 'linked',
+                        status: 'confirmed',
                         confirmedByUserId: session.user.id,
                         confirmedAt: new Date(),
-                        categoryId: parsed.data.categoryId ?? context.entry.categoryId,
                     },
                 },
                 { new: true }
@@ -92,23 +103,26 @@ export async function POST(
         }
 
         try {
-            const transaction = await createTransactionFromSpaceEntry({
+            await createPersonalImpactFromSpaceEntry({
+                spaceId: extractId(context.entry.spaceId) ?? '',
                 entry: context.entry,
+                participants: context.participants,
                 userId: session.user.id,
+                participantId: extractId(context.paidByParticipant._id) ?? '',
+                mode: 'create_transaction',
                 accountId: parsed.data.accountId!,
                 description: parsed.data.description ?? context.entry.title,
                 categoryId: parsed.data.categoryId,
+                spaceNameSnapshot: context.space.name,
             })
 
             const entry = await SpaceEntry.findByIdAndUpdate(
                 id,
                 {
                     $set: {
-                        linkedTransactionId: transaction._id,
-                        status: 'linked',
+                        status: 'confirmed',
                         confirmedByUserId: session.user.id,
                         confirmedAt: new Date(),
-                        categoryId: parsed.data.categoryId ?? context.entry.categoryId,
                     },
                 },
                 { new: true }

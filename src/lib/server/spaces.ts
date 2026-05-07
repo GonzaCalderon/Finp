@@ -4,6 +4,7 @@ import {
     buildSpaceSummary,
     extractId,
 } from '@/lib/utils/spaces'
+import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
 import type {
     ISpace,
     ISpaceDetailPayload,
@@ -258,11 +259,19 @@ export async function buildSpaceDetailPayload(spaceId: string, userId: string) {
         getSpaceEntries(spaceId),
         getPendingSpaceActions(userId, spaceId),
     ])
+    const personalImpactsByEntryId = await getPersonalImpactForEntries(
+        spaceId,
+        userId,
+        entries.map((entry) => extractId(entry._id)).filter((entryId): entryId is string => Boolean(entryId)),
+        entries,
+        context.participants
+    )
 
     return {
         space: context.space,
         participants: context.participants,
         entries,
+        personalImpactsByEntryId,
         summary: buildSpaceSummary({
             space: context.space,
             entries,

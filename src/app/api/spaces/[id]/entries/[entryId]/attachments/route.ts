@@ -4,12 +4,14 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceEntry } from '@/lib/models'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import {
     isAllowedMimeType,
     isWithinSizeLimit,
     sanitizeFileName,
 } from '@/lib/utils/space-categories'
+import { extractId } from '@/lib/utils/spaces'
 import type { ISpaceEntry, ISpaceEntryAttachment } from '@/types'
 
 export async function POST(
@@ -101,6 +103,21 @@ export async function POST(
             { _id: entryId, spaceId: id },
             { $push: { attachments: attachment } }
         )
+
+        createSpaceActivityEvent({
+            spaceId: id,
+            actorUserId: session.user.id,
+            actorParticipantId: extractId(context.currentParticipant._id),
+            type: 'attachment_uploaded',
+            entityType: 'attachment',
+            entityId: extractId(attachment._id),
+            title: `${context.currentParticipant.displayName} subió un comprobante`,
+            metadata: {
+                entryId,
+                entryTitle: entry.title,
+                fileName: attachment.fileName,
+            },
+        }).catch((err) => console.error('[space-activity]', err))
 
         return NextResponse.json({ attachment }, { status: 201 })
     } catch (error) {

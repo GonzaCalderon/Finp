@@ -6,8 +6,10 @@ import {
     buildSpaceDetailPayload,
     getAccessibleSpaceContext,
 } from '@/lib/server/spaces'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { spaceSchema } from '@/lib/validations'
 import {
+    extractId,
     normalizeSpaceCurrencies,
 } from '@/lib/utils/spaces'
 
@@ -131,6 +133,31 @@ export async function PATCH(
         if (!space) {
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
+
+        const changedFields = Object.entries({
+            name: parsed.data.name,
+            description: parsed.data.description,
+            type: parsed.data.type,
+            mode: parsed.data.mode,
+            status: parsed.data.status,
+            reportingCurrency: parsed.data.reportingCurrency,
+            defaultSplitMode: parsed.data.defaultSplitMode,
+        })
+            .filter(([key, value]) => context.space[key as keyof typeof context.space] !== value)
+            .map(([key]) => key)
+
+        createSpaceActivityEvent({
+            spaceId: id,
+            actorUserId: session.user.id,
+            actorParticipantId: extractId(context.currentParticipant?._id),
+            type: 'space_updated',
+            entityType: 'space',
+            entityId: extractId(space._id),
+            title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} actualizó la configuración del espacio`,
+            metadata: {
+                changedFields,
+            },
+        }).catch((err) => console.error('[space-activity]', err))
 
         return NextResponse.json({ space })
     } catch (error) {

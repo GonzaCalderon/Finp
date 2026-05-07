@@ -62,7 +62,7 @@ export function ConfirmSpaceEntryDialog({
         setForm({
             mode: 'create',
             description: entry.title,
-            categoryId: extractId(entry.categoryId),
+            categoryId: undefined,
             accountId: undefined,
             linkedTransactionId: undefined,
         })

@@ -480,6 +480,13 @@ export function SpaceEntryDialog({
         (participant) => extractId(participant._id) === form.paidByParticipantId
     )
     const isCurrentUserPayer = extractId(paidByParticipant?.userId) === currentUserId
+    const initialLinkedTransactionImpactsCurrentUser = Boolean(
+        initialData?.linkedTransactionId &&
+        currentUserId &&
+        extractId(activeParticipants.find(
+            (participant) => extractId(participant._id) === extractId(initialData.paidByParticipantId)
+        )?.userId) === currentUserId
+    )
     const filteredAccounts = useMemo(
         () =>
             accounts.filter((account) =>
@@ -884,7 +891,7 @@ export function SpaceEntryDialog({
                                 </DialogDescription>
                             </div>
                         </DialogHeader>
-                        {mode === 'edit' && initialData?.linkedTransactionId ? (
+                        {mode === 'edit' && initialLinkedTransactionImpactsCurrentUser ? (
                             <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>

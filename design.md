@@ -1313,14 +1313,14 @@ Al entrar a un espacio, el contexto registra una acción que reemplaza el botón
 - Las transacciones personales creadas desde Espacios guardan origen mediante `spaceId`, `spaceEntryId` y `spaceNameSnapshot`, y la UI de Transacciones muestra una referencia "Espacio" con navegación al espacio.
 - La UI de Espacios oculta Ingreso y Ajuste por ahora. El modelo y las APIs siguen soportando `income` y `adjustment` para compatibilidad, pero la experiencia principal sólo ofrece gastos y liquidaciones.
 - La moneda del movimiento debe pertenecer a `space.currencies`; si el usuario quiere impactar en Finp personal, sólo puede elegir cuentas compatibles con esa moneda. La conversión avanzada espacio EUR -> Finp personal ARS/USD queda para una fase posterior como operación de cambio explícita.
-- Los movimientos editados/eliminados quedan fuera de esta fase: editar requerirá aprobación de participantes involucrados, tag "Editado", versión anterior y notificaciones; eliminar será lógico, dejando el movimiento gris y marcado como eliminado.
+- Los movimientos editados/anulados quedan fuera de esta fase: la dirección posterior del MVP es aplicar cambios si el usuario tiene permiso, conservar historial/trazabilidad y notificar de forma informativa, sin aprobación obligatoria.
 - URL amigable de espacios: no se migra ahora. Plan técnico recomendado: agregar `slug` estable a `Space`, generarlo desde el nombre al crear, resolver colisiones con sufijo corto, permitir que la ruta `[id]` acepte ObjectId o slug para compatibilidad, y hacer que links internos nuevos prefieran `slug` cuando exista. El slug no debería cambiar automáticamente al renombrar para no romper enlaces.
 
 # Fase 5 — Saldos, movimientos y edición controlada
 
 ## Propósito
 
-Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visualizar movimientos con el mismo nivel de detalle que Transacciones personales, y sentar las bases de edición/eliminación con aprobación de participantes.
+Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visualizar movimientos con el mismo nivel de detalle que Transacciones personales, y sentar las bases de edición/anulación con historial, trazabilidad y notificaciones informativas.
 
 ## Cambios planeados
 
@@ -1340,12 +1340,12 @@ Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visua
 - Acciones rápidas por movimiento: ver detalle, iniciar liquidación parcial.
 - Adaptar al contexto compartido: mostrar quién pagó y quién debe qué.
 
-### Edición y eliminación con aprobación (diseño, no implementar aún)
+### Edición y anulación con trazabilidad
 
-- Editar un movimiento requiere aprobación de todos los participantes involucrados.
+- Editar un movimiento se permite si el usuario tiene permisos.
 - El movimiento editado muestra tag "Editado" y permite ver la versión anterior.
-- Eliminar es lógico: el movimiento queda gris y marcado como eliminado, no desaparece.
-- Las aprobaciones/rechazos se gestionan por notificaciones.
+- Anular es lógico: el movimiento queda gris y marcado como anulado, no desaparece.
+- Los cambios sensibles se registran en actividad y generan notificaciones informativas.
 
 ## Componentes implementados / diferidos
 
@@ -1357,11 +1357,11 @@ Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visua
 | `SpaceEntryDetailSheet` | ✅ Implementado — "Recibió" para settlements, badge "En Finp personal" |
 | `SpaceEntryList` (nuevo) | Diferido |
 | `SpaceEntryRow` (nuevo) | Diferido |
-| `SpaceEditRequestDialog` (futuro) | Futuro — flujo de aprobación |
+| `SpaceEditRequestDialog` (futuro) | No previsto para el MVP |
 
 ## No implementar todavía
 
-- Aprobación de edición/eliminación.
+- Aprobación obligatoria de edición/anulación.
 - Movimiento editado con historial de versiones.
 - Eliminación lógica (soft delete).
 - Pago múltiple.
@@ -1415,7 +1415,7 @@ Pulir la experiencia de creación de movimientos y la gestión de pagos en espac
 | `SpaceBalanceSection` | Filas compactas, scroll 4+, confirmación rápida inline sin dialog |
 
 ## No implementado en esta fase
-- Edición/anulación de movimientos con aprobación.
+- Aprobación obligatoria de edición/anulación.
 - Pago múltiple.
 - Cuotas y reintegros.
 - Slug de espacios.
@@ -1508,45 +1508,15 @@ GET   /api/spaces/[id]/entries/[entryId]/revisions — historial de versiones (t
 
 ### Integración con Finp personal
 
-Al editar o anular un movimiento con `linkedTransactionId`, la transacción personal vinculada no se modifica automáticamente. Se muestra una advertencia clara en el dialog. La sincronización automática queda para Fase 5E+.
+Al editar o anular un movimiento con `linkedTransactionId`, la transacción personal vinculada no se modifica automáticamente. Se muestra una advertencia clara en el dialog y la acción queda trazada en actividad. No hay sincronización automática con Finp personal en el MVP.
 
-## No implementado en esta fase (diferido a Fase 5E+)
-
-### Sistema de aprobaciones
-
-Actualmente editar o anular un movimiento no requiere aprobación de otros participantes. Para Fase 5E+, el modelo diseñado es:
-
-```typescript
-interface ISpaceEntryChangeRequest {
-  _id: ObjectId
-  spaceId: ObjectId
-  entryId: ObjectId
-  requestedByUserId: ObjectId
-  type: 'edit' | 'void'
-  proposedChanges?: Partial<ISpaceEntry>   // para type='edit'
-  voidReason?: string                       // para type='void'
-  status: 'pending' | 'approved' | 'rejected'
-  requiredApprovers: ObjectId[]
-  approvals: { userId: ObjectId; approvedAt: Date }[]
-  rejections: { userId: ObjectId; rejectedAt: Date; reason?: string }[]
-  createdAt: Date
-  resolvedAt?: Date
-}
-```
-
-Flujo de aprobación previsto:
-1. Creador solicita edición/anulación → se crea `SpaceEntryChangeRequest` en estado `pending`.
-2. Los participantes involucrados reciben notificación.
-3. Cada participante aprueba o rechaza.
-4. Cuando todos los `requiredApprovers` aprueban → se aplica el cambio; si alguno rechaza → se cancela.
-5. El movimiento muestra badge "Pendiente de aprobación" mientras espera.
+## No implementado en esta fase
 
 ### Otros diferidos
 
-- **Sincronización automática con transacción personal**: al editar monto/moneda/fecha de un movimiento con `linkedTransactionId`, propagar el cambio a la transacción personal con confirmación previa.
-- **Reversa contable al anular**: al anular un movimiento con `linkedTransactionId`, crear una transacción de reversa en Finp personal.
-- **Desanular (undo void)**: no implementado. Requiere definir permisos y si la reversión necesita aprobación.
-- **Notificaciones a participantes**: notificar cuando un movimiento relevante es editado o anulado.
+- **Sincronización automática con transacción personal**: al editar monto/moneda/fecha de un movimiento con `linkedTransactionId`, no se propaga el cambio a la transacción personal.
+- **Reversa contable al anular**: al anular un movimiento con `linkedTransactionId`, no se crea una transacción de reversa en Finp personal.
+- **Desanular (undo void)**: no implementado. Requiere definir permisos y reglas de trazabilidad.
 - **Historial en colección separada**: si el volumen de ediciones lo justifica, migrar `previousVersions` de array embebido a una colección `SpaceEntryRevision`.
 
 ## Componentes nuevos / modificados
@@ -1564,82 +1534,139 @@ Flujo de aprobación previsto:
 | `SpaceEntryDetailSheet` — badges, botones, warnings | ✅ Implementado |
 | `SpaceDetailPanels` — `MovementCard` visual anulado/editado | ✅ Implementado |
 | `SpaceEntryDialog mode='edit'` | ✅ Implementado |
-| `SpaceEditRequestDialog` — flujo de aprobación | Diferido — Fase 5E+ |
+| `SpaceEditRequestDialog` — flujo de aprobación | No previsto para el MVP |
 
 ---
 
-## Fase 5E+ — Notificaciones y eventos de actividad en Espacios
+## Fase 5E — Actividad y notificaciones informativas
 
 ### Contexto
 
-Cuando un movimiento es editado o anulado, los demás participantes del espacio no reciben
-ninguna señal. En producción esto puede generar confusión si alguien nota que el balance
-cambió sin entender por qué. Esta sección documenta el sistema de notificaciones diferido.
+Fase 5E cierra Fase 5 agregando una capa de actividad y notificaciones in-app informativas para Espacios. La decisión de producto del MVP es no exigir aprobaciones obligatorias para editar o anular movimientos.
 
-**No implementado en Fase 5D.** Solo se documenta el diseño aquí para orientar la implementación futura.
+Regla principal: si un usuario tiene permiso para editar o anular, el cambio se aplica. Si el cambio afecta a otros, se registra en actividad y se notifica a los involucrados dentro de Finp.
 
 ---
 
-### Eventos a notificar
+### Conceptos
 
-| Evento | Disparo | Destinatarios |
-|---|---|---|
-| `space.entry.edited` | Al completarse `PATCH /entries/[entryId]` exitosamente | Todos los participantes activos, excepto quien editó |
-| `space.entry.voided` | Al completarse `POST /entries/[entryId]/void` exitosamente | Todos los participantes activos, excepto quien anuló |
+- **Actividad**: historial informativo de lo que ocurrió en un espacio.
+- **Notificación**: evento relevante para un usuario, visible como no leído hasta que lo marque leído.
+- **Pendiente**: algo que requiere acción del usuario.
 
----
-
-### Payload mínimo por evento
-
-```typescript
-interface SpaceEntryEditedEvent {
-  type: 'space.entry.edited'
-  spaceId: string
-  entryId: string
-  entryTitle: string
-  editedByUserId: string
-  editedByDisplayName: string
-  editedAt: Date
-  // qué cambió (opcional, para notificación enriquecida):
-  changedFields?: Array<'amount' | 'currency' | 'date' | 'paidByParticipantId' | 'splitMode' | 'spaceCategoryId' | 'title' | 'notes'>
-}
-
-interface SpaceEntryVoidedEvent {
-  type: 'space.entry.voided'
-  spaceId: string
-  entryId: string
-  entryTitle: string
-  voidedByUserId: string
-  voidedByDisplayName: string
-  voidedAt: Date
-  voidReason?: string
-}
-```
+En Fase 5E los pendientes siguen siendo invitaciones y confirmaciones actuales. No se agregan pendientes de aprobación.
 
 ---
 
-### Canales de entrega previstos
+### Modelo implementado
 
-- **In-app**: badge en el header + centro de notificaciones (no existe aún, Fase 5F+).
-- **Email**: resumen diario o push inmediato según preferencias del usuario.
-- **Push nativa**: si se implementa la PWA con Service Workers.
+`SpaceActivityEvent` guarda eventos inmutables con:
 
----
-
-### Consideraciones de implementación
-
-- Disparar los eventos desde la API route, después del `$set` exitoso (no dentro del model hook).
-- Usar una cola de trabajo (job queue) para evitar bloquear la respuesta HTTP mientras se envían notificaciones.
-- Si no hay sistema de cola, un `Promise.allSettled` con `fetch` fire-and-forget es aceptable para MVP.
-- Respetar preferencias de notificación por usuario (`notificationPreferences` — campo diferido en `IUser`).
-- No notificar al propio ejecutor (quien editó / anuló).
-- Batching: si múltiples cambios ocurren en menos de N minutos, agrupar en una sola notificación.
+- `spaceId`, actor opcional, tipo de evento, entidad afectada, título, descripción y metadata.
+- `visibleToUserIds`: usuarios Finp activos del espacio que pueden ver la actividad.
+- `readByUserIds`: usuarios que ya leyeron el evento. El actor se agrega automáticamente para que su propia acción no aparezca como no leída.
 
 ---
 
-### Relación con aprobaciones (Fase 5E+)
+### Eventos implementados
 
-Si se implementa `SpaceEntryChangeRequest` (flujo de aprobación), los eventos de notificación
-se disparan también cuando:
-- Se crea una solicitud de cambio pendiente → notificar a los aprobadores requeridos.
-- Se aprueba/rechaza una solicitud → notificar al solicitante.
+- Movimientos: `entry_created`, `entry_edited`, `entry_voided`.
+- Pagos: `settlement_created`.
+- Comprobantes: `attachment_uploaded`, `attachment_deleted`.
+- Categorías: `category_created`, `category_archived`, `category_restored`.
+- Participantes: `participant_invited`, `participant_joined`, `participant_removed`, `role_changed`.
+- Espacio: `space_updated`.
+
+---
+
+### UI y campana
+
+- El resumen del espacio muestra “Última actividad” desde `SpaceActivityEvent`; un movimiento anulado aparece como `entry_voided`, no como movimiento normal.
+- La campana suma pendientes de acción + actividad no leída.
+- `SpacesPendingSheet` separa “Pendientes” y “Actividad”.
+- El detalle de movimiento muestra actividad relacionada con ese movimiento.
+
+---
+
+### Política del MVP
+
+- No hay aprobaciones obligatorias, `approve`, `reject`, `cancel` ni `SpaceEntryChangeRequest`.
+- La trazabilidad reemplaza a la aprobación obligatoria para mantener el flujo ágil en grupos grandes.
+- Finp personal no sincroniza automáticamente cambios sensibles; sólo se muestra advertencia y se registra actividad.
+- Usuarios externos sin `userId` no reciben notificación in-app, aunque la actividad queda visible dentro del espacio para usuarios Finp activos.
+
+### Diferidos
+
+- Aprobaciones configurables por espacio.
+- Emails, push notifications y Telegram.
+- Sincronización automática con Finp personal.
+- Reversas contables.
+- Desanular.
+- Cuotas.
+- Slugs.
+- Actividad global avanzada.
+
+---
+
+## Fase 5F - Impacto personal por usuario en Espacios
+
+### Contexto
+
+Fase 5F separa definitivamente el movimiento compartido del espacio del impacto personal de cada usuario en su Finp.
+
+Regla principal:
+
+- Movimiento del espacio = compartido.
+- Impacto en Finp personal = contextual y privado por usuario.
+
+`SpaceEntryPersonalImpact` es la nueva fuente de verdad para saber si un usuario registro o vinculo un movimiento del espacio en su Finp personal.
+
+---
+
+### Modelo implementado
+
+`SpaceEntryPersonalImpact` guarda:
+
+- `spaceId`, `entryId`, `userId`, `participantId`.
+- `transactionId`, `accountId`, `categoryId` personales opcionales.
+- `impactKind`: `payer_full_amount`, `participant_share`, `settlement_paid`, `settlement_received`.
+- `amount`, `currency`, `status`.
+
+Hay indices por espacio/movimiento, usuario/movimiento y transaccion. La regla de negocio evita mas de un impacto activo `linked` por `userId + entryId`.
+
+---
+
+### Legacy
+
+`SpaceEntry.linkedTransactionId`, `SpaceEntry.categoryId` y `status: linked` quedan solo por compatibilidad:
+
+- Los flujos nuevos escriben impactos en `SpaceEntryPersonalImpact`.
+- `SpaceEntry.status` no vuelve a setearse en `linked`.
+- `status === 'linked'` se muestra como "Confirmado".
+- Si un movimiento legacy tiene `linkedTransactionId`, solo se trata como "En tu Finp" para `confirmedByUserId` o para el pagador inferido.
+- No hay migracion destructiva automatica.
+
+---
+
+### UI
+
+- `En tu Finp` aparece solo si existe impacto personal del usuario actual o fallback legacy seguro.
+- La categoria visual compartida del espacio se resuelve desde `spaceCategoryId`; las categorias personales no se usan como categoria visual del espacio.
+- `SpaceEntryDetailSheet` agrega la seccion "Tu Finp" con estado contextual y CTA "Registrar en mi Finp".
+- `SpacePersonalImpactDialog` permite crear una transaccion personal o vincular una existente, eligiendo cuenta, categoria personal y monto sugerido.
+
+---
+
+### Privacidad y actividad
+
+Registrar un movimiento en Finp personal es una accion personal. En esta fase no se genera actividad global publica por `SpaceEntryPersonalImpact`, para no revelar cuentas ni categorias personales ni sugerir que el movimiento quedo vinculado para todos.
+
+---
+
+### Diferidos
+
+- Migracion masiva de impactos legacy.
+- Sync automatica al editar/anular.
+- Reversas contables.
+- Reintegros avanzados.
+- Cuotas en espacios.

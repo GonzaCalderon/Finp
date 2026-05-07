@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Ban, CalendarRange, Coins, FileBadge2, History, Pencil, Users } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { AlertTriangle, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, Trash2, Users, WalletCards } from 'lucide-react'
 import {
     Sheet,
     SheetContent,
@@ -21,8 +22,11 @@ import {
 import { SpaceAttachmentsUploader } from '@/components/spaces/dialogs/SpaceAttachmentsUploader'
 import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
 import { SpaceEntryRevisionSheet } from '@/components/spaces/detail/SpaceEntryRevisionSheet'
+import { SpacePersonalImpactDialog } from '@/components/spaces/dialogs/SpacePersonalImpactDialog'
+import { fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { extractId, formatSpaceDate } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpaceEntryAttachment, ISpaceEntrySnapshot, ISpaceParticipant } from '@/types'
+import type { ISpaceActivityEvent, ISpaceEntry, ISpaceEntryAttachment, ISpaceEntryPersonalImpact, ISpaceEntrySnapshot, ISpaceParticipant } from '@/types'
+import type { SpaceActivityEventType } from '@/lib/constants'
 
 function resolveCategory(entry: ISpaceEntry | null) {
     if (!entry) return null
@@ -41,6 +45,7 @@ function resolveCategory(entry: ISpaceEntry | null) {
     }
 
     if (
+        extractId(entry.spaceCategoryId) === 'legacy-personal-category-disabled' &&
         entry.categoryId &&
         typeof entry.categoryId === 'object' &&
         'name' in entry.categoryId &&
@@ -56,6 +61,15 @@ function resolveCategory(entry: ISpaceEntry | null) {
     return null
 }
 
+const ENTRY_ACTIVITY_ICONS: Partial<Record<SpaceActivityEventType, typeof FileText>> = {
+    entry_created: FileText,
+    entry_edited: Pencil,
+    entry_voided: Ban,
+    settlement_created: HandCoins,
+    attachment_uploaded: Paperclip,
+    attachment_deleted: Trash2,
+}
+
 export function SpaceEntryDetailSheet({
     open,
     onOpenChange,
@@ -63,8 +77,12 @@ export function SpaceEntryDetailSheet({
     participants,
     spaceId,
     currency,
+    currentUserId,
+    personalImpact,
     canEdit,
     canVoid,
+    activityEvents = [],
+    onPersonalImpactCreated,
     onEdit,
     onVoided,
 }: {
@@ -74,8 +92,12 @@ export function SpaceEntryDetailSheet({
     participants: ISpaceParticipant[]
     spaceId: string
     currency: string
+    currentUserId?: string
+    personalImpact?: ISpaceEntryPersonalImpact
     canEdit?: boolean
     canVoid?: boolean
+    activityEvents?: ISpaceActivityEvent[]
+    onPersonalImpactCreated?: (entryId: string, impact: ISpaceEntryPersonalImpact) => void
     onEdit?: (entry: ISpaceEntry, hasSubsequentSettlement: boolean) => void
     onVoided?: (entry: ISpaceEntry) => void
 }) {
@@ -83,6 +105,7 @@ export function SpaceEntryDetailSheet({
     const [voidDialogOpen, setVoidDialogOpen] = useState(false)
     const [revisionSheetOpen, setRevisionSheetOpen] = useState(false)
     const [selectedSnapshot, setSelectedSnapshot] = useState<ISpaceEntrySnapshot | null>(null)
+    const [impactDialogOpen, setImpactDialogOpen] = useState(false)
     const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false })
 
     useEffect(() => {
@@ -116,10 +139,27 @@ export function SpaceEntryDetailSheet({
         .map((participantId) => participantsById.get(extractId(participantId) ?? ''))
         .filter((participant): participant is ISpaceParticipant => Boolean(participant))
     const category = resolveCategory(currentEntry)
+    const legacyImpactsCurrentUser = Boolean(
+        currentEntry.linkedTransactionId &&
+        currentUserId &&
+        payer &&
+        (extractId(currentEntry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
+    )
+    const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
     const isVoided = currentEntry.isVoided === true
     const isEdited = (currentEntry.editCount ?? 0) > 0
     const previousVersions = currentEntry.previousVersions ?? []
     const hasPreviousVersions = previousVersions.length > 0
+    const relatedActivityEvents = activityEvents.filter((event) => {
+        const entityId = extractId(event.entityId)
+        const metadataEntryId = typeof event.metadata?.entryId === 'string'
+            ? event.metadata.entryId
+            : undefined
+
+        if (entityId === entryId) return true
+        if (metadataEntryId === entryId) return true
+        return currentEntry.type === 'settlement' && event.entityType === 'settlement' && entityId === entryId
+    })
 
     const updateAttachments = (updater: (attachments: ISpaceEntryAttachment[]) => ISpaceEntryAttachment[]) => {
         setCurrentEntry((previous) => {
@@ -142,7 +182,7 @@ export function SpaceEntryDetailSheet({
                     hasSubsequentSettlement: boolean
                 }
                 setVoidContext({
-                    hasLinkedTransaction: json.hasLinkedTransaction,
+                    hasLinkedTransaction: json.hasLinkedTransaction && impactsCurrentUser,
                     hasSubsequentSettlement: json.hasSubsequentSettlement,
                 })
             }
@@ -268,7 +308,7 @@ export function SpaceEntryDetailSheet({
 
                     <div className="space-y-5 px-5 py-5">
                         {/* Advertencia linkedTransaction cuando anulado */}
-                        {isVoided && currentEntry.linkedTransactionId ? (
+                        {isVoided && impactsCurrentUser ? (
                             <div className="flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>
@@ -315,10 +355,44 @@ export function SpaceEntryDetailSheet({
                                     ) : null}
                                 </SpaceMetaBadge>
                             ) : null}
-                            {currentEntry.linkedTransactionId ? (
-                                <SpaceMetaBadge icon={Coins}>En Finp personal</SpaceMetaBadge>
+                            {impactsCurrentUser ? (
+                                <SpaceMetaBadge icon={Coins}>En tu Finp</SpaceMetaBadge>
                             ) : null}
                         </div>
+
+                        <section className="space-y-3 rounded-[20px] border border-foreground/[0.07] bg-background/72 p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="space-y-1">
+                                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                        <WalletCards className="h-3.5 w-3.5" />
+                                        Tu Finp
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {impactsCurrentUser
+                                            ? 'Registrado en tu Finp.'
+                                            : isVoided
+                                                ? 'Este movimiento esta anulado.'
+                                                : 'Todavia no registraste este movimiento en tu Finp.'}
+                                    </p>
+                                    {isEdited && !isVoided && !impactsCurrentUser ? (
+                                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                                            Este movimiento fue editado. Revisa el monto antes de registrarlo en tu Finp.
+                                        </p>
+                                    ) : null}
+                                </div>
+                                {!impactsCurrentUser ? (
+                                    <Button
+                                        size="sm"
+                                        className="rounded-full"
+                                        onClick={() => setImpactDialogOpen(true)}
+                                        disabled={isVoided}
+                                    >
+                                        <WalletCards className="h-3.5 w-3.5" />
+                                        Registrar en mi Finp
+                                    </Button>
+                                ) : null}
+                            </div>
+                        </section>
 
                         <section className="space-y-3">
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -428,6 +502,50 @@ export function SpaceEntryDetailSheet({
                                 ) : null
                             )}
                         </section>
+
+                        <section className="space-y-3">
+                            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                <History className="h-3.5 w-3.5" />
+                                Actividad del movimiento
+                            </p>
+                            {relatedActivityEvents.length > 0 ? (
+                                <motion.div
+                                    className="space-y-1.5"
+                                    variants={staggerContainer}
+                                    initial="initial"
+                                    animate="animate"
+                                >
+                                    {relatedActivityEvents.slice(0, 6).map((event) => {
+                                        const Icon = ENTRY_ACTIVITY_ICONS[event.type] ?? History
+                                        return (
+                                            <motion.div
+                                                key={extractId(event._id)}
+                                                layout
+                                                variants={staggerItem}
+                                                className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-background/70 px-3 py-2.5 text-xs transition-colors hover:border-primary/30 hover:bg-primary/[0.03]"
+                                            >
+                                                <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="line-clamp-2 font-medium text-foreground">
+                                                        {event.title}
+                                                    </p>
+                                                    <p className="mt-0.5 text-muted-foreground">
+                                                        {formatSpaceDate(event.createdAt)}
+                                                    </p>
+                                                </div>
+                                            </motion.div>
+                                        )
+                                    })}
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    {...fadeInFast}
+                                    className="rounded-xl border border-dashed border-border bg-background/60 px-3 py-4 text-center text-xs text-muted-foreground"
+                                >
+                                    Todavía no hay actividad registrada para este movimiento.
+                                </motion.div>
+                            )}
+                        </section>
                     </div>
                 </SheetContent>
             </Sheet>
@@ -447,6 +565,16 @@ export function SpaceEntryDetailSheet({
                 snapshot={selectedSnapshot}
                 participants={participants}
                 reportingCurrency={currency}
+            />
+
+            <SpacePersonalImpactDialog
+                open={impactDialogOpen}
+                onOpenChange={setImpactDialogOpen}
+                spaceId={spaceId}
+                entry={currentEntry}
+                onCreated={(impact) => {
+                    onPersonalImpactCreated?.(entryId, impact)
+                }}
             />
         </>
     )

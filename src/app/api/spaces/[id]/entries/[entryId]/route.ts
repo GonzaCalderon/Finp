@@ -3,6 +3,8 @@ import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceCategory, SpaceEntry } from '@/lib/models'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
+import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryEditSchema } from '@/lib/validations'
 import { calculateReportingAmount, extractId } from '@/lib/utils/spaces'
@@ -47,10 +49,17 @@ export async function GET(request: Request, { params }: { params: Params }) {
             status: { $nin: ['rejected', 'pending_confirmation'] },
             createdAt: { $gt: entry.createdAt },
         })
+        const personalImpactsByEntryId = await getPersonalImpactForEntries(
+            id,
+            session.user.id,
+            [entryId],
+            [entry],
+            context.participants
+        )
 
         return NextResponse.json({
             entry,
-            hasLinkedTransaction: Boolean(entry.linkedTransactionId),
+            hasLinkedTransaction: Boolean(personalImpactsByEntryId[entryId]),
             hasSubsequentSettlement: laterSettlements > 0,
         })
     } catch (error) {
@@ -233,6 +242,32 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
             .populate('categoryId', 'name color type')
             .populate('spaceCategoryId', 'name color type isArchived')
             .lean<ISpaceEntry | null>()
+
+        if (updatedEntry) {
+            createSpaceActivityEvent({
+                spaceId: id,
+                actorUserId: session.user.id,
+                actorParticipantId: extractId(context.currentParticipant?._id),
+                type: 'entry_edited',
+                entityType: 'entry',
+                entityId: extractId(updatedEntry._id),
+                title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} editó ${updatedEntry.title}`,
+                description: 'Se modificó un movimiento del espacio.',
+                metadata: {
+                    entryTitle: updatedEntry.title,
+                    amount: updatedEntry.amount,
+                    currency: updatedEntry.currency,
+                    hasLinkedTransaction: false,
+                    hasSubsequentSettlement,
+                    previousAmount: entry.amount,
+                    nextAmount: updatedEntry.amount,
+                    previousDate: entry.date,
+                    nextDate: updatedEntry.date,
+                    previousPayer: extractId(entry.paidByParticipantId),
+                    nextPayer: extractId(updatedEntry.paidByParticipantId),
+                },
+            }).catch((err) => console.error('[space-activity]', err))
+        }
 
         return NextResponse.json({ entry: updatedEntry, hasSubsequentSettlement })
     } catch (error) {

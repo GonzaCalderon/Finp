@@ -150,6 +150,45 @@ export const SPACE_SPLIT_MODES = {
     FIXED: 'fixed',
 } as const
 
+export const SPACE_ACTIVITY_EVENT_TYPES = {
+    ENTRY_CREATED: 'entry_created',
+    ENTRY_EDITED: 'entry_edited',
+    ENTRY_VOIDED: 'entry_voided',
+    SETTLEMENT_CREATED: 'settlement_created',
+    ATTACHMENT_UPLOADED: 'attachment_uploaded',
+    ATTACHMENT_DELETED: 'attachment_deleted',
+    CATEGORY_CREATED: 'category_created',
+    CATEGORY_ARCHIVED: 'category_archived',
+    CATEGORY_RESTORED: 'category_restored',
+    PARTICIPANT_INVITED: 'participant_invited',
+    PARTICIPANT_JOINED: 'participant_joined',
+    PARTICIPANT_REMOVED: 'participant_removed',
+    ROLE_CHANGED: 'role_changed',
+    SPACE_UPDATED: 'space_updated',
+} as const
+
+export const SPACE_ACTIVITY_ENTITY_TYPES = {
+    SPACE: 'space',
+    ENTRY: 'entry',
+    SETTLEMENT: 'settlement',
+    ATTACHMENT: 'attachment',
+    CATEGORY: 'category',
+    PARTICIPANT: 'participant',
+} as const
+
+export const SPACE_PERSONAL_IMPACT_KINDS = {
+    PAYER_FULL_AMOUNT: 'payer_full_amount',
+    PARTICIPANT_SHARE: 'participant_share',
+    SETTLEMENT_PAID: 'settlement_paid',
+    SETTLEMENT_RECEIVED: 'settlement_received',
+} as const
+
+export const SPACE_PERSONAL_IMPACT_STATUSES = {
+    LINKED: 'linked',
+    UNLINKED: 'unlinked',
+    NEEDS_REVIEW: 'needs_review',
+} as const
+
 // Tipos derivados
 export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
@@ -179,3 +218,11 @@ export type SpaceEntryType = typeof SPACE_ENTRY_TYPES[keyof typeof SPACE_ENTRY_T
 export type SpaceEntryStatus =
     typeof SPACE_ENTRY_STATUSES[keyof typeof SPACE_ENTRY_STATUSES]
 export type SpaceSplitMode = typeof SPACE_SPLIT_MODES[keyof typeof SPACE_SPLIT_MODES]
+export type SpaceActivityEventType =
+    typeof SPACE_ACTIVITY_EVENT_TYPES[keyof typeof SPACE_ACTIVITY_EVENT_TYPES]
+export type SpaceActivityEntityType =
+    typeof SPACE_ACTIVITY_ENTITY_TYPES[keyof typeof SPACE_ACTIVITY_ENTITY_TYPES]
+export type SpacePersonalImpactKind =
+    typeof SPACE_PERSONAL_IMPACT_KINDS[keyof typeof SPACE_PERSONAL_IMPACT_KINDS]
+export type SpacePersonalImpactStatus =
+    typeof SPACE_PERSONAL_IMPACT_STATUSES[keyof typeof SPACE_PERSONAL_IMPACT_STATUSES]

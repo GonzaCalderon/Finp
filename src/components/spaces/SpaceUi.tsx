@@ -513,7 +513,7 @@ export function SpaceEntryStatusBadge({
 }) {
     const tone =
         status === 'linked'
-            ? { background: 'rgba(16,185,129,0.12)', color: '#10B981', label: 'Vinculado' }
+            ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
             : status === 'confirmed'
                 ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
                 : status === 'pending_confirmation'

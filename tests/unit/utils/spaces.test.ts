@@ -350,7 +350,7 @@ describe('buildSpaceSummary', () => {
                 paidByParticipantId: 'participant-gonzalo',
                 splitMode: 'equal',
                 sharedWithParticipantIds: ['participant-gonzalo', 'participant-roro'],
-                categoryId: { _id: 'cat-food', name: 'Alimentos', color: '#10B981' },
+                spaceCategoryId: { _id: 'cat-food', name: 'Alimentos', color: '#10B981' },
             }),
             entry({
                 _id: 'entry-expense-roro',
@@ -358,7 +358,7 @@ describe('buildSpaceSummary', () => {
                 reportingAmount: 40,
                 paidByParticipantId: 'participant-roro',
                 splitMode: 'none',
-                categoryId: { _id: 'cat-home', name: 'Hogar', color: '#3B82F6' },
+                spaceCategoryId: { _id: 'cat-home', name: 'Hogar', color: '#3B82F6' },
             }),
             entry({
                 _id: 'entry-settlement',

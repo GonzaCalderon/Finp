@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceInvite, SpaceParticipant, User } from '@/lib/models'
+import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceParticipantSchema } from '@/lib/validations'
+import { extractId } from '@/lib/utils/spaces'
 
 export async function GET(
     request: Request,
@@ -134,6 +136,20 @@ export async function POST(
                 status: 'pending',
             })
 
+            createSpaceActivityEvent({
+                spaceId: id,
+                actorUserId: session.user.id,
+                actorParticipantId: extractId(context.currentParticipant?._id),
+                type: 'participant_invited',
+                entityType: 'participant',
+                entityId: extractId(participant._id),
+                title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} invitó a ${participant.displayName}`,
+                metadata: {
+                    participantName: participant.displayName,
+                    participantUserId: extractId(participant.userId),
+                },
+            }).catch((err) => console.error('[space-activity]', err))
+
             return NextResponse.json({ participant, invite }, { status: 201 })
         }
 
@@ -161,6 +177,20 @@ export async function POST(
             inviteStatus: 'accepted',
             isActive: true,
         })
+
+        createSpaceActivityEvent({
+            spaceId: id,
+            actorUserId: session.user.id,
+            actorParticipantId: extractId(context.currentParticipant?._id),
+            type: 'participant_joined',
+            entityType: 'participant',
+            entityId: extractId(participant._id),
+            title: `${context.currentParticipant?.displayName ?? session.user.name ?? 'Un participante'} agregó a ${participant.displayName}`,
+            metadata: {
+                participantName: participant.displayName,
+                participantKind: participant.kind,
+            },
+        }).catch((err) => console.error('[space-activity]', err))
 
         return NextResponse.json({ participant }, { status: 201 })
     } catch (error) {

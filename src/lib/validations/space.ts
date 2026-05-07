@@ -293,6 +293,38 @@ export const spaceEntryConfirmSchema = z
         }
     })
 
+export const spacePersonalImpactSchema = z
+    .object({
+        mode: z.enum(['create_transaction', 'link_existing']),
+        accountId: optionalObjectIdString,
+        categoryId: optionalObjectIdString,
+        linkedTransactionId: optionalObjectIdString,
+        impactKind: z
+            .enum(['payer_full_amount', 'participant_share', 'settlement_paid', 'settlement_received'])
+            .optional(),
+        amount: optionalAmountSchema.refine(
+            (value) => value === undefined || value > 0,
+            'El monto debe ser mayor a 0'
+        ),
+    })
+    .superRefine((data, ctx) => {
+        if (data.mode === 'create_transaction' && !data.accountId) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Selecciona una cuenta para registrar en tu Finp',
+                path: ['accountId'],
+            })
+        }
+
+        if (data.mode === 'link_existing' && !data.linkedTransactionId) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Selecciona una transaccion existente para vincular',
+                path: ['linkedTransactionId'],
+            })
+        }
+    })
+
 export const spaceSettlementSchema = z
     .object({
         payerId: z.string().min(1, 'Indicá quién realizó el pago'),

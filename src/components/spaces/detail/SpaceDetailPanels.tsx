@@ -20,7 +20,7 @@ import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrency
 import { Badge } from '@/components/ui/badge'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
-import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
+import type { ISpace, ISpaceEntry, ISpaceEntryPersonalImpact, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
 import type { SpaceParticipantRole } from '@/lib/constants'
 
@@ -42,6 +42,7 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
     }
 
     if (
+        extractId(entry.spaceCategoryId) === 'legacy-personal-category-disabled' &&
         entry.categoryId &&
         typeof entry.categoryId === 'object' &&
         'name' in entry.categoryId &&
@@ -63,6 +64,7 @@ function MovementCard({
     hidden,
     participants,
     currentUserId,
+    personalImpact,
     canManage,
     onEntryClick,
     onEdit,
@@ -73,6 +75,7 @@ function MovementCard({
     hidden: boolean
     participants: ISpaceParticipant[]
     currentUserId?: string
+    personalImpact?: ISpaceEntryPersonalImpact
     canManage?: boolean
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
@@ -85,12 +88,13 @@ function MovementCard({
     const category = resolveCategoryInfo(entry)
     const clickable = Boolean(onEntryClick)
     const includedCount = entry.sharedWithParticipantIds?.length ?? 0
-    const impactsCurrentUser = Boolean(
+    const legacyImpactsCurrentUser = Boolean(
         entry.linkedTransactionId &&
         currentUserId &&
         payer &&
-        extractId(payer.userId) === currentUserId
+        (extractId(entry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
     )
+    const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
     const settlementReceiverId = entry.type === 'settlement'
         ? extractId(entry.sharedWithParticipantIds?.[0])
         : null
@@ -269,6 +273,7 @@ export function SpaceMovementsPanel({
     entries,
     participants,
     currentUserId,
+    personalImpactsByEntryId = {},
     canManage,
     entryFilter,
     onFilterChange,
@@ -282,6 +287,7 @@ export function SpaceMovementsPanel({
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
     currentUserId?: string
+    personalImpactsByEntryId?: Record<string, ISpaceEntryPersonalImpact>
     canManage?: boolean
     entryFilter: SpaceEntryFilter
     onFilterChange: (filter: SpaceEntryFilter) => void
@@ -384,6 +390,7 @@ export function SpaceMovementsPanel({
                             hidden={hidden}
                             participants={participants}
                             currentUserId={currentUserId}
+                            personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']}
                             canManage={canManage}
                             onEntryClick={onEntryClick}
                             onEdit={onEdit}

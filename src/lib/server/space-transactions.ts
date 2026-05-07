@@ -5,7 +5,6 @@ import {
     getInitialBalancesByCurrency,
     supportsCurrency,
 } from '@/lib/utils/accounts'
-import { extractId } from '@/lib/utils/spaces'
 import type { Currency } from '@/lib/constants'
 import type { IAccount, ISpaceEntry, ITransaction } from '@/types'
 
@@ -16,6 +15,9 @@ type CreateSpaceTransactionOptions = {
     description?: string
     categoryId?: string
     spaceNameSnapshot?: string
+    amountOverride?: number
+    dateOverride?: Date
+    transactionTypeOverride?: ITransaction['type']
 }
 
 function mapEntryTypeToTransactionType(entry: ISpaceEntry['type']) {
@@ -31,6 +33,9 @@ export async function createTransactionFromSpaceEntry({
     description,
     categoryId,
     spaceNameSnapshot,
+    amountOverride,
+    dateOverride,
+    transactionTypeOverride,
 }: CreateSpaceTransactionOptions) {
     if (!Types.ObjectId.isValid(accountId)) {
         throw new Error('La cuenta seleccionada no es válida.')
@@ -50,30 +55,31 @@ export async function createTransactionFromSpaceEntry({
         throw new Error(`La cuenta "${account.name}" no opera en ${entry.currency}.`)
     }
 
-    if (entry.type !== 'income' && account.allowNegativeBalance === false) {
+    const transactionAmount = amountOverride ?? entry.amount
+    const transactionType = transactionTypeOverride ?? mapEntryTypeToTransactionType(entry.type)
+    const transactionDate = dateOverride ?? entry.date
+
+    if (transactionType !== 'income' && account.allowNegativeBalance === false) {
         const balances = await calculateAccountBalancesByCurrency(account._id, account.userId, {
             initialBalances: getInitialBalancesByCurrency(account),
         })
         const balance = balances[entryCurrency]
 
-        if (balance - entry.amount < 0) {
+        if (balance - transactionAmount < 0) {
             throw new Error(`Saldo insuficiente en "${account.name}".`)
         }
     }
 
-    const fallbackCategoryId = extractId(entry.categoryId)
     const payload: Partial<ITransaction> = {
         userId: account.userId,
-        type: mapEntryTypeToTransactionType(entry.type),
-        amount: entry.amount,
+        type: transactionType,
+        amount: transactionAmount,
         currency: entryCurrency,
-        date: entry.date,
+        date: transactionDate,
         description: description?.trim() || entry.title,
         categoryId: categoryId
             ? new Types.ObjectId(categoryId)
-            : fallbackCategoryId
-                ? new Types.ObjectId(fallbackCategoryId)
-                : undefined,
+            : undefined,
         status: 'confirmed',
         createdFrom: 'web',
         spaceId: entry.spaceId,
@@ -81,7 +87,7 @@ export async function createTransactionFromSpaceEntry({
         spaceNameSnapshot,
     }
 
-    if (entry.type === 'income') {
+    if (transactionType === 'income') {
         payload.destinationAccountId = account._id
     } else {
         payload.sourceAccountId = account._id
