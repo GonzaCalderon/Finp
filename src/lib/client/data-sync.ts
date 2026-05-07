@@ -13,6 +13,7 @@ export const DATA_TAGS = [
     'preferences',
     'settings',
     'spaces',
+    'debts',
 ] as const
 
 export type DataTag = (typeof DATA_TAGS)[number]
@@ -108,3 +109,12 @@ export const SPACE_INVALIDATION_TAGS: DataTag[] = [
 ]
 
 export const ALL_DATA_TAGS: DataTag[] = [...DATA_TAGS]
+
+export const DEBT_INVALIDATION_TAGS: DataTag[] = [
+    'debts',
+    'spaces',
+    'transactions',
+    'dashboard',
+    'accounts',
+    'account-detail',
+]

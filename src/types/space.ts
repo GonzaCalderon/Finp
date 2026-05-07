@@ -3,6 +3,7 @@ import type {
     SpaceCurrency,
     SpaceActivityEntityType,
     SpaceActivityEventType,
+    SpaceDebtMode,
     SpaceEntryStatus,
     SpaceEntryType,
     SpaceInviteStatus,
@@ -54,6 +55,7 @@ export interface ISpace {
     reportingCurrency: SpaceCurrency
     defaultSplitMode: SpaceSplitMode
     simplifyDebts?: boolean | null
+    debtMode?: SpaceDebtMode
     createdAt: Date
     updatedAt: Date
 }

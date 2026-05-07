@@ -76,6 +76,7 @@ export const spaceSchema = z
         reportingCurrency: currencySchema,
         defaultSplitMode: z.enum(['none', 'equal', 'percentage', 'fixed']).default('equal'),
         simplifyDebts: z.boolean().nullable().optional(),
+        debtMode: z.enum(['direct', 'simplified']).optional(),
     })
     .superRefine((data, ctx) => {
         if (!data.currencies.includes(data.reportingCurrency)) {

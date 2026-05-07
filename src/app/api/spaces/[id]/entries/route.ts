@@ -16,6 +16,7 @@ import {
     getSpaceEntries,
 } from '@/lib/server/spaces'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
+import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { spaceEntrySchema } from '@/lib/validations'
 import {
     calculateReportingAmount,
@@ -218,9 +219,15 @@ export async function POST(
         }
 
         const payerUserId = extractId(paidByParticipant?.userId)
+        const currentParticipantId = extractId(context.currentParticipant._id)
+        const isPayerSelf = Boolean(
+            parsed.data.paidByParticipantId &&
+            currentParticipantId === parsed.data.paidByParticipantId
+        )
+
         if (
             (parsed.data.personalAccountId || parsed.data.linkedTransactionId) &&
-            payerUserId !== session.user.id
+            !isPayerSelf
         ) {
             return NextResponse.json(
                 {
@@ -230,9 +237,13 @@ export async function POST(
             )
         }
 
-        const confirmationRequired = Boolean(
-            payerUserId && payerUserId !== session.user.id
-        )
+        // Los settlements impactan el balance del espacio inmediatamente.
+        // La "confirmación" del pagador real (cuando alguien registra un pago de otro)
+        // se canaliza por SpacePersonalImpact: el pagador recibe la notificación
+        // para impactar (o no) el movimiento en su Finp personal.
+        const confirmationRequired = parsed.data.type === 'settlement'
+            ? false
+            : Boolean(!isPayerSelf && payerUserId && payerUserId !== session.user.id)
 
         const personalCategoryId = parsed.data.categoryId
 
@@ -340,6 +351,12 @@ export async function POST(
                     currency: savedEntry.currency,
                 },
         }).catch((err) => console.error('[space-activity]', err))
+
+        try {
+            await syncSpaceDebtsForActiveParticipants(id)
+        } catch (err) {
+            console.error('[debt-sync] entries POST:', err)
+        }
 
         return NextResponse.json({ entry: savedEntry }, { status: 201 })
     } catch (error) {

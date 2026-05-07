@@ -306,6 +306,29 @@ export function EditSpaceSettingsDialog({
                                         ))}
                                     </div>
                                 </SpaceDialogField>
+
+                                <SpaceDialogField
+                                    label="Criterio de deudas personales"
+                                    hint="Controla cómo se calculan las deudas en el Finp personal de cada participante."
+                                >
+                                    <div className="flex flex-wrap gap-2">
+                                        {([
+                                            { value: 'simplified' as const, label: 'Simplificado', desc: 'Reduce la cantidad de pagos' },
+                                            { value: 'direct' as const, label: 'Directo', desc: 'Respeta el origen de cada movimiento' },
+                                        ]).map((option) => (
+                                            <SpaceDialogChoice
+                                                key={option.value}
+                                                active={form.debtMode === option.value}
+                                                onClick={() => setField('debtMode', option.value)}
+                                            >
+                                                {option.label}
+                                            </SpaceDialogChoice>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Cambiar este criterio recalculará las deudas personales derivadas de este espacio. No modifica los movimientos originales.
+                                    </p>
+                                </SpaceDialogField>
                             </SettingSection>
 
                             <SettingSection title="Reparto">

@@ -107,11 +107,21 @@ SpaceEntrySchema.index({ spaceId: 1, isVoided: 1, date: -1 })
 
 const existingSpaceEntryModel = mongoose.models.SpaceEntry as mongoose.Model<ISpaceEntry> | undefined
 
-if (existingSpaceEntryModel && !existingSpaceEntryModel.schema.path('spaceCategoryId')) {
+const currentStatusEnum = existingSpaceEntryModel?.schema.path('status')?.options?.enum as string[] | undefined
+const needsSchemaRefresh =
+    !!existingSpaceEntryModel &&
+    (!existingSpaceEntryModel.schema.path('confirmationRequired') ||
+        !existingSpaceEntryModel.schema.path('confirmedByUserId') ||
+        !currentStatusEnum?.includes(SPACE_ENTRY_STATUSES.CONFIRMED))
+
+if (needsSchemaRefresh) {
+    delete mongoose.models.SpaceEntry
+} else if (existingSpaceEntryModel && !existingSpaceEntryModel.schema.path('spaceCategoryId')) {
     existingSpaceEntryModel.schema.add({
         spaceCategoryId: { type: Schema.Types.ObjectId, ref: 'SpaceCategory' },
     })
 }
 
 export const SpaceEntry =
-    existingSpaceEntryModel || mongoose.model<ISpaceEntry>('SpaceEntry', SpaceEntrySchema)
+    (needsSchemaRefresh ? undefined : existingSpaceEntryModel) ||
+    mongoose.model<ISpaceEntry>('SpaceEntry', SpaceEntrySchema)

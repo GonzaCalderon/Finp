@@ -14,8 +14,10 @@ export const TRANSACTION_TYPES = {
     TRANSFER: 'transfer',
     EXCHANGE: 'exchange',
     CREDIT_CARD_PAYMENT: 'credit_card_payment',
-    DEBT_PAYMENT: 'debt_payment',      // kept for backwards compat — display as "Pago de tarjeta"
+    DEBT_PAYMENT: 'debt_payment',           // kept for backwards compat — display as "Pago de tarjeta"
     ADJUSTMENT: 'adjustment',
+    PERSONAL_DEBT_PAYMENT: 'personal_debt_payment', // pago de deuda personal: dinero sale de cuenta propia
+    PERSONAL_DEBT_COLLECT: 'personal_debt_collect', // cobro de deuda personal: dinero entra a cuenta propia
 } as const
 
 export const CATEGORY_TYPES = {
@@ -189,6 +191,45 @@ export const SPACE_PERSONAL_IMPACT_STATUSES = {
     NEEDS_REVIEW: 'needs_review',
 } as const
 
+export const DEBT_DIRECTIONS = {
+    PAYABLE: 'payable',
+    RECEIVABLE: 'receivable',
+} as const
+
+export const DEBT_SOURCE_TYPES = {
+    MANUAL: 'manual',
+    SPACE: 'space',
+} as const
+
+export const DEBT_STATUSES = {
+    ACTIVE: 'active',
+    IGNORED: 'ignored',
+    PARTIALLY_PAID: 'partially_paid',
+    PAID: 'paid',
+    CANCELLED: 'cancelled',
+} as const
+
+export const DEBT_ORIGIN_MODES = {
+    DIRECT: 'direct',
+    SIMPLIFIED: 'simplified',
+} as const
+
+export const DEBT_MOVEMENT_TYPES = {
+    CREATION: 'creation',
+    PAYMENT: 'payment',
+    COLLECT: 'collect',
+    ADJUSTMENT: 'adjustment',
+    CANCELLATION: 'cancellation',
+    IGNORE: 'ignore',
+    RESTORE: 'restore',
+    SYNC_UPDATE: 'sync_update',
+} as const
+
+export const SPACE_DEBT_MODES = {
+    DIRECT: 'direct',
+    SIMPLIFIED: 'simplified',
+} as const
+
 // Tipos derivados
 export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
@@ -226,3 +267,9 @@ export type SpacePersonalImpactKind =
     typeof SPACE_PERSONAL_IMPACT_KINDS[keyof typeof SPACE_PERSONAL_IMPACT_KINDS]
 export type SpacePersonalImpactStatus =
     typeof SPACE_PERSONAL_IMPACT_STATUSES[keyof typeof SPACE_PERSONAL_IMPACT_STATUSES]
+export type DebtDirection = typeof DEBT_DIRECTIONS[keyof typeof DEBT_DIRECTIONS]
+export type DebtSourceType = typeof DEBT_SOURCE_TYPES[keyof typeof DEBT_SOURCE_TYPES]
+export type DebtStatus = typeof DEBT_STATUSES[keyof typeof DEBT_STATUSES]
+export type DebtOriginMode = typeof DEBT_ORIGIN_MODES[keyof typeof DEBT_ORIGIN_MODES]
+export type DebtMovementType = typeof DEBT_MOVEMENT_TYPES[keyof typeof DEBT_MOVEMENT_TYPES]
+export type SpaceDebtMode = typeof SPACE_DEBT_MODES[keyof typeof SPACE_DEBT_MODES]

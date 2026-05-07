@@ -2,6 +2,7 @@ import mongoose, { Schema } from 'mongoose'
 import type { ISpace } from '@/types'
 import {
     CURRENCIES,
+    SPACE_DEBT_MODES,
     SPACE_MODES,
     SPACE_SPLIT_MODES,
     SPACE_STATUSES,
@@ -41,6 +42,11 @@ const SpaceSchema = new Schema<ISpace>(
             default: SPACE_SPLIT_MODES.EQUAL,
         },
         simplifyDebts: { type: Boolean },
+        debtMode: {
+            type: String,
+            enum: Object.values(SPACE_DEBT_MODES),
+            default: SPACE_DEBT_MODES.SIMPLIFIED,
+        },
     },
     { timestamps: true }
 )

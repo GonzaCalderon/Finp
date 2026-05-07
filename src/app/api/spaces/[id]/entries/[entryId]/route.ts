@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceCategory, SpaceEntry } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
+import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryEditSchema } from '@/lib/validations'
@@ -267,6 +268,12 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
                     nextPayer: extractId(updatedEntry.paidByParticipantId),
                 },
             }).catch((err) => console.error('[space-activity]', err))
+        }
+
+        try {
+            await syncSpaceDebtsForActiveParticipants(id)
+        } catch (err) {
+            console.error('[debt-sync] entries PATCH:', err)
         }
 
         return NextResponse.json({ entry: updatedEntry, hasSubsequentSettlement })

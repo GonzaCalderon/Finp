@@ -1,0 +1,31 @@
+import mongoose, { Schema } from 'mongoose'
+import type { IDebtMovement } from '@/types/debt'
+import { DEBT_MOVEMENT_TYPES } from '@/lib/constants'
+
+const DebtMovementSchema = new Schema<IDebtMovement>(
+    {
+        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        debtId: { type: Schema.Types.ObjectId, ref: 'Debt', required: true },
+        type: { type: String, enum: Object.values(DEBT_MOVEMENT_TYPES), required: true },
+
+        amount: { type: Number, required: true, min: 0 },
+        currency: { type: String, required: true, trim: true },
+
+        // Registros relacionados
+        accountId: { type: Schema.Types.ObjectId, ref: 'Account' },
+        transactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
+        spaceId: { type: Schema.Types.ObjectId, ref: 'Space' },
+        spaceEntryId: { type: Schema.Types.ObjectId, ref: 'SpaceEntry' },
+
+        date: { type: Date, required: true },
+        notes: { type: String, trim: true, maxlength: 500 },
+    },
+    { timestamps: { createdAt: true, updatedAt: false } }
+)
+
+DebtMovementSchema.index({ userId: 1, debtId: 1, createdAt: -1 })
+DebtMovementSchema.index({ transactionId: 1 }, { sparse: true })
+
+export const DebtMovement =
+    (mongoose.models.DebtMovement as mongoose.Model<IDebtMovement> | undefined) ||
+    mongoose.model<IDebtMovement>('DebtMovement', DebtMovementSchema)

@@ -7,6 +7,7 @@ import {
     getAccessibleSpaceContext,
 } from '@/lib/server/spaces'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
+import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { spaceSchema } from '@/lib/validations'
 import {
     extractId,
@@ -158,6 +159,14 @@ export async function PATCH(
                 changedFields,
             },
         }).catch((err) => console.error('[space-activity]', err))
+
+        if (parsed.data.debtMode !== undefined) {
+            try {
+                await syncSpaceDebtsForActiveParticipants(id)
+            } catch (err) {
+                console.error('[debt-sync] space PATCH debtMode:', err)
+            }
+        }
 
         return NextResponse.json({ space })
     } catch (error) {

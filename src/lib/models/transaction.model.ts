@@ -56,6 +56,8 @@ const needsSchemaRefresh =
     (!currentTypeEnum ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.CREDIT_CARD_EXPENSE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.EXCHANGE) ||
+        !currentTypeEnum.includes(TRANSACTION_TYPES.PERSONAL_DEBT_PAYMENT) ||
+        !currentTypeEnum.includes(TRANSACTION_TYPES.PERSONAL_DEBT_COLLECT) ||
         !hasDestinationAmountPath ||
         !hasPaymentGroupIdPath ||
         !hasSpaceIdPath ||
