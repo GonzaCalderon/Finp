@@ -16,6 +16,8 @@ type CreateSpaceTransactionOptions = {
     categoryId?: string
     spaceNameSnapshot?: string
     amountOverride?: number
+    /** Personal share to use for reporting when different from amountOverride (payer case). */
+    operationalAmountOverride?: number
     dateOverride?: Date
     transactionTypeOverride?: ITransaction['type']
 }
@@ -34,6 +36,7 @@ export async function createTransactionFromSpaceEntry({
     categoryId,
     spaceNameSnapshot,
     amountOverride,
+    operationalAmountOverride,
     dateOverride,
     transactionTypeOverride,
 }: CreateSpaceTransactionOptions) {
@@ -70,6 +73,13 @@ export async function createTransactionFromSpaceEntry({
         }
     }
 
+    // Operational amount: only set when the reporting amount differs from the account impact.
+    // This happens when the payer advances the full cost but their personal share is smaller.
+    const resolvedOperationalAmount =
+        operationalAmountOverride !== undefined && operationalAmountOverride !== transactionAmount
+            ? operationalAmountOverride
+            : undefined
+
     const payload: Partial<ITransaction> = {
         userId: account.userId,
         type: transactionType,
@@ -85,6 +95,7 @@ export async function createTransactionFromSpaceEntry({
         spaceId: entry.spaceId,
         spaceEntryId: entry._id,
         spaceNameSnapshot,
+        operationalAmount: resolvedOperationalAmount,
     }
 
     if (transactionType === 'income') {

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, InstallmentPlan, User } from '@/lib/models'
 import { buildMonthlyCardPaymentSummary, getRefId } from '@/lib/utils/credit-card'
+import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
 import { getCurrentFinancialPeriod, parseFinancialPeriod } from '@/lib/utils/period'
 import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
 
@@ -87,11 +88,17 @@ export async function GET(request: Request) {
             const color = cat?.color ?? '#9CA3AF'
 
             if (t.type === 'income') {
-                if (!incomeMap[key]) incomeMap[key] = { name, amount: 0, color }
-                incomeMap[key].amount += t.amount
+                const opAmount = getOperationalIncomeAmount(t)
+                if (opAmount > 0) {
+                    if (!incomeMap[key]) incomeMap[key] = { name, amount: 0, color }
+                    incomeMap[key].amount += opAmount
+                }
             } else if (t.type === 'expense' && !t.installmentPlanId) {
-                if (!expenseMap[key]) expenseMap[key] = { name, amount: 0, color }
-                expenseMap[key].amount += t.amount
+                const opAmount = getOperationalExpenseAmount(t)
+                if (opAmount > 0) {
+                    if (!expenseMap[key]) expenseMap[key] = { name, amount: 0, color }
+                    expenseMap[key].amount += opAmount
+                }
             }
         })
 

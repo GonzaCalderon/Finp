@@ -111,6 +111,12 @@ export interface ITransaction {
     spaceId?: Types.ObjectId
     spaceEntryId?: Types.ObjectId
     spaceNameSnapshot?: string
+    /**
+     * For space payer transactions: the portion of the amount that counts for
+     * personal reporting (their own share, not the full payment they advanced).
+     * Undefined for most transactions — falls back to `amount`.
+     */
+    operationalAmount?: number
     createdAt: Date
     updatedAt: Date
 }

@@ -22,7 +22,7 @@ import {
     Settings,
     Wand2,
     BriefcaseBusiness,
-    Handshake,
+    HandCoins,
 } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
@@ -62,7 +62,7 @@ const NAV_ITEMS: NavItemDef[] = [
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
     { href: '/rules', label: 'Reglas', icon: Wand2 },
     { href: '/spaces', label: 'Espacios', icon: BriefcaseBusiness },
-    { href: '/debts', label: 'Deudas', icon: Handshake },
+    { href: '/debts', label: 'Deudas', icon: HandCoins },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
@@ -93,7 +93,7 @@ const MORE_ITEMS: MoreItem[] = [
     { href: '/commitments', label: 'Compromisos', icon: Calendar },
     { href: '/projection', label: 'Proyección', icon: TrendingUp },
     { href: '/rules', label: 'Reglas', icon: Wand2 },
-    { href: '/debts', label: 'Deudas', icon: Handshake },
+    { href: '/debts', label: 'Deudas', icon: HandCoins },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 

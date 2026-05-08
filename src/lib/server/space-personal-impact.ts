@@ -231,6 +231,21 @@ export async function createPersonalImpactFromSpaceEntry({
     let transaction: ITransaction | null = null
     let resolvedAccountId = accountId
 
+    // For payer_full_amount: the transaction amount = full entry cost (account impact),
+    // but operational reporting should use only the payer's personal share.
+    let payerPersonalShare: number | undefined
+    if (resolvedImpactKind === 'payer_full_amount') {
+        const currentParticipantId = extractId(currentParticipant._id)
+        const payerShare = currentParticipantId
+            ? buildEntryShares(entry, participants).find(
+                (s) => s.participantId === currentParticipantId
+            )
+            : undefined
+        if (payerShare && payerShare.amount < resolvedAmount) {
+            payerPersonalShare = roundAmount(payerShare.amount)
+        }
+    }
+
     if (mode === 'create_transaction') {
         if (!accountId) throw new Error('Selecciona una cuenta para registrar en tu Finp.')
         transaction = await createTransactionFromSpaceEntry({
@@ -240,6 +255,7 @@ export async function createPersonalImpactFromSpaceEntry({
             description,
             categoryId,
             amountOverride: resolvedAmount,
+            operationalAmountOverride: payerPersonalShare,
             transactionTypeOverride: resolvedImpactKind === 'settlement_received' ? 'income' : undefined,
             spaceNameSnapshot,
         })

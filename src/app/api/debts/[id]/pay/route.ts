@@ -74,7 +74,7 @@ export async function POST(
             amount: parsed.data.amount,
             currency: debt.currency,
             date: parsed.data.date,
-            description: `Pago de deuda a ${debt.counterpartyNameSnapshot}`,
+            description: `Pagaste a ${debt.counterpartyNameSnapshot}`,
             sourceAccountId: account._id,
             ...(debt.spaceId && { spaceId: debt.spaceId }),
             notes: parsed.data.notes,

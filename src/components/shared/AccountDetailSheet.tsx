@@ -18,6 +18,7 @@ import {
     isDualCurrencyAccount,
 } from '@/lib/utils/accounts'
 import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
+import { isSplitTransaction } from '@/lib/utils/operational-amount'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import { apiJson } from '@/lib/client/auth-client'
 
@@ -32,6 +33,7 @@ interface RecentTransaction {
     _id: string
     type: string
     amount: number
+    operationalAmount?: number
     currency: string
     destinationAmount?: number
     destinationCurrency?: string
@@ -293,6 +295,7 @@ export function AccountDetailSheet({ open, onOpenChange, accountId }: AccountDet
                                         })()
                                         const accountImpact = getTransactionAccountImpact(t, accountId ?? undefined)
                                         const displayAmount = Math.abs(accountImpact?.delta ?? t.amount)
+                                        const personalShare = isSplitTransaction(t) ? t.operationalAmount : undefined
                                         const displayCurrency = accountImpact?.currency ?? t.currency
                                         const displayPrefix =
                                             accountImpact?.direction === 'increase'
@@ -330,9 +333,16 @@ export function AccountDetailSheet({ open, onOpenChange, accountId }: AccountDet
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <span className={`text-sm font-semibold ${accountImpact?.direction === 'decrease' ? 'text-red-600' : 'text-green-600'}`}>
-                          {displayPrefix}{fmt(displayAmount, displayCurrency)}
-                        </span>
+                                                <div className="text-right">
+                                                    <span className={`text-sm font-semibold ${accountImpact?.direction === 'decrease' ? 'text-red-600' : 'text-green-600'}`}>
+                                                        {displayPrefix}{fmt(displayAmount, displayCurrency)}
+                                                    </span>
+                                                    {personalShare !== undefined && (
+                                                        <p className="text-[10px] text-muted-foreground/70">
+                                                            Tu parte: {fmt(personalShare, displayCurrency)}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
                                         )
                                     })}

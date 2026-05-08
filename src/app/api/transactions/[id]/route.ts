@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, Account, InstallmentPlan } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
+import { isNonOperationalTransactionType } from '@/lib/utils/operational-amount'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
@@ -58,6 +59,23 @@ export async function PATCH(
         const { id } = await params
         const body = await request.json()
 
+        // Quick pre-check: fetch the existing type before full validation
+        await connectDB()
+        const existingForTypeCheck = await Transaction.findOne(
+            { _id: id, userId: session.user.id },
+            { type: 1 }
+        ).lean<{ type: string } | null>()
+
+        if (existingForTypeCheck && isNonOperationalTransactionType(existingForTypeCheck.type)) {
+            return NextResponse.json(
+                {
+                    error: 'Esta transacción se gestiona desde Deudas y no puede editarse como transacción común.',
+                    code: 'NON_EDITABLE_TRANSACTION',
+                },
+                { status: 422 }
+            )
+        }
+
         const parsed = transactionSchema.safeParse(body)
 
         if (!parsed.success) {
@@ -69,8 +87,6 @@ export async function PATCH(
                 { status: 400 }
             )
         }
-
-        await connectDB()
 
         const data = {
             ...parsed.data,
@@ -287,6 +303,25 @@ export async function DELETE(
         const { id } = await params
 
         await connectDB()
+
+        const existing = await Transaction.findOne(
+            { _id: id, userId: session.user.id },
+            { type: 1 }
+        ).lean<{ type: string } | null>()
+
+        if (!existing) {
+            return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
+        }
+
+        if (isNonOperationalTransactionType(existing.type)) {
+            return NextResponse.json(
+                {
+                    error: 'Esta transacción es parte de un pago/cobro de deuda. Gestionala desde Deudas.',
+                    code: 'NON_DELETABLE_TRANSACTION',
+                },
+                { status: 422 }
+            )
+        }
 
         const transaction = await Transaction.findOneAndDelete({
             _id: id,

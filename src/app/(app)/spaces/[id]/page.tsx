@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Coins, Plus, Users } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
@@ -221,6 +221,8 @@ function SpaceMovementsKpiRow({
 
 export default function SpaceDetailPage() {
     const params = useParams<{ id: string }>()
+    const searchParams = useSearchParams()
+    const focusEntryId = searchParams?.get('entryId') ?? null
     const spaceId = params?.id
     const { hidden } = useHideAmounts()
     const { setAction: setBreadcrumbAction, clearAction: clearBreadcrumbAction } = useBreadcrumbAction()
@@ -229,7 +231,7 @@ export default function SpaceDetailPage() {
     const spaceActivity = useSpaceActivity(spaceId)
     const entriesApi = useSpaceEntries(spaceId)
     const participantsApi = useSpaceParticipants(spaceId)
-    const [activeTab, setActiveTab] = useState<SpaceTab>('summary')
+    const [activeTab, setActiveTab] = useState<SpaceTab>(() => focusEntryId ? 'entries' : 'summary')
     const [entryFilter, setEntryFilter] = useState<SpaceEntryFilter>('all')
     const [entryDialogOpen, setEntryDialogOpen] = useState(false)
     const [participantDialogOpen, setParticipantDialogOpen] = useState(false)
@@ -274,6 +276,14 @@ export default function SpaceDetailPage() {
 
         return () => clearBreadcrumbAction()
     }, [clearBreadcrumbAction, data?.pendingActions.length, setBreadcrumbAction, spaceActivity.unreadCount])
+
+    useEffect(() => {
+        if (activeTab !== 'entries' || !focusEntryId) return
+        const el = document.querySelector(`[data-entry-id="${focusEntryId}"]`)
+        if (el) {
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+        }
+    }, [activeTab, focusEntryId, data?.entries])
 
     usePageTitle(data?.space.name ? `${data.space.name} · Espacios` : 'Espacios')
     useAppStartupReady(!loading)
@@ -636,6 +646,7 @@ export default function SpaceDetailPage() {
                             onFilterChange={setEntryFilter}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
+                            focusEntryId={focusEntryId}
                             onCreate={() => setEntryDialogOpen(true)}
                             onEntryClick={setDetailEntry}
                             onEdit={(entry) => {
@@ -656,6 +667,7 @@ export default function SpaceDetailPage() {
                         hidden={hidden}
                         currentUserId={currentUserId}
                         simplifyDebts={data.space.simplifyDebts ?? undefined}
+                        debtMode={data.space.debtMode ?? undefined}
                         onRegisterSettlement={handleRegisterSettlement}
                         onCreateSettlementDirect={handleCreateSettlementDirect}
                         onViewAllSettlements={() => {

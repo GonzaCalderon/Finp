@@ -22,7 +22,16 @@ export const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     transfer: 'Transferencia',
     exchange: 'Cambio',
     credit_card_payment: 'Pago de tarjeta',
+    debt_payment: 'Pago de tarjeta',
     adjustment: 'Ajuste',
+    personal_debt_payment: 'Pago de deuda',
+    personal_debt_collect: 'Cobro de deuda',
+}
+
+export function getEffectiveTransactionLabel(type: string, spaceId?: string): string {
+    if (spaceId && type === 'expense') return 'Gasto de espacio'
+    if (spaceId && type === 'income') return 'Ingreso de espacio'
+    return TRANSACTION_TYPE_LABELS[type] ?? type
 }
 
 export type DashboardCardBrand = 'visa' | 'mastercard' | 'amex' | 'cabal' | 'diners' | 'generic'

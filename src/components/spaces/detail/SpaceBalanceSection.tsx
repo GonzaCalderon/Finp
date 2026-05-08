@@ -101,6 +101,7 @@ export function SpaceBalanceSection({
     hidden,
     currentUserId,
     simplifyDebts,
+    debtMode,
     onRegisterSettlement,
     onViewAllSettlements,
     onCreateSettlementDirect,
@@ -111,13 +112,14 @@ export function SpaceBalanceSection({
     hidden: boolean
     currentUserId: string
     simplifyDebts?: boolean
+    debtMode?: 'direct' | 'simplified'
     onRegisterSettlement?: (prefill?: { payerId: string; receiverId: string; amount: number }) => void
     onViewAllSettlements?: () => void
     onCreateSettlementDirect?: (payerId: string, receiverId: string, amount: number) => Promise<void>
 }) {
     const activeParticipantCount = balances.length
-    const defaultSimplified = simplifyDebts === true || (simplifyDebts === undefined && activeParticipantCount >= 3)
-    const [showSimplified, setShowSimplified] = useState(defaultSimplified)
+    const showSimplified = debtMode === 'simplified'
+        || (!debtMode && (simplifyDebts === true || (simplifyDebts === undefined && activeParticipantCount >= 3)))
     const [confirmingPayment, setConfirmingPayment] = useState<{
         from: SpaceBalanceItem
         to: SpaceBalanceItem
@@ -155,23 +157,10 @@ export function SpaceBalanceSection({
                             title="Cómo saldar el espacio"
                             description="Pagos sugeridos para saldar el espacio."
                         />
-                        {activeParticipantCount >= 3 ? (
-                            <div className="flex shrink-0 overflow-hidden rounded-full border border-border bg-background/80 text-xs font-medium">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowSimplified(true)}
-                                    className={showSimplified ? 'bg-primary/10 px-3 py-1.5 text-primary' : 'px-3 py-1.5 text-muted-foreground hover:text-foreground'}
-                                >
-                                    Simplificada
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowSimplified(false)}
-                                    className={!showSimplified ? 'bg-primary/10 px-3 py-1.5 text-primary' : 'px-3 py-1.5 text-muted-foreground hover:text-foreground'}
-                                >
-                                    Directa
-                                </button>
-                            </div>
+                        {debtMode ? (
+                            <span className="text-xs text-muted-foreground">
+                                {debtMode === 'simplified' ? 'Vista simplificada' : 'Vista directa'}
+                            </span>
                         ) : null}
                     </div>
                     {activeParticipantCount >= 3 ? (

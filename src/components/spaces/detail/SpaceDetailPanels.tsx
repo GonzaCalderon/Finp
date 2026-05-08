@@ -66,6 +66,7 @@ function MovementCard({
     currentUserId,
     personalImpact,
     canManage,
+    highlighted,
     onEntryClick,
     onEdit,
     onVoid,
@@ -77,6 +78,7 @@ function MovementCard({
     currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
     canManage?: boolean
+    highlighted?: boolean
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
@@ -127,6 +129,16 @@ function MovementCard({
         metaParts.push({ key: 'voided-by', label: `Anulado por ${voidedByName}` })
     } else if (entry.type === 'settlement') {
         metaParts.push({ key: 'date', label: formatSpaceDate(entry.date) })
+        const registrant = entry.createdByUserId
+            ? participants.find((p) => extractId(p.userId) === extractId(entry.createdByUserId))
+            : null
+        const registrantIsPayer = !registrant || extractId(registrant._id) === extractId(entry.paidByParticipantId)
+        if (!registrantIsPayer && registrant) {
+            metaParts.push({ key: 'registered-by', label: `Registrado por ${registrant.displayName}` })
+        }
+        if (impactsCurrentUser) {
+            metaParts.push({ key: 'finp', label: 'En tu Finp', accent: true })
+        }
     } else {
         metaParts.push({ key: 'date', label: formatSpaceDate(entry.date) })
         if (payer) metaParts.push({ key: 'payer', label: `Pagó ${payer.displayName}` })
@@ -146,6 +158,7 @@ function MovementCard({
         <div
             role={clickable ? 'button' : undefined}
             tabIndex={clickable ? 0 : undefined}
+            data-entry-id={extractId(entry._id)}
             onClick={() => onEntryClick?.(entry)}
             onKeyDown={(event) => {
                 if (!clickable) return
@@ -155,7 +168,8 @@ function MovementCard({
                 }
             }}
             className={cn(
-                'group flex items-start justify-between gap-4 rounded-2xl border border-foreground/[0.07] bg-background/74 px-4 py-4 transition-colors',
+                'group flex items-start justify-between gap-4 rounded-2xl border bg-background/74 px-4 py-4 transition-colors',
+                highlighted ? 'border-primary/40 bg-primary/[0.04] ring-2 ring-primary/20' : 'border-foreground/[0.07]',
                 isVoided ? 'opacity-60' : '',
                 clickable ? 'cursor-pointer hover:border-primary/25 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40' : ''
             )}
@@ -169,9 +183,9 @@ function MovementCard({
                 <div className="min-w-0 flex-1 space-y-1.5">
                     {/* Title / settlement direction */}
                     {entry.type === 'settlement' && payer ? (
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex flex-wrap items-baseline gap-1">
                             <span className={cn('text-sm font-semibold', isVoided ? 'text-muted-foreground line-through' : 'text-foreground')}>{payer.displayName}</span>
-                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                            <span className="text-xs text-muted-foreground">pagó a</span>
                             <span className={cn('text-sm font-semibold', isVoided ? 'text-muted-foreground line-through' : 'text-foreground')}>
                                 {settlementReceiver?.displayName ?? 'Receptor'}
                             </span>
@@ -219,6 +233,11 @@ function MovementCard({
                         </Badge>
                     ) : (
                         <>
+                            {entry.type === 'settlement' && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                    Pago
+                                </Badge>
+                            )}
                             <SpaceEntryStatusBadge status={entry.status} />
                             {isEdited ? (
                                 <Badge variant="secondary" className="gap-1 text-[10px]">
@@ -279,6 +298,7 @@ export function SpaceMovementsPanel({
     onFilterChange,
     reportingCurrency,
     hidden,
+    focusEntryId,
     onCreate,
     onEntryClick,
     onEdit,
@@ -293,6 +313,7 @@ export function SpaceMovementsPanel({
     onFilterChange: (filter: SpaceEntryFilter) => void
     reportingCurrency: string
     hidden: boolean
+    focusEntryId?: string | null
     onCreate: () => void
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
@@ -392,6 +413,7 @@ export function SpaceMovementsPanel({
                             currentUserId={currentUserId}
                             personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']}
                             canManage={canManage}
+                            highlighted={Boolean(focusEntryId && extractId(entry._id) === focusEntryId)}
                             onEntryClick={onEntryClick}
                             onEdit={onEdit}
                             onVoid={onVoid}

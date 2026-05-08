@@ -115,6 +115,7 @@ export interface DashboardRecentTransaction {
     installmentCount?: number
     spaceId?: string
     spaceNameSnapshot?: string
+    totalAmount?: number
 }
 
 export interface DashboardData {
