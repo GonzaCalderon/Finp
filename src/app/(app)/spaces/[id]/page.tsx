@@ -460,7 +460,7 @@ export default function SpaceDetailPage() {
             (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
         )
         const impactsCurrentUser = Boolean(
-            data?.personalImpactsByEntryId[entryId ?? '']?.status === 'linked' ||
+            data?.personalImpactsByEntryId[entryId ?? '']?.linkedImpact?.status === 'linked' ||
             (
                 entry.linkedTransactionId &&
                 currentUserId &&
@@ -782,7 +782,7 @@ export default function SpaceDetailPage() {
                 spaceId={spaceId}
                 currency={data.space.reportingCurrency}
                 currentUserId={currentUserId}
-                personalImpact={detailEntry ? data.personalImpactsByEntryId[extractId(detailEntry._id) ?? ''] : undefined}
+                personalImpact={detailEntry ? data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.linkedImpact : undefined}
                 activityEvents={spaceActivity.events}
                 canEdit={Boolean(
                     detailEntry && (

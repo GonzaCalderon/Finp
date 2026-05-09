@@ -3,6 +3,8 @@ import type { ISpaceEntryPersonalImpact } from '@/types'
 import {
     SPACE_PERSONAL_IMPACT_KINDS,
     SPACE_PERSONAL_IMPACT_STATUSES,
+    SPACE_PERSONAL_PENDING_ACTION_TYPES,
+    SPACE_PERSONAL_IMPACT_SOURCE_TYPES,
 } from '@/lib/constants'
 
 const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
@@ -27,6 +29,25 @@ const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
             required: true,
             default: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
         },
+        // Fase 6F.1 — campos de pendiente accionable
+        actionType: {
+            type: String,
+            enum: Object.values(SPACE_PERSONAL_PENDING_ACTION_TYPES),
+        },
+        sourceType: {
+            type: String,
+            enum: Object.values(SPACE_PERSONAL_IMPACT_SOURCE_TYPES),
+        },
+        actorUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+        counterpartyParticipantId: { type: Schema.Types.ObjectId, ref: 'SpaceParticipant' },
+        counterpartyNameSnapshot: { type: String },
+        debtId: { type: Schema.Types.ObjectId, ref: 'Debt' },
+        debtMovementId: { type: Schema.Types.ObjectId, ref: 'DebtMovement' },
+        accountImpactAmount: { type: Number },
+        operationalAmount: { type: Number },
+        resolvedAt: { type: Date },
+        ignoredAt: { type: Date },
+        removedAt: { type: Date },
     },
     { timestamps: true }
 )
@@ -34,11 +55,24 @@ const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
 SpaceEntryPersonalImpactSchema.index({ spaceId: 1, entryId: 1 })
 SpaceEntryPersonalImpactSchema.index({ userId: 1, entryId: 1 })
 SpaceEntryPersonalImpactSchema.index({ transactionId: 1 })
+
+// Un solo linked vigente por (userId, entryId)
 SpaceEntryPersonalImpactSchema.index(
     { userId: 1, entryId: 1, status: 1 },
     {
         unique: true,
         partialFilterExpression: { status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED },
+    }
+)
+
+// Un solo pending por (userId, entryId, actionType) — idempotencia de pendientes
+SpaceEntryPersonalImpactSchema.index(
+    { userId: 1, entryId: 1, actionType: 1 },
+    {
+        unique: true,
+        sparse: true,
+        partialFilterExpression: { status: SPACE_PERSONAL_IMPACT_STATUSES.PENDING },
+        name: 'pending_unique_per_user_entry_action',
     }
 )
 

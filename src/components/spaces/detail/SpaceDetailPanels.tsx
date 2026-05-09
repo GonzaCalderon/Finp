@@ -20,7 +20,7 @@ import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrency
 import { Badge } from '@/components/ui/badge'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
-import type { ISpace, ISpaceEntry, ISpaceEntryPersonalImpact, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
+import type { ISpace, ISpaceEntry, ISpaceEntryPersonalImpact, ISpaceEntryPersonalImpactByEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
 import type { SpaceParticipantRole } from '@/lib/constants'
 
@@ -307,7 +307,7 @@ export function SpaceMovementsPanel({
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
     currentUserId?: string
-    personalImpactsByEntryId?: Record<string, ISpaceEntryPersonalImpact>
+    personalImpactsByEntryId?: Record<string, ISpaceEntryPersonalImpactByEntry>
     canManage?: boolean
     entryFilter: SpaceEntryFilter
     onFilterChange: (filter: SpaceEntryFilter) => void
@@ -411,7 +411,7 @@ export function SpaceMovementsPanel({
                             hidden={hidden}
                             participants={participants}
                             currentUserId={currentUserId}
-                            personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']}
+                            personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.linkedImpact}
                             canManage={canManage}
                             highlighted={Boolean(focusEntryId && extractId(entry._id) === focusEntryId)}
                             onEntryClick={onEntryClick}

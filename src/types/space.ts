@@ -12,6 +12,8 @@ import type {
     SpaceParticipantRole,
     SpacePersonalImpactKind,
     SpacePersonalImpactStatus,
+    SpacePersonalImpactSourceType,
+    SpacePersonalPendingActionType,
     SpaceSplitMode,
     SpaceStatus,
     SpaceType,
@@ -164,8 +166,26 @@ export interface ISpaceEntryPersonalImpact {
     amount: number
     currency: SpaceCurrency
     status: SpacePersonalImpactStatus
+    // Campos de pendiente accionable (Fase 6F.1)
+    actionType?: SpacePersonalPendingActionType
+    sourceType?: SpacePersonalImpactSourceType
+    actorUserId?: Types.ObjectId
+    counterpartyParticipantId?: Types.ObjectId
+    counterpartyNameSnapshot?: string
+    debtId?: Types.ObjectId
+    debtMovementId?: Types.ObjectId
+    accountImpactAmount?: number
+    operationalAmount?: number
+    resolvedAt?: Date
+    ignoredAt?: Date
+    removedAt?: Date
     createdAt: Date
     updatedAt: Date
+}
+
+export interface ISpaceEntryPersonalImpactByEntry {
+    linkedImpact?: ISpaceEntryPersonalImpact
+    pendingActions: ISpaceEntryPersonalImpact[]
 }
 
 export interface ISpaceActivityEvent {
@@ -267,7 +287,7 @@ export interface ISpaceDetailPayload {
     space: ISpace
     participants: ISpaceParticipant[]
     entries: ISpaceEntry[]
-    personalImpactsByEntryId: Record<string, ISpaceEntryPersonalImpact>
+    personalImpactsByEntryId: Record<string, ISpaceEntryPersonalImpactByEntry>
     summary: SpaceSummarySnapshot
     pendingActions: ISpacePendingAction[]
     currentUserId: string

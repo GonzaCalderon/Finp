@@ -60,7 +60,7 @@ export async function GET(request: Request, { params }: { params: Params }) {
 
         return NextResponse.json({
             entry,
-            hasLinkedTransaction: Boolean(personalImpactsByEntryId[entryId]),
+            hasLinkedTransaction: Boolean(personalImpactsByEntryId[entryId]?.linkedImpact),
             hasSubsequentSettlement: laterSettlements > 0,
         })
     } catch (error) {

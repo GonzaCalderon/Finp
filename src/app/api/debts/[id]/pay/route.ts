@@ -6,7 +6,9 @@ import { payDebtSchema } from '@/lib/validations/debt'
 import { isAccountCurrencyCompatible } from '@/lib/utils/debt'
 import { calculateReportingAmount } from '@/lib/utils/spaces'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
-import { DEBT_STATUSES, DEBT_MOVEMENT_TYPES, TRANSACTION_TYPES } from '@/lib/constants'
+import { upsertLinkedPersonalImpact } from '@/lib/server/space-personal-impact'
+import { emitPersonalSyncEvent } from '@/lib/server/personal-sync-events'
+import { DEBT_STATUSES, DEBT_MOVEMENT_TYPES, TRANSACTION_TYPES, SPACE_PERSONAL_PENDING_ACTION_TYPES, SPACE_PERSONAL_IMPACT_SOURCE_TYPES } from '@/lib/constants'
 
 export async function POST(
     request: Request,
@@ -118,6 +120,52 @@ export async function POST(
                     notes: parsed.data.notes,
                 })
                 spaceEntryId = settlement._id.toString()
+
+                // Actor: linked impact (ya tiene transaction)
+                try {
+                    await upsertLinkedPersonalImpact({
+                        spaceId: debt.spaceId.toString(),
+                        entryId: spaceEntryId,
+                        userId: session.user.id,
+                        participantId: currentParticipant._id.toString(),
+                        impactKind: 'settlement_paid',
+                        actionType: SPACE_PERSONAL_PENDING_ACTION_TYPES.IMPACT_SPACE_PAYMENT,
+                        transactionId: transaction._id.toString(),
+                        accountId: account._id.toString(),
+                        amount: parsed.data.amount,
+                        currency: debt.currency,
+                    })
+                } catch (err) {
+                    console.error('[personal-sync] pay upsert linked:', err)
+                }
+
+                // Contraparte: pending si tiene userId
+                try {
+                    const counterpartyParticipant = await SpaceParticipant.findById(
+                        debt.counterpartyParticipantId
+                    ).lean()
+                    if (counterpartyParticipant?.userId) {
+                        await emitPersonalSyncEvent({
+                            actorUserId: session.user.id,
+                            spaceId: debt.spaceId.toString(),
+                            entryId: spaceEntryId,
+                            sourceType: SPACE_PERSONAL_IMPACT_SOURCE_TYPES.DEBT_PAYMENT,
+                            debtId: id,
+                            pendingTargets: [{
+                                userId: counterpartyParticipant.userId.toString(),
+                                participantId: counterpartyParticipant._id.toString(),
+                                impactKind: 'settlement_received',
+                                actionType: SPACE_PERSONAL_PENDING_ACTION_TYPES.IMPACT_SPACE_COLLECT,
+                                amount: parsed.data.amount,
+                                currency: debt.currency,
+                                counterpartyParticipantId: currentParticipant._id.toString(),
+                                counterpartyNameSnapshot: debt.counterpartyNameSnapshot,
+                            }],
+                        })
+                    }
+                } catch (err) {
+                    console.error('[personal-sync] pay counterparty pending:', err)
+                }
             }
         }
 

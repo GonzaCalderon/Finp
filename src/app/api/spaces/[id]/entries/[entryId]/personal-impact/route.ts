@@ -8,6 +8,7 @@ import {
     getPersonalImpactForEntries,
     resolveCurrentUserEntryShare,
 } from '@/lib/server/space-personal-impact'
+import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spacePersonalImpactSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
@@ -158,14 +159,22 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
+        // Remover impacto: limpiar vínculo con transacción y setear removedAt
+        // El badge "En tu Finp" desaparece; la transacción personal NO se elimina
         await SpaceEntryPersonalImpact.findOneAndUpdate(
             {
                 spaceId: id,
                 entryId,
                 userId: session.user.id,
-                status: 'linked',
+                status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
             },
-            { $set: { status: 'unlinked' } },
+            {
+                $set: {
+                    status: SPACE_PERSONAL_IMPACT_STATUSES.REMOVED,
+                    removedAt: new Date(),
+                },
+                $unset: { transactionId: 1, accountId: 1 },
+            },
             { new: true }
         ).lean<ISpaceEntryPersonalImpact | null>()
 

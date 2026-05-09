@@ -189,6 +189,22 @@ export const SPACE_PERSONAL_IMPACT_STATUSES = {
     LINKED: 'linked',
     UNLINKED: 'unlinked',
     NEEDS_REVIEW: 'needs_review',
+    PENDING: 'pending',      // sin transacción, esperando decisión del usuario
+    IGNORED: 'ignored',      // usuario decidió no registrar en su Finp
+    REMOVED: 'removed',      // tenía linked, el usuario lo quitó
+    CANCELLED: 'cancelled',  // sistema canceló (entry fue anulada)
+} as const
+
+export const SPACE_PERSONAL_PENDING_ACTION_TYPES = {
+    IMPACT_SPACE_EXPENSE: 'impact_space_expense',
+    IMPACT_SPACE_PAYMENT: 'impact_space_payment',
+    IMPACT_SPACE_COLLECT: 'impact_space_collect',
+} as const
+
+export const SPACE_PERSONAL_IMPACT_SOURCE_TYPES = {
+    SPACE_ENTRY: 'space_entry',
+    DEBT_PAYMENT: 'debt_payment',
+    DEBT_COLLECT: 'debt_collect',
 } as const
 
 export const DEBT_DIRECTIONS = {
@@ -267,6 +283,10 @@ export type SpacePersonalImpactKind =
     typeof SPACE_PERSONAL_IMPACT_KINDS[keyof typeof SPACE_PERSONAL_IMPACT_KINDS]
 export type SpacePersonalImpactStatus =
     typeof SPACE_PERSONAL_IMPACT_STATUSES[keyof typeof SPACE_PERSONAL_IMPACT_STATUSES]
+export type SpacePersonalPendingActionType =
+    typeof SPACE_PERSONAL_PENDING_ACTION_TYPES[keyof typeof SPACE_PERSONAL_PENDING_ACTION_TYPES]
+export type SpacePersonalImpactSourceType =
+    typeof SPACE_PERSONAL_IMPACT_SOURCE_TYPES[keyof typeof SPACE_PERSONAL_IMPACT_SOURCE_TYPES]
 export type DebtDirection = typeof DEBT_DIRECTIONS[keyof typeof DEBT_DIRECTIONS]
 export type DebtSourceType = typeof DEBT_SOURCE_TYPES[keyof typeof DEBT_SOURCE_TYPES]
 export type DebtStatus = typeof DEBT_STATUSES[keyof typeof DEBT_STATUSES]

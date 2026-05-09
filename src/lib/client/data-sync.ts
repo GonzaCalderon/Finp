@@ -14,6 +14,7 @@ export const DATA_TAGS = [
     'settings',
     'spaces',
     'debts',
+    'personal-pending-actions',
 ] as const
 
 export type DataTag = (typeof DATA_TAGS)[number]
@@ -100,12 +101,15 @@ export const PREFERENCE_INVALIDATION_TAGS: DataTag[] = [
     'projection',
 ]
 
+export const PERSONAL_PENDING_ACTIONS_INVALIDATION_TAGS: DataTag[] = ['personal-pending-actions']
+
 export const SPACE_INVALIDATION_TAGS: DataTag[] = [
     'spaces',
     'transactions',
     'dashboard',
     'accounts',
     'account-detail',
+    'personal-pending-actions',
 ]
 
 export const ALL_DATA_TAGS: DataTag[] = [...DATA_TAGS]
@@ -117,4 +121,5 @@ export const DEBT_INVALIDATION_TAGS: DataTag[] = [
     'dashboard',
     'accounts',
     'account-detail',
+    'personal-pending-actions',
 ]

@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { SpaceEntry } from '@/lib/models'
+import { SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
+import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryVoidSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
@@ -78,7 +79,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
             [entry],
             context.participants
         )
-        const hasPersonalImpact = Boolean(personalImpactsByEntryId[entryId])
+        const hasPersonalImpact = Boolean(personalImpactsByEntryId[entryId]?.linkedImpact)
 
         const voidedEntry = await SpaceEntry.findByIdAndUpdate(
             entryId,
@@ -115,6 +116,16 @@ export async function POST(request: Request, { params }: { params: Params }) {
                     hasSubsequentSettlement,
                 },
             }).catch((err) => console.error('[space-activity]', err))
+        }
+
+        // Cancelar pendientes del entry anulado (sistema, no usuario)
+        try {
+            await SpaceEntryPersonalImpact.updateMany(
+                { entryId, status: SPACE_PERSONAL_IMPACT_STATUSES.PENDING },
+                { $set: { status: SPACE_PERSONAL_IMPACT_STATUSES.CANCELLED, resolvedAt: new Date() } }
+            )
+        } catch (err) {
+            console.error('[personal-sync] void cancel pending:', err)
         }
 
         try {

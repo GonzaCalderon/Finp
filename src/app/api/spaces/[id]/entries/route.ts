@@ -17,10 +17,14 @@ import {
 } from '@/lib/server/spaces'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
+import { emitPersonalSyncEvent } from '@/lib/server/personal-sync-events'
+import type { PendingActionTarget } from '@/lib/server/personal-sync-events'
 import { spaceEntrySchema } from '@/lib/validations'
 import {
+    buildEntryShares,
     calculateReportingAmount,
     extractId,
+    roundAmount,
 } from '@/lib/utils/spaces'
 import type { ISpaceEntry } from '@/types'
 
@@ -356,6 +360,123 @@ export async function POST(
             await syncSpaceDebtsForActiveParticipants(id)
         } catch (err) {
             console.error('[debt-sync] entries POST:', err)
+        }
+
+        // Crear pendientes accionables para los participantes involucrados
+        try {
+            const entryId = extractId(savedEntry._id)
+            if (entryId) {
+                const actorAlreadyLinked = Boolean(
+                    parsed.data.personalAccountId || parsed.data.linkedTransactionId
+                )
+                const pendingTargets: PendingActionTarget[] = []
+
+                if (savedEntry.type === 'settlement') {
+                    const payer = context.participants.find(
+                        (p) => extractId(p._id) === extractId(savedEntry.paidByParticipantId)
+                    )
+                    const payerUserId = extractId(payer?.userId)
+                    if (payerUserId && payer) {
+                        const isCreatorPayer = payerUserId === session.user.id
+                        if (!isCreatorPayer || !actorAlreadyLinked) {
+                            const firstReceiverId = extractId(savedEntry.sharedWithParticipantIds?.[0])
+                            const firstReceiver = firstReceiverId
+                                ? context.participants.find((p) => extractId(p._id) === firstReceiverId)
+                                : undefined
+                            pendingTargets.push({
+                                userId: payerUserId,
+                                participantId: extractId(payer._id) ?? '',
+                                impactKind: 'settlement_paid',
+                                actionType: 'impact_space_payment',
+                                amount: roundAmount(savedEntry.amount),
+                                currency: savedEntry.currency,
+                                counterpartyParticipantId: firstReceiverId,
+                                counterpartyNameSnapshot: firstReceiver?.displayName,
+                            })
+                        }
+                    }
+
+                    for (const sharedId of (savedEntry.sharedWithParticipantIds ?? [])) {
+                        const shared = context.participants.find(
+                            (p) => extractId(p._id) === extractId(sharedId)
+                        )
+                        const sharedUserId = extractId(shared?.userId)
+                        if (!sharedUserId || !shared) continue
+                        if (sharedUserId === session.user.id && actorAlreadyLinked) continue
+                        pendingTargets.push({
+                            userId: sharedUserId,
+                            participantId: extractId(shared._id) ?? '',
+                            impactKind: 'settlement_received',
+                            actionType: 'impact_space_collect',
+                            amount: roundAmount(savedEntry.amount),
+                            currency: savedEntry.currency,
+                            counterpartyParticipantId: extractId(savedEntry.paidByParticipantId),
+                            counterpartyNameSnapshot: payer?.displayName,
+                        })
+                    }
+                } else {
+                    const payerParticipant = context.participants.find(
+                        (p) => extractId(p._id) === extractId(savedEntry.paidByParticipantId)
+                    )
+                    const payerUserId = extractId(payerParticipant?.userId)
+                    const shares = buildEntryShares(savedEntry, context.participants)
+
+                    if (payerUserId && payerParticipant) {
+                        const payerAlreadyLinked = payerUserId === session.user.id && actorAlreadyLinked
+                        if (!payerAlreadyLinked) {
+                            const payerShare = shares.find(
+                                (s) => s.participantId === extractId(payerParticipant._id)
+                            )
+                            pendingTargets.push({
+                                userId: payerUserId,
+                                participantId: extractId(payerParticipant._id) ?? '',
+                                impactKind: 'payer_full_amount',
+                                actionType: 'impact_space_expense',
+                                amount: roundAmount(payerShare?.amount ?? savedEntry.amount),
+                                currency: savedEntry.currency,
+                                accountImpactAmount: roundAmount(savedEntry.amount),
+                                operationalAmount: payerShare
+                                    ? roundAmount(payerShare.amount)
+                                    : undefined,
+                            })
+                        }
+                    }
+
+                    for (const sharedId of (savedEntry.sharedWithParticipantIds ?? [])) {
+                        const shared = context.participants.find(
+                            (p) => extractId(p._id) === extractId(sharedId)
+                        )
+                        const sharedUserId = extractId(shared?.userId)
+                        if (!sharedUserId || !shared) continue
+                        if (extractId(shared._id) === extractId(payerParticipant?._id)) continue
+                        if (sharedUserId === session.user.id && actorAlreadyLinked) continue
+                        const share = shares.find(
+                            (s) => s.participantId === extractId(shared._id)
+                        )
+                        if (!share) continue
+                        pendingTargets.push({
+                            userId: sharedUserId,
+                            participantId: extractId(shared._id) ?? '',
+                            impactKind: 'participant_share',
+                            actionType: 'impact_space_expense',
+                            amount: roundAmount(share.amount),
+                            currency: savedEntry.currency,
+                            counterpartyParticipantId: extractId(payerParticipant?._id),
+                            counterpartyNameSnapshot: payerParticipant?.displayName,
+                        })
+                    }
+                }
+
+                await emitPersonalSyncEvent({
+                    actorUserId: session.user.id,
+                    spaceId: id,
+                    entryId,
+                    sourceType: 'space_entry',
+                    pendingTargets,
+                })
+            }
+        } catch (err) {
+            console.error('[personal-sync] entries POST:', err)
         }
 
         return NextResponse.json({ entry: savedEntry }, { status: 201 })
