@@ -5,6 +5,7 @@ import { Info } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
     DialogFooter,
@@ -98,6 +99,9 @@ export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: 
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle>Pagar deuda</DialogTitle>
+                    <DialogDescription>
+                        Registra un pago y actualiza el saldo pendiente de esta deuda.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">

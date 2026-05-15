@@ -30,11 +30,13 @@ function InsightTile({
     value,
     caption,
     tone = 'default',
+    loading = false,
 }: {
     label: string
     value: string
     caption: string
     tone?: 'default' | 'positive' | 'warning' | 'negative'
+    loading?: boolean
 }) {
     const color =
         tone === 'positive'
@@ -49,7 +51,13 @@ function InsightTile({
         <div className="rounded-[22px] border border-foreground/[0.06] bg-background/45 p-3">
             <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
             <p className="mt-2 text-lg font-semibold tracking-tight" style={{ color }}>
-                {value}
+                {loading ? (
+                    <span
+                        className="inline-block h-[1em] w-[7ch] animate-pulse rounded-md align-[-0.12em]"
+                        style={{ background: 'color-mix(in srgb, currentColor 16%, transparent)' }}
+                        aria-label="Cargando valor"
+                    />
+                ) : value}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">{caption}</p>
         </div>
@@ -61,11 +69,13 @@ function MobileSummaryCard({
     hidden,
     balance,
     debtRatio,
+    loading = false,
 }: {
     href: string
     hidden: boolean
     balance: { ars: number; usd: number }
     debtRatio: number
+    loading?: boolean
 }) {
     return (
         <Link
@@ -88,6 +98,7 @@ function MobileSummaryCard({
                         hideZeroSecondary
                         preserveSecondarySpace
                         className="text-[1.85rem] font-semibold tracking-tight"
+                        loading={loading}
                     />
                 </div>
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-foreground/[0.08] bg-background/55">
@@ -125,7 +136,13 @@ function MobileSummaryCard({
                                     : 'var(--foreground)',
                     }}
                 >
-                    {Math.round(debtRatio)}%
+                    {loading ? (
+                        <span
+                            className="inline-block h-[1em] w-[4ch] animate-pulse rounded-md align-[-0.12em]"
+                            style={{ background: 'color-mix(in srgb, currentColor 16%, transparent)' }}
+                            aria-label="Cargando porcentaje"
+                        />
+                    ) : `${Math.round(debtRatio)}%`}
                 </span>
             </div>
         </Link>
@@ -140,6 +157,7 @@ function MobileMetricTile({
     primaryColor,
     secondaryColor,
     className,
+    loading = false,
 }: {
     title: string
     href: string
@@ -148,6 +166,7 @@ function MobileMetricTile({
     primaryColor: string
     secondaryColor: string
     className?: string
+    loading?: boolean
 }) {
     return (
         <Link
@@ -166,6 +185,7 @@ function MobileMetricTile({
                 hideZeroSecondary
                 preserveSecondarySpace
                 className="mt-2 text-[1.05rem] font-semibold tracking-tight"
+                loading={loading}
             />
         </Link>
     )
@@ -175,6 +195,7 @@ export function DashboardMobile({
     data,
     month,
     monthOptions,
+    refreshing,
     hidden,
     onMonthChange,
     operationalStartConfigured,
@@ -234,6 +255,7 @@ export function DashboardMobile({
                     hidden={hidden}
                     balance={data.summary.balance}
                     debtRatio={debtToIncomeRatio}
+                    loading={refreshing}
                 />
 
                 <div className="grid grid-cols-2 gap-3">
@@ -244,6 +266,7 @@ export function DashboardMobile({
                         totals={data.summary.totalIncome}
                         primaryColor="#10B981"
                         secondaryColor="rgba(16,185,129,0.78)"
+                        loading={refreshing}
                     />
                     <MobileMetricTile
                         title="Gastos"
@@ -252,6 +275,7 @@ export function DashboardMobile({
                         totals={data.summary.totalExpense}
                         primaryColor="var(--destructive)"
                         secondaryColor="rgba(239,68,68,0.78)"
+                        loading={refreshing}
                     />
                     <MobileMetricTile
                         title="Deuda mensual"
@@ -260,6 +284,7 @@ export function DashboardMobile({
                         totals={data.summary.totalCreditCardExpense}
                         primaryColor="var(--amber-dark)"
                         secondaryColor="rgba(234,179,8,0.78)"
+                        loading={refreshing}
                     />
                     <MobileMetricTile
                         title="Pendiente TC"
@@ -268,6 +293,7 @@ export function DashboardMobile({
                         totals={data.summary.totalDebt}
                         primaryColor={data.summary.totalDebt.ars > 0 ? 'var(--foreground)' : 'var(--sky-dark)'}
                         secondaryColor="var(--muted-foreground)"
+                        loading={refreshing}
                     />
                     <MobileMetricTile
                         title="Compromisos del mes"
@@ -277,6 +303,7 @@ export function DashboardMobile({
                         primaryColor="var(--sky-dark)"
                         secondaryColor="rgba(96,184,224,0.78)"
                         className="col-span-2"
+                        loading={refreshing}
                     />
                 </div>
             </section>
@@ -324,24 +351,28 @@ export function DashboardMobile({
                         label="Top categoría"
                         value={topCategory?.name ?? 'Sin datos'}
                         caption={topCategory ? 'Mayor concentración de gasto' : 'Aún no hay categoría líder'}
+                        loading={refreshing}
                     />
                     <InsightTile
                         label="Cuotas"
                         value={String(data.installmentsThisMonth.length)}
                         caption="Compromisos pendientes"
                         tone="default"
+                        loading={refreshing}
                     />
                     <InsightTile
                         label="TC / ingreso"
                         value={`${Math.round(debtToIncomeRatio)}%`}
                         caption="Presión mensual de tarjetas"
                         tone={debtToIncomeRatio >= 60 ? 'warning' : 'default'}
+                        loading={refreshing}
                     />
                     <InsightTile
                         label="Compromisos / ingreso"
                         value={commitmentsToIncomeRatio > 0 ? `${Math.round(commitmentsToIncomeRatio)}%` : 'Sin datos'}
                         caption={commitmentsToIncomeRatio > 0 ? 'Obligaciones fijas del mes' : 'Sin compromisos activos'}
                         tone="default"
+                        loading={refreshing}
                     />
                 </div>
             </DashboardPanel>
@@ -361,6 +392,7 @@ export function DashboardMobile({
                         hideZeroSecondary
                         preserveSecondarySpace
                         className="mt-2 text-[1.45rem] font-semibold tracking-tight"
+                        loading={refreshing}
                     />
                 </div>
 

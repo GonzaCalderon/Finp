@@ -238,6 +238,7 @@ export default function SpaceDetailPage() {
     const [pendingSheetTab, setPendingSheetTab] = useState<PendingSheetTab>('pending')
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
+    const [focusedEntryId, setFocusedEntryId] = useState<string | null>(focusEntryId)
     const [detailEntry, setDetailEntry] = useState<ISpaceEntry | null>(null)
     const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
     const [editingEntry, setEditingEntry] = useState<ISpaceEntry | null>(null)
@@ -255,18 +256,26 @@ export default function SpaceDetailPage() {
         setAction({
             label: 'Agregar movimiento',
             icon: <Plus size={18} color="#fff" />,
-            onPress: () => setEntryDialogOpen(true),
+            onPress: () => {
+                setFocusedEntryId(null)
+                setEntryDialogOpen(true)
+            },
         })
         return () => clearAction()
     }, [setAction, clearAction])
 
     useEffect(() => {
-        if (activeTab !== 'entries' || !focusEntryId) return
-        const el = document.querySelector(`[data-entry-id="${focusEntryId}"]`)
+        setFocusedEntryId(focusEntryId)
+        if (focusEntryId) setActiveTab('entries')
+    }, [focusEntryId])
+
+    useEffect(() => {
+        if (activeTab !== 'entries' || !focusedEntryId) return
+        const el = document.querySelector(`[data-entry-id="${focusedEntryId}"]`)
         if (el) {
             setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
         }
-    }, [activeTab, focusEntryId, data?.entries])
+    }, [activeTab, focusedEntryId, data?.entries])
 
     usePageTitle(data?.space.name ? `${data.space.name} · Espacios` : 'Espacios')
     useAppStartupReady(!loading)
@@ -295,12 +304,14 @@ export default function SpaceDetailPage() {
     const suggestedPayments = data?.summary.balances ? buildRecommendedPayments(data.summary.balances) : []
 
     const handleCreateEntry = async (payload: Parameters<typeof entriesApi.createEntry>[0]) => {
+        setFocusedEntryId(null)
         const entry = await entriesApi.createEntry(payload)
         success('Movimiento guardado')
         return entry
     }
 
     function handleRegisterSettlement(prefill?: SettlementPrefill) {
+        setFocusedEntryId(null)
         setSettlementPrefill(prefill)
         setSettlementDialogOpen(true)
     }
@@ -435,6 +446,7 @@ export default function SpaceDetailPage() {
     }
 
     async function handleQuickVoid(entry: ISpaceEntry) {
+        setFocusedEntryId(null)
         const entryId = extractId(entry._id)
         setVoidingEntry(entry)
         let hasLinkedTransaction = false
@@ -553,14 +565,20 @@ export default function SpaceDetailPage() {
                 <MobileTabBar
                     activeTab={activeTab}
                     pendingCount={data.summary.pendingEntryCount}
-                    onChange={setActiveTab}
+                    onChange={(tab) => {
+                        setFocusedEntryId(null)
+                        setActiveTab(tab)
+                    }}
                 />
 
                 {/* Desktop tab bar (6 tabs) */}
                 <DesktopTabBar
                     activeTab={activeTab}
                     pendingCount={data.summary.pendingEntryCount}
-                    onChange={setActiveTab}
+                    onChange={(tab) => {
+                        setFocusedEntryId(null)
+                        setActiveTab(tab)
+                    }}
                 />
 
                 {/* Summary tab */}
@@ -577,7 +595,10 @@ export default function SpaceDetailPage() {
                             currency={data.space.reportingCurrency}
                             hidden={hidden}
                             currentUserId={currentUserId}
-                            onGoToBalance={() => setActiveTab('balance')}
+                            onGoToBalance={() => {
+                                setFocusedEntryId(null)
+                                setActiveTab('balance')
+                            }}
                         />
 
                         {/* Charts: visible on mobile and desktop */}
@@ -626,13 +647,23 @@ export default function SpaceDetailPage() {
                             personalImpactsByEntryId={data.personalImpactsByEntryId}
                             canManage={canManage}
                             entryFilter={entryFilter}
-                            onFilterChange={setEntryFilter}
+                            onFilterChange={(filter) => {
+                                setFocusedEntryId(null)
+                                setEntryFilter(filter)
+                            }}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
-                            focusEntryId={focusEntryId}
-                            onCreate={() => setEntryDialogOpen(true)}
-                            onEntryClick={setDetailEntry}
+                            focusEntryId={focusedEntryId}
+                            onCreate={() => {
+                                setFocusedEntryId(null)
+                                setEntryDialogOpen(true)
+                            }}
+                            onEntryClick={(entry) => {
+                                setFocusedEntryId(null)
+                                setDetailEntry(entry)
+                            }}
                             onEdit={(entry) => {
+                                setFocusedEntryId(null)
                                 setEditingEntry(entry)
                                 setEditEntryHasSubsequentSettlement(false)
                                 setEditEntryDialogOpen(true)
@@ -654,6 +685,7 @@ export default function SpaceDetailPage() {
                         onRegisterSettlement={handleRegisterSettlement}
                         onCreateSettlementDirect={handleCreateSettlementDirect}
                         onViewAllSettlements={() => {
+                            setFocusedEntryId(null)
                             setActiveTab('entries')
                             setEntryFilter('settlement')
                         }}

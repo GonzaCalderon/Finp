@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import { ArrowRight, ExternalLink, History, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -186,7 +187,14 @@ export function DebtRelationPanel({
     }, {})
 
     return (
-        <div className="flex h-full min-h-0 flex-col bg-card">
+        <motion.div
+            key={rel.key}
+            className="flex h-full min-h-0 flex-col bg-card"
+            initial={{ opacity: 0, x: 14 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 10 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        >
             <div className="border-b p-4 md:p-5">
                 <div className="flex items-start gap-3">
                     <DebtInitialsAvatar name={rel.name} className="h-11 w-11" />
@@ -318,6 +326,6 @@ export function DebtRelationPanel({
                     ) : null}
                 </div>
             </div>
-        </div>
+        </motion.div>
     )
 }

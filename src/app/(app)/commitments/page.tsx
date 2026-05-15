@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
     Calendar,
@@ -319,6 +320,8 @@ function CommitmentSection({
 }
 
 export default function CommitmentsPage() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const { commitments, loading, error, createCommitment, updateCommitment, deleteCommitment } = useCommitments()
     const { categories } = useCategories()
     const { accounts } = useAccounts()
@@ -332,6 +335,13 @@ export default function CommitmentsPage() {
     const [appliedId, setAppliedId] = useState<string | null>(null)
 
     usePageTitle('Compromisos')
+
+    useEffect(() => {
+        if (searchParams.get('create') !== '1') return
+        setSelected(null)
+        setDialogOpen(true)
+        router.replace('/commitments', { scroll: false })
+    }, [router, searchParams])
 
     const commitmentsWithRecentApply = useMemo(
         () =>

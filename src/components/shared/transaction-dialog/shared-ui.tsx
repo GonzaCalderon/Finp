@@ -128,13 +128,24 @@ export function ChoiceCard({
     )
 }
 
-export function CategoryChip({ category, selected, onClick }: { category: ICategory; selected: boolean; onClick: () => void }) {
+export function CategoryChip({
+    category,
+    selected,
+    onClick,
+    animateOnMount = true,
+}: {
+    category: ICategory
+    selected: boolean
+    onClick: () => void
+    animateOnMount?: boolean
+}) {
     return (
         <motion.button
             type="button"
             onClick={onClick}
             className="rounded-full border px-3 py-2 text-sm font-medium transition-colors"
-            variants={staggerItem}
+            variants={animateOnMount ? staggerItem : undefined}
+            initial={animateOnMount ? undefined : false}
             {...MOTION_CHIP}
             style={{
                 background: selected ? category.color || 'var(--sky)' : category.type === 'income' ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',

@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -204,6 +205,9 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
             <DialogContent variant="fullscreen-mobile" className="max-w-md p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{account ? 'Editar cuenta' : 'Nueva cuenta'}</DialogTitle>
+                    <DialogDescription>
+                        Configura el tipo, moneda y saldo inicial de la cuenta.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form

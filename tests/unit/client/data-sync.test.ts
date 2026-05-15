@@ -75,12 +75,12 @@ describe('data-sync invalidation bus', () => {
 
 describe('fase 6 invalidation tags', () => {
     it('NOTIFICATION_INVALIDATION_TAGS contiene notifications', () => {
-        expect(NOTIFICATION_INVALIDATION_TAGS).toEqual(['notifications'])
+        expect(NOTIFICATION_INVALIDATION_TAGS).toEqual(expect.arrayContaining(['notifications', 'nav-insights']))
     })
 
     it('PERSONAL_PENDING_ACTIONS_INVALIDATION_TAGS refresca pending y notifications', () => {
         expect(PERSONAL_PENDING_ACTIONS_INVALIDATION_TAGS).toEqual(
-            expect.arrayContaining(['personal-pending-actions', 'notifications'])
+            expect.arrayContaining(['personal-pending-actions', 'notifications', 'nav-insights'])
         )
     })
 
@@ -95,6 +95,7 @@ describe('fase 6 invalidation tags', () => {
                 'account-detail',
                 'personal-pending-actions',
                 'notifications',
+                'nav-insights',
             ])
         )
     })
@@ -108,6 +109,7 @@ describe('fase 6 invalidation tags', () => {
                 'account-detail',
                 'dashboard',
                 'notifications',
+                'nav-insights',
             ])
         )
     })

@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { CreditCard, Handshake } from 'lucide-react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useDebts } from '@/hooks/useDebts'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useSpaces } from '@/hooks/useSpaces'
@@ -69,6 +69,7 @@ function emptyTitle(filter: DebtsFilter) {
 export default function DebtsPage() {
     usePageTitle('Deudas')
 
+    const router = useRouter()
     const searchParams = useSearchParams()
     const {
         debts,
@@ -145,6 +146,11 @@ export default function DebtsPage() {
     }, [allRelationships, selectedRelationKey])
 
     useEffect(() => {
+        if (searchParams.get('create') === '1') {
+            openCreate()
+            router.replace('/debts', { scroll: false })
+        }
+
         const debtId = searchParams.get('debtId')
         if (!debtId || debtsLoading || handledDebtParamRef.current === debtId) return
 
@@ -171,7 +177,7 @@ export default function DebtsPage() {
             setSelectedRelationKey(relationKeyFromDebt(debt))
             setHighlightedDebtId(debtId)
         })
-    }, [allDebts, debtsLoading, info, searchParams])
+    }, [allDebts, debtsLoading, info, router, searchParams])
 
     function openCreate(prefillName = '') {
         setCreatePrefillName(prefillName)
@@ -354,16 +360,25 @@ export default function DebtsPage() {
                 </div>
             </div>
 
-            {selectedRel ? (
-                <aside className="hidden w-96 shrink-0 border-l bg-card md:flex md:flex-col">
-                    <DebtRelationPanel
-                        rel={selectedRel}
-                        hidden={hidden}
-                        highlightedDebtId={highlightedDebtId}
-                        {...panelHandlers}
-                    />
-                </aside>
-            ) : null}
+            <AnimatePresence mode="wait">
+                {selectedRel ? (
+                    <motion.aside
+                        key={selectedRel.key}
+                        className="hidden w-96 shrink-0 overflow-hidden border-l bg-card md:flex md:flex-col"
+                        initial={{ opacity: 0, x: 28 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 18 }}
+                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                        <DebtRelationPanel
+                            rel={selectedRel}
+                            hidden={hidden}
+                            highlightedDebtId={highlightedDebtId}
+                            {...panelHandlers}
+                        />
+                    </motion.aside>
+                ) : null}
+            </AnimatePresence>
 
             <DebtRelationSheet
                 open={Boolean(selectedRel && isMobile)}

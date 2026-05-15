@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -164,6 +165,9 @@ export function TransactionRuleDialog({
             <DialogContent variant="fullscreen-mobile" className="max-w-lg p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{rule ? 'Editar regla' : 'Nueva regla automática'}</DialogTitle>
+                    <DialogDescription>
+                        Automatiza la categoria o el tipo cuando un movimiento coincida con este criterio.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(handleFormSubmit)} className="flex max-h-[85vh] flex-col">

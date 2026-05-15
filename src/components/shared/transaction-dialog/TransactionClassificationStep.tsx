@@ -157,6 +157,7 @@ export function TransactionClassificationStep({
                                                     category={category}
                                                     selected={categoryId === category._id.toString()}
                                                     onClick={() => onCategorySelect(category._id.toString())}
+                                                    animateOnMount={false}
                                                 />
                                             ))}
                                         </motion.div>

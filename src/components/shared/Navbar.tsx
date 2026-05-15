@@ -27,9 +27,11 @@ import {
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
+import { NavInsight } from '@/components/shared/NavInsight'
 import { Button } from '@/components/ui/button'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
+import { useNavInsights } from '@/hooks/useNavInsights'
 import { useToast } from '@/hooks/useToast'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useSpaceAction } from '@/contexts/SpaceActionContext'
@@ -43,6 +45,7 @@ import {
     invalidateData,
     TRANSACTION_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
+import type { NavInsight as NavInsightType } from '@/types/nav-insight'
 
 type NavKey =
     | 'dashboard'
@@ -146,6 +149,11 @@ const FAB_TONE_STYLES: Record<FabActionTone, { background: string; color: string
     muted: { background: 'var(--secondary)', color: 'var(--muted-foreground)', shadow: 'rgba(17,24,39,0.10)' },
 }
 
+const NAV_LOAD_ITEM = {
+    initial: { opacity: 0, y: 8, scale: 0.985 },
+    animate: { opacity: 1, y: 0, scale: 1 },
+} as const
+
 function isRouteActive(pathname: string, href: string) {
     if (href === '/transactions') return pathname === href
     if (href === '/dashboard') return pathname === href
@@ -164,11 +172,15 @@ function compactCount(count: number) {
 function getPeriodInfo(date = new Date()) {
     const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
     const progress = Math.min(1, Math.max(0, date.getDate() / daysInMonth))
-    const month = date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+    const monthLabel = date.toLocaleDateString('es-AR', { month: 'long' })
+        .replace(/^\w/, (letter) => letter.toUpperCase())
+    const percent = Math.round(progress * 100)
     return {
         progress,
-        month: month.replace(' de ', ' '),
-        progressLabel: `${Math.round(progress * 100)}% del mes`,
+        monthLabel,
+        percentLabel: `${percent}%`,
+        compactLabel: `${monthLabel} · ${percent}%`,
+        progressAriaLabel: `${monthLabel}, ${percent}% del mes transcurrido`,
     }
 }
 
@@ -187,7 +199,7 @@ function buildConfig(label: string, actions: FabAction[], icon?: ReactNode): Fab
     }
 
     return {
-        mode: available.length === 1 ? 'direct' : 'radial',
+        mode: 'radial',
         label,
         icon,
         actions: available,
@@ -219,7 +231,6 @@ export function getMobileFabConfig(params: {
     const {
         pathname,
         openTransactionDialog,
-        openCreditCardExpense,
         openAccountDialog,
         openSpaceDialog,
         openDebtDialog,
@@ -236,23 +247,6 @@ export function getMobileFabConfig(params: {
         tone: 'primary',
         onPress: openTransactionDialog,
     }
-    const creditCardExpense: FabAction = openCreditCardExpense
-        ? {
-            id: 'credit-card-expense',
-            label: 'Gasto con TC',
-            description: 'Tarjeta y cuotas',
-            icon: CreditCard,
-            tone: 'purple',
-            onPress: openCreditCardExpense,
-        }
-        : {
-            id: 'credit-card-expense',
-            label: 'Gasto con TC',
-            description: 'Tarjeta y cuotas',
-            icon: CreditCard,
-            tone: 'purple',
-            href: '/transactions/credit-card',
-        }
     const importExcel: FabAction = {
         id: 'import-excel',
         label: 'Importar Excel',
@@ -277,7 +271,7 @@ export function getMobileFabConfig(params: {
             description: 'Banco o billetera',
             icon: Wallet,
             tone: 'green',
-            href: '/accounts',
+            href: '/accounts?create=1',
             currentPathname: pathname,
         })
 
@@ -305,7 +299,7 @@ export function getMobileFabConfig(params: {
                 description: 'Gasto compartido',
                 icon: BriefcaseBusiness,
                 tone: 'amber',
-                href: '/spaces',
+                href: '/spaces?create=1',
                 currentPathname: pathname,
             })
 
@@ -325,14 +319,36 @@ export function getMobileFabConfig(params: {
         )
     }
 
+    const newSpaceAction: FabAction = {
+        id: 'new-space',
+        label: 'Nuevo espacio',
+        description: 'Crear espacio compartido',
+        icon: BriefcaseBusiness,
+        tone: 'amber',
+        href: '/spaces?create=1',
+    }
+
     if (pathname === '/spaces') {
-        return buildConfig('Acciones de espacios', [spaceCreateAction, newTransaction].filter(Boolean) as FabAction[])
+        return buildConfig('Acciones de espacios', [
+            spaceAction
+                ? {
+                    id: 'space-action',
+                    label: spaceAction.label,
+                    description: 'Registrar gasto compartido',
+                    icon: BriefcaseBusiness,
+                    tone: 'amber',
+                    onPress: spaceAction.onPress,
+                }
+                : null,
+            newSpaceAction,
+            newTransaction,
+        ].filter(Boolean) as FabAction[])
     }
 
     if (pathname === '/transactions/credit-card') {
         return buildConfig('Acciones de tarjeta', [
-            openCreditCardExpense ? creditCardExpense : null,
             newTransaction,
+            importExcel,
         ].filter(Boolean) as FabAction[])
     }
 
@@ -341,7 +357,7 @@ export function getMobileFabConfig(params: {
     }
 
     if (pathname === '/transactions') {
-        return buildConfig('Acciones de movimientos', [newTransaction, creditCardExpense, importExcel])
+        return buildConfig('Acciones de movimientos', [newTransaction, importExcel])
     }
 
     if (pathname === '/accounts') {
@@ -364,7 +380,7 @@ export function getMobileFabConfig(params: {
                 description: 'Prestamo o pendiente',
                 icon: HandCoins,
                 tone: 'amber',
-                href: '/debts',
+                href: '/debts?create=1',
                 currentPathname: pathname,
             })
         return buildConfig('Acciones de deudas', [debtAction, newTransaction].filter(Boolean) as FabAction[])
@@ -386,7 +402,7 @@ export function getMobileFabConfig(params: {
                 description: 'Pago previsto',
                 icon: Calendar,
                 tone: 'green',
-                href: '/commitments',
+                href: '/commitments?create=1',
                 currentPathname: pathname,
             })
         return buildConfig('Acciones de compromisos', [commitmentAction, newTransaction].filter(Boolean) as FabAction[])
@@ -408,20 +424,16 @@ export function getMobileFabConfig(params: {
                 description: 'Automatizar categoria',
                 icon: Wand2,
                 tone: 'purple',
-                href: '/rules',
+                href: '/rules?create=1',
                 currentPathname: pathname,
             })
         return buildConfig('Acciones de reglas', [ruleAction].filter(Boolean) as FabAction[])
     }
 
-    if (pathname === '/settings') {
-        return { mode: 'hidden', label: 'Acciones rapidas', actions: [] }
-    }
-
     if (pathname === '/dashboard') {
         return buildConfig('Acciones rapidas', [
             newTransaction,
-            creditCardExpense,
+            importExcel,
             accountAction,
             spaceCreateAction,
         ].filter(Boolean) as FabAction[])
@@ -429,7 +441,7 @@ export function getMobileFabConfig(params: {
 
     return buildConfig('Acciones rapidas', [
         newTransaction,
-        creditCardExpense,
+        importExcel,
         accountAction,
         spaceCreateAction,
     ].filter(Boolean) as FabAction[])
@@ -449,10 +461,12 @@ function AvatarProgressRing({
     initials,
     progress,
     size = 38,
+    ariaLabel,
 }: {
     initials: string
     progress: number
     size?: number
+    ariaLabel?: string
 }) {
     const stroke = Math.max(2, Math.round(size * 0.07))
     const radius = (size - stroke) / 2
@@ -461,7 +475,12 @@ function AvatarProgressRing({
     const innerSize = size - stroke * 2 - 4
 
     return (
-        <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <div
+            className="relative shrink-0"
+            style={{ width: size, height: size }}
+            role="img"
+            aria-label={ariaLabel}
+        >
             <svg className="absolute inset-0" width={size} height={size} aria-hidden="true">
                 <circle
                     cx={size / 2}
@@ -499,24 +518,7 @@ function AvatarProgressRing({
     )
 }
 
-function NavTicker({ month, progressLabel }: { month: string; progressLabel: string }) {
-    return (
-        <div
-            className="mt-2 overflow-hidden rounded-lg border px-2.5 py-2"
-            style={{
-                borderColor: 'var(--finp-nav-line)',
-                background: 'color-mix(in srgb, var(--finp-nav-hover) 58%, transparent)',
-            }}
-        >
-            <div className="finp-nav-ticker flex items-center gap-2 text-[11px] font-medium text-white/55">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--sky)' }} />
-                <span className="truncate">Periodo actual · {month} · {progressLabel}</span>
-            </div>
-        </div>
-    )
-}
-
-function SidebarContent() {
+function SidebarContent({ insight, insightLoading }: { insight: NavInsightType; insightLoading: boolean }) {
     const pathname = usePathname()
     const { hidden, toggleHidden } = useHideAmounts()
     const { pendingCount } = useNotifications()
@@ -532,108 +534,138 @@ function SidebarContent() {
                     >
                         Fin<span style={{ color: 'var(--sky)' }}>p</span>
                     </div>
-                    <AvatarProgressRing initials={initials} progress={period.progress} />
+                    <div className="flex items-center gap-2">
+                        <div className="text-right leading-tight">
+                            <div className="text-[11px] font-semibold text-white">{period.monthLabel}</div>
+                            <div className="text-[10px] font-medium text-white/42">{period.percentLabel}</div>
+                        </div>
+                        <AvatarProgressRing
+                            initials={initials}
+                            progress={period.progress}
+                            ariaLabel={period.progressAriaLabel}
+                        />
+                    </div>
                 </div>
             </div>
 
             <div className="border-b px-4 py-3" style={{ borderColor: 'var(--finp-nav-line)' }}>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/35">
-                    Periodo actual
-                </div>
-                <div className="mt-1 flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold text-white">{period.month}</span>
-                    <span className="text-[11px] font-medium" style={{ color: 'var(--sky)' }}>
-                        {period.progressLabel}
-                    </span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--finp-nav-track)' }}>
-                    <div
-                        className="h-full rounded-full"
-                        style={{ width: `${period.progress * 100}%`, background: 'var(--sky)' }}
-                    />
-                </div>
-                <NavTicker month={period.month} progressLabel={period.progressLabel} />
+                <NavInsight insight={insight} loading={insightLoading} />
             </div>
 
             <nav className="finp-nav-scrollbar min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
-                {DESKTOP_GROUPS.map((group) => (
-                    <div key={group.label} className="mb-3">
-                        <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/32">
+                {DESKTOP_GROUPS.map((group, groupIndex) => (
+                    <motion.div
+                        key={group.label}
+                        className="mb-3"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, delay: 0.04 + groupIndex * 0.035, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                        <motion.div
+                            className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/32"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.18, delay: 0.06 + groupIndex * 0.035 }}
+                        >
                             {group.label}
-                        </div>
+                        </motion.div>
                         <div className="space-y-1">
-                            {group.items.map((key) => {
+                            {group.items.map((key, itemIndex) => {
                                 const item = NAV_BY_KEY[key]
                                 const Icon = item.icon
                                 const active = isRouteActive(pathname, item.href)
                                 const showPending = key === 'spaces' && pendingCount > 0
 
                                 return (
-                                    <Link
+                                    <motion.div
                                         key={item.href}
-                                        href={item.href}
-                                        className="group relative flex items-center gap-2.5 overflow-hidden rounded-lg px-3 py-2 text-sm transition-colors hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
-                                        style={{ color: active ? '#fff' : 'var(--sidebar-foreground)' }}
+                                        {...NAV_LOAD_ITEM}
+                                        transition={{
+                                            duration: 0.22,
+                                            delay: 0.08 + groupIndex * 0.04 + itemIndex * 0.025,
+                                            ease: [0.22, 1, 0.36, 1],
+                                        }}
                                     >
-                                        {active && (
-                                            <motion.span
-                                                layoutId="desktop-nav-active"
-                                                className="absolute inset-0 rounded-lg"
-                                                style={{ background: 'var(--sidebar-accent)' }}
-                                                transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+                                        <Link
+                                            href={item.href}
+                                            className="group relative flex items-center gap-2.5 overflow-hidden rounded-lg px-3 py-2 text-sm transition-colors hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                                            style={{ color: active ? '#fff' : 'var(--sidebar-foreground)' }}
+                                        >
+                                            {active && (
+                                                <motion.span
+                                                    layoutId="desktop-nav-active"
+                                                    className="absolute inset-0 rounded-lg"
+                                                    style={{ background: 'var(--sidebar-accent)' }}
+                                                    transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+                                                />
+                                            )}
+                                            {active && (
+                                                <motion.span
+                                                    layoutId="desktop-nav-bar"
+                                                    className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full"
+                                                    style={{ background: 'var(--sky)' }}
+                                                    transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+                                                />
+                                            )}
+                                            <Icon
+                                                size={16}
+                                                className="relative shrink-0 transition-colors"
+                                                style={{ color: active ? 'var(--sky)' : 'currentColor' }}
                                             />
-                                        )}
-                                        {active && (
-                                            <motion.span
-                                                layoutId="desktop-nav-bar"
-                                                className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full"
-                                                style={{ background: 'var(--sky)' }}
-                                                transition={{ type: 'spring', stiffness: 420, damping: 38 }}
-                                            />
-                                        )}
-                                        <Icon
-                                            size={16}
-                                            className="relative shrink-0 transition-colors"
-                                            style={{ color: active ? 'var(--sky)' : 'currentColor' }}
-                                        />
-                                        <span className="relative min-w-0 flex-1 truncate">{item.label}</span>
-                                        {showPending && <PulseDot count={pendingCount} />}
-                                    </Link>
+                                            <span className="relative min-w-0 flex-1 truncate">{item.label}</span>
+                                            {showPending && <PulseDot count={pendingCount} />}
+                                        </Link>
+                                    </motion.div>
                                 )
                             })}
                         </div>
-                    </div>
+                    </motion.div>
                 ))}
             </nav>
 
             <div className="mt-auto border-t px-3 py-3" style={{ borderColor: 'var(--finp-nav-line)' }}>
                 <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                    <button
-                        type="button"
-                        onClick={toggleHidden}
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium text-sidebar-foreground hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
-                        style={{ borderColor: 'var(--finp-nav-line)' }}
-                        aria-label={hidden ? 'Mostrar montos' : 'Ocultar montos'}
+                    <motion.div
+                        {...NAV_LOAD_ITEM}
+                        transition={{ duration: 0.22, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
                     >
-                        {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                        <span>{hidden ? 'Mostrar' : 'Ocultar'}</span>
-                    </button>
+                        <button
+                            type="button"
+                            onClick={toggleHidden}
+                            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium text-sidebar-foreground hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                            style={{ borderColor: 'var(--finp-nav-line)' }}
+                            aria-label={hidden ? 'Mostrar montos' : 'Ocultar montos'}
+                        >
+                            {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                            <span>{hidden ? 'Mostrar' : 'Ocultar'}</span>
+                        </button>
+                    </motion.div>
 
-                    <ThemeToggle
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium text-sidebar-foreground hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
-                        iconSize={14}
-                        style={{ color: 'var(--sidebar-foreground)', borderColor: 'var(--finp-nav-line)' }}
-                    />
-
-                    <button
-                        type="button"
-                        onClick={() => signOut({ callbackUrl: '/login' })}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sidebar-foreground hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
-                        style={{ borderColor: 'var(--finp-nav-line)' }}
-                        aria-label="Cerrar sesion"
+                    <motion.div
+                        {...NAV_LOAD_ITEM}
+                        transition={{ duration: 0.22, delay: 0.27, ease: [0.22, 1, 0.36, 1] }}
                     >
-                        <LogOut size={14} />
-                    </button>
+                        <ThemeToggle
+                            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium text-sidebar-foreground hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                            iconSize={14}
+                            style={{ color: 'var(--sidebar-foreground)', borderColor: 'var(--finp-nav-line)' }}
+                        />
+                    </motion.div>
+
+                    <motion.div
+                        {...NAV_LOAD_ITEM}
+                        transition={{ duration: 0.22, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => signOut({ callbackUrl: '/login' })}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sidebar-foreground hover:bg-[var(--finp-nav-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                            style={{ borderColor: 'var(--finp-nav-line)' }}
+                            aria-label="Cerrar sesion"
+                        >
+                            <LogOut size={14} />
+                        </button>
+                    </motion.div>
                 </div>
             </div>
         </div>
@@ -707,8 +739,9 @@ function useTransactionLauncher() {
 
 function DesktopFloatingTransactionButton() {
     const pathname = usePathname()
+    const router = useRouter()
     const { action: spaceAction } = useSpaceAction()
-    const isSpacesRoute = pathname === '/spaces' || pathname.startsWith('/spaces/')
+    const [open, setOpen] = useState(false)
     const {
         txDialogOpen,
         setTxDialogOpen,
@@ -720,63 +753,133 @@ function DesktopFloatingTransactionButton() {
         handleCreateTransactionBatch,
         handleCreateInstallment,
     } = useTransactionLauncher()
-    const actionLabel = isSpacesRoute ? (spaceAction?.label ?? 'Agregar movimiento') : 'Nueva transaccion'
 
-    const handlePress = () => {
-        if (isSpacesRoute) {
-            spaceAction?.onPress()
-            return
-        }
+    const fabConfig = getMobileFabConfig({
+        pathname,
+        openTransactionDialog: () => setTxDialogOpen(true),
+        spaceAction,
+        navigate: (href) => router.push(href),
+    })
 
-        setTxDialogOpen(true)
+    const setOpenState = (nextOpen: boolean) => {
+        setOpen(nextOpen)
     }
 
-    if (isSpacesRoute && !spaceAction) return null
+    useEffect(() => {
+        if (fabConfig.mode === 'hidden' && open) setOpenState(false)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fabConfig.mode, open])
+
+    if (fabConfig.mode === 'hidden') return null
 
     return (
         <>
             <div className="fixed bottom-6 right-6 z-40 hidden md:block">
-                <div className="group relative">
-                    <div className="pointer-events-none absolute bottom-[calc(100%+0.75rem)] right-0 translate-y-1 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
-                        <div
-                            className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium shadow-sm"
-                            style={{
-                                background: 'var(--card)',
-                                color: 'var(--foreground)',
-                                border: '0.5px solid var(--border)',
-                            }}
-                        >
-                            {actionLabel}
-                        </div>
-                    </div>
+                <AnimatePresence>
+                    {open && (
+                        <>
+                            <motion.button
+                                type="button"
+                                className="fixed inset-0 z-30 cursor-default bg-background/20 backdrop-blur-[2px]"
+                                onClick={() => setOpenState(false)}
+                                aria-label="Cerrar acciones rapidas"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.16 }}
+                            />
 
+                            <motion.div
+                                className="absolute bottom-[calc(100%+0.85rem)] right-0 z-40 flex w-72 flex-col gap-2"
+                                initial="closed"
+                                animate="open"
+                                exit="closed"
+                                variants={{
+                                    open: { transition: { staggerChildren: 0.045, delayChildren: 0.02 } },
+                                    closed: { transition: { staggerChildren: 0.025, staggerDirection: -1 } },
+                                }}
+                            >
+                                {fabConfig.actions.map((action) => {
+                                    const Icon = action.icon
+                                    const tone = FAB_TONE_STYLES[action.tone ?? 'sky']
+
+                                    return (
+                                        <motion.button
+                                            key={action.id}
+                                            type="button"
+                                            className="finp-fab-action flex min-h-[3.45rem] w-full items-center gap-3 rounded-2xl border p-3 text-left shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 disabled:opacity-50"
+                                            style={{
+                                                background: 'var(--card)',
+                                                borderColor: 'var(--border)',
+                                                boxShadow: `0 12px 28px ${tone.shadow}`,
+                                            }}
+                                            aria-label={action.label}
+                                            disabled={action.disabled}
+                                            onClick={() => {
+                                                setOpenState(false)
+                                                runFabAction(action, (href) => router.push(href))
+                                            }}
+                                            variants={{
+                                                open: { opacity: 1, y: 0, scale: 1 },
+                                                closed: { opacity: 0, y: 10, scale: 0.96 },
+                                            }}
+                                            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                        >
+                                            <span
+                                                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+                                                style={{ background: tone.background, color: tone.color }}
+                                            >
+                                                <Icon size={18} />
+                                            </span>
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate text-sm font-semibold">{action.label}</span>
+                                                {action.description && (
+                                                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                                        {action.description}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </motion.button>
+                                    )
+                                })}
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                <div className="relative z-50 flex flex-col items-end gap-1.5">
                     <Button
                         type="button"
-                        onClick={handlePress}
+                        onClick={() => setOpenState(!open)}
                         size="icon"
-                        className="h-14 w-14 rounded-full shadow-lg shadow-sky-500/25 transition-all duration-200 hover:shadow-sky-500/40 group-hover:-translate-y-0.5 group-hover:scale-[1.04] active:scale-[0.98]"
-                        aria-label={actionLabel}
+                        className="h-14 w-14 rounded-full border-[3px] text-white shadow-lg shadow-sky-500/30 transition-all duration-200 hover:shadow-sky-500/40 hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.98]"
+                        style={{
+                            background: 'linear-gradient(160deg, var(--sky), var(--sky-dark))',
+                            borderColor: 'var(--finp-fab-ring)',
+                        }}
+                        aria-label={open ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
+                        aria-expanded={open}
                     >
-                        {isSpacesRoute && spaceAction?.icon ? spaceAction.icon : <Plus className="h-5 w-5" />}
+                        <span className={open ? 'rotate-45 transition-transform duration-200' : 'transition-transform duration-200'}>
+                            <Plus className="h-5 w-5" />
+                        </span>
                     </Button>
                 </div>
             </div>
 
-            {!isSpacesRoute ? (
-                <TransactionDialog
-                    open={txDialogOpen}
-                    onOpenChange={setTxDialogOpen}
-                    transaction={null}
-                    accounts={accounts}
-                    categories={categories}
-                    onSubmit={handleCreateTransaction}
-                    onBatchSubmit={handleCreateTransactionBatch}
-                    onInstallmentSubmit={handleCreateInstallment}
-                    rules={rules}
-                    defaultAccountId={preferences.defaultAccountId}
-                    monthStartDay={preferences.monthStartDay}
-                />
-            ) : null}
+            <TransactionDialog
+                open={txDialogOpen}
+                onOpenChange={setTxDialogOpen}
+                transaction={null}
+                accounts={accounts}
+                categories={categories}
+                onSubmit={handleCreateTransaction}
+                onBatchSubmit={handleCreateTransactionBatch}
+                onInstallmentSubmit={handleCreateInstallment}
+                rules={rules}
+                defaultAccountId={preferences.defaultAccountId}
+                monthStartDay={preferences.monthStartDay}
+            />
         </>
     )
 }
@@ -787,31 +890,39 @@ function MobileNavItem({
     icon: Icon,
     active,
     onClick,
+    loadDelay = 0,
 }: {
     href: string
     label: string
     icon: ElementType
     active: boolean
     onClick: () => void
+    loadDelay?: number
 }) {
     return (
-        <Link
-            href={href}
-            onClick={onClick}
-            className="relative flex h-full w-full flex-col items-center justify-center gap-1 rounded-[1.15rem] px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
-            style={{ color: active ? 'var(--sky-dark)' : 'var(--muted-foreground)' }}
+        <motion.div
+            className="h-full w-full"
+            {...NAV_LOAD_ITEM}
+            transition={{ duration: 0.24, delay: loadDelay, ease: [0.22, 1, 0.36, 1] }}
         >
-            {active && (
-                <motion.span
-                    layoutId="mobile-bottom-active"
-                    className="absolute left-2 right-2 top-1.5 h-8 rounded-full"
-                    style={{ background: 'var(--sky-light)' }}
-                    transition={{ type: 'spring', stiffness: 450, damping: 38 }}
-                />
-            )}
-            <Icon size={18} className="relative" />
-            <span className="relative max-w-full truncate text-[10px] font-medium leading-none">{label}</span>
-        </Link>
+            <Link
+                href={href}
+                onClick={onClick}
+                className="relative flex h-full w-full flex-col items-center justify-center gap-1 rounded-[1.15rem] px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                style={{ color: active ? 'var(--sky-dark)' : 'var(--muted-foreground)' }}
+            >
+                {active && (
+                    <motion.span
+                        layoutId="mobile-bottom-active"
+                        className="absolute left-2 right-2 top-1.5 h-8 rounded-full"
+                        style={{ background: 'var(--sky-light)' }}
+                        transition={{ type: 'spring', stiffness: 450, damping: 38 }}
+                    />
+                )}
+                <Icon size={18} className="relative" />
+                <span className="relative max-w-full truncate text-[10px] font-medium leading-none">{label}</span>
+            </Link>
+        </motion.div>
     )
 }
 
@@ -877,7 +988,7 @@ function MobileContextualFab({
                     <>
                         <motion.button
                             type="button"
-                            className="fixed inset-0 z-40 bg-black/30 md:hidden"
+                            className="fixed inset-0 z-20 bg-background/35 backdrop-blur-[3px] dark:bg-black/35 md:hidden"
                             onClick={() => setOpenState(false)}
                             aria-label="Cerrar acciones rapidas"
                             initial={{ opacity: 0 }}
@@ -945,7 +1056,11 @@ function MobileContextualFab({
                 )}
             </AnimatePresence>
 
-            <div className="relative z-[46] -mt-6 flex flex-col items-center gap-1">
+            <motion.div
+                className="relative z-[46] -mt-6 flex flex-col items-center gap-1"
+                {...NAV_LOAD_ITEM}
+                transition={{ duration: 0.26, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+            >
                 <button
                     type="button"
                     onClick={handleCorePress}
@@ -962,9 +1077,9 @@ function MobileContextualFab({
                     </span>
                 </button>
                 <span className="max-w-[4.8rem] truncate text-center text-[10px] font-medium leading-none text-muted-foreground">
-                    {config.mode === 'direct' ? config.actions[0]?.label ?? config.label : 'Agregar'}
+                    Agregar
                 </span>
-            </div>
+            </motion.div>
         </>
     )
 }
@@ -973,10 +1088,14 @@ function MobileMoreSheet({
     open,
     onClose,
     onNavigate,
+    insight,
+    insightLoading,
 }: {
     open: boolean
     onClose: () => void
     onNavigate: () => void
+    insight: NavInsightType
+    insightLoading: boolean
 }) {
     const pathname = usePathname()
     const { hidden, toggleHidden } = useHideAmounts()
@@ -1024,23 +1143,26 @@ function MobileMoreSheet({
                         <div className="safe-area-pb">
                             <div className="mx-auto my-2 h-1.5 w-11 rounded-full bg-muted" />
 
-                            <div className="mx-4 rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'linear-gradient(135deg, color-mix(in srgb, var(--sky) 12%, var(--card)), var(--card))' }}>
+                            <div className="mx-4 rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'linear-gradient(135deg, color-mix(in srgb, var(--sky) 10%, var(--card)), var(--card))' }}>
                                 <div className="flex items-center gap-3">
                                     <div className="rounded-full bg-[var(--sidebar)] p-1">
-                                        <AvatarProgressRing initials={initials} progress={period.progress} size={48} />
+                                        <AvatarProgressRing
+                                            initials={initials}
+                                            progress={period.progress}
+                                            size={50}
+                                            ariaLabel={period.progressAriaLabel}
+                                        />
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="truncate text-sm font-semibold">{displayName}</div>
                                         <div className="truncate text-xs text-muted-foreground">{displayEmail}</div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                            Periodo
-                                        </div>
-                                        <div className="text-xs font-semibold" style={{ color: 'var(--sky-dark)' }}>
-                                            {period.progressLabel}
+                                        <div className="mt-0.5 truncate text-[11px] font-medium" style={{ color: 'var(--sky-dark)' }}>
+                                            {period.compactLabel}
                                         </div>
                                     </div>
+                                </div>
+                                <div className="mt-2.5">
+                                    <NavInsight insight={insight} variant="mobile" loading={insightLoading} />
                                 </div>
                             </div>
 
@@ -1125,7 +1247,7 @@ function MobileMoreSheet({
     )
 }
 
-function MobileBottomBar() {
+function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType; insightLoading: boolean }) {
     const pathname = usePathname()
     const router = useRouter()
     const [moreOpen, setMoreOpen] = useState(false)
@@ -1183,17 +1305,29 @@ function MobileBottomBar() {
                 open={moreOpen}
                 onClose={closeMore}
                 onNavigate={closeMore}
+                insight={insight}
+                insightLoading={insightLoading}
             />
 
             <div
                 className="fixed inset-x-0 z-30 px-3 md:hidden"
                 style={{ bottom: 'calc(var(--safe-area-bottom) + 0.55rem)' }}
             >
-                <div
-                    className="finp-mobile-pill mx-auto grid h-[4.35rem] max-w-[26rem] grid-cols-5 items-center rounded-[1.65rem] border px-1.5 py-1.5 shadow-2xl backdrop-blur-xl"
+                <motion.div
+                    className="finp-mobile-pill mx-auto grid h-[4.35rem] max-w-[26rem] grid-cols-5 items-center rounded-[1.65rem] border px-1.5 py-1.5 shadow-2xl backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-200"
+                    initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                     style={{
-                        borderColor: 'color-mix(in srgb, var(--foreground) 9%, transparent)',
-                        background: 'color-mix(in srgb, var(--background) 92%, transparent)',
+                        borderColor: fabOpen
+                            ? 'color-mix(in srgb, var(--foreground) 16%, transparent)'
+                            : 'color-mix(in srgb, var(--foreground) 9%, transparent)',
+                        background: fabOpen
+                            ? 'color-mix(in srgb, var(--background) 78%, var(--foreground) 14%)'
+                            : 'color-mix(in srgb, var(--background) 92%, transparent)',
+                        boxShadow: fabOpen
+                            ? '0 18px 46px rgba(17,24,39,0.24), 0 2px 10px rgba(17,24,39,0.12)'
+                            : undefined,
                     }}
                 >
                     <MobileNavItem
@@ -1201,6 +1335,7 @@ function MobileBottomBar() {
                         label={BOTTOM_NAV[0].mobileLabel}
                         icon={NAV_BY_KEY.dashboard.icon}
                         active={isBottomRouteActive(pathname, NAV_BY_KEY.dashboard.href) && !moreOpen}
+                        loadDelay={0.05}
                         onClick={() => {
                             closeMore()
                             closeFab()
@@ -1212,6 +1347,7 @@ function MobileBottomBar() {
                         label={BOTTOM_NAV[1].mobileLabel}
                         icon={NAV_BY_KEY.transactions.icon}
                         active={isBottomRouteActive(pathname, NAV_BY_KEY.transactions.href) && !moreOpen}
+                        loadDelay={0.08}
                         onClick={() => {
                             closeMore()
                             closeFab()
@@ -1231,16 +1367,19 @@ function MobileBottomBar() {
                         label={BOTTOM_NAV[2].mobileLabel}
                         icon={NAV_BY_KEY.spaces.icon}
                         active={isBottomRouteActive(pathname, NAV_BY_KEY.spaces.href) && !moreOpen}
+                        loadDelay={0.14}
                         onClick={() => {
                             closeMore()
                             closeFab()
                         }}
                     />
 
-                    <button
+                    <motion.button
                         type="button"
                         onClick={openMore}
                         className="relative flex h-full w-full flex-col items-center justify-center gap-1 rounded-[1.15rem] px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                        {...NAV_LOAD_ITEM}
+                        transition={{ duration: 0.24, delay: 0.17, ease: [0.22, 1, 0.36, 1] }}
                         style={{
                             color: moreOpen || (!isBottomRouteActive(pathname, '/dashboard') && !isBottomRouteActive(pathname, '/transactions') && !isBottomRouteActive(pathname, '/spaces'))
                                 ? 'var(--sky-dark)'
@@ -1266,8 +1405,8 @@ function MobileBottomBar() {
                             )}
                         </span>
                         <span className="relative text-[10px] font-medium leading-none">Mas</span>
-                    </button>
-                </div>
+                    </motion.button>
+                </motion.div>
             </div>
 
             <TransactionDialog
@@ -1288,17 +1427,19 @@ function MobileBottomBar() {
 }
 
 export function Navbar() {
+    const { activeInsight, loading: insightLoading } = useNavInsights()
+
     return (
         <>
             <aside
                 className="hidden md:sticky md:top-0 md:flex md:h-screen md:w-64 md:flex-col md:self-start"
                 style={{ background: 'var(--sidebar)' }}
             >
-                <SidebarContent />
+                <SidebarContent insight={activeInsight} insightLoading={insightLoading} />
             </aside>
 
             <DesktopFloatingTransactionButton />
-            <MobileBottomBar />
+            <MobileBottomBar insight={activeInsight} insightLoading={insightLoading} />
         </>
     )
 }

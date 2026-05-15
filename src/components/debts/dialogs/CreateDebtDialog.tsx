@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
     DialogFooter,
@@ -88,6 +89,9 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, onSubmit }: 
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle>Nueva deuda</DialogTitle>
+                    <DialogDescription>
+                        Registra una deuda manual para hacer seguimiento del saldo pendiente.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">

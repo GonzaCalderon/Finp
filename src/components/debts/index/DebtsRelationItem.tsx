@@ -1,6 +1,7 @@
 'use client'
 
 import type React from 'react'
+import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Bell, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -98,16 +99,26 @@ export function DebtsRelationItem({
 
     if (variant === 'desktop') {
         return (
-            <div
+            <motion.div
+                layout
                 role="button"
                 tabIndex={0}
                 onClick={onViewDetail}
                 onKeyDown={handleOpenKeyDown}
                 className={cn(
-                    'grid w-full grid-cols-[minmax(0,1fr)_150px_170px_104px] items-center gap-4 border-b px-4 py-3.5 text-left transition-colors last:border-b-0 hover:bg-muted/45',
-                    selected && 'bg-muted/60'
+                    'relative grid w-full grid-cols-[minmax(0,1fr)_150px_170px_104px] items-center gap-4 overflow-hidden border-b px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow] duration-200 last:border-b-0 hover:bg-muted/45',
+                    selected && 'bg-primary/5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_22%,transparent)]'
                 )}
+                animate={{ scale: selected ? 1.006 : 1 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
+                {selected ? (
+                    <motion.span
+                        layoutId="debt-relation-active-bar"
+                        className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-primary"
+                        transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+                    />
+                ) : null}
                 <div className="flex min-w-0 items-center gap-3">
                     <DebtInitialsAvatar name={rel.name} />
                     <div className="min-w-0">
@@ -145,21 +156,31 @@ export function DebtsRelationItem({
                 <Button size="sm" variant={rel.primaryAction === 'detail' ? 'outline' : 'default'} onClick={handlePrimary} className="justify-center">
                     {primaryLabel}
                 </Button>
-            </div>
+            </motion.div>
         )
     }
 
     return (
-        <div
+        <motion.div
+            layout
             role="button"
             tabIndex={0}
             onClick={onViewDetail}
             onKeyDown={handleOpenKeyDown}
             className={cn(
-                'w-full rounded-xl border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted/35',
-                selected && 'border-primary/30 bg-primary/5'
+                'relative w-full overflow-hidden rounded-xl border bg-card p-4 text-left shadow-sm transition-[background-color,border-color,box-shadow] duration-200 hover:bg-muted/35',
+                selected && 'border-primary/35 bg-primary/5 shadow-md'
             )}
+            animate={{ y: selected ? -1 : 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
+            {selected ? (
+                <motion.span
+                    layoutId="mobile-debt-relation-active-bar"
+                    className="absolute inset-x-4 top-0 h-1 rounded-b-full bg-primary"
+                    transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+                />
+            ) : null}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{rel.name}</p>
@@ -210,6 +231,6 @@ export function DebtsRelationItem({
                     </Button>
                 ) : null}
             </div>
-        </div>
+        </motion.div>
     )
 }

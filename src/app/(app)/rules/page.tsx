@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Plus,
@@ -256,6 +257,8 @@ function RuleCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RulesPage() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     usePageTitle('Reglas automáticas')
 
     const { rules, loading, createRule, updateRule, toggleRule, deleteRule } =
@@ -270,6 +273,13 @@ export default function RulesPage() {
 
     const activeRules = rules.filter((r) => r.isActive)
     const inactiveRules = rules.filter((r) => !r.isActive)
+
+    useEffect(() => {
+        if (searchParams.get('create') !== '1') return
+        setEditingRule(null)
+        setDialogOpen(true)
+        router.replace('/rules', { scroll: false })
+    }, [router, searchParams])
 
     const handleOpenCreate = () => {
         setEditingRule(null)

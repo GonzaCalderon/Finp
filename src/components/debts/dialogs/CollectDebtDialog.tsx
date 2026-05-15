@@ -5,6 +5,7 @@ import { Info } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
     DialogFooter,
@@ -97,6 +98,9 @@ export function CollectDebtDialog({ open, onOpenChange, debt, accounts, onSubmit
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle>Registrar cobro</DialogTitle>
+                    <DialogDescription>
+                        Registra un cobro y actualiza el saldo que te deben.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">

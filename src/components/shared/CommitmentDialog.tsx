@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -105,6 +106,9 @@ export function CommitmentDialog({
             <DialogContent variant="fullscreen-mobile" className="max-w-md p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{commitment ? 'Editar compromiso' : 'Nuevo compromiso'}</DialogTitle>
+                    <DialogDescription>
+                        Defini monto, recurrencia y modo de aplicacion del compromiso.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form ref={scrollRef} onSubmit={handleSubmit(onSubmit)} className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">

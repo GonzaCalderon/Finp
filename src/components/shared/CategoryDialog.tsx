@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -66,6 +67,9 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
             <DialogContent variant="fullscreen-mobile" className="max-w-sm p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{category ? 'Editar categoría' : 'Nueva categoría'}</DialogTitle>
+                    <DialogDescription>
+                        Elegi nombre, tipo y color para identificarla en Finp.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col sm:max-h-[85vh]">

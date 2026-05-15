@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Layers3, Plus, Sparkles } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -177,6 +178,8 @@ function SpacesQuickEntryFlow({
 }
 
 export default function SpacesPage() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const { hidden } = useHideAmounts()
     const { setAction: setSpaceAction, clearAction: clearSpaceAction } = useSpaceAction()
     const { success, error: toastError } = useToast()
@@ -195,6 +198,12 @@ export default function SpacesPage() {
 
     usePageTitle('Espacios')
     useAppStartupReady(!loading)
+
+    useEffect(() => {
+        if (searchParams.get('create') !== '1') return
+        setCreateDialogOpen(true)
+        router.replace('/spaces', { scroll: false })
+    }, [router, searchParams])
 
     useEffect(() => {
         setSpaceAction({

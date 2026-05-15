@@ -23,6 +23,7 @@ const ROUTE_LABELS: Record<string, string> = {
     projection: 'Proyección',
     rules: 'Reglas',
     spaces: 'Espacios',
+    debts: 'Deudas',
     settings: 'Configuración',
     import: 'Importar',
     history: 'Historial',

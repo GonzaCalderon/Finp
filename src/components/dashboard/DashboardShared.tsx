@@ -140,6 +140,7 @@ export function DashboardMetricLinkCard({
     trend,
     subtitle,
     className,
+    loading = false,
 }: {
     title: string
     totals: DashboardCurrencyTotals
@@ -152,6 +153,7 @@ export function DashboardMetricLinkCard({
     trend?: React.ReactNode
     subtitle?: string
     className?: string
+    loading?: boolean
 }) {
     return (
         <Link href={href} className={cn('group block', className)}>
@@ -197,6 +199,7 @@ export function DashboardMetricLinkCard({
                         hideZeroSecondary
                         preserveSecondarySpace
                         className="text-[1.35rem] font-semibold tracking-tight"
+                        loading={loading}
                     />
                     {(supporting || trend) && (
                         <div className="mt-4 flex items-center justify-between gap-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
