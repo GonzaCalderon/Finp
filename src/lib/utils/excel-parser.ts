@@ -136,7 +136,7 @@ function extractCellValue(raw: ExcelJS.CellValue): string | number | Date | unde
     if (typeof raw === 'number' || typeof raw === 'string') return raw
     if (typeof raw === 'boolean') return String(raw)
 
-    const obj = raw as Record<string, unknown>
+    const obj = raw as unknown as Record<string, unknown>
 
     if ('richText' in obj && Array.isArray(obj.richText)) {
         return (obj.richText as Array<{ text: string }>).map((rt) => rt.text).join('')
@@ -271,7 +271,8 @@ const REQUIRED_HEADERS = ['fecha', 'tipo', 'descripción', 'monto', 'moneda']
 
 export async function parseImportFile(buffer: Buffer): Promise<ParseResult> {
     const workbook = new ExcelJS.Workbook()
-    await workbook.xlsx.load(buffer)
+    const workbookBuffer = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]
+    await workbook.xlsx.load(workbookBuffer)
 
     const sheetName =
         workbook.worksheets.find((ws) => ws.name.toLowerCase().includes('transaccion'))?.name ??
