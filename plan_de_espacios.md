@@ -6,6 +6,10 @@ Documento vivo para ordenar la evolución del módulo **Espacios**, su integraci
 
 ---
 
+> Nota 2026-05-15: este documento queda como referencia histórica y de dominio para Espacios. El plan principal actualizado está en `plan_de_desarrollo_finp.md`; el plan de calidad y estabilización está en `docs/plan_calidad_estabilizacion_finp.md`.
+
+---
+
 ## Estado actual resumido
 
 El módulo **Espacios** ya cuenta con una base funcional avanzada:

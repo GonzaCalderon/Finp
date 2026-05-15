@@ -62,6 +62,7 @@ export function NotificationBell() {
                 </button>
             </SheetTrigger>
             <NotificationSheet
+                key={`${open ? 'open' : 'closed'}-${defaultTab}`}
                 onClose={() => setOpen(false)}
                 isOpen={open}
                 defaultTab={defaultTab}

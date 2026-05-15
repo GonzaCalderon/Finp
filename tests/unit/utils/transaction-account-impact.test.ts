@@ -113,4 +113,23 @@ describe('transaction account impact', () => {
             destinationAccountId: 'visa',
         })?.accountId).toBe('bank')
     })
+
+    it('uses real amount for account impact even when operationalAmount is smaller', () => {
+        const transaction = {
+            type: 'expense',
+            amount: 1000,
+            operationalAmount: 400,
+            currency: 'ARS',
+            sourceAccountId: 'bank',
+        }
+
+        const result = getTransactionAccountImpact(transaction)
+
+        expect(result).toEqual({
+            accountId: 'bank',
+            currency: 'ARS',
+            delta: -1000,
+            direction: 'decrease',
+        })
+    })
 })

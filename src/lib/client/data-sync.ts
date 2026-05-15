@@ -111,6 +111,7 @@ export const NOTIFICATION_INVALIDATION_TAGS: DataTag[] = ['notifications']
 
 export const SPACE_INVALIDATION_TAGS: DataTag[] = [
     'spaces',
+    'debts',
     'transactions',
     'dashboard',
     'accounts',

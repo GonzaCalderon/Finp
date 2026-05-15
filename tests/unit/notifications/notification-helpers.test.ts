@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Types } from 'mongoose'
+import { expectNoPrivateFields } from '../../helpers/assertions'
 
 const mocks = vi.hoisted(() => {
     const Notification = {
@@ -23,9 +24,12 @@ vi.mock('@/lib/constants', async (importOriginal) => {
 const {
     upsertNotificationByDedupeKey,
     markAllNotificationsAsRead,
+    archiveNotification,
+    unarchiveNotification,
     dismissNotification,
     resolveNotificationsForTarget,
     buildNotificationFromPendingAction,
+    buildReviewNotification,
 } = await import('@/lib/server/notifications')
 
 const userId = new Types.ObjectId().toString()
@@ -60,7 +64,7 @@ describe('upsertNotificationByDedupeKey', () => {
         const result = await upsertNotificationByDedupeKey(input)
 
         expect(mocks.Notification.findOneAndUpdate).toHaveBeenCalledOnce()
-        const [query, update, options] = mocks.Notification.findOneAndUpdate.mock.calls[0]
+        const [query, , options] = mocks.Notification.findOneAndUpdate.mock.calls[0]
         expect(query).toEqual({ dedupeKey: 'test-key' })
         expect(options).toMatchObject({ upsert: true, new: true })
         expect(result).toBe(existing)
@@ -96,6 +100,59 @@ describe('upsertNotificationByDedupeKey', () => {
         // create nunca fue llamado
         expect(mocks.Notification.create).not.toHaveBeenCalled()
     })
+
+    it('si reabre pending/unread limpia timestamps de estados anteriores', async () => {
+        mocks.Notification.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve({ _id: notifId }) })
+
+        await upsertNotificationByDedupeKey({
+            dedupeKey: 'reopen-key',
+            recipientUserId: new Types.ObjectId(userId),
+            type: 'personal_impact_pending' as const,
+            category: 'personal_impact' as const,
+            priority: 'normal' as const,
+            status: 'unread' as const,
+            actionStatus: 'pending' as const,
+            title: 'Reabierta',
+        })
+
+        const [, update] = mocks.Notification.findOneAndUpdate.mock.calls[0]
+        expect(update.$unset).toEqual({
+            readAt: '',
+            dismissedAt: '',
+            archivedAt: '',
+            resolvedAt: '',
+        })
+    })
+
+    it('si estaba archived y vuelve a pending queda visible nuevamente', async () => {
+        mocks.Notification.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve({ _id: notifId }) })
+
+        await upsertNotificationByDedupeKey({
+            dedupeKey: 'archived-pending',
+            recipientUserId: new Types.ObjectId(userId),
+            type: 'personal_impact_pending' as const,
+            category: 'personal_impact' as const,
+            priority: 'normal' as const,
+            status: 'unread' as const,
+            actionStatus: 'pending' as const,
+            title: 'Visible de nuevo',
+            entityRefs: {
+                spaceId: new Types.ObjectId(spaceId),
+                spaceEntryId: new Types.ObjectId(entryId),
+            },
+            action: {
+                label: 'Ver',
+                href: `/spaces/${spaceId}?entryId=${entryId}`,
+            },
+        })
+
+        const [, update] = mocks.Notification.findOneAndUpdate.mock.calls[0]
+        expect(update.$set.status).toBe('unread')
+        expect(update.$set.actionStatus).toBe('pending')
+        expect(update.$unset.archivedAt).toBe('')
+        expect(update.$set.entityRefs.spaceEntryId.toString()).toBe(entryId)
+        expect(update.$set.action.href).toBe(`/spaces/${spaceId}?entryId=${entryId}`)
+    })
 })
 
 // ─── markAllNotificationsAsRead ──────────────────────────────────────────────
@@ -130,7 +187,7 @@ describe('markAllNotificationsAsRead', () => {
 // ─── dismissNotification ─────────────────────────────────────────────────────
 
 describe('dismissNotification', () => {
-    it('marca como dismissed con dismissedAt', async () => {
+    it('marca como dismissed con dismissedAt sin resolver pending action', async () => {
         const notif = { _id: notifId, status: 'dismissed' }
         mocks.Notification.findOneAndUpdate = vi.fn().mockReturnValue({ lean: () => Promise.resolve(notif) })
 
@@ -142,6 +199,46 @@ describe('dismissNotification', () => {
         expect(filter.recipientUserId.toString()).toBe(userId)
         expect(update.$set.status).toBe('dismissed')
         expect(update.$set.dismissedAt).toBeInstanceOf(Date)
+        expect(update.$set.actionStatus).toBeUndefined()
+        expect(update.$set.pendingActionId).toBeUndefined()
+    })
+})
+
+// ─── archive / unarchive ─────────────────────────────────────────────────────
+
+describe('archiveNotification', () => {
+    it('archiva solo la notificación del usuario actual sin tocar actionStatus ni pendingActionId', async () => {
+        const notif = { _id: notifId, status: 'archived' }
+        mocks.Notification.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve(notif) })
+
+        const result = await archiveNotification(userId, notifId)
+
+        expect(result).toBe(notif)
+        const [filter, update] = mocks.Notification.findOneAndUpdate.mock.calls[0]
+        expect(filter._id.toString()).toBe(notifId)
+        expect(filter.recipientUserId.toString()).toBe(userId)
+        expect(update.$set.status).toBe('archived')
+        expect(update.$set.archivedAt).toBeInstanceOf(Date)
+        expect(update.$set.actionStatus).toBeUndefined()
+        expect(update.$set.pendingActionId).toBeUndefined()
+    })
+})
+
+describe('unarchiveNotification', () => {
+    it('vuelve a read y limpia archivedAt sin tocar actionStatus ni pendingActionId', async () => {
+        const notif = { _id: notifId, status: 'read' }
+        mocks.Notification.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve(notif) })
+
+        const result = await unarchiveNotification(userId, notifId)
+
+        expect(result).toBe(notif)
+        const [filter, update] = mocks.Notification.findOneAndUpdate.mock.calls[0]
+        expect(filter._id.toString()).toBe(notifId)
+        expect(filter.recipientUserId.toString()).toBe(userId)
+        expect(update.$set.status).toBe('read')
+        expect(update.$unset.archivedAt).toBe('')
+        expect(update.$set.actionStatus).toBeUndefined()
+        expect(update.$set.pendingActionId).toBeUndefined()
     })
 })
 
@@ -203,6 +300,20 @@ describe('resolveNotificationsForTarget', () => {
         })
 
         expect(mocks.Notification.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('resuelve solo pending y no toca dismissed; archived sí puede resolverse para evitar acciones stale', async () => {
+        mocks.Notification.updateMany.mockResolvedValue({ modifiedCount: 1 })
+
+        await resolveNotificationsForTarget({
+            spaceEntryId: entryId,
+            actionStatus: 'cancelled',
+        })
+
+        const [filter, update] = mocks.Notification.updateMany.mock.calls[0]
+        expect(filter.actionStatus).toBe('pending')
+        expect(filter.status).toEqual({ $ne: 'dismissed' })
+        expect(update.$set.actionStatus).toBe('cancelled')
     })
 })
 
@@ -282,5 +393,63 @@ describe('buildNotificationFromPendingAction', () => {
 
         expect(result.title).toBe('Registraron un cobro para vos')
         expect(result.body).toContain('Ana')
+    })
+
+    it('no expone cuenta ni categoría personal en la notificación pending', () => {
+        const result = buildNotificationFromPendingAction(
+            { ...baseTarget, counterpartyNameSnapshot: 'Ana' },
+            baseEvent,
+            pendingId
+        )
+
+        expectNoPrivateFields(result)
+        expect(result.entityRefs?.spaceId?.toString()).toBe(spaceId)
+        expect(result.entityRefs?.spaceEntryId?.toString()).toBe(entryId)
+        expect(result.entityRefs?.personalImpactId?.toString()).toBe(pendingId)
+    })
+})
+
+describe('buildReviewNotification', () => {
+    it('construye review notification para entry_voided', () => {
+        const impactId = new Types.ObjectId().toString()
+
+        const result = buildReviewNotification({
+            recipientUserId: userId,
+            actorUserId: userBId,
+            entryId,
+            spaceId,
+            entryTitle: 'Cena',
+            reason: 'entry_voided',
+            impactId,
+        })
+
+        expect(result.category).toBe('personal_impact')
+        expect(result.actionStatus).toBe('pending')
+        expect(result.action?.href).toBe(`/spaces/${spaceId}?entryId=${entryId}`)
+        expect(result.dedupeKey).toBe(`review:entry_voided:${userId}:${entryId}`)
+        expect(result.entityRefs?.spaceId?.toString()).toBe(spaceId)
+        expect(result.entityRefs?.spaceEntryId?.toString()).toBe(entryId)
+        expect(result.entityRefs?.personalImpactId?.toString()).toBe(impactId)
+    })
+
+    it('construye review notification para entry_edited con dedupe estable', () => {
+        const impactId = new Types.ObjectId().toString()
+
+        const result = buildReviewNotification({
+            recipientUserId: userId,
+            actorUserId: userBId,
+            entryId,
+            spaceId,
+            entryTitle: 'Cena',
+            reason: 'entry_edited',
+            impactId,
+            changedFields: ['monto', 'pagador'],
+        })
+
+        expect(result.type).toBe('space_entry_edited_review')
+        expect(result.actionStatus).toBe('pending')
+        expect(result.dedupeKey).toBe(`review:entry_edited:${userId}:${entryId}`)
+        expect(result.body).toContain('monto')
+        expect(result.body).toContain('pagador')
     })
 })

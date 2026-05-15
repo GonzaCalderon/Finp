@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
     SheetContent,
@@ -52,15 +52,6 @@ interface NotificationSheetProps {
 export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: NotificationSheetProps) {
     const { notifications, unreadCount, tabCounts, loading, fetchNotifications, markAllAsRead } = useNotifications()
     const [activeTab, setActiveTab] = useState<Tab>(defaultTab)
-    const prevIsOpen = useRef(false)
-
-    // Resetear tab al abrir (solo en la transición cerrado→abierto)
-    useEffect(() => {
-        if (isOpen && !prevIsOpen.current) {
-            setActiveTab(defaultTab)
-        }
-        prevIsOpen.current = isOpen ?? false
-    }, [isOpen, defaultTab])
 
     // Cargar notificaciones al cambiar de tab
     useEffect(() => {

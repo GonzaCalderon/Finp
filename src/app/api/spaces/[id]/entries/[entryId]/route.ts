@@ -6,6 +6,7 @@ import { SpaceCategory, SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/model
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { getPersonalImpactForEntries, markLinkedImpactsAsNeedsReview } from '@/lib/server/space-personal-impact'
+import { detectSpaceEntryMaterialChanges } from '@/lib/server/space-entry-changes'
 import { buildReviewNotification, safeUpsertNotificationByDedupeKey } from '@/lib/server/notifications'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryEditSchema } from '@/lib/validations'
@@ -14,47 +15,6 @@ import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import type { ISpace, ISpaceEntry, ISpaceEntrySnapshot } from '@/types'
 
 type Params = Promise<{ id: string; entryId: string }>
-
-const MATERIAL_FIELD_LABELS: Record<string, string> = {
-    amount: 'monto',
-    currency: 'moneda',
-    exchangeRate: 'cotización',
-    date: 'fecha',
-    paidByParticipantId: 'pagador',
-    sharedWithParticipantIds: 'participantes',
-    splitMode: 'modo de división',
-    splitAllocations: 'división',
-}
-
-function detectSpaceEntryMaterialChanges(
-    old: ISpaceEntry,
-    data: ReturnType<typeof spaceEntryEditSchema.parse>
-): { isMaterial: boolean; changedFields: string[]; changedLabels: string[] } {
-    const changedFields: string[] = []
-
-    if (data.amount !== undefined && data.amount !== old.amount) changedFields.push('amount')
-    if (data.currency !== undefined && data.currency !== old.currency) changedFields.push('currency')
-    if (data.exchangeRate !== undefined && data.exchangeRate !== old.exchangeRate) changedFields.push('exchangeRate')
-    if (data.date !== undefined && new Date(data.date).getTime() !== new Date(old.date).getTime()) changedFields.push('date')
-    if (data.paidByParticipantId !== undefined && data.paidByParticipantId !== extractId(old.paidByParticipantId)) changedFields.push('paidByParticipantId')
-    if (data.splitMode !== undefined && data.splitMode !== old.splitMode) changedFields.push('splitMode')
-
-    if (data.sharedWithParticipantIds !== undefined) {
-        const oldIds = (old.sharedWithParticipantIds ?? []).map((pid) => extractId(pid) ?? '').sort()
-        const newIds = [...data.sharedWithParticipantIds].sort()
-        if (JSON.stringify(oldIds) !== JSON.stringify(newIds)) changedFields.push('sharedWithParticipantIds')
-    }
-
-    if (data.splitAllocations !== undefined) {
-        const sortKey = (a: { participantId: string; percentage?: number; amount?: number }) => a.participantId
-        const oldAlloc = JSON.stringify((old.splitAllocations ?? []).map((a) => ({ participantId: extractId(a.participantId) ?? '', percentage: a.percentage, amount: a.amount })).sort((a, b) => sortKey(a).localeCompare(sortKey(b))))
-        const newAlloc = JSON.stringify([...data.splitAllocations].sort((a, b) => a.participantId.localeCompare(b.participantId)))
-        if (oldAlloc !== newAlloc) changedFields.push('splitAllocations')
-    }
-
-    const changedLabels = changedFields.map((f) => MATERIAL_FIELD_LABELS[f] ?? f)
-    return { isMaterial: changedFields.length > 0, changedFields, changedLabels }
-}
 
 export async function GET(request: Request, { params }: { params: Params }) {
     try {
@@ -331,7 +291,7 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
         }
 
         // Notificar a usuarios con impactos vinculados si hubo cambios materiales
-        const { isMaterial, changedFields, changedLabels } = detectSpaceEntryMaterialChanges(entry, data)
+        const { isMaterial, changedLabels } = detectSpaceEntryMaterialChanges(entry, data)
         if (isMaterial && updatedEntry) {
             try {
                 const affectedImpacts = await markLinkedImpactsAsNeedsReview(entryId, 'entry_edited', changedLabels)

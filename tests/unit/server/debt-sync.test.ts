@@ -81,6 +81,7 @@ function makeDebt(remainingAmount: number, status = 'active', amount?: number) {
         status,
         currency: 'ARS',
         spaceId: { toString: () => spaceId },
+        counterpartyNameSnapshot: 'Juan',
     }
 }
 
@@ -123,11 +124,23 @@ describe('syncSpaceDebtsForUser', () => {
         expect(createdDebt.spaceDebtKey).toBe(`${userId}:${spaceId}:${participantJuanId}:ARS`)
     })
 
+    it('crea una deuda receivable cuando al usuario le deben', async () => {
+        ;(buildSpaceBalances as ReturnType<typeof vi.fn>).mockReturnValue([
+            makeBalance(participantMeId, 100),
+            makeBalance(participantJuanId, -100),
+        ])
+
+        await syncSpaceDebtsForUser(spaceId, userId)
+
+        const createdDebt = mocks.Debt.create.mock.calls[0][0]
+        expect(createdDebt.direction).toBe('receivable')
+        expect(createdDebt.sourceType).toBe('space')
+        expect(createdDebt.amount).toBe(100)
+    })
+
     it('es idempotente: correr sync dos veces no duplica registros', async () => {
         // Primera corrida: crea la deuda
         await syncSpaceDebtsForUser(spaceId, userId)
-        const createdDebt = mocks.Debt.create.mock.calls[0][0]
-
         vi.clearAllMocks()
 
         // Segunda corrida: debe actualizar, no crear
@@ -151,6 +164,7 @@ describe('syncSpaceDebtsForUser', () => {
         const result2 = await syncSpaceDebtsForUser(spaceId, userId)
 
         expect(mocks.Debt.create).not.toHaveBeenCalled()
+        expect(mocks.DebtMovement.create).not.toHaveBeenCalled()
         expect(result2.created).toBe(0)
         expect(result2.updated).toBe(0) // Sin cambios en monto → no cuenta como updated
     })
@@ -178,7 +192,7 @@ describe('syncSpaceDebtsForUser', () => {
 
     it('marca deuda como paid cuando el balance llega a cero', async () => {
         mocks.Debt.findOne.mockResolvedValue(makeDebt(100, 'active'))
-        mocks.Debt.find.mockResolvedValue([])
+        mocks.Debt.find.mockResolvedValue([makeDebt(100, 'active')])
         mocks.Debt.updateOne.mockResolvedValue({ modifiedCount: 1 })
         mocks.DebtMovement.create.mockResolvedValue({})
 
@@ -190,9 +204,35 @@ describe('syncSpaceDebtsForUser', () => {
 
         const result = await syncSpaceDebtsForUser(spaceId, userId)
 
-        // No se generan deudas cuando el balance es cero
-        // Pero la deuda existente que ya no aparece debe marcarse como paid
-        expect(mocks.Debt.find).toHaveBeenCalled()
+        expect(result.paid).toBe(1)
+        expect(mocks.Debt.updateOne).toHaveBeenCalledWith(
+            { _id: expect.anything() },
+            { $set: { remainingAmount: 0, status: 'paid' } }
+        )
+    })
+
+    it('recalcula remainingAmount de deudas de espacio respetando pagos previos', async () => {
+        mocks.Debt.findOne.mockResolvedValue(makeDebt(60, 'partially_paid', 100))
+        mocks.Debt.find.mockResolvedValue([])
+        ;(buildSpaceBalances as ReturnType<typeof vi.fn>).mockReturnValue([
+            makeBalance(participantMeId, -150),
+            makeBalance(participantJuanId, 150),
+        ])
+
+        const result = await syncSpaceDebtsForUser(spaceId, userId)
+
+        const updateCall = mocks.Debt.updateOne.mock.calls[0][1]
+        expect(updateCall.$set.amount).toBe(150)
+        expect(updateCall.$set.remainingAmount).toBe(110)
+        expect(updateCall.$set.status).toBe('partially_paid')
+        expect(result.updated).toBe(1)
+        expect(mocks.DebtMovement.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: 'sync_update',
+                amount: 50,
+                currency: 'ARS',
+            })
+        )
     })
 
     it('no falla si el usuario no es participante del espacio', async () => {
@@ -224,6 +264,16 @@ describe('syncSpaceDebtsForUser', () => {
         const createdDebt = mocks.Debt.create.mock.calls[0]?.[0]
         expect(createdDebt?.originMode).toBe('direct')
         expect(createdDebt?.metadata?.syncSnapshot?.debtMode).toBe('direct')
+    })
+
+    it('usa modo simplified por defecto cuando space.debtMode no está definido', async () => {
+        mocks.Space.findById.mockResolvedValue(makeSpace({ debtMode: undefined }))
+
+        await syncSpaceDebtsForUser(spaceId, userId)
+
+        const createdDebt = mocks.Debt.create.mock.calls[0]?.[0]
+        expect(createdDebt?.originMode).toBe('simplified')
+        expect(createdDebt?.metadata?.syncSnapshot?.debtMode).toBe('simplified')
     })
 
     it('crea DebtMovement tipo creation al crear deuda nueva', async () => {

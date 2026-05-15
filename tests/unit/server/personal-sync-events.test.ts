@@ -60,7 +60,10 @@ beforeEach(() => {
     vi.clearAllMocks()
     // Por defecto: no existe linked ni pending
     mocks.SpaceEntryPersonalImpact.findOne.mockReturnValue(leanNull())
-    mocks.SpaceEntryPersonalImpact.create.mockResolvedValue({})
+    mocks.SpaceEntryPersonalImpact.create.mockImplementation(async (data: unknown) => ({
+        _id: new Types.ObjectId(),
+        ...(data as object),
+    }))
 })
 
 describe('emitPersonalSyncEvent — createPersonalPendingActions', () => {
@@ -245,5 +248,126 @@ describe('emitPersonalSyncEvent — createPersonalPendingActions', () => {
         const created = mocks.SpaceEntryPersonalImpact.create.mock.calls[0][0]
         expect(created.accountImpactAmount).toBe(1000)
         expect(created.operationalAmount).toBe(500)
+    })
+
+    it('crea pending payment para settlement pagado por el usuario target', async () => {
+        await emitPersonalSyncEvent({
+            actorUserId,
+            spaceId,
+            entryId,
+            sourceType: 'debt_payment',
+            pendingTargets: [
+                makePendingTarget({
+                    impactKind: 'settlement_paid',
+                    actionType: 'impact_space_payment',
+                    amount: 750,
+                    currency: 'ARS',
+                    counterpartyNameSnapshot: 'Roro',
+                }),
+            ],
+        })
+
+        const created = mocks.SpaceEntryPersonalImpact.create.mock.calls[0][0]
+        expect(created.status).toBe('pending')
+        expect(created.sourceType).toBe('debt_payment')
+        expect(created.impactKind).toBe('settlement_paid')
+        expect(created.actionType).toBe('impact_space_payment')
+        expect(created.amount).toBe(750)
+        expect(mocks.buildNotificationFromPendingAction).toHaveBeenCalledOnce()
+    })
+
+    it('crea pending collect para settlement recibido por el usuario target', async () => {
+        await emitPersonalSyncEvent({
+            actorUserId,
+            spaceId,
+            entryId,
+            sourceType: 'debt_collect',
+            pendingTargets: [
+                makePendingTarget({
+                    impactKind: 'settlement_received',
+                    actionType: 'impact_space_collect',
+                    amount: 900,
+                    currency: 'USD',
+                    counterpartyNameSnapshot: 'Ana',
+                }),
+            ],
+        })
+
+        const created = mocks.SpaceEntryPersonalImpact.create.mock.calls[0][0]
+        expect(created.sourceType).toBe('debt_collect')
+        expect(created.impactKind).toBe('settlement_received')
+        expect(created.actionType).toBe('impact_space_collect')
+        expect(created.currency).toBe('USD')
+    })
+
+    it('no crea pending para usuario no involucrado si no viene en pendingTargets', async () => {
+        await emitPersonalSyncEvent({
+            actorUserId,
+            spaceId,
+            entryId,
+            sourceType: 'space_entry',
+            pendingTargets: [makePendingTarget({ userId: userAId })],
+        })
+
+        expect(mocks.SpaceEntryPersonalImpact.create).toHaveBeenCalledTimes(1)
+        const created = mocks.SpaceEntryPersonalImpact.create.mock.calls[0][0]
+        expect(created.userId.toString()).toBe(userAId)
+        expect(created.userId.toString()).not.toBe(userBId)
+    })
+
+    it('pending conserva metadata mínima de origen, contraparte y montos', async () => {
+        const debtId = new Types.ObjectId().toString()
+        const debtMovementId = new Types.ObjectId().toString()
+
+        await emitPersonalSyncEvent({
+            actorUserId,
+            spaceId,
+            entryId,
+            sourceType: 'debt_payment',
+            debtId,
+            debtMovementId,
+            pendingTargets: [
+                makePendingTarget({
+                    counterpartyParticipantId: participantBId,
+                    counterpartyNameSnapshot: 'Roro',
+                    accountImpactAmount: 1200,
+                    operationalAmount: 600,
+                }),
+            ],
+        })
+
+        const created = mocks.SpaceEntryPersonalImpact.create.mock.calls[0][0]
+        expect(created.actorUserId.toString()).toBe(actorUserId)
+        expect(created.counterpartyNameSnapshot).toBe('Roro')
+        expect(created.counterpartyParticipantId.toString()).toBe(participantBId)
+        expect(created.sourceType).toBe('debt_payment')
+        expect(created.amount).toBe(500)
+        expect(created.currency).toBe('ARS')
+        expect(created.accountImpactAmount).toBe(1200)
+        expect(created.operationalAmount).toBe(600)
+        expect(created.debtId.toString()).toBe(debtId)
+        expect(created.debtMovementId.toString()).toBe(debtMovementId)
+    })
+
+    it('privacy: no guarda accountId/categoryId de otro usuario en pending ni notification input', async () => {
+        await emitPersonalSyncEvent({
+            actorUserId,
+            spaceId,
+            entryId,
+            sourceType: 'space_entry',
+            pendingTargets: [
+                makePendingTarget({
+                    accountId: new Types.ObjectId().toString(),
+                    categoryId: new Types.ObjectId().toString(),
+                }),
+            ],
+        })
+
+        const created = mocks.SpaceEntryPersonalImpact.create.mock.calls[0][0]
+        expect(created.accountId).toBeUndefined()
+        expect(created.categoryId).toBeUndefined()
+        const notificationTarget = mocks.buildNotificationFromPendingAction.mock.calls[0][0]
+        expect(notificationTarget.accountId).toBeUndefined()
+        expect(notificationTarget.categoryId).toBeUndefined()
     })
 })

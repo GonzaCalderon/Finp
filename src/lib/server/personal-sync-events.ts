@@ -101,9 +101,30 @@ async function createPersonalPendingActions(event: PersonalSyncEvent): Promise<v
                 pendingId = created._id.toString()
             }
 
+            const notificationTarget: PendingActionTarget = {
+                userId: target.userId,
+                participantId: target.participantId,
+                impactKind: target.impactKind,
+                actionType: target.actionType,
+                amount: target.amount,
+                currency: target.currency,
+                ...(target.accountImpactAmount !== undefined && {
+                    accountImpactAmount: target.accountImpactAmount,
+                }),
+                ...(target.operationalAmount !== undefined && {
+                    operationalAmount: target.operationalAmount,
+                }),
+                ...(target.counterpartyParticipantId && {
+                    counterpartyParticipantId: target.counterpartyParticipantId,
+                }),
+                ...(target.counterpartyNameSnapshot && {
+                    counterpartyNameSnapshot: target.counterpartyNameSnapshot,
+                }),
+            }
+
             // Siempre upsert la notificación — idempotente por dedupeKey
             await safeUpsertNotificationByDedupeKey(
-                buildNotificationFromPendingAction(target, event, pendingId)
+                buildNotificationFromPendingAction(notificationTarget, event, pendingId)
             )
         })
     )

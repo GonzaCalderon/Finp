@@ -144,6 +144,24 @@ describe('computeDirectSpaceDebts', () => {
 })
 
 describe('buildDebtSummary', () => {
+    it('incluye deuda manual payable activa', () => {
+        const summary = buildDebtSummary([
+            makeDebt({ direction: 'payable', sourceType: 'manual', remainingAmount: 300, currency: 'ARS', status: 'active' }),
+        ])
+
+        expect(summary.payable.byCurrency['ARS']).toBe(300)
+        expect(summary.receivable.byCurrency['ARS']).toBeUndefined()
+    })
+
+    it('incluye deuda manual receivable parcialmente pagada', () => {
+        const summary = buildDebtSummary([
+            makeDebt({ direction: 'receivable', sourceType: 'manual', remainingAmount: 125, currency: 'USD', status: 'partially_paid' }),
+        ])
+
+        expect(summary.receivable.byCurrency['USD']).toBe(125)
+        expect(summary.payable.byCurrency['USD']).toBeUndefined()
+    })
+
     it('separa correctamente payable y receivable por moneda', () => {
         const debts = [
             makeDebt({ direction: 'payable', currency: 'ARS', remainingAmount: 1000, status: 'active' }),
@@ -156,14 +174,27 @@ describe('buildDebtSummary', () => {
         expect(summary.receivable.byCurrency['ARS']).toBe(500)
     })
 
-    it('excluye deudas ignored, paid y cancelled del resumen', () => {
+    it('excluye deudas ignored, paid y cancelled del resumen activo', () => {
         const debts = [
             makeDebt({ direction: 'payable', currency: 'ARS', remainingAmount: 100, status: 'ignored' }),
             makeDebt({ _id: 'debt-2' as unknown as IDebt['_id'], direction: 'payable', currency: 'ARS', remainingAmount: 200, status: 'paid' }),
-            makeDebt({ _id: 'debt-3' as unknown as IDebt['_id'], direction: 'payable', currency: 'ARS', remainingAmount: 300, status: 'active' }),
+            makeDebt({ _id: 'debt-3' as unknown as IDebt['_id'], direction: 'payable', currency: 'ARS', remainingAmount: 250, status: 'cancelled' }),
+            makeDebt({ _id: 'debt-4' as unknown as IDebt['_id'], direction: 'payable', currency: 'ARS', remainingAmount: 300, status: 'active' }),
         ]
         const summary = buildDebtSummary(debts)
         expect(summary.payable.byCurrency['ARS']).toBe(300)
+    })
+
+    it('no mezcla ARS y USD en el neto por moneda', () => {
+        const summary = buildDebtSummary([
+            makeDebt({ direction: 'payable', currency: 'ARS', remainingAmount: 1000, status: 'active' }),
+            makeDebt({ _id: 'debt-2' as unknown as IDebt['_id'], direction: 'payable', currency: 'USD', remainingAmount: 10, status: 'active' }),
+            makeDebt({ _id: 'debt-3' as unknown as IDebt['_id'], direction: 'receivable', currency: 'ARS', remainingAmount: 300, status: 'active' }),
+            makeDebt({ _id: 'debt-4' as unknown as IDebt['_id'], direction: 'receivable', currency: 'USD', remainingAmount: 5, status: 'active' }),
+        ])
+
+        expect(summary.payable.byCurrency).toEqual({ ARS: 1000, USD: 10 })
+        expect(summary.receivable.byCurrency).toEqual({ ARS: 300, USD: 5 })
     })
 })
 
@@ -189,6 +220,20 @@ describe('consolidateDebtsByPerson', () => {
         expect(consolidated).toHaveLength(1)
         expect(consolidated[0]?.payable['ARS']).toBe(100)
         expect(consolidated[0]?.receivable['ARS']).toBe(50)
+    })
+
+    it('consolida sourceType space y manual por contraparte sin mezclar monedas', () => {
+        const debts = [
+            makeDebt({ counterpartyNameSnapshot: 'Roro', sourceType: 'space', direction: 'payable', currency: 'ARS', remainingAmount: 200, status: 'active' }),
+            makeDebt({ _id: 'debt-2' as unknown as IDebt['_id'], counterpartyNameSnapshot: 'Roro', sourceType: 'manual', direction: 'payable', currency: 'USD', remainingAmount: 15, status: 'active' }),
+            makeDebt({ _id: 'debt-3' as unknown as IDebt['_id'], counterpartyNameSnapshot: 'Roro', sourceType: 'manual', direction: 'receivable', currency: 'ARS', remainingAmount: 50, status: 'active' }),
+        ]
+
+        const consolidated = consolidateDebtsByPerson(debts)
+
+        expect(consolidated).toHaveLength(1)
+        expect(consolidated[0]?.payable).toEqual({ ARS: 200, USD: 15 })
+        expect(consolidated[0]?.receivable).toEqual({ ARS: 50 })
     })
 })
 

@@ -2,7 +2,7 @@
 
 Documento vivo para ordenar la evolución de **Finp**, especialmente la integración entre **Finanzas personales**, **Espacios**, **Deudas**, **Transacciones**, **Cuentas** y futuras funciones relacionadas.
 
-**Última actualización:** 2026-05-09
+**Última actualización:** 2026-05-15
 
 ---
 
@@ -39,9 +39,9 @@ Finp ya cuenta con una base funcional avanzada en tres frentes principales:
     - Pagos y cobros de deuda con impacto real en cuentas.
     - Pagos/cobros excluidos de gastos e ingresos operativos.
     - Integración con Transacciones, Cuentas, Dashboard y Espacios.
-    - Rediseño visual de `/debts` pendiente.
+    - Rediseño visual de `/debts` cerrado en Fase 6G / en QA.
 
-La prioridad inmediata es **rediseñar la experiencia visual de Deudas** para que el módulo quede alineado con Finp antes de avanzar con cuotas en Espacios.
+La prioridad inmediata es reforzar la base automatizada de testing con **Fase 6T.1** y **Fase 6T.2**. El plan completo de calidad y estabilización vive en `docs/plan_calidad_estabilizacion_finp.md`.
 
 ---
 
@@ -689,11 +689,11 @@ Incluye:
 
 ---
 
-# Próxima fase inmediata
+# Próximas fases inmediatas
 
-## Fase 6E — Rediseño visual del módulo Deudas
+## Fase 6G — Rediseño visual del módulo Deudas
 
-**Estado:** próxima recomendada.
+**Estado:** implementada / en QA visual.
 
 Objetivo:
 Rediseñar `/debts` para que deje de sentirse como una pantalla técnica y pase a sentirse como un módulo propio de Finp.
@@ -734,6 +734,72 @@ No debe incluir:
 - Reintegros avanzados.
 
 ---
+
+## Fase 6T.1 — Infra de testing y factories
+
+**Estado:** fase actual.
+
+Objetivo:
+Crear una base mantenible para tests unitarios, integration/API y e2e futuros sin duplicar setups ni mocks.
+
+Incluye:
+
+- Helpers de ObjectId.
+- Factories mínimas de dominio.
+- Mock reusable de auth/session.
+- Helpers para mocks Mongoose con `.lean()`.
+- Assertions comunes para privacidad, ObjectId, fechas y targets de notificación.
+- Documentación breve de uso en `tests/helpers`.
+
+El alcance completo de calidad se documenta aparte en `docs/plan_calidad_estabilizacion_finp.md`.
+
+---
+
+## Fase 6T.2 — Unit tests críticos
+
+**Estado:** fase actual.
+
+Objetivo:
+Cubrir con Vitest la lógica más sensible de Fase 6 antes del pulido final.
+
+Prioridades:
+
+- Estados `pending`, `linked` y `needs_review`.
+- Notificaciones accionables, archivo, eliminación lógica y dedupe.
+- Privacidad de cuentas/categorías personales.
+- Deudas manuales y derivadas de espacios.
+- Sync idempotente.
+- Montos operativos vs impacto real de cuenta.
+- Invalidaciones client-side.
+
+No busca 100% de cobertura todavía; busca cobertura de riesgo.
+
+---
+
+## Fase 6M — Pulido de navegación, menús y experiencia mobile/desktop
+
+**Estado:** siguiente fase para cerrar Fase 6.
+
+Objetivo:
+Pulir navegación, menús, affordances y consistencia responsive antes del cierre formal de Fase 6.
+
+Incluye:
+
+- Menús mobile y desktop.
+- Navegación entre Deudas, Espacios, Transacciones y Dashboard.
+- Estados vacíos y acciones rápidas.
+- QA visual final en mobile/desktop y dark mode.
+
+---
+
+## Cierre de Fase 6
+
+**Estado:** posterior a Fase 6M.
+
+Objetivo:
+Cerrar Fase 6 con Deudas, sync, notificaciones, impactos personales y navegación estabilizados.
+
+Las fases 6T.3, 6T.4 y 6RC quedan para el plan dedicado de calidad y estabilización, no para expandir el plan principal.
 
 # Fases futuras
 
@@ -1049,13 +1115,17 @@ Incluye:
 
 # Orden recomendado desde ahora
 
-1. Fase 6E — Rediseño visual de Deudas.
-2. Fase 7 — Cuotas en Espacios.
-3. Fase 8 — Invitaciones por link.
-4. Fase 9 — Gastos compartidos simples.
-5. Fase 10 — Reintegros avanzados.
-6. Fase 11 — Automatización de impacto personal desde Espacios.
-7. Fase 12 — Integración avanzada Finp / Espacios.
+1. Fase 6G — Rediseño visual de Deudas.
+2. Fase 6T.1 — Infra de testing y factories.
+3. Fase 6T.2 — Unit tests críticos.
+4. Fase 6M — Pulido de navegación, menús y experiencia mobile/desktop.
+5. Cierre de Fase 6.
+6. Fase 7 — Cuotas en Espacios.
+7. Fase 8 — Invitaciones por link.
+8. Fase 9 — Gastos compartidos simples.
+9. Fase 10 — Reintegros avanzados.
+10. Fase 11 — Automatización de impacto personal desde Espacios.
+11. Fase 12 — Integración avanzada Finp / Espacios.
 
 Este orden puede cambiar si una necesidad funcional aparece antes.
 
@@ -1192,5 +1262,5 @@ Validar especialmente:
 - Integración profunda de tarjetas de crédito con Deudas.
 - Conversión multi-moneda en deudas.
 - Link profundo a movimiento específico en todos los contextos.
-- Rediseño visual final de Deudas.
+- QA visual continuo de Deudas tras el rediseño.
 - Automatización avanzada de categorías personales por espacio.
