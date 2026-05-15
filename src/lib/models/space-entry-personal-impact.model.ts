@@ -48,6 +48,12 @@ const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
         resolvedAt: { type: Date },
         ignoredAt: { type: Date },
         removedAt: { type: Date },
+        // Fase 6F.4 — campos de revisión
+        reviewReason: { type: String, enum: ['entry_voided', 'entry_edited'] },
+        reviewRequestedAt: { type: Date },
+        reviewChangedFields: { type: [String] },
+        reviewedAt: { type: Date },
+        reviewedResolution: { type: String, enum: ['kept', 'removed'] },
     },
     { timestamps: true }
 )

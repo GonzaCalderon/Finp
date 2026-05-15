@@ -234,6 +234,48 @@ function notificationCopyFor(
     }
 }
 
+export function buildReviewNotification(params: {
+    recipientUserId: string
+    actorUserId: string
+    entryId: string
+    spaceId: string
+    entryTitle: string
+    reason: 'entry_voided' | 'entry_edited'
+    impactId: string
+    changedFields?: string[]
+}): CreateNotificationInput & { dedupeKey: string } {
+    const { recipientUserId, actorUserId, entryId, spaceId, entryTitle, reason, impactId, changedFields } = params
+    const isVoided = reason === 'entry_voided'
+    const title = isVoided ? 'Un movimiento vinculado fue anulado' : 'Un movimiento vinculado fue modificado'
+    const fieldsSuffix = !isVoided && changedFields?.length ? ` (${changedFields.join(', ')})` : ''
+    const body = isVoided
+        ? `"${entryTitle}" fue anulado. Revisá tu transacción vinculada para mantener tus finanzas consistentes.`
+        : `"${entryTitle}" fue editado${fieldsSuffix}. Revisá tu transacción vinculada para mantener tus finanzas consistentes.`
+
+    return {
+        recipientUserId: new Types.ObjectId(recipientUserId),
+        actorUserId: new Types.ObjectId(actorUserId),
+        type: isVoided ? NOTIFICATION_TYPES.SPACE_ENTRY_VOIDED_REVIEW : NOTIFICATION_TYPES.SPACE_ENTRY_EDITED_REVIEW,
+        category: NOTIFICATION_CATEGORIES.PERSONAL_IMPACT,
+        priority: 'high',
+        status: NOTIFICATION_STATUSES.UNREAD,
+        actionStatus: NOTIFICATION_ACTION_STATUSES.PENDING,
+        title,
+        body,
+        pendingActionId: new Types.ObjectId(impactId),
+        entityRefs: {
+            spaceId: new Types.ObjectId(spaceId),
+            spaceEntryId: new Types.ObjectId(entryId),
+            personalImpactId: new Types.ObjectId(impactId),
+        },
+        action: {
+            label: 'Ver movimiento',
+            href: `/spaces/${spaceId}?entryId=${entryId}`,
+        },
+        dedupeKey: `review:${reason}:${recipientUserId}:${entryId}`,
+    }
+}
+
 export function buildNotificationFromPendingAction(
     target: PendingActionTargetLike,
     event: PersonalSyncEventLike,

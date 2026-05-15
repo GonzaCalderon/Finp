@@ -2,16 +2,59 @@ import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { SpaceCategory, SpaceEntry } from '@/lib/models'
+import { SpaceCategory, SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
-import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
+import { getPersonalImpactForEntries, markLinkedImpactsAsNeedsReview } from '@/lib/server/space-personal-impact'
+import { buildReviewNotification, safeUpsertNotificationByDedupeKey } from '@/lib/server/notifications'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryEditSchema } from '@/lib/validations'
 import { calculateReportingAmount, extractId } from '@/lib/utils/spaces'
+import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import type { ISpace, ISpaceEntry, ISpaceEntrySnapshot } from '@/types'
 
 type Params = Promise<{ id: string; entryId: string }>
+
+const MATERIAL_FIELD_LABELS: Record<string, string> = {
+    amount: 'monto',
+    currency: 'moneda',
+    exchangeRate: 'cotización',
+    date: 'fecha',
+    paidByParticipantId: 'pagador',
+    sharedWithParticipantIds: 'participantes',
+    splitMode: 'modo de división',
+    splitAllocations: 'división',
+}
+
+function detectSpaceEntryMaterialChanges(
+    old: ISpaceEntry,
+    data: ReturnType<typeof spaceEntryEditSchema.parse>
+): { isMaterial: boolean; changedFields: string[]; changedLabels: string[] } {
+    const changedFields: string[] = []
+
+    if (data.amount !== undefined && data.amount !== old.amount) changedFields.push('amount')
+    if (data.currency !== undefined && data.currency !== old.currency) changedFields.push('currency')
+    if (data.exchangeRate !== undefined && data.exchangeRate !== old.exchangeRate) changedFields.push('exchangeRate')
+    if (data.date !== undefined && new Date(data.date).getTime() !== new Date(old.date).getTime()) changedFields.push('date')
+    if (data.paidByParticipantId !== undefined && data.paidByParticipantId !== extractId(old.paidByParticipantId)) changedFields.push('paidByParticipantId')
+    if (data.splitMode !== undefined && data.splitMode !== old.splitMode) changedFields.push('splitMode')
+
+    if (data.sharedWithParticipantIds !== undefined) {
+        const oldIds = (old.sharedWithParticipantIds ?? []).map((pid) => extractId(pid) ?? '').sort()
+        const newIds = [...data.sharedWithParticipantIds].sort()
+        if (JSON.stringify(oldIds) !== JSON.stringify(newIds)) changedFields.push('sharedWithParticipantIds')
+    }
+
+    if (data.splitAllocations !== undefined) {
+        const sortKey = (a: { participantId: string; percentage?: number; amount?: number }) => a.participantId
+        const oldAlloc = JSON.stringify((old.splitAllocations ?? []).map((a) => ({ participantId: extractId(a.participantId) ?? '', percentage: a.percentage, amount: a.amount })).sort((a, b) => sortKey(a).localeCompare(sortKey(b))))
+        const newAlloc = JSON.stringify([...data.splitAllocations].sort((a, b) => a.participantId.localeCompare(b.participantId)))
+        if (oldAlloc !== newAlloc) changedFields.push('splitAllocations')
+    }
+
+    const changedLabels = changedFields.map((f) => MATERIAL_FIELD_LABELS[f] ?? f)
+    return { isMaterial: changedFields.length > 0, changedFields, changedLabels }
+}
 
 export async function GET(request: Request, { params }: { params: Params }) {
     try {
@@ -43,25 +86,36 @@ export async function GET(request: Request, { params }: { params: Params }) {
         }
 
         // Detectar settlements posteriores para warning pre-acción (edit / void)
-        const laterSettlements = await SpaceEntry.countDocuments({
-            spaceId: id,
-            type: 'settlement',
-            isVoided: { $ne: true },
-            status: { $nin: ['rejected', 'pending_confirmation'] },
-            createdAt: { $gt: entry.createdAt },
-        })
-        const personalImpactsByEntryId = await getPersonalImpactForEntries(
-            id,
-            session.user.id,
-            [entryId],
-            [entry],
-            context.participants
-        )
+        const [laterSettlements, allLinkedImpacts, currentUserReviewImpact, personalImpactsByEntryId] = await Promise.all([
+            SpaceEntry.countDocuments({
+                spaceId: id,
+                type: 'settlement',
+                isVoided: { $ne: true },
+                status: { $nin: ['rejected', 'pending_confirmation'] },
+                createdAt: { $gt: entry.createdAt },
+            }),
+            SpaceEntryPersonalImpact.find({
+                entryId,
+                status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
+            }).lean(),
+            SpaceEntryPersonalImpact.findOne({
+                entryId,
+                userId: new Types.ObjectId(session.user.id),
+                status: SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW,
+            }).lean(),
+            getPersonalImpactForEntries(id, session.user.id, [entryId], [entry], context.participants),
+        ])
+
+        const currentUserHasLinkedImpact = Boolean(personalImpactsByEntryId[entryId]?.linkedImpact)
 
         return NextResponse.json({
             entry,
-            hasLinkedTransaction: Boolean(personalImpactsByEntryId[entryId]?.linkedImpact),
+            hasLinkedTransaction: currentUserHasLinkedImpact,
             hasSubsequentSettlement: laterSettlements > 0,
+            linkedImpactsCount: allLinkedImpacts.length,
+            affectedUsersCount: allLinkedImpacts.length,
+            currentUserHasLinkedImpact,
+            currentUserNeedsReview: Boolean(currentUserReviewImpact),
         })
     } catch (error) {
         console.error('Error al obtener movimiento:', error)
@@ -276,7 +330,33 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
             console.error('[debt-sync] entries PATCH:', err)
         }
 
-        return NextResponse.json({ entry: updatedEntry, hasSubsequentSettlement })
+        // Notificar a usuarios con impactos vinculados si hubo cambios materiales
+        const { isMaterial, changedFields, changedLabels } = detectSpaceEntryMaterialChanges(entry, data)
+        if (isMaterial && updatedEntry) {
+            try {
+                const affectedImpacts = await markLinkedImpactsAsNeedsReview(entryId, 'entry_edited', changedLabels)
+                await Promise.allSettled(
+                    affectedImpacts.map((impact) =>
+                        safeUpsertNotificationByDedupeKey(
+                            buildReviewNotification({
+                                recipientUserId: impact.userId.toString(),
+                                actorUserId: session.user.id,
+                                entryId,
+                                spaceId: id,
+                                entryTitle: updatedEntry.title,
+                                reason: 'entry_edited',
+                                impactId: impact._id.toString(),
+                                changedFields: changedLabels,
+                            })
+                        )
+                    )
+                )
+            } catch (err) {
+                console.error('[personal-sync] edit review notifications:', err)
+            }
+        }
+
+        return NextResponse.json({ entry: updatedEntry, hasSubsequentSettlement, materialChange: isMaterial })
     } catch (error) {
         console.error('Error al editar movimiento:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

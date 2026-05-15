@@ -21,6 +21,7 @@ export function VoidEntryDialog({
     entry,
     hasLinkedTransaction,
     hasSubsequentSettlement,
+    affectedUsersCount = 0,
     onConfirm,
 }: {
     open: boolean
@@ -28,6 +29,7 @@ export function VoidEntryDialog({
     entry: ISpaceEntry | null
     hasLinkedTransaction: boolean
     hasSubsequentSettlement: boolean
+    affectedUsersCount?: number
     onConfirm: (voidReason?: string) => Promise<void>
 }) {
     const [reason, setReason] = useState('')
@@ -74,6 +76,17 @@ export function VoidEntryDialog({
                             </span>
                         </div>
                     ) : null}
+
+                    {affectedUsersCount > 0 && (
+                        <div className="flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>
+                                {affectedUsersCount === 1
+                                    ? 'Un participante tiene este movimiento registrado en su Finp. Recibirá una notificación para revisar su transacción vinculada.'
+                                    : `${affectedUsersCount} participantes tienen este movimiento registrado en su Finp. Recibirán una notificación para revisar sus transacciones vinculadas.`}
+                            </span>
+                        </div>
+                    )}
 
                     {hasLinkedTransaction ? (
                         <div className="flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">

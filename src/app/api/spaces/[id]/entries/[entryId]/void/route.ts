@@ -5,8 +5,8 @@ import { connectDB } from '@/lib/db'
 import { SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
-import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
-import { resolveNotificationsForTarget } from '@/lib/server/notifications'
+import { getPersonalImpactForEntries, markLinkedImpactsAsNeedsReview } from '@/lib/server/space-personal-impact'
+import { resolveNotificationsForTarget, buildReviewNotification, safeUpsertNotificationByDedupeKey } from '@/lib/server/notifications'
 import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryVoidSchema } from '@/lib/validations'
@@ -82,6 +82,12 @@ export async function POST(request: Request, { params }: { params: Params }) {
         )
         const hasPersonalImpact = Boolean(personalImpactsByEntryId[entryId]?.linkedImpact)
 
+        // Pre-query linked impacts for all users before voiding (to notify them after)
+        const linkedImpactsBeforeVoid = await SpaceEntryPersonalImpact.find({
+            entryId,
+            status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
+        }).lean()
+
         const voidedEntry = await SpaceEntry.findByIdAndUpdate(
             entryId,
             {
@@ -135,6 +141,32 @@ export async function POST(request: Request, { params }: { params: Params }) {
             actionStatus: 'cancelled',
         }).catch((err) => console.error('[notifications] resolve on void:', err))
 
+        // Marcar impactos LINKED como needs_review y notificar a los usuarios afectados
+        try {
+            const affectedImpacts = await markLinkedImpactsAsNeedsReview(entryId, 'entry_voided')
+            const spaceId = id
+            const entryTitle = voidedEntry?.title ?? entry.title
+
+            await Promise.allSettled(
+                affectedImpacts.map((impact) => {
+                    const userId = impact.userId.toString()
+                    return safeUpsertNotificationByDedupeKey(
+                        buildReviewNotification({
+                            recipientUserId: userId,
+                            actorUserId: session.user.id,
+                            entryId,
+                            spaceId,
+                            entryTitle,
+                            reason: 'entry_voided',
+                            impactId: impact._id.toString(),
+                        })
+                    )
+                })
+            )
+        } catch (err) {
+            console.error('[personal-sync] void review notifications:', err)
+        }
+
         try {
             await syncSpaceDebtsForActiveParticipants(id)
         } catch (err) {
@@ -145,6 +177,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
             entry: voidedEntry,
             hasLinkedTransaction: hasPersonalImpact,
             hasSubsequentSettlement,
+            affectedUsersCount: linkedImpactsBeforeVoid.length,
         })
     } catch (error) {
         console.error('Error al anular movimiento:', error)

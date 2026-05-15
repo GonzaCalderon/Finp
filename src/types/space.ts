@@ -179,6 +179,12 @@ export interface ISpaceEntryPersonalImpact {
     resolvedAt?: Date
     ignoredAt?: Date
     removedAt?: Date
+    // Campos de revisión (Fase 6F.4)
+    reviewReason?: 'entry_voided' | 'entry_edited'
+    reviewRequestedAt?: Date
+    reviewChangedFields?: string[]
+    reviewedAt?: Date
+    reviewedResolution?: 'kept' | 'removed'
     createdAt: Date
     updatedAt: Date
 }
@@ -186,6 +192,7 @@ export interface ISpaceEntryPersonalImpact {
 export interface ISpaceEntryPersonalImpactByEntry {
     linkedImpact?: ISpaceEntryPersonalImpact
     pendingActions: ISpaceEntryPersonalImpact[]
+    reviewImpact?: ISpaceEntryPersonalImpact
 }
 
 export interface ISpaceActivityEvent {

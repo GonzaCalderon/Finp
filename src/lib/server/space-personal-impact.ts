@@ -153,7 +153,13 @@ export async function getPersonalImpactForEntries(
         spaceId,
         userId,
         entryId: { $in: validEntryIds },
-        status: { $in: [SPACE_PERSONAL_IMPACT_STATUSES.LINKED, SPACE_PERSONAL_IMPACT_STATUSES.PENDING] },
+        status: {
+            $in: [
+                SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
+                SPACE_PERSONAL_IMPACT_STATUSES.PENDING,
+                SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW,
+            ],
+        },
     }).lean<ISpaceEntryPersonalImpact[]>()
 
     const byEntryId: Record<string, ISpaceEntryPersonalImpactByEntry> = {}
@@ -166,6 +172,8 @@ export async function getPersonalImpactForEntries(
         }
         if (impact.status === SPACE_PERSONAL_IMPACT_STATUSES.LINKED) {
             byEntryId[entryId].linkedImpact = impact
+        } else if (impact.status === SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW) {
+            byEntryId[entryId].reviewImpact = impact
         } else {
             byEntryId[entryId].pendingActions.push(impact)
         }
@@ -174,7 +182,7 @@ export async function getPersonalImpactForEntries(
     // Soporte legado: entries con linkedTransactionId pero sin SpaceEntryPersonalImpact
     entries.forEach((entry) => {
         const entryId = extractId(entry._id)
-        if (!entryId || byEntryId[entryId]?.linkedImpact) return
+        if (!entryId || byEntryId[entryId]?.linkedImpact || byEntryId[entryId]?.reviewImpact) return
         if (entry.status !== 'linked' && !entry.linkedTransactionId) return
 
         const confirmedByUserId = extractId(entry.confirmedByUserId)
@@ -431,4 +439,35 @@ export async function createPersonalImpactFromSpaceEntry({
         status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
         resolvedAt: new Date(),
     })
+}
+
+/**
+ * Transiciona todos los impactos LINKED de un entry a NEEDS_REVIEW y devuelve los registros afectados.
+ * Usado al anular o editar materialmente un entry.
+ */
+export async function markLinkedImpactsAsNeedsReview(
+    entryId: string,
+    reason: 'entry_voided' | 'entry_edited',
+    changedFields?: string[]
+): Promise<ISpaceEntryPersonalImpact[]> {
+    const linked = await SpaceEntryPersonalImpact.find({
+        entryId,
+        status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
+    }).lean<ISpaceEntryPersonalImpact[]>()
+
+    if (linked.length === 0) return []
+
+    await SpaceEntryPersonalImpact.updateMany(
+        { entryId, status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED },
+        {
+            $set: {
+                status: SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW,
+                reviewReason: reason,
+                reviewRequestedAt: new Date(),
+                ...(changedFields?.length ? { reviewChangedFields: changedFields } : {}),
+            },
+        }
+    )
+
+    return linked
 }

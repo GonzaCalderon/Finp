@@ -106,7 +106,7 @@ export function SpaceEntryDetailSheet({
     const [revisionSheetOpen, setRevisionSheetOpen] = useState(false)
     const [selectedSnapshot, setSelectedSnapshot] = useState<ISpaceEntrySnapshot | null>(null)
     const [impactDialogOpen, setImpactDialogOpen] = useState(false)
-    const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false })
+    const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false, affectedUsersCount: 0 })
 
     useEffect(() => {
         setCurrentEntry(entry)
@@ -180,10 +180,12 @@ export function SpaceEntryDetailSheet({
                     entry: ISpaceEntry
                     hasLinkedTransaction: boolean
                     hasSubsequentSettlement: boolean
+                    affectedUsersCount?: number
                 }
                 setVoidContext({
                     hasLinkedTransaction: json.hasLinkedTransaction && impactsCurrentUser,
                     hasSubsequentSettlement: json.hasSubsequentSettlement,
+                    affectedUsersCount: json.affectedUsersCount ?? 0,
                 })
             }
         } catch {
@@ -556,6 +558,7 @@ export function SpaceEntryDetailSheet({
                 entry={currentEntry}
                 hasLinkedTransaction={voidContext.hasLinkedTransaction}
                 hasSubsequentSettlement={voidContext.hasSubsequentSettlement}
+                affectedUsersCount={voidContext.affectedUsersCount}
                 onConfirm={handleVoidConfirm}
             />
 

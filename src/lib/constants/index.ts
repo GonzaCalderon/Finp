@@ -279,6 +279,8 @@ export const NOTIFICATION_TYPES = {
     PERSONAL_IMPACT_PENDING: 'personal_impact_pending',
     SPACE_ENTRY_CREATED: 'space_entry_created',
     SPACE_ENTRY_VOIDED: 'space_entry_voided',
+    SPACE_ENTRY_VOIDED_REVIEW: 'space_entry_voided_review',
+    SPACE_ENTRY_EDITED_REVIEW: 'space_entry_edited_review',
     DEBT_PAYMENT_REGISTERED: 'debt_payment_registered',
     DEBT_COLLECT_REGISTERED: 'debt_collect_registered',
     SYSTEM_INFO: 'system_info',
