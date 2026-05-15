@@ -85,6 +85,69 @@ export function DebtAmountInline({
     return <span className={cn('font-medium tabular-nums', className)} style={style}>{formatted}</span>
 }
 
+export function DebtNetAmountDisplay({
+    netByCurrency,
+    hidden = false,
+    mode = 'compact',
+    className,
+}: {
+    netByCurrency: Record<string, number>
+    hidden?: boolean
+    mode?: 'compact' | 'stacked' | 'inline'
+    className?: string
+}) {
+    const entries = Object.entries(netByCurrency)
+        .map(([currency, amount]) => ({ currency, amount }))
+        .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+
+    if (entries.length === 0) {
+        return <span className={cn('text-sm text-muted-foreground', className)}>Sin saldo</span>
+    }
+
+    if (mode === 'inline') {
+        return (
+            <span className={cn('inline-flex flex-wrap items-center gap-x-2 gap-y-1', className)}>
+                {entries.map(({ currency, amount }) => (
+                    <DebtAmountInline
+                        key={currency}
+                        amount={Math.abs(amount)}
+                        currency={currency}
+                        hidden={hidden}
+                        className="text-sm"
+                        style={{ color: amount > 0 ? 'var(--chart-3)' : amount < 0 ? 'var(--chart-4)' : undefined }}
+                    />
+                ))}
+            </span>
+        )
+    }
+
+    const [primary, ...others] = entries
+
+    return (
+        <div className={cn('min-w-0', mode === 'stacked' ? 'space-y-1.5' : 'space-y-0.5', className)}>
+            <DebtAmountInline
+                amount={Math.abs(primary.amount)}
+                currency={primary.currency}
+                hidden={hidden}
+                className={cn(mode === 'stacked' ? 'text-2xl font-semibold' : 'text-base font-semibold')}
+                style={{
+                    color: primary.amount > 0 ? 'var(--chart-3)' : primary.amount < 0 ? 'var(--chart-4)' : undefined,
+                }}
+            />
+            {others.length > 0 ? (
+                <div className={cn('flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground', mode === 'stacked' && 'flex-col')}>
+                    {others.map(({ currency, amount }) => (
+                        <span key={currency} className="font-medium tabular-nums">
+                            {amount > 0 ? '+' : amount < 0 ? '-' : ''}
+                            {hidden ? '••••' : formatDebtAmount(Math.abs(amount), currency)}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    )
+}
+
 export function DebtInitialsAvatar({ name, className }: { name: string; className?: string }) {
     const initials = name
         .split(' ')

@@ -31,17 +31,6 @@ import {
 } from '@/components/debts/DebtsUi'
 import type { IDebt, IDebtMovement } from '@/types/debt'
 
-const MOVEMENT_TYPE_LABELS: Record<string, string> = {
-    creation: 'Creación',
-    payment: 'Pago',
-    collect: 'Cobro',
-    adjustment: 'Ajuste',
-    cancellation: 'Cancelación',
-    ignore: 'Ignorada',
-    restore: 'Restaurada',
-    sync_update: 'Actualización de espacio',
-}
-
 interface DebtDetailSheetProps {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -53,6 +42,38 @@ interface DebtDetailSheetProps {
     onRestore: (debt: IDebt) => void
     onCancel: (debt: IDebt) => void
     getDebtWithMovements: (id: string) => Promise<{ debt: IDebt; movements: IDebtMovement[] }>
+}
+
+function idToString(id: unknown) {
+    if (!id) return ''
+    return typeof id === 'string' ? id : id.toString()
+}
+
+function movementTitle(movement: IDebtMovement, debt: IDebt) {
+    if (movement.type === 'payment') return `Le pagaste a ${debt.counterpartyNameSnapshot}`
+    if (movement.type === 'collect') return `${debt.counterpartyNameSnapshot} te pagó`
+    if (movement.type === 'creation') return 'Deuda registrada'
+    if (movement.type === 'sync_update') return 'Actualizado desde espacio'
+    if (movement.type === 'cancellation') return 'Deuda cancelada'
+    if (movement.type === 'ignore') return 'Deuda ignorada'
+    if (movement.type === 'restore') return 'Deuda restaurada'
+    if (movement.type === 'adjustment') return 'Ajuste de deuda'
+    return movement.type
+}
+
+function statusCopy(debt: IDebt) {
+    if (debt.status === 'paid') return 'Sin saldo pendiente'
+    if (debt.status === 'ignored') return 'Ignorada en tu Finp'
+    if (debt.status === 'cancelled') return 'Cancelada'
+    if (debt.status === 'partially_paid') return 'Pago parcial registrado'
+    return debt.sourceType === 'space' ? 'Pendiente de impactar' : 'Saldo pendiente'
+}
+
+function spaceHref(spaceId?: unknown, entryId?: unknown) {
+    const sid = idToString(spaceId)
+    if (!sid) return ''
+    const eid = idToString(entryId)
+    return `/spaces/${sid}${eid ? `?entryId=${eid}` : ''}`
 }
 
 export function DebtDetailSheet({
@@ -120,6 +141,7 @@ export function DebtDetailSheet({
                                 <DebtSourceBadge sourceType={debt.sourceType} />
                                 <DebtStatusBadge status={debt.status} />
                             </div>
+                            <p className="text-xs text-muted-foreground">{statusCopy(debt)}</p>
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
@@ -149,16 +171,17 @@ export function DebtDetailSheet({
                             )}
 
                             {debt.sourceType === 'space' && debt.spaceId && (
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-xs text-muted-foreground">Origen:</span>
-                                    <Link
-                                        href={`/spaces/${debt.spaceId.toString()}`}
-                                        className="text-xs text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-0.5"
-                                        onClick={() => onOpenChange(false)}
-                                    >
-                                        Ver espacio
-                                        <ExternalLink size={10} />
-                                    </Link>
+                                    <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                                        <Link
+                                            href={spaceHref(debt.spaceId, debt.metadata?.sourceEntryIds?.[0])}
+                                            onClick={() => onOpenChange(false)}
+                                        >
+                                            Ver en espacio
+                                            <ExternalLink size={10} />
+                                        </Link>
+                                    </Button>
                                     {debt.originMode && (
                                         <span className="text-xs text-muted-foreground">
                                             · Modo {debt.originMode === 'simplified' ? 'Simplificado' : 'Directo'}
@@ -178,12 +201,22 @@ export function DebtDetailSheet({
                                         <div key={mv._id.toString()} className="flex items-center justify-between gap-2">
                                             <div className="flex flex-col">
                                                 <span className="text-xs font-medium">
-                                                    {MOVEMENT_TYPE_LABELS[mv.type] ?? mv.type}
+                                                    {movementTitle(mv, debt)}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {new Date(mv.date).toLocaleDateString('es-AR')}
                                                     {mv.notes ? ` · ${mv.notes}` : ''}
                                                 </span>
+                                                {mv.spaceId ? (
+                                                    <Link
+                                                        href={spaceHref(mv.spaceId, mv.spaceEntryId)}
+                                                        className="mt-0.5 inline-flex w-fit items-center gap-1 text-xs text-sky-600 hover:underline dark:text-sky-400"
+                                                        onClick={() => onOpenChange(false)}
+                                                    >
+                                                        Ver en espacio
+                                                        <ExternalLink size={10} />
+                                                    </Link>
+                                                ) : null}
                                             </div>
                                             <DebtAmountInline
                                                 amount={mv.amount}

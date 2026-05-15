@@ -1,6 +1,5 @@
 'use client'
 
-import { useMemo } from 'react'
 import {
     Sheet,
     SheetContent,
@@ -9,50 +8,44 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import { DebtRelationPanel } from '@/components/debts/panels/DebtRelationPanel'
-import { buildDebtRelationships } from '@/lib/utils/debts-ui'
+import type { DebtRelationship } from '@/lib/utils/debts-ui'
 import type { IDebt } from '@/types/debt'
-import type { ConsolidatedDebtByPerson } from '@/lib/utils/debt'
 
-interface DebtPersonSheetProps {
+interface DebtRelationSheetProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    person: ConsolidatedDebtByPerson | null
-    debts: IDebt[]
+    rel: DebtRelationship | null
     hidden?: boolean
+    highlightedDebtId?: string | null
     onViewDebt: (debt: IDebt) => void
     onPay: (debt: IDebt) => void
     onCollect: (debt: IDebt) => void
     onNewDebt: (prefillName: string) => void
 }
 
-export function DebtPersonSheet({
+export function DebtRelationSheet({
     open,
     onOpenChange,
-    person,
-    debts,
+    rel,
     hidden,
+    highlightedDebtId,
     onViewDebt,
     onPay,
     onCollect,
     onNewDebt,
-}: DebtPersonSheetProps) {
-    const rel = useMemo(() => {
-        return buildDebtRelationships(debts, [], {})[0] ?? null
-    }, [debts])
-
-    if (!person && !rel) return null
-
+}: DebtRelationSheetProps) {
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-full p-0 sm:max-w-lg" showCloseButton>
+            <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl p-0" showCloseButton>
                 <SheetHeader className="sr-only">
-                    <SheetTitle>{rel?.name ?? person?.counterpartyNameSnapshot ?? 'Detalle de deuda'}</SheetTitle>
-                    <SheetDescription>Detalle de deudas con esta persona</SheetDescription>
+                    <SheetTitle>{rel?.name ?? 'Detalle de deuda'}</SheetTitle>
+                    <SheetDescription>Detalle de relación de deuda</SheetDescription>
                 </SheetHeader>
                 {rel ? (
                     <DebtRelationPanel
                         rel={rel}
                         hidden={hidden}
+                        highlightedDebtId={highlightedDebtId}
                         onViewDebt={onViewDebt}
                         onPay={onPay}
                         onCollect={onCollect}
