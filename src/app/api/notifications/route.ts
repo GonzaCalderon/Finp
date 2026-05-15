@@ -23,7 +23,11 @@ export async function GET(request: Request) {
 
         const query: Record<string, unknown> = { recipientUserId }
 
-        if (status) query.status = status
+        if (status) {
+            query.status = status
+        } else {
+            query.status = { $ne: NOTIFICATION_STATUSES.DISMISSED }
+        }
         if (category) query.category = category
         if (actionStatus) query.actionStatus = actionStatus
         if (cursor) query.createdAt = { $lt: new Date(cursor) }

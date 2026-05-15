@@ -408,7 +408,14 @@ export async function createPersonalImpactFromSpaceEntry({
         { new: true }
     ).lean<ISpaceEntryPersonalImpact | null>()
 
-    if (pendingToResolve) return pendingToResolve
+    if (pendingToResolve) {
+        resolveNotificationsForTarget({
+            recipientUserId: userId,
+            pendingActionId: pendingToResolve._id.toString(),
+            actionStatus: 'completed',
+        }).catch((err) => console.error('[notifications] resolve on linked from createPersonalImpact:', err))
+        return pendingToResolve
+    }
 
     return SpaceEntryPersonalImpact.create({
         spaceId,

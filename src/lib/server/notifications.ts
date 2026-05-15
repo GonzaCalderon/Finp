@@ -57,17 +57,23 @@ export async function upsertNotificationByDedupeKey(
     input: CreateNotificationInput & { dedupeKey: string }
 ): Promise<INotification> {
     const { dedupeKey, ...rest } = input
+
+    const isReopening =
+        input.actionStatus === NOTIFICATION_ACTION_STATUSES.PENDING ||
+        input.status === NOTIFICATION_STATUSES.UNREAD
+
+    const updateOp: Record<string, unknown> = {
+        $set: { ...rest, dedupeKey },
+        $setOnInsert: { createdAt: new Date() },
+    }
+
+    if (isReopening) {
+        updateOp.$unset = { readAt: '', dismissedAt: '', resolvedAt: '' }
+    }
+
     const result = await Notification.findOneAndUpdate(
         { dedupeKey },
-        {
-            $set: {
-                ...rest,
-                dedupeKey,
-            },
-            $setOnInsert: {
-                createdAt: new Date(),
-            },
-        },
+        updateOp,
         { upsert: true, new: true }
     ).lean()
     return result as INotification
@@ -191,7 +197,9 @@ function notificationCopyFor(
         case 'impact_space_collect':
             return {
                 title: 'Registraron un cobro para vos',
-                body: `${who} registró que te pagaron ${amount} ${currency}`,
+                body: counterparty
+                    ? `${counterparty} registró que te pagó ${amount} ${currency}`
+                    : 'Podés registrar la entrada en tu Finp si corresponde.',
             }
         default:
             return {

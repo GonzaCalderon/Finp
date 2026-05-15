@@ -9,7 +9,13 @@ import { NotificationSheet } from './NotificationSheet'
 
 export function NotificationBell() {
     const [open, setOpen] = useState(false)
-    const { unreadCount } = useNotifications()
+    const { unreadCount, pendingCount } = useNotifications()
+
+    const ariaLabel = [
+        'Notificaciones',
+        unreadCount > 0 ? `${unreadCount} sin leer` : '',
+        pendingCount > 0 ? `${pendingCount} pendientes` : '',
+    ].filter(Boolean).join(', ')
 
     return (
         <Sheet open={open} onOpenChange={setOpen}>
@@ -18,11 +24,14 @@ export function NotificationBell() {
                     type="button"
                     className="relative flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium transition-all duration-150 hover:bg-foreground/[0.06] hover:text-foreground"
                     style={{ color: 'var(--muted-foreground)' }}
-                    aria-label={`Notificaciones${unreadCount > 0 ? ` (${unreadCount} sin leer)` : ''}`}
+                    aria-label={ariaLabel}
                 >
                     <div className="relative">
                         <Bell size={15} strokeWidth={1.8} />
                         {unreadCount > 0 && <NotificationBadge count={unreadCount} />}
+                        {unreadCount === 0 && pendingCount > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-amber-400" />
+                        )}
                     </div>
                     {/* Desktop: texto + conteo */}
                     <span className="hidden md:inline">Notificaciones</span>

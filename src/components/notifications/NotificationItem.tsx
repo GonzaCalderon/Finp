@@ -125,7 +125,7 @@ export function NotificationItem({ notification, onClose }: NotificationItemProp
                     <div className="pt-1">
                         <button
                             type="button"
-                            onClick={handleClick}
+                            onClick={(e) => { e.stopPropagation(); void handleClick() }}
                             className="text-xs font-medium text-sky-400 hover:text-sky-300 transition-colors"
                         >
                             {notification.action.label} →
