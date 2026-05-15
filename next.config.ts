@@ -1,10 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
-// next.config.js
-module.exports = {
-    allowedDevOrigins: ['192.168.1.141'],
+    allowedDevOrigins: ['192.168.1.141', '192.168.1.170'],
 }
+
 export default nextConfig;
