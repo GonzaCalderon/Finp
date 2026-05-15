@@ -13,9 +13,9 @@ export async function GET() {
         await connectDB()
 
         const recipientUserId = new Types.ObjectId(session.user.id)
-        const notDismissed = { $ne: NOTIFICATION_STATUSES.DISMISSED }
+        const notActive = { $nin: [NOTIFICATION_STATUSES.DISMISSED, NOTIFICATION_STATUSES.ARCHIVED] }
 
-        const [unreadCount, pendingCount, allCount, spacesCount, debtsCount] = await Promise.all([
+        const [unreadCount, pendingCount, allCount, spacesCount, debtsCount, archivedCount] = await Promise.all([
             Notification.countDocuments({
                 recipientUserId,
                 status: NOTIFICATION_STATUSES.UNREAD,
@@ -23,21 +23,25 @@ export async function GET() {
             Notification.countDocuments({
                 recipientUserId,
                 actionStatus: NOTIFICATION_ACTION_STATUSES.PENDING,
-                status: notDismissed,
+                status: notActive,
             }),
             Notification.countDocuments({
                 recipientUserId,
-                status: notDismissed,
+                status: notActive,
             }),
             Notification.countDocuments({
                 recipientUserId,
-                status: notDismissed,
+                status: notActive,
                 'entityRefs.spaceId': { $exists: true },
             }),
             Notification.countDocuments({
                 recipientUserId,
-                status: notDismissed,
+                status: notActive,
                 'entityRefs.debtId': { $exists: true },
+            }),
+            Notification.countDocuments({
+                recipientUserId,
+                status: NOTIFICATION_STATUSES.ARCHIVED,
             }),
         ])
 
@@ -49,6 +53,7 @@ export async function GET() {
                 pending: pendingCount,
                 spaces: spacesCount,
                 debts: debtsCount,
+                archived: archivedCount,
             },
         })
     } catch (err) {

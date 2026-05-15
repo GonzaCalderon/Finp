@@ -5,24 +5,27 @@ import { Notification } from '@/lib/models'
 import { Types } from 'mongoose'
 import { NOTIFICATION_STATUSES, NOTIFICATION_ACTION_STATUSES } from '@/lib/constants'
 
-const notDismissed = { $ne: NOTIFICATION_STATUSES.DISMISSED }
+const notActive = { $nin: [NOTIFICATION_STATUSES.DISMISSED, NOTIFICATION_STATUSES.ARCHIVED] }
 
 function applySection(section: string, query: Record<string, unknown>) {
     switch (section) {
         case 'pending':
             query.actionStatus = NOTIFICATION_ACTION_STATUSES.PENDING
-            query.status = notDismissed
+            query.status = notActive
             break
         case 'spaces':
             query['entityRefs.spaceId'] = { $exists: true }
-            query.status = notDismissed
+            query.status = notActive
             break
         case 'debts':
             query['entityRefs.debtId'] = { $exists: true }
-            query.status = notDismissed
+            query.status = notActive
+            break
+        case 'archived':
+            query.status = NOTIFICATION_STATUSES.ARCHIVED
             break
         default: // 'all'
-            query.status = notDismissed
+            query.status = notActive
     }
 }
 
@@ -50,7 +53,7 @@ export async function GET(request: Request) {
             if (status) {
                 query.status = status
             } else {
-                query.status = notDismissed
+                query.status = notActive
             }
             if (category) query.category = category
             if (actionStatus) query.actionStatus = actionStatus
@@ -70,7 +73,7 @@ export async function GET(request: Request) {
             Notification.countDocuments({
                 recipientUserId,
                 actionStatus: NOTIFICATION_ACTION_STATUSES.PENDING,
-                status: notDismissed,
+                status: { $nin: [NOTIFICATION_STATUSES.DISMISSED, NOTIFICATION_STATUSES.ARCHIVED] },
             }),
         ])
 

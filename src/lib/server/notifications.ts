@@ -68,7 +68,7 @@ export async function upsertNotificationByDedupeKey(
     }
 
     if (isReopening) {
-        updateOp.$unset = { readAt: '', dismissedAt: '', resolvedAt: '' }
+        updateOp.$unset = { readAt: '', dismissedAt: '', archivedAt: '', resolvedAt: '' }
     }
 
     const result = await Notification.findOneAndUpdate(
@@ -117,6 +117,31 @@ export async function dismissNotification(
     return Notification.findOneAndUpdate(
         { _id: new Types.ObjectId(notificationId), recipientUserId: new Types.ObjectId(userId) },
         { $set: { status: NOTIFICATION_STATUSES.DISMISSED, dismissedAt: new Date() } },
+        { new: true }
+    ).lean() as Promise<INotification | null>
+}
+
+export async function archiveNotification(
+    userId: string,
+    notificationId: string
+): Promise<INotification | null> {
+    return Notification.findOneAndUpdate(
+        { _id: new Types.ObjectId(notificationId), recipientUserId: new Types.ObjectId(userId) },
+        { $set: { status: NOTIFICATION_STATUSES.ARCHIVED, archivedAt: new Date() } },
+        { new: true }
+    ).lean() as Promise<INotification | null>
+}
+
+export async function unarchiveNotification(
+    userId: string,
+    notificationId: string
+): Promise<INotification | null> {
+    return Notification.findOneAndUpdate(
+        { _id: new Types.ObjectId(notificationId), recipientUserId: new Types.ObjectId(userId) },
+        {
+            $set: { status: NOTIFICATION_STATUSES.READ },
+            $unset: { archivedAt: '' },
+        },
         { new: true }
     ).lean() as Promise<INotification | null>
 }

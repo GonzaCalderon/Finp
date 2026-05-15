@@ -13,13 +13,14 @@ import { useNotifications } from '@/contexts/NotificationsContext'
 import { NotificationItem } from './NotificationItem'
 import type { NotificationFilters } from '@/contexts/NotificationsContext'
 
-export type Tab = 'all' | 'pending' | 'space' | 'debt'
+export type Tab = 'all' | 'pending' | 'space' | 'debt' | 'archived'
 
 const TABS: { key: Tab; label: string }[] = [
     { key: 'all', label: 'Todas' },
     { key: 'pending', label: 'Pendientes' },
     { key: 'space', label: 'Espacios' },
     { key: 'debt', label: 'Deudas' },
+    { key: 'archived', label: 'Archivadas' },
 ]
 
 function tabToFilters(tab: Tab): NotificationFilters {
@@ -27,6 +28,7 @@ function tabToFilters(tab: Tab): NotificationFilters {
         case 'pending': return { section: 'pending' }
         case 'space': return { section: 'spaces' }
         case 'debt': return { section: 'debts' }
+        case 'archived': return { section: 'archived' }
         default: return { section: 'all' }
     }
 }
@@ -36,6 +38,7 @@ function emptyMessageFor(tab: Tab): string {
         case 'pending': return 'No tenés acciones pendientes'
         case 'space': return 'No hay notificaciones de espacios'
         case 'debt': return 'No hay notificaciones de deudas'
+        case 'archived': return 'No tenés notificaciones archivadas'
         default: return 'No tenés notificaciones'
     }
 }
@@ -79,6 +82,7 @@ export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: Notif
             case 'pending': return tabCounts.pending
             case 'space': return tabCounts.spaces
             case 'debt': return tabCounts.debts
+            case 'archived': return tabCounts.archived
         }
     }
 
@@ -92,7 +96,7 @@ export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: Notif
             showCloseButton
         >
             <SheetHeader
-                className="px-4 pt-4 pb-3 border-b flex-shrink-0"
+                className="px-4 pt-4 pb-2 border-b flex-shrink-0"
                 style={{ borderColor: 'var(--border)' }}
             >
                 <div className="flex items-center justify-between">
@@ -112,8 +116,11 @@ export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: Notif
                     Lista de notificaciones del usuario
                 </SheetDescription>
 
-                {/* Tabs con contadores */}
-                <div className="flex gap-1 mt-2 -mx-1">
+                {/* Tabs con contadores — scroll horizontal en mobile */}
+                <div
+                    className="flex gap-1 mt-2 -mx-1 overflow-x-auto"
+                    style={{ scrollbarWidth: 'none' }}
+                >
                     {TABS.map(({ key, label }) => {
                         const count = tabCount(key)
                         return (
@@ -122,7 +129,7 @@ export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: Notif
                                 type="button"
                                 onClick={() => setActiveTab(key)}
                                 className={[
-                                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                                    'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                                     activeTab === key
                                         ? 'bg-sky-500/15 text-sky-400'
                                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
@@ -145,9 +152,16 @@ export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: Notif
                         )
                     })}
                 </div>
+
+                {/* Hint mobile — solo visible en touch devices */}
+                {notifications.length > 0 && activeTab !== 'archived' && (
+                    <p className="md:hidden pt-1 text-[10px] text-muted-foreground/50 text-center select-none">
+                        Deslizá para archivar o eliminar
+                    </p>
+                )}
             </SheetHeader>
 
-            {/* Área scrollable — pb-20 deja espacio para la nav bar mobile */}
+            {/* Área scrollable */}
             <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
                 {loading ? (
                     <div className="flex items-center justify-center py-16">

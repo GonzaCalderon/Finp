@@ -11,13 +11,14 @@ export interface TabCounts {
     pending: number
     spaces: number
     debts: number
+    archived: number
 }
 
 export interface NotificationFilters {
     status?: string
     category?: string
     actionStatus?: string
-    section?: 'all' | 'pending' | 'spaces' | 'debts'
+    section?: 'all' | 'pending' | 'spaces' | 'debts' | 'archived'
     limit?: number
     cursor?: string
 }
@@ -33,9 +34,11 @@ interface NotificationsContextValue {
     markAsRead: (id: string) => Promise<void>
     markAllAsRead: () => Promise<void>
     dismiss: (id: string) => Promise<void>
+    archive: (id: string) => Promise<void>
+    unarchive: (id: string) => Promise<void>
 }
 
-const DEFAULT_TAB_COUNTS: TabCounts = { all: 0, pending: 0, spaces: 0, debts: 0 }
+const DEFAULT_TAB_COUNTS: TabCounts = { all: 0, pending: 0, spaces: 0, debts: 0, archived: 0 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null)
 
@@ -126,6 +129,26 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         }
     }, [])
 
+    const archive = useCallback(async (id: string) => {
+        try {
+            await apiJson(`/api/notifications/${id}/archive`, { method: 'PATCH' })
+            setNotifications((prev) => prev.filter((n) => n._id.toString() !== id))
+            invalidateData(NOTIFICATION_INVALIDATION_TAGS)
+        } catch (err) {
+            console.error('[notifications] archive:', err)
+        }
+    }, [])
+
+    const unarchive = useCallback(async (id: string) => {
+        try {
+            await apiJson(`/api/notifications/${id}/unarchive`, { method: 'PATCH' })
+            setNotifications((prev) => prev.filter((n) => n._id.toString() !== id))
+            invalidateData(NOTIFICATION_INVALIDATION_TAGS)
+        } catch (err) {
+            console.error('[notifications] unarchive:', err)
+        }
+    }, [])
+
     // Auto-refresh via invalidación de datos
     useDataInvalidation(['notifications'], fetchUnreadCount)
 
@@ -169,6 +192,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
                 markAsRead,
                 markAllAsRead,
                 dismiss,
+                archive,
+                unarchive,
             }}
         >
             {children}

@@ -249,6 +249,7 @@ export const SPACE_DEBT_MODES = {
 export const NOTIFICATION_STATUSES = {
     UNREAD: 'unread',
     READ: 'read',
+    ARCHIVED: 'archived',
     DISMISSED: 'dismissed',
 } as const
 

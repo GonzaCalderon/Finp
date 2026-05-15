@@ -47,6 +47,7 @@ const NotificationSchema = new Schema<INotification>(
         dedupeKey: { type: String },
         readAt: { type: Date },
         dismissedAt: { type: Date },
+        archivedAt: { type: Date },
         resolvedAt: { type: Date },
         expiresAt: { type: Date },
     },

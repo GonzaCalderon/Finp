@@ -22,7 +22,7 @@ export interface INotification {
     type: string
     category: 'space' | 'debt' | 'personal_impact' | 'system' | 'insight'
     priority: 'low' | 'normal' | 'high'
-    status: 'unread' | 'read' | 'dismissed'
+    status: 'unread' | 'read' | 'archived' | 'dismissed'
     actionStatus?: 'none' | 'pending' | 'completed' | 'ignored' | 'cancelled'
     title: string
     body?: string
@@ -35,6 +35,7 @@ export interface INotification {
     dedupeKey?: string
     readAt?: Date
     dismissedAt?: Date
+    archivedAt?: Date
     resolvedAt?: Date
     expiresAt?: Date
     createdAt: Date
