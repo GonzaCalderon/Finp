@@ -1,15 +1,27 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Bell } from 'lucide-react'
 import { Sheet, SheetTrigger } from '@/components/ui/sheet'
 import { useNotifications } from '@/contexts/NotificationsContext'
 import { NotificationBadge } from './NotificationBadge'
 import { NotificationSheet } from './NotificationSheet'
+import type { Tab } from './NotificationSheet'
+import type { TabCounts } from '@/contexts/NotificationsContext'
+
+function resolveDefaultTab(pathname: string, tabCounts: TabCounts): Tab {
+    if (pathname.startsWith('/spaces') && tabCounts.spaces > 0) return 'space'
+    if (pathname.startsWith('/debts') && tabCounts.debts > 0) return 'debt'
+    if (tabCounts.pending > 0) return 'pending'
+    return 'all'
+}
 
 export function NotificationBell() {
     const [open, setOpen] = useState(false)
-    const { unreadCount, pendingCount } = useNotifications()
+    const [defaultTab, setDefaultTab] = useState<Tab>('all')
+    const pathname = usePathname()
+    const { unreadCount, pendingCount, tabCounts } = useNotifications()
 
     const ariaLabel = [
         'Notificaciones',
@@ -17,8 +29,15 @@ export function NotificationBell() {
         pendingCount > 0 ? `${pendingCount} pendientes` : '',
     ].filter(Boolean).join(', ')
 
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (nextOpen) {
+            setDefaultTab(resolveDefaultTab(pathname, tabCounts))
+        }
+        setOpen(nextOpen)
+    }
+
     return (
-        <Sheet open={open} onOpenChange={setOpen}>
+        <Sheet open={open} onOpenChange={handleOpenChange}>
             <SheetTrigger asChild>
                 <button
                     type="button"
@@ -42,7 +61,11 @@ export function NotificationBell() {
                     )}
                 </button>
             </SheetTrigger>
-            <NotificationSheet onClose={() => setOpen(false)} />
+            <NotificationSheet
+                onClose={() => setOpen(false)}
+                isOpen={open}
+                defaultTab={defaultTab}
+            />
         </Sheet>
     )
 }

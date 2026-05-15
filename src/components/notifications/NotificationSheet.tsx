@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
     SheetContent,
@@ -13,7 +13,7 @@ import { useNotifications } from '@/contexts/NotificationsContext'
 import { NotificationItem } from './NotificationItem'
 import type { NotificationFilters } from '@/contexts/NotificationsContext'
 
-type Tab = 'all' | 'pending' | 'space' | 'debt'
+export type Tab = 'all' | 'pending' | 'space' | 'debt'
 
 const TABS: { key: Tab; label: string }[] = [
     { key: 'all', label: 'Todas' },
@@ -24,10 +24,10 @@ const TABS: { key: Tab; label: string }[] = [
 
 function tabToFilters(tab: Tab): NotificationFilters {
     switch (tab) {
-        case 'pending': return { actionStatus: 'pending' }
-        case 'space': return { category: 'space' }
-        case 'debt': return { category: 'debt' }
-        default: return {}
+        case 'pending': return { section: 'pending' }
+        case 'space': return { section: 'spaces' }
+        case 'debt': return { section: 'debts' }
+        default: return { section: 'all' }
     }
 }
 
@@ -42,15 +42,45 @@ function emptyMessageFor(tab: Tab): string {
 
 interface NotificationSheetProps {
     onClose?: () => void
+    isOpen?: boolean
+    defaultTab?: Tab
 }
 
-export function NotificationSheet({ onClose }: NotificationSheetProps) {
-    const { notifications, unreadCount, loading, fetchNotifications, markAllAsRead } = useNotifications()
-    const [activeTab, setActiveTab] = useState<Tab>('all')
+export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: NotificationSheetProps) {
+    const { notifications, unreadCount, tabCounts, loading, fetchNotifications, markAllAsRead } = useNotifications()
+    const [activeTab, setActiveTab] = useState<Tab>(defaultTab)
+    const prevIsOpen = useRef(false)
 
+    // Resetear tab al abrir (solo en la transición cerrado→abierto)
+    useEffect(() => {
+        if (isOpen && !prevIsOpen.current) {
+            setActiveTab(defaultTab)
+        }
+        prevIsOpen.current = isOpen ?? false
+    }, [isOpen, defaultTab])
+
+    // Cargar notificaciones al cambiar de tab
     useEffect(() => {
         void fetchNotifications(tabToFilters(activeTab))
     }, [activeTab, fetchNotifications])
+
+    // Polling cada 15s mientras el sheet esté abierto
+    useEffect(() => {
+        if (!isOpen) return
+        const id = setInterval(() => {
+            void fetchNotifications(tabToFilters(activeTab))
+        }, 15_000)
+        return () => clearInterval(id)
+    }, [isOpen, activeTab, fetchNotifications])
+
+    function tabCount(key: Tab): number {
+        switch (key) {
+            case 'all': return tabCounts.all
+            case 'pending': return tabCounts.pending
+            case 'space': return tabCounts.spaces
+            case 'debt': return tabCounts.debts
+        }
+    }
 
     const handleMarkAllRead = async () => {
         await markAllAsRead()
@@ -58,8 +88,6 @@ export function NotificationSheet({ onClose }: NotificationSheetProps) {
 
     return (
         <SheetContent
-            // !w-full override el data-[side=right]:w-3/4 del Radix Sheet (especificidad de atributo).
-            // sm+: ancho fijo de panel lateral.
             className="!w-full sm:!w-[28rem] flex flex-col gap-0 p-0 overflow-hidden"
             showCloseButton
         >
@@ -84,23 +112,38 @@ export function NotificationSheet({ onClose }: NotificationSheetProps) {
                     Lista de notificaciones del usuario
                 </SheetDescription>
 
-                {/* Tabs */}
+                {/* Tabs con contadores */}
                 <div className="flex gap-1 mt-2 -mx-1">
-                    {TABS.map(({ key, label }) => (
-                        <button
-                            key={key}
-                            type="button"
-                            onClick={() => setActiveTab(key)}
-                            className={[
-                                'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                                activeTab === key
-                                    ? 'bg-sky-500/15 text-sky-400'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-                            ].join(' ')}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                    {TABS.map(({ key, label }) => {
+                        const count = tabCount(key)
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setActiveTab(key)}
+                                className={[
+                                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                                    activeTab === key
+                                        ? 'bg-sky-500/15 text-sky-400'
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                ].join(' ')}
+                            >
+                                {label}
+                                {count > 0 && (
+                                    <span
+                                        className={[
+                                            'inline-flex items-center justify-center rounded-full px-1.5 min-w-[1.125rem] h-[1.125rem] text-[10px] font-semibold leading-none',
+                                            activeTab === key
+                                                ? 'bg-sky-500/20 text-sky-400'
+                                                : 'bg-muted text-muted-foreground',
+                                        ].join(' ')}
+                                    >
+                                        {count}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
                 </div>
             </SheetHeader>
 

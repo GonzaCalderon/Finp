@@ -111,9 +111,11 @@ export function SpacePersonalImpactDialog({
             try {
                 const impactData = await apiJson<{
                     impact: ISpaceEntryPersonalImpact | null
+                    pendingActions: ISpaceEntryPersonalImpact[]
                     suggestion: Suggestion | null
                 }>(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`)
                 if (cancelled) return
+                // Solo el linkedImpact real bloquea el registro; pendingActions son informativos
                 setExistingImpact(impactData.impact)
                 setSuggestion(impactData.suggestion)
                 setAmount(String(impactData.suggestion?.amount ?? currentEntry.amount))

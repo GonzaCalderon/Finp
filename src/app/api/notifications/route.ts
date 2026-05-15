@@ -5,12 +5,34 @@ import { Notification } from '@/lib/models'
 import { Types } from 'mongoose'
 import { NOTIFICATION_STATUSES, NOTIFICATION_ACTION_STATUSES } from '@/lib/constants'
 
+const notDismissed = { $ne: NOTIFICATION_STATUSES.DISMISSED }
+
+function applySection(section: string, query: Record<string, unknown>) {
+    switch (section) {
+        case 'pending':
+            query.actionStatus = NOTIFICATION_ACTION_STATUSES.PENDING
+            query.status = notDismissed
+            break
+        case 'spaces':
+            query['entityRefs.spaceId'] = { $exists: true }
+            query.status = notDismissed
+            break
+        case 'debts':
+            query['entityRefs.debtId'] = { $exists: true }
+            query.status = notDismissed
+            break
+        default: // 'all'
+            query.status = notDismissed
+    }
+}
+
 export async function GET(request: Request) {
     try {
         const session = await auth()
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const { searchParams } = new URL(request.url)
+        const section = searchParams.get('section')
         const status = searchParams.get('status')
         const category = searchParams.get('category')
         const actionStatus = searchParams.get('actionStatus')
@@ -20,16 +42,20 @@ export async function GET(request: Request) {
         await connectDB()
 
         const recipientUserId = new Types.ObjectId(session.user.id)
-
         const query: Record<string, unknown> = { recipientUserId }
 
-        if (status) {
-            query.status = status
+        if (section) {
+            applySection(section, query)
         } else {
-            query.status = { $ne: NOTIFICATION_STATUSES.DISMISSED }
+            if (status) {
+                query.status = status
+            } else {
+                query.status = notDismissed
+            }
+            if (category) query.category = category
+            if (actionStatus) query.actionStatus = actionStatus
         }
-        if (category) query.category = category
-        if (actionStatus) query.actionStatus = actionStatus
+
         if (cursor) query.createdAt = { $lt: new Date(cursor) }
 
         const [notifications, unreadCount, pendingCount] = await Promise.all([
@@ -44,7 +70,7 @@ export async function GET(request: Request) {
             Notification.countDocuments({
                 recipientUserId,
                 actionStatus: NOTIFICATION_ACTION_STATUSES.PENDING,
-                status: { $ne: NOTIFICATION_STATUSES.DISMISSED },
+                status: notDismissed,
             }),
         ])
 

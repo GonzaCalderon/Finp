@@ -13,8 +13,9 @@ export async function GET() {
         await connectDB()
 
         const recipientUserId = new Types.ObjectId(session.user.id)
+        const notDismissed = { $ne: NOTIFICATION_STATUSES.DISMISSED }
 
-        const [unreadCount, pendingCount] = await Promise.all([
+        const [unreadCount, pendingCount, allCount, spacesCount, debtsCount] = await Promise.all([
             Notification.countDocuments({
                 recipientUserId,
                 status: NOTIFICATION_STATUSES.UNREAD,
@@ -22,11 +23,34 @@ export async function GET() {
             Notification.countDocuments({
                 recipientUserId,
                 actionStatus: NOTIFICATION_ACTION_STATUSES.PENDING,
-                status: { $ne: NOTIFICATION_STATUSES.DISMISSED },
+                status: notDismissed,
+            }),
+            Notification.countDocuments({
+                recipientUserId,
+                status: notDismissed,
+            }),
+            Notification.countDocuments({
+                recipientUserId,
+                status: notDismissed,
+                'entityRefs.spaceId': { $exists: true },
+            }),
+            Notification.countDocuments({
+                recipientUserId,
+                status: notDismissed,
+                'entityRefs.debtId': { $exists: true },
             }),
         ])
 
-        return NextResponse.json({ unreadCount, pendingCount })
+        return NextResponse.json({
+            unreadCount,
+            pendingCount,
+            tabCounts: {
+                all: allCount,
+                pending: pendingCount,
+                spaces: spacesCount,
+                debts: debtsCount,
+            },
+        })
     } catch (err) {
         console.error('[GET /api/notifications/unread-count]', err)
         return NextResponse.json({ error: 'Error interno' }, { status: 500 })

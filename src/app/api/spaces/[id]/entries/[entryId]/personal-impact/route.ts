@@ -49,8 +49,10 @@ export async function GET(_request: Request, { params }: { params: Params }) {
         )
         const suggestion = resolveCurrentUserEntryShare(entry, context.participants, session.user.id)
 
+        const entryImpact = impacts[entryId]
         return NextResponse.json({
-            impact: impacts[entryId] ?? null,
+            impact: entryImpact?.linkedImpact ?? null,
+            pendingActions: entryImpact?.pendingActions ?? [],
             suggestion: suggestion
                 ? {
                     amount: suggestion.amount,
