@@ -13,7 +13,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useBreadcrumbAction } from '@/contexts/BreadcrumbActionContext'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -34,7 +33,7 @@ import {
 import { SpaceOverviewCard } from '@/components/spaces/index/SpaceOverviewCard'
 import { SpacesFiltersBar } from '@/components/spaces/index/SpacesFiltersBar'
 import type { SpaceSortOption } from '@/components/spaces/index/SpacesFiltersBar'
-import { SpacesPageTopBar, SpacesPendingBell } from '@/components/spaces/index/SpacesPageHeader'
+import { SpacesPageTopBar } from '@/components/spaces/index/SpacesPageHeader'
 import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingViews'
 import { extractId } from '@/lib/utils/spaces'
 import type { ISpaceEntry, ISpaceListItem, ISpacePendingAction } from '@/types'
@@ -179,7 +178,6 @@ function SpacesQuickEntryFlow({
 
 export default function SpacesPage() {
     const { hidden } = useHideAmounts()
-    const { setAction: setBreadcrumbAction, clearAction: clearBreadcrumbAction } = useBreadcrumbAction()
     const { setAction: setSpaceAction, clearAction: clearSpaceAction } = useSpaceAction()
     const { success, error: toastError } = useToast()
     const { spaces, loading, error, createSpace, currentUserId } = useSpaces()
@@ -214,17 +212,6 @@ export default function SpacesPage() {
 
         return () => clearSpaceAction()
     }, [clearSpaceAction, setSpaceAction, spaces.length])
-
-    useEffect(() => {
-        setBreadcrumbAction(
-            <SpacesPendingBell
-                pendingCount={pending.counts.total + pending.counts.unreadActivityCount}
-                onShowPending={() => setPendingDialogOpen(true)}
-            />
-        )
-
-        return () => clearBreadcrumbAction()
-    }, [clearBreadcrumbAction, pending.counts.total, pending.counts.unreadActivityCount, setBreadcrumbAction])
 
     const filteredSpaces = useMemo(() => {
         const normalizedSearch = search.trim().toLowerCase()

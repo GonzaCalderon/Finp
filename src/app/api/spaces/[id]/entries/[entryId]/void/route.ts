@@ -6,6 +6,7 @@ import { SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
+import { resolveNotificationsForTarget } from '@/lib/server/notifications'
 import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryVoidSchema } from '@/lib/validations'
@@ -127,6 +128,12 @@ export async function POST(request: Request, { params }: { params: Params }) {
         } catch (err) {
             console.error('[personal-sync] void cancel pending:', err)
         }
+
+        // Resolver notificaciones pendientes del entry anulado (para todos los usuarios)
+        resolveNotificationsForTarget({
+            spaceEntryId: entryId,
+            actionStatus: 'cancelled',
+        }).catch((err) => console.error('[notifications] resolve on void:', err))
 
         try {
             await syncSpaceDebtsForActiveParticipants(id)

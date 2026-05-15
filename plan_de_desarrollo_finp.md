@@ -11,35 +11,35 @@ Documento vivo para ordenar la evolución de **Finp**, especialmente la integrac
 Finp ya cuenta con una base funcional avanzada en tres frentes principales:
 
 1. **Finanzas personales**
-   - Transacciones.
-   - Cuentas.
-   - Dashboard.
-   - Gastos con tarjeta de crédito.
-   - Pagos con TC.
-   - Importación.
-   - Multi-moneda ARS/USD.
-   - Fecha de inicio operativo.
-   - Métricas operativas separadas de movimientos reales cuando corresponde.
+    - Transacciones.
+    - Cuentas.
+    - Dashboard.
+    - Gastos con tarjeta de crédito.
+    - Pagos con TC.
+    - Importación.
+    - Multi-moneda ARS/USD.
+    - Fecha de inicio operativo.
+    - Métricas operativas separadas de movimientos reales cuando corresponde.
 
 2. **Espacios**
-   - Home y detalle de espacios rediseñados.
-   - Nuevo gasto con split configurable.
-   - Balance con pagos.
-   - Categorías internas del espacio.
-   - Comprobantes persistentes.
-   - Detalle de movimiento.
-   - Edición y anulación lógica con trazabilidad.
-   - Actividad y notificaciones informativas.
-   - Impacto personal por usuario mediante `SpaceEntryPersonalImpact`.
+    - Home y detalle de espacios rediseñados.
+    - Nuevo gasto con split configurable.
+    - Balance con pagos.
+    - Categorías internas del espacio.
+    - Comprobantes persistentes.
+    - Detalle de movimiento.
+    - Edición y anulación lógica con trazabilidad.
+    - Actividad y notificaciones informativas.
+    - Impacto personal por usuario mediante `SpaceEntryPersonalImpact`.
 
 3. **Deudas**
-   - Módulo propio con “Debo” y “Me deben”.
-   - Deudas manuales.
-   - Deudas derivadas de Espacios.
-   - Pagos y cobros de deuda con impacto real en cuentas.
-   - Pagos/cobros excluidos de gastos e ingresos operativos.
-   - Integración con Transacciones, Cuentas, Dashboard y Espacios.
-   - Rediseño visual de `/debts` pendiente.
+    - Módulo propio con “Debo” y “Me deben”.
+    - Deudas manuales.
+    - Deudas derivadas de Espacios.
+    - Pagos y cobros de deuda con impacto real en cuentas.
+    - Pagos/cobros excluidos de gastos e ingresos operativos.
+    - Integración con Transacciones, Cuentas, Dashboard y Espacios.
+    - Rediseño visual de `/debts` pendiente.
 
 La prioridad inmediata es **rediseñar la experiencia visual de Deudas** para que el módulo quede alineado con Finp antes de avanzar con cuotas en Espacios.
 
@@ -65,9 +65,9 @@ Reglas clave:
 - Un pago de deuda mueve cuenta y reduce deuda, pero **no suma gasto**.
 - Un cobro/reintegro mueve cuenta y reduce lo que me deben, pero **no suma ingreso**.
 - Un gasto compartido puede tener:
-  - monto real movido en cuenta;
-  - monto operativo propio;
-  - deuda a pagar/cobrar asociada.
+    - monto real movido en cuenta;
+    - monto operativo propio;
+    - deuda a pagar/cobrar asociada.
 - En reportes personales se usa el monto operativo propio.
 - En cuentas se usa el impacto real de cuenta.
 
@@ -114,8 +114,8 @@ Ejemplos:
 - Participantes.
 - Monedas habilitadas.
 - Criterio de deuda del espacio:
-  - directa;
-  - simplificada.
+    - directa;
+    - simplificada.
 - Categorías internas del espacio.
 - Reglas compartidas del espacio.
 - Comprobantes.
@@ -189,10 +189,10 @@ Incluye:
 - Tipo de movimiento oculto de la UI principal.
 - Tipos `Ingreso` y `Ajuste` ocultos de la UI por ahora.
 - Split con:
-  - partes iguales;
-  - responsable único;
-  - porcentajes;
-  - montos fijos.
+    - partes iguales;
+    - responsable único;
+    - porcentajes;
+    - montos fijos.
 - Comportamiento smart interno para porcentajes y montos fijos, sin mostrar “Smart”.
 - Preview de reparto.
 - FAB contextual en Espacios.
@@ -242,13 +242,13 @@ Incluye:
 - `SpaceSettlementDialog` unificado.
 - Header de contexto.
 - Presets:
-  - total;
-  - 50%;
-  - otro monto.
+    - total;
+    - 50%;
+    - otro monto.
 - Preview de:
-  - saldo antes;
-  - monto a pagar;
-  - saldo restante después del pago.
+    - saldo antes;
+    - monto a pagar;
+    - saldo restante después del pago.
 - Pagos recomendados compactos.
 - Acción rápida de pago recomendado con confirmación de pago total.
 - CTA general `Registrar pago` como flujo avanzado/manual.
@@ -327,9 +327,9 @@ Diferido:
 Incluye:
 
 - Transacciones personales originadas desde Espacios con metadata:
-  - `spaceId`;
-  - `spaceEntryId`;
-  - `spaceNameSnapshot`.
+    - `spaceId`;
+    - `spaceEntryId`;
+    - `spaceNameSnapshot`.
 - Badge/origen “Espacio” en transacciones personales.
 - Badge/origen en transacciones recientes del dashboard.
 - Link/affordance para volver al movimiento del espacio.
@@ -438,8 +438,8 @@ Incluye:
 - Snapshots de versiones anteriores en `previousVersions`.
 - Historial completo de cambios.
 - Badges:
-  - `Editado`;
-  - `Anulado`.
+    - `Editado`;
+    - `Anulado`.
 - Mostrar quién anuló y cuándo.
 - Motivo de anulación si existe.
 - Advertencias por pagos posteriores.
@@ -476,19 +476,19 @@ Incluye:
 - Actividad global visible para el usuario.
 - Campana con novedades no leídas.
 - Separación:
-  - Actividad;
-  - Notificación;
-  - Pendiente.
+    - Actividad;
+    - Notificación;
+    - Pendiente.
 - Eventos por:
-  - movimiento creado;
-  - movimiento editado;
-  - movimiento anulado;
-  - pago registrado;
-  - comprobante agregado/eliminado;
-  - categoría creada/archivada/restaurada;
-  - participante invitado/agregado/removido;
-  - rol cambiado;
-  - configuración modificada.
+    - movimiento creado;
+    - movimiento editado;
+    - movimiento anulado;
+    - pago registrado;
+    - comprobante agregado/eliminado;
+    - categoría creada/archivada/restaurada;
+    - participante invitado/agregado/removido;
+    - rol cambiado;
+    - configuración modificada.
 - Resumen con actividad real.
 - Sheet/campana con pestañas o secciones.
 - Marcar actividad como leída.
@@ -529,13 +529,13 @@ Incluye:
 - Modelo `SpaceEntryPersonalImpact`.
 - Helper `space-personal-impact.ts`.
 - Endpoint:
-  - `GET /api/spaces/[id]/entries/[entryId]/personal-impact`;
-  - `POST /api/spaces/[id]/entries/[entryId]/personal-impact`;
-  - `DELETE /api/spaces/[id]/entries/[entryId]/personal-impact`.
+    - `GET /api/spaces/[id]/entries/[entryId]/personal-impact`;
+    - `POST /api/spaces/[id]/entries/[entryId]/personal-impact`;
+    - `DELETE /api/spaces/[id]/entries/[entryId]/personal-impact`.
 - `createTransactionFromSpaceEntry` soporta:
-  - `amountOverride`;
-  - `dateOverride`;
-  - `transactionTypeOverride`.
+    - `amountOverride`;
+    - `dateOverride`;
+    - `transactionTypeOverride`.
 - Nuevos flujos dejan de escribir `SpaceEntry.status = 'linked'`.
 - Nuevos flujos dejan de usar `SpaceEntry.linkedTransactionId`.
 - `SpaceEntryPersonalImpact` guarda impacto privado por `userId + entryId`.
@@ -579,20 +579,20 @@ Incluye:
 
 - Modelos `Debt` y `DebtMovement`.
 - Tipos:
-  - `payable` / `receivable`;
-  - `manual` / `space`.
+    - `payable` / `receivable`;
+    - `manual` / `space`.
 - Endpoints `/api/debts`.
 - Endpoints de:
-  - pago;
-  - cobro;
-  - ignorar/restaurar;
-  - resumen;
-  - deudas de espacios.
+    - pago;
+    - cobro;
+    - ignorar/restaurar;
+    - resumen;
+    - deudas de espacios.
 - Sincronización idempotente desde Espacios.
 - `debtMode` en `Space`.
 - Nuevos tipos de transacción:
-  - `personal_debt_payment`;
-  - `personal_debt_collect`.
+    - `personal_debt_payment`;
+    - `personal_debt_collect`.
 - Pagos/cobros afectan cuentas reales.
 - Pagos/cobros no computan como gasto/ingreso operativo.
 - Tarjetas de crédito no se reescriben ni se mezclan en esta fase.
@@ -609,17 +609,17 @@ Incluye:
 - Resumen Debo / Me deben / Neto.
 - Lista agrupada por persona.
 - Filtros:
-  - Todo;
-  - Debo;
-  - Me deben;
-  - Espacios;
-  - Manuales;
-  - Ignoradas.
+    - Todo;
+    - Debo;
+    - Me deben;
+    - Espacios;
+    - Manuales;
+    - Ignoradas.
 - Sheets de detalle por persona y por deuda.
 - Dialogs:
-  - nueva deuda;
-  - pagar deuda;
-  - registrar cobro.
+    - nueva deuda;
+    - pagar deuda;
+    - registrar cobro.
 - Ignorar/restaurar deudas de espacios.
 - `debtMode` visible en configuración de espacio.
 - Sync automática de deudas cuando cambian movimientos de espacios.
@@ -640,20 +640,20 @@ Que los movimientos de Deudas y Espacios se vean correctamente en Transacciones,
 Incluye:
 
 - Badges para:
-  - pago de deuda;
-  - cobro de deuda;
-  - gastos de espacios.
+    - pago de deuda;
+    - cobro de deuda;
+    - gastos de espacios.
 - Nombres más naturales:
-  - “Raúl te pagó”;
-  - “Le pagaste a Roro”.
+    - “Raúl te pagó”;
+    - “Le pagaste a Roro”.
 - Pagos/cobros de deuda excluidos de métricas operativas.
 - Filtros de transacciones adaptados.
 - Edición común restringida para pagos/cobros de deuda.
 - Links hacia deuda/espacio cuando corresponde.
 - Helper de monto operativo.
 - Diferenciación entre:
-  - monto operativo propio;
-  - monto real movido en cuenta.
+    - monto operativo propio;
+    - monto real movido en cuenta.
 - Dashboard y reportes usan monto operativo.
 - Cuentas usan impacto real de cuenta como principal.
 
@@ -675,9 +675,9 @@ Incluye:
 
 - Mejoras en visualización de “Tu parte” y “Total pagado”.
 - Acciones robustas para gastos originados en espacios:
-  - editar en espacio;
-  - quitar de mi Finp;
-  - advertencias claras.
+    - editar en espacio;
+    - quitar de mi Finp;
+    - advertencias claras.
 - Si se quita de mi Finp, el espacio deja de mostrar “En tu Finp” para ese usuario.
 - Links profundos hacia espacios/movimientos cuando exista metadata suficiente.
 - Mejora de badges en Dashboard.
@@ -706,10 +706,10 @@ Principios:
 - Sin tabla contable pesada.
 - Sin lenguaje contable complejo.
 - Con jerarquía visual:
-  1. posición neta;
-  2. Debo / Me deben;
-  3. personas;
-  4. detalle y acciones.
+    1. posición neta;
+    2. Debo / Me deben;
+    3. personas;
+    4. detalle y acciones.
 
 Debe incluir:
 
@@ -749,23 +749,23 @@ Principios:
 - Espacios no debe replicar Proyección, Compromisos ni Dashboard de Finp.
 - Solo debe mostrar lo necesario para entender cuotas compartidas.
 - Las cuotas deben integrarse con:
-  - Balance;
-  - Movimientos;
-  - Saldar deudas;
-  - Deudas;
-  - Impacto personal.
+    - Balance;
+    - Movimientos;
+    - Saldar deudas;
+    - Deudas;
+    - Impacto personal.
 
 ### Modos de reconocimiento
 
 1. **Por cuota mensual**
-   - Recomendado para pareja, hogar y compras grandes.
-   - El espacio reconoce cada cuota cuando corresponde.
-   - El balance actual solo exige cuotas vigentes/vencidas.
-   - Las cuotas futuras son compromiso futuro, no deuda exigible.
+    - Recomendado para pareja, hogar y compras grandes.
+    - El espacio reconoce cada cuota cuando corresponde.
+    - El balance actual solo exige cuotas vigentes/vencidas.
+    - Las cuotas futuras son compromiso futuro, no deuda exigible.
 
 2. **Total ahora**
-   - Útil para viajes, compras puntuales o cuando se quiere saldar todo.
-   - El espacio reconoce la deuda completa desde la fecha del gasto.
+    - Útil para viajes, compras puntuales o cuando se quiere saldar todo.
+    - El espacio reconoce la deuda completa desde la fecha del gasto.
 
 ### Vista de cuotas
 
@@ -781,11 +781,11 @@ Debe mostrar:
 - Quién pagó.
 - Quién debe.
 - Estado:
-  - futura;
-  - vigente;
-  - vencida;
-  - saldada;
-  - parcialmente saldada.
+    - futura;
+    - vigente;
+    - vencida;
+    - saldada;
+    - parcialmente saldada.
 
 No debe mostrar:
 
@@ -836,13 +836,13 @@ Si el usuario crea el gasto desde Espacios y elige “Registrar en mi Finp”:
 
 ```ts
 SpaceEntry.installmentPlan?: {
-  source: 'linked_transaction' | 'manual'
-  linkedTransactionId?: string
-  totalAmount: number
-  installments: number
-  firstInstallmentMonth: string
-  currentInstallment?: number
-  recognitionMode: 'monthly' | 'upfront'
+    source: 'linked_transaction' | 'manual'
+    linkedTransactionId?: string
+    totalAmount: number
+    installments: number
+    firstInstallmentMonth: string
+    currentInstallment?: number
+    recognitionMode: 'monthly' | 'upfront'
 }
 ```
 
@@ -1036,11 +1036,11 @@ Incluye:
 - “A cobrar / A pagar” global.
 - Pendientes de impacto personal.
 - Reportes separando:
-  - gasto propio;
-  - adelantos;
-  - reintegros.
+    - gasto propio;
+    - adelantos;
+    - reintegros.
 - Sugerencias inteligentes:
-  - “Compartiste 5 gastos con Roro, ¿querés crear un espacio?”.
+    - “Compartiste 5 gastos con Roro, ¿querés crear un espacio?”.
 - Sincronización avanzada de ediciones/anulaciones con Finp personal.
 - Reversas automáticas o asistidas.
 - Aprobaciones configurables por espacio si se requiere modo formal.
@@ -1108,10 +1108,10 @@ Validar especialmente:
 
 1. Espacios son para gestión persistente o colaborativa.
 2. Tipos actuales de espacio:
-   - Pareja;
-   - Grupo;
-   - Viaje;
-   - Proyecto.
+    - Pareja;
+    - Grupo;
+    - Viaje;
+    - Proyecto.
 3. Gastos compartidos simples existen sin espacio.
 4. Gasto compartido simple impacta solo la parte propia en MVP.
 5. Gasto compartido simple no se convierte en espacio.

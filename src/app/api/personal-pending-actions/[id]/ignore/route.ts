@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceEntryPersonalImpact } from '@/lib/models'
 import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
+import { resolveNotificationsForTarget, safeUpsertNotificationByDedupeKey, buildNotificationFromPendingAction } from '@/lib/server/notifications'
 import type { ISpaceEntryPersonalImpact } from '@/types'
 
 type Params = Promise<{ id: string }>
@@ -45,6 +46,12 @@ export async function POST(_request: Request, { params }: { params: Params }) {
             )
         }
 
+        resolveNotificationsForTarget({
+            recipientUserId: session.user.id,
+            pendingActionId: id,
+            actionStatus: 'ignored',
+        }).catch((err) => console.error('[notifications] resolve on ignore:', err))
+
         return NextResponse.json({ action: updated })
     } catch (error) {
         console.error('Error al ignorar pendiente:', error)
@@ -85,6 +92,31 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
                 { error: 'Pendiente no encontrado o no está ignorado' },
                 { status: 404 }
             )
+        }
+
+        // Reabrir notificación — usar dedupeKey estable del pendiente restaurado
+        if (updated.actionType && updated.entryId && updated.spaceId) {
+            const dedupeKey = `pending-action:${session.user.id}:${updated.entryId.toString()}:${updated.actionType}`
+            safeUpsertNotificationByDedupeKey(
+                buildNotificationFromPendingAction(
+                    {
+                        userId: session.user.id,
+                        actionType: updated.actionType,
+                        amount: updated.amount,
+                        currency: updated.currency,
+                        counterpartyNameSnapshot: updated.counterpartyNameSnapshot,
+                    },
+                    {
+                        actorUserId: updated.actorUserId?.toString() ?? session.user.id,
+                        spaceId: updated.spaceId.toString(),
+                        entryId: updated.entryId.toString(),
+                        sourceType: updated.sourceType ?? 'space_entry',
+                        debtId: updated.debtId?.toString(),
+                        debtMovementId: updated.debtMovementId?.toString(),
+                    },
+                    updated._id.toString()
+                )
+            ).catch((err) => console.error('[notifications] reopen on restore:', err))
         }
 
         return NextResponse.json({ action: updated })

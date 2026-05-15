@@ -11,11 +11,18 @@ const mocks = vi.hoisted(() => {
         findOneAndUpdate: vi.fn(),
         _makeLean: makeLean,
     }
-    return { SpaceEntryPersonalImpact }
+    const safeUpsertNotificationByDedupeKey = vi.fn().mockResolvedValue(undefined)
+    const buildNotificationFromPendingAction = vi.fn().mockReturnValue({ dedupeKey: 'mock-key' })
+    return { SpaceEntryPersonalImpact, safeUpsertNotificationByDedupeKey, buildNotificationFromPendingAction }
 })
 
 vi.mock('@/lib/models', () => ({
     SpaceEntryPersonalImpact: mocks.SpaceEntryPersonalImpact,
+}))
+
+vi.mock('@/lib/server/notifications', () => ({
+    safeUpsertNotificationByDedupeKey: mocks.safeUpsertNotificationByDedupeKey,
+    buildNotificationFromPendingAction: mocks.buildNotificationFromPendingAction,
 }))
 
 vi.mock('@/lib/constants', async (importOriginal) => {
@@ -73,10 +80,10 @@ describe('emitPersonalSyncEvent — createPersonalPendingActions', () => {
         expect(created.userId.toString()).toBe(userAId)
     })
 
-    it('es idempotente: no crea duplicado si ya existe pending con mismo actionType', async () => {
+    it('es idempotente: no crea duplicado si ya existe pending con mismo actionType, pero sí upserta notificación', async () => {
         mocks.SpaceEntryPersonalImpact.findOne
             .mockReturnValueOnce(leanNull())   // linked check → no existe
-            .mockReturnValueOnce({ lean: () => Promise.resolve({ _id: 'existing' }) })  // pending check → ya existe
+            .mockReturnValueOnce({ lean: () => Promise.resolve({ _id: 'existing-pending-id' }) })  // pending check → ya existe
 
         await emitPersonalSyncEvent({
             actorUserId,
@@ -87,6 +94,39 @@ describe('emitPersonalSyncEvent — createPersonalPendingActions', () => {
         })
 
         expect(mocks.SpaceEntryPersonalImpact.create).not.toHaveBeenCalled()
+        // La notificación sí se upserta aunque el pending ya existía
+        expect(mocks.safeUpsertNotificationByDedupeKey).toHaveBeenCalledOnce()
+    })
+
+    it('llama a safeUpsertNotificationByDedupeKey cuando crea un pending nuevo', async () => {
+        mocks.SpaceEntryPersonalImpact.create.mockResolvedValue({ _id: 'new-pending-id' })
+
+        await emitPersonalSyncEvent({
+            actorUserId,
+            spaceId,
+            entryId,
+            sourceType: 'space_entry',
+            pendingTargets: [makePendingTarget()],
+        })
+
+        expect(mocks.SpaceEntryPersonalImpact.create).toHaveBeenCalledOnce()
+        expect(mocks.safeUpsertNotificationByDedupeKey).toHaveBeenCalledOnce()
+    })
+
+    it('no llama a safeUpsertNotificationByDedupeKey si ya existe linked', async () => {
+        mocks.SpaceEntryPersonalImpact.findOne.mockReturnValueOnce({
+            lean: () => Promise.resolve({ _id: 'linked-existing', status: 'linked' }),
+        })
+
+        await emitPersonalSyncEvent({
+            actorUserId,
+            spaceId,
+            entryId,
+            sourceType: 'space_entry',
+            pendingTargets: [makePendingTarget()],
+        })
+
+        expect(mocks.safeUpsertNotificationByDedupeKey).not.toHaveBeenCalled()
     })
 
     it('no crea pendiente si ya existe linked vigente para (userId, entryId)', async () => {

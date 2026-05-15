@@ -246,6 +246,43 @@ export const SPACE_DEBT_MODES = {
     SIMPLIFIED: 'simplified',
 } as const
 
+export const NOTIFICATION_STATUSES = {
+    UNREAD: 'unread',
+    READ: 'read',
+    DISMISSED: 'dismissed',
+} as const
+
+export const NOTIFICATION_CATEGORIES = {
+    SPACE: 'space',
+    DEBT: 'debt',
+    PERSONAL_IMPACT: 'personal_impact',
+    SYSTEM: 'system',
+    INSIGHT: 'insight',
+} as const
+
+export const NOTIFICATION_PRIORITIES = {
+    LOW: 'low',
+    NORMAL: 'normal',
+    HIGH: 'high',
+} as const
+
+export const NOTIFICATION_ACTION_STATUSES = {
+    NONE: 'none',
+    PENDING: 'pending',
+    COMPLETED: 'completed',
+    IGNORED: 'ignored',
+    CANCELLED: 'cancelled',
+} as const
+
+export const NOTIFICATION_TYPES = {
+    PERSONAL_IMPACT_PENDING: 'personal_impact_pending',
+    SPACE_ENTRY_CREATED: 'space_entry_created',
+    SPACE_ENTRY_VOIDED: 'space_entry_voided',
+    DEBT_PAYMENT_REGISTERED: 'debt_payment_registered',
+    DEBT_COLLECT_REGISTERED: 'debt_collect_registered',
+    SYSTEM_INFO: 'system_info',
+} as const
+
 // Tipos derivados
 export type AccountType = typeof ACCOUNT_TYPES[keyof typeof ACCOUNT_TYPES]
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES]
@@ -293,3 +330,8 @@ export type DebtStatus = typeof DEBT_STATUSES[keyof typeof DEBT_STATUSES]
 export type DebtOriginMode = typeof DEBT_ORIGIN_MODES[keyof typeof DEBT_ORIGIN_MODES]
 export type DebtMovementType = typeof DEBT_MOVEMENT_TYPES[keyof typeof DEBT_MOVEMENT_TYPES]
 export type SpaceDebtMode = typeof SPACE_DEBT_MODES[keyof typeof SPACE_DEBT_MODES]
+export type NotificationStatus = typeof NOTIFICATION_STATUSES[keyof typeof NOTIFICATION_STATUSES]
+export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[keyof typeof NOTIFICATION_CATEGORIES]
+export type NotificationPriority = typeof NOTIFICATION_PRIORITIES[keyof typeof NOTIFICATION_PRIORITIES]
+export type NotificationActionStatus = typeof NOTIFICATION_ACTION_STATUSES[keyof typeof NOTIFICATION_ACTION_STATUSES]
+export type NotificationType = typeof NOTIFICATION_TYPES[keyof typeof NOTIFICATION_TYPES]

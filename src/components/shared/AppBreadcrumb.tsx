@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/breadcrumb'
 import { RouteTransitionButton } from '@/components/shared/RouteTransitionButton'
 import { useBreadcrumbAction } from '@/contexts/BreadcrumbActionContext'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const ROUTE_LABELS: Record<string, string> = {
     dashboard: 'Dashboard',
@@ -46,8 +47,8 @@ export function AppBreadcrumb() {
     if (segments.length === 0) return null
 
     return (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-            <Breadcrumb>
+        <div className="flex items-center justify-between gap-3">
+            <Breadcrumb className="min-w-0">
                 <BreadcrumbList>
                     <BreadcrumbItem>
                         <BreadcrumbLink
@@ -86,23 +87,28 @@ export function AppBreadcrumb() {
                 </BreadcrumbList>
             </Breadcrumb>
 
-            {action ?? (pathname === '/transactions' ? (
-                <RouteTransitionButton
-                    href="/transactions/credit-card"
-                    direction="forward"
-                    ariaLabel="Ir a Gastos con TC"
-                    className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                    style={{
-                        background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                        borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
-                        boxShadow: 'var(--card-shadow)',
-                    }}
-                >
-                    <CreditCard className="h-3.5 w-3.5" />
-                    <span>Gastos con TC</span>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                </RouteTransitionButton>
-            ) : null)}
+            {/* Acciones a la derecha: acción contextual + campana */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+                {action ?? (pathname === '/transactions' ? (
+                    <RouteTransitionButton
+                        href="/transactions/credit-card"
+                        direction="forward"
+                        ariaLabel="Ir a Gastos con TC"
+                        className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <CreditCard className="h-3.5 w-3.5" />
+                        <span>Gastos con TC</span>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </RouteTransitionButton>
+                ) : null)}
+
+                <NotificationBell />
+            </div>
         </div>
     )
 }

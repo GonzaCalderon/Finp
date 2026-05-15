@@ -8,12 +8,14 @@ import { CategoriesProvider } from '@/contexts/CategoriesContext'
 import { AccountsProvider } from '@/contexts/AccountsContext'
 import { SpaceActionProvider } from '@/contexts/SpaceActionContext'
 import { BreadcrumbActionProvider } from '@/contexts/BreadcrumbActionContext'
+import { NotificationsProvider } from '@/contexts/NotificationsContext'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <AppStartupGate>
             <SpaceActionProvider>
             <HideAmountsProvider>
+            <NotificationsProvider>
                 <CategoriesProvider>
                     <AccountsProvider>
                         <BreadcrumbActionProvider>
@@ -35,6 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         </BreadcrumbActionProvider>
                     </AccountsProvider>
                 </CategoriesProvider>
+            </NotificationsProvider>
             </HideAmountsProvider>
             </SpaceActionProvider>
         </AppStartupGate>

@@ -8,7 +8,6 @@ import { ArrowLeft, Coins, Plus, Users } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { useBreadcrumbAction } from '@/contexts/BreadcrumbActionContext'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -56,7 +55,6 @@ import {
     RecentSpaceActivityCard,
     SpacePendingConfirmationsCard,
 } from '@/components/spaces/detail/SpaceSummaryPanels'
-import { SpacesPendingBell } from '@/components/spaces/index/SpacesPageHeader'
 import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingViews'
 import { apiJson } from '@/lib/client/auth-client'
 import {
@@ -225,7 +223,6 @@ export default function SpaceDetailPage() {
     const focusEntryId = searchParams?.get('entryId') ?? null
     const spaceId = params?.id
     const { hidden } = useHideAmounts()
-    const { setAction: setBreadcrumbAction, clearAction: clearBreadcrumbAction } = useBreadcrumbAction()
     const { success, error: toastError } = useToast()
     const { data, loading, error, updateSpace } = useSpace(spaceId)
     const spaceActivity = useSpaceActivity(spaceId)
@@ -262,20 +259,6 @@ export default function SpaceDetailPage() {
         })
         return () => clearAction()
     }, [setAction, clearAction])
-
-    useEffect(() => {
-        setBreadcrumbAction(
-            <SpacesPendingBell
-                pendingCount={(data?.pendingActions.length ?? 0) + spaceActivity.unreadCount}
-                onShowPending={() => {
-                    setPendingSheetTab('pending')
-                    setPendingSheetOpen(true)
-                }}
-            />
-        )
-
-        return () => clearBreadcrumbAction()
-    }, [clearBreadcrumbAction, data?.pendingActions.length, setBreadcrumbAction, spaceActivity.unreadCount])
 
     useEffect(() => {
         if (activeTab !== 'entries' || !focusEntryId) return

@@ -763,7 +763,9 @@ function MobileBottomBar() {
                                 color: moreOpen ? 'var(--sky)' : 'var(--muted-foreground)',
                             }}
                         >
-                            <MoreHorizontal size={18} />
+                            <div className="relative">
+                                <MoreHorizontal size={18} />
+                            </div>
                             <span className="text-[11px]">Más</span>
                         </button>
                     </div>
@@ -783,6 +785,7 @@ function MobileBottomBar() {
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}
             />
+
         </>
     )
 }

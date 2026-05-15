@@ -1,6 +1,7 @@
 import { Types } from 'mongoose'
 import { Category, SpaceEntryPersonalImpact, Transaction } from '@/lib/models'
 import { createTransactionFromSpaceEntry } from '@/lib/server/space-transactions'
+import { resolveNotificationsForTarget } from '@/lib/server/notifications'
 import { buildEntryShares, extractId, roundAmount } from '@/lib/utils/spaces'
 import type {
     ISpaceEntry,
@@ -251,7 +252,14 @@ export async function upsertLinkedPersonalImpact(
         { new: true }
     ).lean<ISpaceEntryPersonalImpact | null>()
 
-    if (existingPending) return existingPending
+    if (existingPending) {
+        resolveNotificationsForTarget({
+            recipientUserId: userId.toString(),
+            pendingActionId: existingPending._id.toString(),
+            actionStatus: 'completed',
+        }).catch((err) => console.error('[notifications] resolve on linked:', err))
+        return existingPending
+    }
 
     // Si ya existe linked, retornarlo (no duplicar)
     const existingLinked = await SpaceEntryPersonalImpact.findOne({

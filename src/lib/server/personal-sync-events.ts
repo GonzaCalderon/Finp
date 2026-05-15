@@ -8,6 +8,10 @@ import type {
     SpacePersonalPendingActionType,
     SpacePersonalImpactSourceType,
 } from '@/lib/constants'
+import {
+    safeUpsertNotificationByDedupeKey,
+    buildNotificationFromPendingAction,
+} from './notifications'
 
 export interface PendingActionTarget {
     userId: string
@@ -55,49 +59,59 @@ async function createPersonalPendingActions(event: PersonalSyncEvent): Promise<v
             }).lean()
             if (existingLinked) return
 
-            // Skip si ya existe un pending para (userId, entryId, actionType) — idempotente
+            // Obtener o crear el pending — idempotente
+            let pendingId: string
             const existingPending = await SpaceEntryPersonalImpact.findOne({
                 userId: userObjId,
                 entryId: entryObjId,
                 actionType: target.actionType,
                 status: SPACE_PERSONAL_IMPACT_STATUSES.PENDING,
             }).lean()
-            if (existingPending) return
 
-            await SpaceEntryPersonalImpact.create({
-                spaceId: new Types.ObjectId(spaceId),
-                entryId: entryObjId,
-                userId: userObjId,
-                participantId: new Types.ObjectId(target.participantId),
-                impactKind: target.impactKind,
-                amount: target.amount,
-                currency: target.currency,
-                status: SPACE_PERSONAL_IMPACT_STATUSES.PENDING,
-                actionType: target.actionType,
-                sourceType,
-                actorUserId: new Types.ObjectId(actorUserId),
-                ...(target.counterpartyParticipantId && {
-                    counterpartyParticipantId: new Types.ObjectId(target.counterpartyParticipantId),
-                }),
-                ...(target.counterpartyNameSnapshot && {
-                    counterpartyNameSnapshot: target.counterpartyNameSnapshot,
-                }),
-                ...(debtId && { debtId: new Types.ObjectId(debtId) }),
-                ...(debtMovementId && { debtMovementId: new Types.ObjectId(debtMovementId) }),
-                ...(target.accountImpactAmount !== undefined && {
-                    accountImpactAmount: target.accountImpactAmount,
-                }),
-                ...(target.operationalAmount !== undefined && {
-                    operationalAmount: target.operationalAmount,
-                }),
-            })
+            if (existingPending) {
+                pendingId = existingPending._id.toString()
+            } else {
+                const created = await SpaceEntryPersonalImpact.create({
+                    spaceId: new Types.ObjectId(spaceId),
+                    entryId: entryObjId,
+                    userId: userObjId,
+                    participantId: new Types.ObjectId(target.participantId),
+                    impactKind: target.impactKind,
+                    amount: target.amount,
+                    currency: target.currency,
+                    status: SPACE_PERSONAL_IMPACT_STATUSES.PENDING,
+                    actionType: target.actionType,
+                    sourceType,
+                    actorUserId: new Types.ObjectId(actorUserId),
+                    ...(target.counterpartyParticipantId && {
+                        counterpartyParticipantId: new Types.ObjectId(target.counterpartyParticipantId),
+                    }),
+                    ...(target.counterpartyNameSnapshot && {
+                        counterpartyNameSnapshot: target.counterpartyNameSnapshot,
+                    }),
+                    ...(debtId && { debtId: new Types.ObjectId(debtId) }),
+                    ...(debtMovementId && { debtMovementId: new Types.ObjectId(debtMovementId) }),
+                    ...(target.accountImpactAmount !== undefined && {
+                        accountImpactAmount: target.accountImpactAmount,
+                    }),
+                    ...(target.operationalAmount !== undefined && {
+                        operationalAmount: target.operationalAmount,
+                    }),
+                })
+                pendingId = created._id.toString()
+            }
+
+            // Siempre upsert la notificación — idempotente por dedupeKey
+            await safeUpsertNotificationByDedupeKey(
+                buildNotificationFromPendingAction(target, event, pendingId)
+            )
         })
     )
 }
 
 /**
- * Emite un evento de sincronización personal: crea pendientes y deja un hook
- * para que Fase 6F.2 enganche la creación de Notification records.
+ * Emite un evento de sincronización personal: crea pendientes y notificaciones
+ * de forma idempotente para cada target involucrado.
  */
 export async function emitPersonalSyncEvent(event: PersonalSyncEvent): Promise<void> {
     try {
@@ -105,7 +119,6 @@ export async function emitPersonalSyncEvent(event: PersonalSyncEvent): Promise<v
         console.log(
             `[personal-sync] ${event.sourceType} | space=${event.spaceId} | entry=${event.entryId} | targets=${event.pendingTargets.length}`
         )
-        // Fase 6F.2: aquí se creará el Notification record para cada target
     } catch (err) {
         console.error('[personal-sync] Error al emitir evento:', err)
     }
