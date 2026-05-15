@@ -1,10 +1,10 @@
 # Informe de estado actual de Finp
 
-Estado relevado: 17 de abril de 2026.
+Estado relevado: 15 de mayo de 2026.
 
 ## Resumen ejecutivo
 
-Finp es una aplicación web de gestión financiera personal construida con Next.js, React, TypeScript, MongoDB y NextAuth. El producto ya cubre un flujo funcional amplio: registro de usuarios, autenticación, cuentas multi-moneda, transacciones, tarjetas de crédito, cuotas, compromisos recurrentes, dashboard financiero, proyección, reglas automáticas de categorización, configuración de usuario, categorías e importación desde Excel.
+Finp es una aplicación web de gestión financiera personal construida con Next.js, React, TypeScript, MongoDB y NextAuth. El producto ya cubre un flujo funcional amplio: registro de usuarios, autenticación, cuentas multi-moneda, transacciones, tarjetas de crédito, cuotas, compromisos recurrentes, dashboard financiero, proyección, reglas automáticas de categorización, configuración de usuario, categorías e importación desde Excel. Además, cuenta con módulos completos de Espacios compartidos, Deudas personales y un sistema de notificaciones globales.
 
 El estado actual es el de una app web funcional con experiencia responsive y una capa de dominio considerable. Todavía no es una app mobile nativa ni una PWA offline-first. La experiencia mobile existe dentro del navegador mediante layout responsive, sidebar desktop y bottom navigation mobile, pero los datos dependen del backend y de MongoDB en línea.
 
@@ -435,6 +435,107 @@ Observaciones:
 - `usePreferences` mantiene una estrategia híbrida: estado inicial desde `localStorage`, sincronización posterior con API y fallback si la API no responde.
 - Las preferencias invalidan dashboard, transacciones, gastos de tarjeta y proyección.
 
+### Espacios
+
+Funcionalidades disponibles:
+
+- Tipos de espacio: Pareja, Grupo, Viaje, Proyecto.
+- Listado con filtros y grid en desktop.
+- Detalle de espacio con: Balance, Movimientos, Actividad, Configuración.
+- Nuevo movimiento con split configurable: partes iguales, responsable único, porcentajes, montos fijos.
+- Preview de reparto antes de confirmar.
+- Settlements: registrar pagos parciales o totales entre participantes.
+- Balance directo y simplificado según `debtMode` del espacio.
+- Pagos recomendados basados en balance.
+- Categorías internas propias del espacio.
+- Comprobantes adjuntos persistidos en Vercel Blob privado.
+- Edición de movimientos con historial de versiones.
+- Anulación lógica con `isVoided` y campo de motivo.
+- Actividad del espacio: registro de eventos por movimiento, categoría, participante y configuración.
+- Impacto personal por usuario mediante `SpaceEntryPersonalImpact`:
+    - Cada participante puede vincular un movimiento a su Finp privado de forma independiente.
+    - El estado global del movimiento no se modifica; el vínculo es privado por usuario.
+- Sincronización multiusuario:
+    - Al crear un movimiento, los participantes involucrados reciben un pendiente accionable.
+    - `emitPersonalSyncEvent` garantiza idempotencia por `(userId, entryId, actionType)`.
+- Roles de participantes con permisos.
+- Invitaciones con modelo `SpaceInvite`.
+
+Archivos principales:
+
+- `src/app/(app)/spaces/page.tsx`
+- `src/app/(app)/spaces/[id]/page.tsx`
+- `src/components/spaces/`
+- `src/hooks/useSpaces.ts`, `useSpaceEntries.ts`, `useSpaceParticipants.ts`, `useSpacePendingActions.ts`
+- `src/app/api/spaces/`, `src/app/api/personal-pending-actions/`
+- `src/lib/models/space.model.ts`, `space-entry.model.ts`, `space-entry-personal-impact.model.ts`
+- `src/lib/utils/space-personal-impact.ts`, `space-entry-changes.ts`, `personal-sync-events.ts`
+
+### Deudas
+
+Funcionalidades disponibles:
+
+- Módulo propio en `/debts`.
+- Dos categorías: "Debo" y "Me deben".
+- Deudas manuales y deudas derivadas de Espacios.
+- Resumen de posición neta.
+- Lista agrupada por persona.
+- Filtros: Todo, Debo, Me deben, Espacios, Manuales, Ignoradas.
+- Registrar pago de deuda con impacto real en cuenta.
+- Registrar cobro de deuda con impacto real en cuenta.
+- Pagos/cobros excluidos de métricas operativas (no suman como gasto/ingreso).
+- Ignorar y restaurar deudas derivadas de Espacios.
+- Sincronización automática de deudas cuando cambian movimientos del espacio.
+- Rediseño visual (Fase 6G):
+    - Relationship sidebar con contexto de la persona/espacio relacionado.
+    - Hero de posición neta.
+    - Cards compactas por categoría.
+    - Timeline de movimientos.
+    - Dialogs rediseñados para nueva deuda, pago y cobro.
+    - Empty states.
+- Integración con Transacciones, Cuentas, Dashboard y Espacios.
+
+Archivos principales:
+
+- `src/app/(app)/debts/page.tsx`
+- `src/components/debts/`
+- `src/hooks/useDebts.ts`
+- `src/app/api/debts/`
+- `src/lib/models/debt.model.ts`, `debt-movement.model.ts`
+- `src/lib/utils/debt-sync.ts`
+
+### Notificaciones
+
+Funcionalidades disponibles:
+
+- Sistema de notificaciones globales para el usuario.
+- Tipos de notificación: `personal_impact_pending`, `space_entry_created`, `space_entry_voided`, `space_entry_voided_review`, `space_entry_edited_review`, `debt_payment_registered`, `debt_collect_registered`, `system_info`.
+- Categorías: `space`, `debt`, `personal_impact`, `system`, `insight`.
+- Prioridades: `low`, `normal`, `high`.
+- Estados: `unread`, `read`, `archived`, `dismissed`.
+- `actionStatus`: `none`, `pending`, `completed`, `ignored`, `cancelled`.
+- Deduplicación idempotente por `dedupeKey` único sparse.
+- Marcar como leída, marcar todas como leídas.
+- Archivar y restaurar.
+- Descartar (dismiss).
+- Campana global con badge de count (máx 9+) y punto ámbar para pendientes.
+- Sheet de notificaciones con 5 tabs: Todas, Pendientes, Espacios, Deudas, Archivadas.
+- Paginación cursor-based por tab.
+- CTA en notificaciones de acción pendiente.
+- Swipe actions en mobile: deslizar derecho para archivar, izquierdo para descartar.
+- Botones de acción al hover en desktop.
+- Polling cada 20s con la pestaña visible; 15s dentro del sheet.
+- Resolución automática de notificaciones al completar la acción relacionada.
+- Alerta `NEEDS_REVIEW` cuando un entry vinculado se anula o edita con cambios materiales.
+
+Archivos principales:
+
+- `src/components/notifications/`
+- `src/contexts/NotificationsContext.tsx`
+- `src/app/api/notifications/`
+- `src/lib/models/notification.model.ts`
+- `src/lib/server/notifications.ts`
+
 ## Modelo de datos
 
 ### User
@@ -548,6 +649,69 @@ Modelos:
 
 - `src/lib/models/import-batch.model.ts`
 - `src/lib/models/import-row.model.ts`
+
+### Debt y DebtMovement
+
+Campos principales de Debt:
+
+- Usuario propietario.
+- Tipo: `payable` (debo) o `receivable` (me deben).
+- Origen: `manual` o `space`.
+- Contraparte (nombre y userId).
+- Espacio de origen (si corresponde).
+- Monto total, monto pagado/cobrado y monto pendiente.
+- Moneda.
+- Estado: activa, saldada, ignorada.
+- Descripción.
+
+Campos principales de DebtMovement:
+
+- Deuda asociada.
+- Tipo de movimiento: `payment` o `collect`.
+- Monto y moneda.
+- Transacción real vinculada.
+- Fecha.
+
+Modelos:
+
+- `src/lib/models/debt.model.ts`
+- `src/lib/models/debt-movement.model.ts`
+
+### SpaceEntryPersonalImpact
+
+Campos principales:
+
+- `userId`: propietario del impacto.
+- `spaceEntryId` y `spaceId`.
+- `status`: `pending`, `linked`, `ignored`, `cancelled`, `removed`, `needs_review`.
+- `actionType`: `impact_space_expense`, `impact_space_payment`, `impact_space_collect`.
+- `linkedTransactionId`: transacción personal creada.
+- `operationalAmount`: parte propia del usuario.
+- `accountImpactAmount`: monto real movido en cuenta.
+- Campos de revisión: `reviewReason`, `reviewRequestedAt`, `reviewChangedFields`, `reviewedAt`, `reviewedResolution`.
+- `debtId`, `debtMovementId`: referencias cruzadas.
+- Índices únicos parciales: 1 LINKED por `(userId, entryId)`, 1 PENDING por `(userId, entryId, actionType)`.
+
+Modelo: `src/lib/models/space-entry-personal-impact.model.ts`.
+
+### Notification
+
+Campos principales:
+
+- `recipientUserId`, `actorUserId`.
+- `type`: enum con 8 valores.
+- `category`: `space`, `debt`, `personal_impact`, `system`, `insight`.
+- `priority`: `low`, `normal`, `high`.
+- `status`: `unread`, `read`, `archived`, `dismissed`.
+- `actionStatus`: `none`, `pending`, `completed`, `ignored`, `cancelled`.
+- `pendingActionId`: referencia a `SpaceEntryPersonalImpact`.
+- `entityRefs`: objeto con referencias a space, entry, debt, transaction, personalImpact.
+- `action`: CTA con label, href y actionType.
+- `dedupeKey`: único sparse para idempotencia.
+- `metadata`: datos adicionales (monto, moneda, campos cambiados).
+- Timestamps: `readAt`, `dismissedAt`, `archivedAt`, `resolvedAt`, `expiresAt`.
+
+Modelo: `src/lib/models/notification.model.ts`.
 
 ## API interna
 

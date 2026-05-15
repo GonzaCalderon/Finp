@@ -687,6 +687,127 @@ Incluye:
 - Corrección de filtro de categorías en Transacciones.
 - Ícono de Deudas revisado.
 
+## Fase 6F.1 — Sincronización multiusuario: pendientes accionables
+
+**Estado:** implementada.
+
+Objetivo:
+Que cuando un participante registra un gasto, los demás participantes que deben impactarlo en su Finp personal reciban un pendiente accionable, no solo una notificación informativa.
+
+Incluye:
+
+- Estados del ciclo de vida de `SpaceEntryPersonalImpact`:
+    - `PENDING`: acción esperando decisión del usuario;
+    - `LINKED`: transacción confirmada en el Finp del usuario;
+    - `IGNORED`: usuario rechazó registrar;
+    - `CANCELLED`: anulado automáticamente cuando el entry fue anulado;
+    - `REMOVED`: usuario quitó un linked existente.
+- `emitPersonalSyncEvent()`: genera lista de targets y delega a `createPersonalPendingActions()`.
+- `createPersonalPendingActions()`: idempotente por índice único `(userId, entryId, actionType)`.
+- Endpoint `GET /api/personal-pending-actions` con filtros de estado.
+- `POST .../ignore` y `DELETE .../ignore` para rechazar o restaurar un pendiente.
+- Trigger automático al crear, editar o anular entries y al registrar pagos/cobros de deuda.
+
+Decisiones:
+
+- Un pendiente no desaparece cuando el entry cambia; se cancela o transiciona.
+- Máximo un `LINKED` vigente por `(userId, entryId)`.
+- Máximo un `PENDING` vigente por `(userId, entryId, actionType)`.
+- `Promise.allSettled` garantiza idempotencia: fallo de un usuario no bloquea al resto.
+
+---
+
+## Fase 6F.2 — Sistema de notificaciones globales
+
+**Estado:** implementada.
+
+Objetivo:
+Crear un sistema centralizado de notificaciones para que el usuario sepa qué pasó en sus espacios, deudas e impactos personales, con acciones directas desde la notificación.
+
+Incluye:
+
+- Modelo `Notification` con campos:
+    - `type`: `personal_impact_pending`, `space_entry_created`, `space_entry_voided`, `space_entry_voided_review`, `space_entry_edited_review`, `debt_payment_registered`, `debt_collect_registered`, `system_info`.
+    - `category`: `space`, `debt`, `personal_impact`, `system`, `insight`.
+    - `priority`: `low`, `normal`, `high`.
+    - `status`: `unread`, `read`, `archived`, `dismissed`.
+    - `actionStatus`: `none`, `pending`, `completed`, `ignored`, `cancelled`.
+    - `dedupeKey`: índice único sparse para idempotencia.
+    - `entityRefs`: referencias cruzadas a entidades relacionadas.
+    - `action`: CTA opcional con label, href y actionType.
+- Helpers server idempotentes:
+    - `upsertNotificationByDedupeKey()`: reabre notificación si ya existía.
+    - `resolveNotificationsForTarget()`: resolución bulk por entidad.
+    - `buildNotificationFromPendingAction()`: factory con copy dinámico.
+- Endpoints:
+    - `GET /api/notifications` con paginación cursor-based y filtros por sección.
+    - `GET /api/notifications/unread-count` con tab counts.
+    - `PATCH /api/notifications/[id]/read`, `read-all`, `dismiss`.
+- `NotificationsContext` con polling cada 20 segundos (tab visible).
+- `NotificationBell` con badge de count (máx 9+) y punto ámbar para pendientes.
+- `NotificationSheet` con tabs: Todas, Pendientes, Espacios, Deudas, Archivadas.
+- `NotificationItem` con dot de no leído, badge de categoría, timestamp relativo y CTA si hay acción pendiente.
+
+Decisiones:
+
+- Las secciones Todas/Pendientes/Espacios/Deudas excluyen dismissed y archived.
+- La sección Archivadas solo muestra status=ARCHIVED.
+- Polling cada 20s global y 15s mientras el sheet esté abierto.
+
+---
+
+## Fase 6F.3 — Archivar notificaciones + swipe actions mobile
+
+**Estado:** implementada.
+
+Objetivo:
+Que el usuario pueda archivar notificaciones y gestionar su bandeja desde mobile mediante gestos de swipe.
+
+Incluye:
+
+- Endpoints `PATCH /api/notifications/[id]/archive` y `.../unarchive`.
+- `archiveNotification()` / `unarchiveNotification()` con timestamps.
+- Swipe en `NotificationItem` con Framer Motion:
+    - Swipe derecho (≥ 72px o velocidad > 500px/s): archivar o restaurar (fondo azul).
+    - Swipe izquierdo: descartar/eliminar (fondo rojo).
+    - Spring snap-back si no alcanza el umbral.
+    - Flag `hasDragged` para evitar navegar cuando fue un drag.
+- Botones de acción al hover en desktop (archive, dismiss).
+- Hint mobile "Deslizá para archivar o eliminar" en tabs activos.
+- Scroll horizontal en tabs del sheet con scrollbar oculto en mobile.
+- Al restaurar un pendiente ignorado, la notificación archivada reabre automáticamente (upsert limpia `archivedAt`).
+
+---
+
+## Fase 6F.4 — Consistencia de impactos personales al anular o editar
+
+**Estado:** implementada.
+
+Objetivo:
+Que cuando un entry compartido se anula o se edita con cambios materiales, los usuarios que ya lo vincularon en su Finp reciban una alerta y quede marcado para revisión.
+
+Incluye:
+
+- Nuevo estado `NEEDS_REVIEW` en `SpaceEntryPersonalImpact`.
+- Campos: `reviewReason` (`entry_voided` | `entry_edited`), `reviewRequestedAt`, `reviewChangedFields`, `reviewedAt`, `reviewedResolution` (`kept` | `removed`).
+- `detectSpaceEntryMaterialChanges()`: detecta cambios en monto, moneda, cotización, fecha, pagador, participantes, modo de división y split.
+- En VOID de entry:
+    - Cancela todos los `PENDING` del entry.
+    - Marca todos los `LINKED` como `NEEDS_REVIEW`.
+    - Genera notificación `space_entry_voided_review` con prioridad `high` para cada afectado.
+- En PATCH de entry con cambios materiales:
+    - Marca todos los `LINKED` como `NEEDS_REVIEW`.
+    - Genera notificación `space_entry_edited_review` con campos cambiados en body y metadata.
+- `VoidEntryDialog` muestra advertencia con cantidad de usuarios que tendrán impacto afectado.
+- `getPersonalImpactForEntries()` expone `reviewImpact` para que el cliente muestre el CTA de revisión.
+- DedupeKey estable por tipo de review: `review:{entry_voided|entry_edited}:{userId}:{entryId}`.
+
+Decisiones:
+
+- `NEEDS_REVIEW` no elimina la transacción personal; solo alerta al usuario para que decida.
+- Resolución implícita: si el usuario re-impacta desde cero, el NEEDS_REVIEW se reemplaza.
+- No hay reversión automática de la transacción personal vinculada.
+
 ---
 
 # Próximas fases inmediatas
