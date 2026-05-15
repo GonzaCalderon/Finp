@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import type { ImportParsedData } from '@/types'
 import {
     IMPORT_TRANSACTION_TYPE_LABELS,
@@ -123,13 +123,43 @@ function normalizeHeader(raw: string): string {
     return HEADER_ALIASES[normalized] ?? normalized
 }
 
+// Excel stores dates as days since Dec 30, 1899 (with a 1900 leap year bug)
+function excelSerialToDate(serial: number): Date | undefined {
+    if (!Number.isFinite(serial) || serial < 1) return undefined
+    const date = new Date(Math.round((serial - 25569) * 86400 * 1000))
+    return isNaN(date.getTime()) ? undefined : date
+}
+
+function extractCellValue(raw: ExcelJS.CellValue): string | number | Date | undefined {
+    if (raw === null || raw === undefined) return undefined
+    if (raw instanceof Date) return raw
+    if (typeof raw === 'number' || typeof raw === 'string') return raw
+    if (typeof raw === 'boolean') return String(raw)
+
+    const obj = raw as Record<string, unknown>
+
+    if ('richText' in obj && Array.isArray(obj.richText)) {
+        return (obj.richText as Array<{ text: string }>).map((rt) => rt.text).join('')
+    }
+    if ('text' in obj && typeof obj.text === 'string') {
+        return obj.text
+    }
+    if ('result' in obj) {
+        const result = obj.result
+        if (result === null || result === undefined) return undefined
+        if (result instanceof Date) return result
+        if (typeof result === 'number' || typeof result === 'string') return result
+        if (typeof result === 'boolean') return String(result)
+        return undefined
+    }
+    return undefined
+}
+
 function parseDateCell(value: unknown): Date | undefined {
     if (!value) return undefined
 
-    // Excel puede dar fechas como número serial
     if (typeof value === 'number') {
-        const date = XLSX.SSF.parse_date_code(value)
-        if (date) return new Date(date.y, date.m - 1, date.d)
+        return excelSerialToDate(value)
     }
 
     if (typeof value === 'string') {
@@ -214,10 +244,8 @@ function parseMonthCell(value: unknown): string | undefined {
     }
 
     if (typeof value === 'number') {
-        const date = XLSX.SSF.parse_date_code(value)
-        if (date) {
-            return normalizeImportMonth(new Date(date.y, date.m - 1, date.d))
-        }
+        const date = excelSerialToDate(value)
+        if (date) return normalizeImportMonth(date)
     }
 
     return normalizeImportMonth(String(value))
@@ -241,24 +269,27 @@ export interface ParseResult {
 
 const REQUIRED_HEADERS = ['fecha', 'tipo', 'descripción', 'monto', 'moneda']
 
-export function parseImportFile(buffer: Buffer): ParseResult {
-    const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false })
+export async function parseImportFile(buffer: Buffer): Promise<ParseResult> {
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(buffer)
 
-    // Buscar hoja "Transacciones" (o la primera hoja si no existe)
     const sheetName =
-        wb.SheetNames.find((n) => n.toLowerCase().includes('transaccion')) ??
-        wb.SheetNames.find((n) => !n.toLowerCase().includes('instruc')) ??
-        wb.SheetNames[0]
+        workbook.worksheets.find((ws) => ws.name.toLowerCase().includes('transaccion'))?.name ??
+        workbook.worksheets.find((ws) => !ws.name.toLowerCase().includes('instruc'))?.name ??
+        workbook.worksheets[0]?.name
 
     if (!sheetName) {
         return { rows: [], missingHeaders: REQUIRED_HEADERS, unknownHeaders: [], totalRows: 0 }
     }
 
-    const ws = wb.Sheets[sheetName]
-    const rawRows = XLSX.utils.sheet_to_json<(string | number | Date)[]>(ws, {
-        header: 1,
-        defval: '',
-        raw: true,
+    const ws = workbook.getWorksheet(sheetName)!
+
+    // Build rawRows as 0-indexed arrays, matching xlsx's sheet_to_json with header:1
+    const rawRows: (string | number | Date | undefined)[][] = []
+    ws.eachRow({ includeEmpty: true }, (row) => {
+        const vals = row.values as ExcelJS.CellValue[]
+        // row.values is 1-indexed; slice(1) normalizes to 0-indexed
+        rawRows.push(vals.slice(1).map(extractCellValue))
     })
 
     if (rawRows.length === 0) {
