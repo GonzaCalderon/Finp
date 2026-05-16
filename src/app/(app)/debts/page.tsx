@@ -208,8 +208,9 @@ function DebtsPageInner() {
 
     async function handlePay(debtId: string, payload: Parameters<typeof payDebt>[1]) {
         try {
-            await payDebt(debtId, payload)
+            const updated = await payDebt(debtId, payload)
             success('Pago registrado')
+            if (updated.status === 'paid') setSelectedRelationKey(null)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al registrar el pago')
         }
@@ -217,8 +218,9 @@ function DebtsPageInner() {
 
     async function handleCollect(debtId: string, payload: Parameters<typeof collectDebt>[1]) {
         try {
-            await collectDebt(debtId, payload)
+            const updated = await collectDebt(debtId, payload)
             success('Cobro registrado')
+            if (updated.status === 'paid') setSelectedRelationKey(null)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al registrar el cobro')
         }

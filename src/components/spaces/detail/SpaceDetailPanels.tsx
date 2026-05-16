@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { ArrowRight, Ban, CalendarRange, ChevronRight, Coins, FileBadge2, History, Pencil, Plus, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { Ban, CalendarRange, ChevronRight, Coins, FileBadge2, History, Pencil, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -65,11 +65,13 @@ function MovementCard({
     participants,
     currentUserId,
     personalImpact,
+    reviewImpact,
     canManage,
     highlighted,
     onEntryClick,
     onEdit,
     onVoid,
+    onSyncImpact,
 }: {
     entry: ISpaceEntry
     reportingCurrency: string
@@ -77,11 +79,13 @@ function MovementCard({
     participants: ISpaceParticipant[]
     currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
+    reviewImpact?: ISpaceEntryPersonalImpact
     canManage?: boolean
     highlighted?: boolean
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
+    onSyncImpact?: (entry: ISpaceEntry) => void
 }) {
     const payer = participants.find(
         (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
@@ -97,6 +101,7 @@ function MovementCard({
         (extractId(entry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
     )
     const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
+    const needsReview = Boolean(reviewImpact) && !entry.isVoided
     const settlementReceiverId = entry.type === 'settlement'
         ? extractId(entry.sharedWithParticipantIds?.[0])
         : null
@@ -136,7 +141,9 @@ function MovementCard({
         if (!registrantIsPayer && registrant) {
             metaParts.push({ key: 'registered-by', label: `Registrado por ${registrant.displayName}` })
         }
-        if (impactsCurrentUser) {
+        if (needsReview) {
+            metaParts.push({ key: 'finp-review', label: 'Revisar en tu Finp', accent: true })
+        } else if (impactsCurrentUser) {
             metaParts.push({ key: 'finp', label: 'En tu Finp', accent: true })
         }
     } else {
@@ -149,7 +156,9 @@ function MovementCard({
         if (attachments > 0) {
             metaParts.push({ key: 'attachments', label: `${attachments} adjunto${attachments === 1 ? '' : 's'}` })
         }
-        if (impactsCurrentUser) {
+        if (needsReview) {
+            metaParts.push({ key: 'finp-review', label: 'Revisar en tu Finp', accent: true })
+        } else if (impactsCurrentUser) {
             metaParts.push({ key: 'finp', label: 'En tu Finp', accent: true })
         }
     }
@@ -248,8 +257,22 @@ function MovementCard({
                         </>
                     )}
                     {/* Desktop only: hover-visible quick actions */}
-                    {hasActions ? (
+                    {(hasActions || needsReview) ? (
                         <div className="hidden items-center gap-0.5 transition-opacity lg:flex lg:opacity-0 lg:group-hover:opacity-100">
+                            {needsReview && onSyncImpact ? (
+                                <button
+                                    type="button"
+                                    aria-label="Resolver impacto"
+                                    title="Resolver"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        onSyncImpact(entry)
+                                    }}
+                                    className="flex h-7 w-7 items-center justify-center rounded-full text-amber-500 transition-colors hover:bg-amber-500/10 hover:text-amber-600"
+                                >
+                                    <RefreshCw className="h-3.5 w-3.5" />
+                                </button>
+                            ) : null}
                             {canEditEntry ? (
                                 <button
                                     type="button"
@@ -303,6 +326,7 @@ export function SpaceMovementsPanel({
     onEntryClick,
     onEdit,
     onVoid,
+    onSyncImpact,
 }: {
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
@@ -318,6 +342,7 @@ export function SpaceMovementsPanel({
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
+    onSyncImpact?: (entry: ISpaceEntry) => void
 }) {
     const [sort, setSort] = useState<SpaceEntrySort>('recent')
     const filters: SpaceEntryFilter[] = ['all', 'expense', 'settlement']
@@ -412,11 +437,13 @@ export function SpaceMovementsPanel({
                             participants={participants}
                             currentUserId={currentUserId}
                             personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.linkedImpact}
+                            reviewImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.reviewImpact}
                             canManage={canManage}
                             highlighted={Boolean(focusEntryId && extractId(entry._id) === focusEntryId)}
                             onEntryClick={onEntryClick}
                             onEdit={onEdit}
                             onVoid={onVoid}
+                            onSyncImpact={onSyncImpact}
                         />
                     ))
                 )}

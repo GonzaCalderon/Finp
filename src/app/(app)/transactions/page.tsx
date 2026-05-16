@@ -6,11 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeftRight,
-    CheckCheck,
     ChevronDown,
     CreditCard,
     ExternalLink,
     Pencil,
+    RefreshCw,
     SlidersHorizontal,
     Trash2,
     Unlink,
@@ -941,17 +941,17 @@ function TransactionsPageInner() {
 
     useKeyboardShortcuts([{ key: 'n', handler: handleNewTransaction }])
 
-    const handleMarkReviewed = async (transaction: ITransaction) => {
+    const handleSyncImpact = async (transaction: ITransaction) => {
         if (!transaction.spaceId || !transaction.spaceEntryId) return
         try {
             await apiJson(
-                `/api/spaces/${transaction.spaceId.toString()}/entries/${transaction.spaceEntryId.toString()}/personal-impact/resolve`,
-                { method: 'PATCH' }
+                `/api/spaces/${transaction.spaceId.toString()}/entries/${transaction.spaceEntryId.toString()}/personal-impact/sync`,
+                { method: 'POST' }
             )
             setHighlightedId(null)
-            await invalidateData(NOTIFICATION_INVALIDATION_TAGS)
-        } catch {
-            // silencioso — el impacto puede ya estar resuelto
+            invalidateData(NOTIFICATION_INVALIDATION_TAGS)
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'No se pudo sincronizar la transacción')
         }
     }
 
@@ -1457,7 +1457,7 @@ function TransactionsPageInner() {
                                                                 color={getTransactionAmountColor(transaction)}
                                                             />
                                                         </p>
-                                                        {!NON_EDITABLE_TYPES.has(transaction.type) && !transaction.spaceId && (
+                                                        {!NON_EDITABLE_TYPES.has(transaction.type) && (
                                                             <>
                                                                 <Button
                                                                     variant="ghost"
@@ -1469,16 +1469,18 @@ function TransactionsPageInner() {
                                                                 >
                                                                     <Pencil />
                                                                 </Button>
-                                                                <Button
-                                                                    variant="destructive"
-                                                                    size="icon-sm"
-                                                                    className="rounded-xl"
-                                                                    onClick={() => handleDelete(transaction._id.toString())}
-                                                                    aria-label="Eliminar"
-                                                                    data-testid="btn-eliminar-transaccion"
-                                                                >
-                                                                    <Trash2 />
-                                                                </Button>
+                                                                {!transaction.spaceId && (
+                                                                    <Button
+                                                                        variant="destructive"
+                                                                        size="icon-sm"
+                                                                        className="rounded-xl"
+                                                                        onClick={() => handleDelete(transaction._id.toString())}
+                                                                        aria-label="Eliminar"
+                                                                        data-testid="btn-eliminar-transaccion"
+                                                                    >
+                                                                        <Trash2 />
+                                                                    </Button>
+                                                                )}
                                                             </>
                                                         )}
                                                     </div>
@@ -1683,16 +1685,25 @@ function TransactionsPageInner() {
                                                     )}
                                                     {transaction.spaceId && !NON_EDITABLE_TYPES.has(transaction.type) && (
                                                         <div className="flex gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                aria-label="Editar transacción"
+                                                                title="Editar"
+                                                                onClick={() => handleEdit(transaction)}
+                                                            >
+                                                                <Pencil size={15} />
+                                                            </Button>
                                                             {isHighlighted && transaction.spaceEntryId && (
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon-sm"
                                                                     className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
-                                                                    aria-label="Marcar como revisado"
-                                                                    title="Marcar como revisado"
-                                                                    onClick={() => void handleMarkReviewed(transaction)}
+                                                                    aria-label="Resolver"
+                                                                    title="Resolver"
+                                                                    onClick={() => void handleSyncImpact(transaction)}
                                                                 >
-                                                                    <CheckCheck size={15} />
+                                                                    <RefreshCw size={15} />
                                                                 </Button>
                                                             )}
                                                             <Button

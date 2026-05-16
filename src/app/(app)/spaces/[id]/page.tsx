@@ -59,6 +59,7 @@ import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingView
 import { apiJson } from '@/lib/client/auth-client'
 import {
     invalidateData,
+    NOTIFICATION_INVALIDATION_TAGS,
     SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
 import { extractId } from '@/lib/utils/spaces'
@@ -448,6 +449,18 @@ function SpaceDetailPageInner() {
         success('Movimiento confirmado')
     }
 
+    async function handleSyncImpact(entry: ISpaceEntry) {
+        const entryId = extractId(entry._id)
+        if (!entryId) return
+        try {
+            await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact/sync`, { method: 'POST' })
+            invalidateData([...SPACE_INVALIDATION_TAGS, ...NOTIFICATION_INVALIDATION_TAGS])
+            success('Transacción actualizada')
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'No se pudo sincronizar la transacción')
+        }
+    }
+
     async function handleQuickVoid(entry: ISpaceEntry) {
         setFocusedEntryId(null)
         const entryId = extractId(entry._id)
@@ -672,6 +685,7 @@ function SpaceDetailPageInner() {
                                 setEditEntryDialogOpen(true)
                             }}
                             onVoid={handleQuickVoid}
+                            onSyncImpact={handleSyncImpact}
                         />
                     </div>
                 ) : null}
