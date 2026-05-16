@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Account, Debt, DebtMovement, SpaceEntry, SpaceParticipant, Transaction } from '@/lib/models'
+import { Account, Debt, DebtMovement, Space, SpaceEntry, SpaceParticipant, Transaction } from '@/lib/models'
 import { payDebtSchema } from '@/lib/validations/debt'
 import { isAccountCurrencyCompatible } from '@/lib/utils/debt'
 import { calculateReportingAmount } from '@/lib/utils/spaces'
@@ -88,6 +88,7 @@ export async function POST(
 
         // Si la deuda viene de un espacio, crear settlement automáticamente
         if (debt.sourceType === 'space' && debt.spaceId && debt.counterpartyParticipantId) {
+            const spaceDoc = await Space.findById(debt.spaceId, { name: 1 }).lean<{ name: string } | null>()
             // Encontrar el participante del usuario actual en el espacio
             const currentParticipant = await SpaceParticipant.findOne({
                 spaceId: debt.spaceId,
@@ -120,6 +121,12 @@ export async function POST(
                     notes: parsed.data.notes,
                 })
                 spaceEntryId = settlement._id.toString()
+
+                // Actualizar transacción con spaceEntryId y spaceNameSnapshot
+                await Transaction.updateOne(
+                    { _id: transaction._id },
+                    { $set: { spaceEntryId: settlement._id, spaceNameSnapshot: spaceDoc?.name ?? '' } }
+                )
 
                 // Actor: linked impact (ya tiene transaction)
                 try {

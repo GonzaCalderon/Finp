@@ -815,6 +815,8 @@ function SpaceDetailPageInner() {
                 currency={data.space.reportingCurrency}
                 currentUserId={currentUserId}
                 personalImpact={detailEntry ? data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.linkedImpact : undefined}
+                reviewImpact={detailEntry ? data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.reviewImpact : undefined}
+                onSyncImpact={handleSyncImpact}
                 activityEvents={spaceActivity.events}
                 canEdit={Boolean(
                     detailEntry && (

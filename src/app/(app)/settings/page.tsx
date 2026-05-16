@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/select'
 import { CategoryDialog } from '@/components/shared/CategoryDialog'
 import { fadeIn, fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { cn } from '@/lib/utils'
 import {
     User,
     Lock,
@@ -1045,30 +1046,20 @@ function SettingsContent() {
             <h1 className="text-xl font-semibold tracking-tight">Configuración</h1>
 
             {/* Tab nav */}
-            <div
-                className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-0 md:overflow-visible"
-                style={{ borderBottom: '0.5px solid var(--border)' }}
-            >
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {tabs.map(({ key, label }) => (
                     <button
                         key={key}
                         type="button"
                         onClick={() => setActiveTab(key)}
-                        className="relative shrink-0 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors md:rounded-none md:px-4"
-                        style={{
-                            color: activeTab === key ? 'var(--sky)' : 'var(--muted-foreground)',
-                            background: activeTab === key ? 'rgba(96,184,224,0.14)' : 'transparent',
-                        }}
+                        className={cn(
+                            'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                            activeTab === key
+                                ? 'bg-foreground text-background'
+                                : 'bg-accent/50 text-muted-foreground hover:text-foreground'
+                        )}
                     >
                         {label}
-                        {activeTab === key && (
-                            <motion.div
-                                layoutId="tab-indicator"
-                                className="absolute bottom-0 left-0 right-0 h-0.5 hidden md:block"
-                                style={{ background: 'var(--sky)', marginBottom: '-0.5px' }}
-                                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                            />
-                        )}
                     </button>
                 ))}
             </div>

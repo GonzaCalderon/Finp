@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { AlertTriangle, ArrowUpRight, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, Trash2, Users, WalletCards } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, RefreshCw, Trash2, Users, WalletCards } from 'lucide-react'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
     Sheet,
     SheetContent,
@@ -80,12 +90,14 @@ export function SpaceEntryDetailSheet({
     currency,
     currentUserId,
     personalImpact,
+    reviewImpact,
     canEdit,
     canVoid,
     activityEvents = [],
     onPersonalImpactCreated,
     onEdit,
     onVoided,
+    onSyncImpact,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -95,18 +107,22 @@ export function SpaceEntryDetailSheet({
     currency: string
     currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
+    reviewImpact?: ISpaceEntryPersonalImpact
     canEdit?: boolean
     canVoid?: boolean
     activityEvents?: ISpaceActivityEvent[]
     onPersonalImpactCreated?: (entryId: string, impact: ISpaceEntryPersonalImpact) => void
     onEdit?: (entry: ISpaceEntry, hasSubsequentSettlement: boolean) => void
     onVoided?: (entry: ISpaceEntry) => void
+    onSyncImpact?: (entry: ISpaceEntry) => Promise<void>
 }) {
     const [currentEntry, setCurrentEntry] = useState<ISpaceEntry | null>(entry)
     const [voidDialogOpen, setVoidDialogOpen] = useState(false)
     const [revisionSheetOpen, setRevisionSheetOpen] = useState(false)
     const [selectedSnapshot, setSelectedSnapshot] = useState<ISpaceEntrySnapshot | null>(null)
     const [impactDialogOpen, setImpactDialogOpen] = useState(false)
+    const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+    const [resolving, setResolving] = useState(false)
     const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false, affectedUsersCount: 0 })
 
     useEffect(() => {
@@ -148,6 +164,7 @@ export function SpaceEntryDetailSheet({
     )
     const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
     const isVoided = currentEntry.isVoided === true
+    const hasReview = Boolean(reviewImpact && !isVoided)
     const isEdited = (currentEntry.editCount ?? 0) > 0
     const previousVersions = currentEntry.previousVersions ?? []
     const hasPreviousVersions = previousVersions.length > 0
@@ -371,6 +388,11 @@ export function SpaceEntryDetailSheet({
                                 ) : (
                                     <SpaceMetaBadge icon={Coins}>En tu Finp</SpaceMetaBadge>
                                 )
+                            ) : hasReview ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                    <RefreshCw className="h-3 w-3" />
+                                    Revisar en tu Finp
+                                </span>
                             ) : null}
                         </div>
 
@@ -397,17 +419,28 @@ export function SpaceEntryDetailSheet({
                                                     </>
                                                 )
                                                 : 'Registrado en tu Finp.'
-                                            : isVoided
-                                                ? 'Este movimiento esta anulado.'
-                                                : 'Todavia no registraste este movimiento en tu Finp.'}
+                                            : hasReview
+                                                ? 'El movimiento fue editado. Tu transacción en Finp puede estar desactualizada.'
+                                                : isVoided
+                                                    ? 'Este movimiento esta anulado.'
+                                                    : 'Todavia no registraste este movimiento en tu Finp.'}
                                     </p>
-                                    {isEdited && !isVoided && !impactsCurrentUser ? (
+                                    {isEdited && !isVoided && !impactsCurrentUser && !hasReview ? (
                                         <p className="text-xs text-amber-700 dark:text-amber-400">
                                             Este movimiento fue editado. Revisa el monto antes de registrarlo en tu Finp.
                                         </p>
                                     ) : null}
                                 </div>
-                                {!impactsCurrentUser ? (
+                                {hasReview && onSyncImpact ? (
+                                    <Button
+                                        size="sm"
+                                        className="rounded-full bg-amber-500 text-white hover:bg-amber-600"
+                                        onClick={() => setResolveDialogOpen(true)}
+                                    >
+                                        <RefreshCw className="h-3.5 w-3.5" />
+                                        Resolver
+                                    </Button>
+                                ) : !impactsCurrentUser && !hasReview ? (
                                     <Button
                                         size="sm"
                                         className="rounded-full"
@@ -604,6 +637,54 @@ export function SpaceEntryDetailSheet({
                     onPersonalImpactCreated?.(entryId, impact)
                 }}
             />
+
+            <AlertDialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Actualizar transacción personal</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-2">
+                                <p>
+                                    Tu transacción personal de{' '}
+                                    <span className="font-medium text-foreground">{currentEntry.title}</span>{' '}
+                                    será actualizada con el monto y fecha actuales del movimiento.
+                                </p>
+                                <p>Esto resolverá la alerta de revisión pendiente.</p>
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                        <AlertDialogCancel disabled={resolving}>Cancelar</AlertDialogCancel>
+                        {reviewImpact?.transactionId ? (
+                            <Button
+                                variant="outline"
+                                className="rounded-md"
+                                asChild
+                                onClick={() => setResolveDialogOpen(false)}
+                            >
+                                <Link href={`/transactions?transactionId=${reviewImpact.transactionId!.toString()}`}>
+                                    Editar a mano
+                                </Link>
+                            </Button>
+                        ) : null}
+                        <AlertDialogAction
+                            disabled={resolving}
+                            onClick={async (e) => {
+                                e.preventDefault()
+                                setResolving(true)
+                                try {
+                                    await onSyncImpact?.(currentEntry)
+                                    setResolveDialogOpen(false)
+                                } finally {
+                                    setResolving(false)
+                                }
+                            }}
+                        >
+                            {resolving ? 'Actualizando...' : 'Confirmar y actualizar'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     )
 }

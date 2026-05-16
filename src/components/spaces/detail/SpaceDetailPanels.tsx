@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { Ban, CalendarRange, ChevronRight, Coins, FileBadge2, History, Pencil, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { Ban, CalendarRange, ChevronRight, Coins, FileBadge2, History, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users, X } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -682,28 +682,41 @@ export function SpaceSettingsPanel({
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
                         <span className="text-muted-foreground">Período</span>
                         {canManage ? (
-                            <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" size="sm" className="rounded-full bg-background/80">
-                                        <CalendarRange className="h-3.5 w-3.5" />
-                                        {formatSpaceDateRange(space.startDate, space.endDate)}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="end" sideOffset={4}>
-                                    <Calendar
-                                        mode="range"
-                                        selected={{
+                            <div className="flex items-center gap-1">
+                                <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" size="sm" className="rounded-full bg-background/80">
+                                            <CalendarRange className="h-3.5 w-3.5" />
+                                            {formatSpaceDateRange(space.startDate, space.endDate)}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="end" sideOffset={4}>
+                                        <Calendar
+                                            mode="range"
+                                            showOutsideDays={false}
+                                            selected={{
+                                                from: space.startDate ? new Date(space.startDate) : undefined,
+                                                to: space.endDate ? new Date(space.endDate) : undefined,
+                                            }}
+                                            onSelect={(range) => void updatePeriod(range)}
+                                            className="rounded-xl"
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                {space.endDate ? (
+                                    <button
+                                        type="button"
+                                        className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                        title="Quitar fecha de fin"
+                                        onClick={() => void updatePeriod({
                                             from: space.startDate ? new Date(space.startDate) : undefined,
-                                            to: space.endDate ? new Date(space.endDate) : undefined,
-                                        }}
-                                        onSelect={(range) => void updatePeriod(range)}
-                                        className="rounded-xl"
-                                    />
-                                    <p className="px-3 pb-3 text-xs text-muted-foreground">
-                                        Seleccioná inicio y fin sobre el mismo calendario para ver la guía del período.
-                                    </p>
-                                </PopoverContent>
-                            </Popover>
+                                            to: undefined,
+                                        })}
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                ) : null}
+                            </div>
                         ) : (
                             <span className="text-right font-medium text-foreground">
                                 {formatSpaceDateRange(space.startDate, space.endDate)}
@@ -746,33 +759,14 @@ export function SpaceSettingsPanel({
                         )}
                     </div>
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
-                        <span className="text-muted-foreground">Moneda de reporte</span>
-                        {canManage ? (
-                            <Select
-                                value={space.reportingCurrency}
-                                onValueChange={(value) => void updateSetting('reportingCurrency', { reportingCurrency: value })}
-                                disabled={savingKey === 'reportingCurrency'}
-                            >
-                                <SelectTrigger size="sm" className="h-8 w-[132px] rounded-full bg-background/80">
-                                    <span className="flex items-center gap-2">
-                                        <SpaceCurrencyIcon currency={space.reportingCurrency} className="h-5 w-5" />
-                                        <span>{space.reportingCurrency}</span>
-                                    </span>
-                                </SelectTrigger>
-                                <SelectContent align="end">
-                                    {space.currencies.map((currency) => (
-                                        <SelectItem key={currency} value={currency}>
-                                            <span className="flex items-center gap-2">
-                                                <SpaceCurrencyIcon currency={currency} className="h-5 w-5" />
-                                                <span>{currency}</span>
-                                            </span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        ) : (
-                            <SpaceCurrencyBadge currency={space.reportingCurrency} />
-                        )}
+                        <div>
+                            <span className="text-muted-foreground">Moneda de reporte</span>
+                            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground/60">
+                                <Lock className="h-2.5 w-2.5" />
+                                Por ahora solo ARS
+                            </p>
+                        </div>
+                        <SpaceCurrencyBadge currency={space.reportingCurrency} />
                     </div>
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
                         <span className="text-muted-foreground">Monedas</span>

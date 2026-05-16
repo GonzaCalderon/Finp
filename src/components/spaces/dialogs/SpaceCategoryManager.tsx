@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Plus, RotateCcw, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ColorPicker } from '@/components/shared/ColorPicker'
 import { useSpaceCategories } from '@/hooks/useSpaceCategories'
 import { useToast } from '@/hooks/useToast'
@@ -26,6 +27,7 @@ export function SpaceCategoryManager({
         archiveCategory,
         restoreCategory,
         seedCategories,
+        loading,
     } = useSpaceCategories(spaceId)
     const { success, error: toastError } = useToast()
     const [name, setName] = useState('')
@@ -108,7 +110,13 @@ export function SpaceCategoryManager({
 
     return (
         <div className="space-y-4">
-            {expenseCategories.length === 0 && canManage ? (
+            {loading ? (
+                <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-8 w-24 rounded-full" />
+                    ))}
+                </div>
+            ) : expenseCategories.length === 0 && canManage ? (
                 <div className="rounded-[18px] border border-primary/15 bg-primary/5 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
