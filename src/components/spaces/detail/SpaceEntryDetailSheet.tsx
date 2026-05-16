@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, Trash2, Users, WalletCards } from 'lucide-react'
+import Link from 'next/link'
+import { AlertTriangle, ArrowUpRight, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, Trash2, Users, WalletCards } from 'lucide-react'
 import {
     Sheet,
     SheetContent,
@@ -358,7 +359,18 @@ export function SpaceEntryDetailSheet({
                                 </SpaceMetaBadge>
                             ) : null}
                             {impactsCurrentUser ? (
-                                <SpaceMetaBadge icon={Coins}>En tu Finp</SpaceMetaBadge>
+                                personalImpact?.transactionId ? (
+                                    <Link
+                                        href={`/transactions?transactionId=${personalImpact.transactionId.toString()}`}
+                                        className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15 transition-colors"
+                                    >
+                                        <Coins className="h-3 w-3" />
+                                        En tu Finp
+                                        <ArrowUpRight className="h-3 w-3" />
+                                    </Link>
+                                ) : (
+                                    <SpaceMetaBadge icon={Coins}>En tu Finp</SpaceMetaBadge>
+                                )
                             ) : null}
                         </div>
 
@@ -371,7 +383,20 @@ export function SpaceEntryDetailSheet({
                                     </p>
                                     <p className="text-sm text-muted-foreground">
                                         {impactsCurrentUser
-                                            ? 'Registrado en tu Finp.'
+                                            ? personalImpact?.transactionId
+                                                ? (
+                                                    <>
+                                                        Registrado en tu Finp.{' '}
+                                                        <Link
+                                                            href={`/transactions?transactionId=${personalImpact.transactionId.toString()}`}
+                                                            className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline"
+                                                        >
+                                                            Ver transacción
+                                                            <ArrowUpRight className="h-3 w-3" />
+                                                        </Link>
+                                                    </>
+                                                )
+                                                : 'Registrado en tu Finp.'
                                             : isVoided
                                                 ? 'Este movimiento esta anulado.'
                                                 : 'Todavia no registraste este movimiento en tu Finp.'}

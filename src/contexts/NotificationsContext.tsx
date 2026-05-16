@@ -28,6 +28,7 @@ interface NotificationsContextValue {
     unreadCount: number
     pendingCount: number
     transactionReviewCount: number
+    transactionReviewIds: string[]
     tabCounts: TabCounts
     loading: boolean
     fetchNotifications: (filters?: NotificationFilters) => Promise<void>
@@ -48,6 +49,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     const [unreadCount, setUnreadCount] = useState(0)
     const [pendingCount, setPendingCount] = useState(0)
     const [transactionReviewCount, setTransactionReviewCount] = useState(0)
+    const [transactionReviewIds, setTransactionReviewIds] = useState<string[]>([])
     const [tabCounts, setTabCounts] = useState<TabCounts>(DEFAULT_TAB_COUNTS)
     const [loading, setLoading] = useState(false)
 
@@ -57,11 +59,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
                 unreadCount: number
                 pendingCount: number
                 transactionReviewCount: number
+                transactionReviewIds: string[]
                 tabCounts: TabCounts
             }>('/api/notifications/unread-count')
             setUnreadCount(data.unreadCount ?? 0)
             setPendingCount(data.pendingCount ?? 0)
             setTransactionReviewCount(data.transactionReviewCount ?? 0)
+            setTransactionReviewIds(data.transactionReviewIds ?? [])
             setTabCounts(data.tabCounts ?? DEFAULT_TAB_COUNTS)
         } catch {
             // silencioso — el badge queda en el último valor conocido
@@ -190,6 +194,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
                 unreadCount,
                 pendingCount,
                 transactionReviewCount,
+                transactionReviewIds,
                 tabCounts,
                 loading,
                 fetchNotifications,

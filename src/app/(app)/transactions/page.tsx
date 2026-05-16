@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { useNotifications } from '@/contexts/NotificationsContext'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { usePreferences } from '@/hooks/usePreferences'
 
@@ -838,6 +839,7 @@ function TransactionsPageInner() {
     const { categories, loading: categoriesLoading } = useCategories()
     const { rules } = useTransactionRules()
     const { preferences } = usePreferences()
+    const { transactionReviewIds } = useNotifications()
 
     const categoryOptions = useMemo<CategoryOption[]>(
         () =>
@@ -949,7 +951,8 @@ function TransactionsPageInner() {
                 { method: 'POST' }
             )
             setHighlightedId(null)
-            invalidateData(NOTIFICATION_INVALIDATION_TAGS)
+            success('Transacción actualizada')
+            invalidateData([...NOTIFICATION_INVALIDATION_TAGS, ...TRANSACTION_INVALIDATION_TAGS])
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'No se pudo sincronizar la transacción')
         }
@@ -1416,6 +1419,8 @@ function TransactionsPageInner() {
                                     const category = transaction.categoryId as { name?: string; color?: string } | null
 
                                     const isHighlighted = transaction._id.toString() === highlightedId
+                                    const needsReview = transactionReviewIds.includes(transaction._id.toString())
+                                    const isAmbered = isHighlighted || needsReview
                                     return (
                                         <motion.div
                                             key={transaction._id.toString()}
@@ -1425,10 +1430,10 @@ function TransactionsPageInner() {
                                             data-transaction-id={transaction._id.toString()}
                                             style={{
                                                 background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                                                border: isHighlighted
+                                                border: isAmbered
                                                     ? '1.5px solid color-mix(in srgb, var(--amber-base, #f59e0b) 60%, transparent)'
                                                     : '0.5px solid var(--border)',
-                                                boxShadow: isHighlighted
+                                                boxShadow: isAmbered
                                                     ? '0 0 0 3px color-mix(in srgb, var(--amber-base, #f59e0b) 20%, transparent)'
                                                     : 'var(--card-shadow)',
                                             }}
@@ -1457,6 +1462,17 @@ function TransactionsPageInner() {
                                                                 color={getTransactionAmountColor(transaction)}
                                                             />
                                                         </p>
+                                                        {(isHighlighted || needsReview) && transaction.spaceEntryId && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                className="rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                                                                onClick={() => void handleSyncImpact(transaction)}
+                                                                aria-label="Resolver"
+                                                            >
+                                                                <RefreshCw />
+                                                            </Button>
+                                                        )}
                                                         {!NON_EDITABLE_TYPES.has(transaction.type) && (
                                                             <>
                                                                 <Button
@@ -1494,15 +1510,6 @@ function TransactionsPageInner() {
                                                         >
                                                             {getTransactionTypeLabel(transaction)}
                                                         </Badge>
-                                                        {transaction.spaceId && (
-                                                            <Link
-                                                                href={`/spaces/${transaction.spaceId.toString()}${transaction.spaceEntryId ? `?entryId=${transaction.spaceEntryId.toString()}` : ''}`}
-                                                                className="flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/15 transition-colors"
-                                                            >
-                                                                <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                                                                Editar en espacio
-                                                            </Link>
-                                                        )}
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="text-[15px] font-semibold tracking-tight leading-tight">
@@ -1694,7 +1701,7 @@ function TransactionsPageInner() {
                                                             >
                                                                 <Pencil size={15} />
                                                             </Button>
-                                                            {isHighlighted && transaction.spaceEntryId && (
+                                                            {(isHighlighted || needsReview) && transaction.spaceEntryId && (
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon-sm"

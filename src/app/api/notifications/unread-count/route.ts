@@ -17,7 +17,7 @@ export async function GET() {
 
         const userId = session.user.id
 
-        const [unreadCount, pendingCount, allCount, spacesCount, debtsCount, archivedCount, transactionReviewCount] = await Promise.all([
+        const [unreadCount, pendingCount, allCount, spacesCount, debtsCount, archivedCount, transactionReviewCount, reviewImpacts] = await Promise.all([
             Notification.countDocuments({
                 recipientUserId,
                 status: NOTIFICATION_STATUSES.UNREAD,
@@ -49,12 +49,21 @@ export async function GET() {
                 userId,
                 status: SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW,
             }),
+            SpaceEntryPersonalImpact.find(
+                { userId, status: SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW },
+                { transactionId: 1, _id: 0 }
+            ).lean<Array<{ transactionId?: Types.ObjectId }>>(),
         ])
+
+        const transactionReviewIds = reviewImpacts
+            .map((i) => i.transactionId?.toString())
+            .filter((id): id is string => Boolean(id))
 
         return NextResponse.json({
             unreadCount,
             pendingCount,
             transactionReviewCount,
+            transactionReviewIds,
             tabCounts: {
                 all: allCount,
                 pending: pendingCount,

@@ -213,6 +213,20 @@ export function SpacePersonalImpactDialog({
                                             hidden={false}
                                             className="text-xl font-semibold"
                                         />
+                                        {suggestion?.impactKind === 'participant_share' &&
+                                            entry?.amount &&
+                                            suggestion?.amount &&
+                                            Math.abs(suggestion.amount - entry.amount) > 0.001 ? (
+                                            <p className="text-xs text-muted-foreground">
+                                                Total del gasto:{' '}
+                                                <SpaceAmountInline
+                                                    amount={entry.amount}
+                                                    currency={entry.currency}
+                                                    hidden={false}
+                                                    className="text-xs font-medium text-foreground"
+                                                />
+                                            </p>
+                                        ) : null}
                                         <p className="text-sm text-muted-foreground">
                                             {getImpactCopy(suggestion?.impactKind)}
                                         </p>
