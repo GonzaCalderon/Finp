@@ -8,7 +8,8 @@ import {
     getPersonalImpactForEntries,
     resolveCurrentUserEntryShare,
 } from '@/lib/server/space-personal-impact'
-import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
+import { resolveNotificationsForTarget } from '@/lib/server/notifications'
+import { NOTIFICATION_ACTION_STATUSES, SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spacePersonalImpactSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
@@ -161,24 +162,33 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        // Remover impacto: limpiar vínculo con transacción y setear removedAt
+        // Remover impacto: cubre tanto LINKED como NEEDS_REVIEW
         // El badge "En tu Finp" desaparece; la transacción personal NO se elimina
-        await SpaceEntryPersonalImpact.findOneAndUpdate(
+        const removed = await SpaceEntryPersonalImpact.findOneAndUpdate(
             {
                 spaceId: id,
                 entryId,
                 userId: session.user.id,
-                status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
+                status: { $in: [SPACE_PERSONAL_IMPACT_STATUSES.LINKED, SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW] },
             },
             {
                 $set: {
                     status: SPACE_PERSONAL_IMPACT_STATUSES.REMOVED,
                     removedAt: new Date(),
+                    reviewedAt: new Date(),
+                    reviewedResolution: 'removed',
                 },
                 $unset: { transactionId: 1, accountId: 1 },
             },
-            { new: true }
+            { new: false }
         ).lean<ISpaceEntryPersonalImpact | null>()
+
+        if (removed) {
+            await resolveNotificationsForTarget({
+                personalImpactId: removed._id.toString(),
+                actionStatus: NOTIFICATION_ACTION_STATUSES.COMPLETED,
+            })
+        }
 
         return NextResponse.json({ ok: true })
     } catch (error) {

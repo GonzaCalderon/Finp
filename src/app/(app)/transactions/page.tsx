@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeftRight,
+    CheckCheck,
     ChevronDown,
     CreditCard,
     ExternalLink,
@@ -64,7 +65,7 @@ import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-star
 import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
 import { isSplitTransaction } from '@/lib/utils/operational-amount'
 import { apiJson } from '@/lib/client/auth-client'
-import { invalidateData, TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/data-sync'
+import { invalidateData, NOTIFICATION_INVALIDATION_TAGS, TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/data-sync'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -812,7 +813,7 @@ function TransactionsPageInner() {
 
     const deepLinkTransactionId = searchParams.get('transactionId')
     const deepLinkHint = searchParams.get('hint')
-    const [highlightedId] = useState<string | null>(() =>
+    const [highlightedId, setHighlightedId] = useState<string | null>(() =>
         deepLinkHint === 'review' && deepLinkTransactionId ? deepLinkTransactionId : null
     )
     const highlightHandledRef = useRef(false)
@@ -940,6 +941,20 @@ function TransactionsPageInner() {
 
     useKeyboardShortcuts([{ key: 'n', handler: handleNewTransaction }])
 
+    const handleMarkReviewed = async (transaction: ITransaction) => {
+        if (!transaction.spaceId || !transaction.spaceEntryId) return
+        try {
+            await apiJson(
+                `/api/spaces/${transaction.spaceId.toString()}/entries/${transaction.spaceEntryId.toString()}/personal-impact/resolve`,
+                { method: 'PATCH' }
+            )
+            setHighlightedId(null)
+            await invalidateData(NOTIFICATION_INVALIDATION_TAGS)
+        } catch {
+            // silencioso — el impacto puede ya estar resuelto
+        }
+    }
+
     const handleEdit = (transaction: ITransaction) => {
         setSelectedTransaction(transaction)
         setTransactionDialogOpen(true)
@@ -971,7 +986,10 @@ function TransactionsPageInner() {
                 await apiJson(`/api/spaces/${spaceId}/entries/${spaceEntryId}/personal-impact`, { method: 'DELETE' })
             }
             await deleteTransaction(transactionId)
-            await invalidateData(TRANSACTION_INVALIDATION_TAGS)
+            await Promise.all([
+                invalidateData(TRANSACTION_INVALIDATION_TAGS),
+                invalidateData(NOTIFICATION_INVALIDATION_TAGS),
+            ])
             success('Movimiento quitado de tu Finp')
             setRemoveFromFinpTarget(null)
         } catch (err) {
@@ -1665,6 +1683,18 @@ function TransactionsPageInner() {
                                                     )}
                                                     {transaction.spaceId && !NON_EDITABLE_TYPES.has(transaction.type) && (
                                                         <div className="flex gap-1">
+                                                            {isHighlighted && transaction.spaceEntryId && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                                                                    aria-label="Marcar como revisado"
+                                                                    title="Marcar como revisado"
+                                                                    onClick={() => void handleMarkReviewed(transaction)}
+                                                                >
+                                                                    <CheckCheck size={15} />
+                                                                </Button>
+                                                            )}
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon-sm"
