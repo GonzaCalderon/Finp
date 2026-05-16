@@ -124,10 +124,25 @@ export const SPACE_PARTICIPANT_ROLES = {
     PARTICIPANT: 'participant',
 } as const
 
+export const SPACE_INVITE_TYPES = {
+    DIRECT: 'direct',
+    LINK: 'link',
+} as const
+
 export const SPACE_INVITE_STATUSES = {
     PENDING: 'pending',
     ACCEPTED: 'accepted',
     DECLINED: 'declined',
+    ACTIVE: 'active',
+    REVOKED: 'revoked',
+    EXPIRED: 'expired',
+} as const
+
+export const SPACE_PERSONAL_CATEGORY_STRATEGIES = {
+    MANUAL: 'manual',
+    SPACE_NAME_VIRTUAL: 'space_name_virtual',
+    FIXED_PERSONAL_CATEGORY: 'fixed_personal_category',
+    MAP_SPACE_CATEGORIES: 'map_space_categories',
 } as const
 
 export const SPACE_ENTRY_TYPES = {
@@ -309,8 +324,12 @@ export type SpaceParticipantKind =
     typeof SPACE_PARTICIPANT_KINDS[keyof typeof SPACE_PARTICIPANT_KINDS]
 export type SpaceParticipantRole =
     typeof SPACE_PARTICIPANT_ROLES[keyof typeof SPACE_PARTICIPANT_ROLES]
+export type SpaceInviteType =
+    typeof SPACE_INVITE_TYPES[keyof typeof SPACE_INVITE_TYPES]
 export type SpaceInviteStatus =
     typeof SPACE_INVITE_STATUSES[keyof typeof SPACE_INVITE_STATUSES]
+export type SpacePersonalCategoryStrategy =
+    typeof SPACE_PERSONAL_CATEGORY_STRATEGIES[keyof typeof SPACE_PERSONAL_CATEGORY_STRATEGIES]
 export type SpaceEntryType = typeof SPACE_ENTRY_TYPES[keyof typeof SPACE_ENTRY_TYPES]
 export type SpaceEntryStatus =
     typeof SPACE_ENTRY_STATUSES[keyof typeof SPACE_ENTRY_STATUSES]

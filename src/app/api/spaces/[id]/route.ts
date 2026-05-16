@@ -8,6 +8,7 @@ import {
 } from '@/lib/server/spaces'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
+import { updateSpaceVirtualCategoryNames } from '@/lib/server/space-personal-settings'
 import { spaceSchema } from '@/lib/validations'
 import {
     extractId,
@@ -172,6 +173,10 @@ export async function PATCH(
             } catch (err) {
                 console.error('[debt-sync] space PATCH debtMode:', err)
             }
+        }
+
+        if (context.space.name !== space.name) {
+            await updateSpaceVirtualCategoryNames(id, space.name)
         }
 
         return NextResponse.json({ space })

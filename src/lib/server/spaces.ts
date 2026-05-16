@@ -1,5 +1,6 @@
 import { Types } from 'mongoose'
 import { Space, SpaceEntry, SpaceInvite, SpaceParticipant, User } from '@/lib/models'
+import { SPACE_INVITE_TYPES } from '@/lib/constants'
 import {
     buildSpaceSummary,
     extractId,
@@ -28,6 +29,13 @@ function sortParticipants(participants: ISpaceParticipant[]) {
         if (roleDiff !== 0) return roleDiff
         return left.displayName.localeCompare(right.displayName, 'es')
     })
+}
+
+const directInviteFilter = {
+    $or: [
+        { inviteType: SPACE_INVITE_TYPES.DIRECT },
+        { inviteType: { $exists: false } },
+    ],
 }
 
 export async function getAccessibleSpaceContext(spaceId: string, userId: string) {
@@ -183,6 +191,7 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
         SpaceInvite.find({
             participantId: { $in: participantIds },
             status: 'pending',
+            ...directInviteFilter,
         })
             .sort({ createdAt: -1 })
             .lean(),

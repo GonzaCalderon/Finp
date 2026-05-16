@@ -95,6 +95,60 @@ Decision consolidada:
 
 - `SpaceEntry.spaceCategoryId` y `Transaction.categoryId` pertenecen a planos distintos.
 
+## 4.1 Invitaciones por link y onboarding space-first
+
+Un admin u owner puede generar un link temporal para sumar participantes al espacio.
+
+Reglas actuales:
+
+- hay un solo link activo por espacio;
+- el link vence en 1, 3 o 7 dias, con 7 dias como default;
+- regenerar revoca el link activo anterior;
+- revocar invalida el link sin borrarlo fisicamente;
+- el token plano nunca se guarda, solo se guarda `tokenHash` y un `tokenPreview` corto;
+- si ya hay un link activo, Finp muestra metadata y permite regenerarlo para obtener un enlace copiable nuevo.
+
+El flujo por link es `space-first`:
+
+- una persona puede abrir `/spaces/invite/[token]` sin sesion;
+- antes de aceptar solo ve nombre, tipo, vencimiento e invitador si esta disponible;
+- puede iniciar sesion o registrarse y volver al mismo callback seguro;
+- al aceptar entra directo a `/spaces/[spaceId]?joined=1`;
+- no se exige crear cuentas, categorias, dashboard ni saldo inicial.
+
+Esto permite que alguien use Finp solo como participante de un espacio.
+
+## 4.2 General vs Mi Finp
+
+La configuracion del espacio se divide en dos planos:
+
+- General: afecta a todos. Incluye nombre, tipo, deuda, monedas, participantes, categorias internas e invitacion por link.
+- Mi Finp: afecta solo al usuario actual. Incluye como se sugiere categorizar el impacto personal de movimientos del espacio.
+
+Un admin no puede editar la configuracion personal de otro participante.
+
+Estrategias personales:
+
+- manual: elegir categoria al impactar;
+- `space_name_virtual`: usar el nombre del espacio como categoria automatica personal;
+- `fixed_personal_category`: usar una categoria personal fija;
+- `map_space_categories`: mapear categorias internas del espacio a categorias personales.
+
+La configuracion personal no impacta automaticamente movimientos viejos ni registra transacciones sin confirmacion del usuario.
+
+## 4.3 Categoria automatica y migracion
+
+La categoria automatica del espacio se modela como una `Category` real del usuario:
+
+- `isVirtual: true`;
+- `hiddenFromSettings: true`;
+- `sourceType: space`;
+- `sourceSpaceId`.
+
+No aparece en Configuracion > Categorias normales, pero puede aparecer en transacciones, filtros y reportes con badge "Espacio" si tiene uso.
+
+La migracion avanzada permite mover transacciones personales desde esa categoria automatica hacia otra categoria del usuario. Solo toca transacciones e impactos personales del usuario actual y del espacio actual; no modifica el espacio ni afecta a otros participantes.
+
 ## 5. Deuda directa y simplificada
 
 Cada espacio puede trabajar con un criterio de deuda:

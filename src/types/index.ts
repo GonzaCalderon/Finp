@@ -78,6 +78,10 @@ export interface ICategory {
     isDefault: boolean
     isArchived: boolean
     sortOrder: number
+    isVirtual?: boolean
+    hiddenFromSettings?: boolean
+    sourceType?: 'space'
+    sourceSpaceId?: Types.ObjectId
     createdAt: Date
     updatedAt: Date
 }

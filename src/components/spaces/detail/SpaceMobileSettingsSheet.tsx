@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Settings2, Trash2, UserPlus, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,8 @@ import {
     SpaceStatusBadge,
     SpaceTypeBadge,
 } from '@/components/spaces/SpaceUi'
+import { SpaceInviteLinkManager } from '@/components/spaces/settings/SpaceInviteLinkManager'
+import { SpacePersonalSettingsPanel } from '@/components/spaces/settings/SpacePersonalSettingsPanel'
 import {
     SPACE_MODE_LABELS,
     SPACE_SPLIT_MODE_LABELS,
@@ -91,6 +94,7 @@ export function SpaceMobileSettingsSheet({
     onUpdateParticipantRole: (participantId: string, role: 'admin' | 'participant') => Promise<unknown>
     onRemoveParticipant: (participantId: string) => Promise<unknown>
 }) {
+    const [section, setSection] = useState<'general' | 'mi_finp'>('general')
     const isClosed = space.status === 'closed'
     const isOwner = currentParticipantRole === 'owner'
     const isAdmin = currentParticipantRole === 'admin'
@@ -179,6 +183,27 @@ export function SpaceMobileSettingsSheet({
                             className="overflow-y-auto"
                             style={{ maxHeight: 'calc(92dvh - 140px)', paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
                         >
+                            <div className="flex gap-2 overflow-x-auto px-5 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                {[
+                                    { key: 'general' as const, label: 'General' },
+                                    { key: 'mi_finp' as const, label: 'Mi Finp' },
+                                ].map((item) => (
+                                    <button
+                                        key={item.key}
+                                        type="button"
+                                        onClick={() => setSection(item.key)}
+                                        className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                                            section === item.key
+                                                ? 'bg-foreground text-background'
+                                                : 'bg-accent/50 text-muted-foreground'
+                                        }`}
+                                    >
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </div>
+                            {section === 'general' && (
+                                <>
                             {/* GENERAL */}
                             <section className="px-5 py-4">
                                 <SectionLabel>General</SectionLabel>
@@ -269,6 +294,9 @@ export function SpaceMobileSettingsSheet({
                                         )
                                     })}
                                 </div>
+                                <div className="mt-4">
+                                    <SpaceInviteLinkManager spaceId={extractId(space._id) ?? ''} canManage={canManage} />
+                                </div>
                             </section>
 
                             {/* REPARTO Y MONEDAS */}
@@ -332,6 +360,14 @@ export function SpaceMobileSettingsSheet({
                                     ) : null}
                                 </div>
                             </section>
+                                </>
+                            )}
+
+                            {section === 'mi_finp' && (
+                                <section className="px-5 pb-6 pt-1">
+                                    <SpacePersonalSettingsPanel spaceId={extractId(space._id) ?? ''} />
+                                </section>
+                            )}
                         </div>
                     </motion.div>
                 </>

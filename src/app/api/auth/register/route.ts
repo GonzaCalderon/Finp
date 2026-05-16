@@ -3,14 +3,17 @@ import bcrypt from 'bcryptjs'
 import { connectDB } from '@/lib/db'
 import { User, Category, Account } from '@/lib/models'
 import { DEFAULT_CATEGORIES } from '@/lib/constants/defaultCategories'
+import { isSafeInviteCallbackUrl } from '@/lib/utils/invite-callback'
 
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { email, password, displayName } = body as {
+        const { email, password, displayName, setupPersonalFinp, callbackUrl } = body as {
             email?: string
             password?: string
             displayName?: string
+            setupPersonalFinp?: boolean
+            callbackUrl?: string
         }
 
         if (!email || !password || !displayName) {
@@ -72,28 +75,32 @@ export async function POST(request: Request) {
             timezone: 'America/Argentina/Buenos_Aires',
         })
 
-        // Crear categorías predeterminadas
-        await Category.insertMany(
-            DEFAULT_CATEGORIES.map((cat) => ({
-                ...cat,
-                userId: user._id,
-                isDefault: true,
-                isArchived: false,
-            }))
+        const shouldCreatePersonalDefaults = !(
+            setupPersonalFinp === false && isSafeInviteCallbackUrl(callbackUrl)
         )
 
-        // Crear cuenta Efectivo predeterminada
-        await Account.create({
-            userId: user._id,
-            name: 'Efectivo',
-            type: 'cash',
-            currency: 'ARS',
-            initialBalance: 0,
-            color: '#10B981',
-            isActive: true,
-            includeInNetWorth: true,
-            allowNegativeBalance: false,
-        })
+        if (shouldCreatePersonalDefaults) {
+            await Category.insertMany(
+                DEFAULT_CATEGORIES.map((cat) => ({
+                    ...cat,
+                    userId: user._id,
+                    isDefault: true,
+                    isArchived: false,
+                }))
+            )
+
+            await Account.create({
+                userId: user._id,
+                name: 'Efectivo',
+                type: 'cash',
+                currency: 'ARS',
+                initialBalance: 0,
+                color: '#10B981',
+                isActive: true,
+                includeInNetWorth: true,
+                allowNegativeBalance: false,
+            })
+        }
 
         return NextResponse.json(
             {

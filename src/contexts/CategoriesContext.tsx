@@ -57,7 +57,7 @@ export function CategoriesProvider({
             }
             setError(null)
 
-            const data = await apiJson<{ categories?: ICategory[] }>('/api/categories')
+            const data = await apiJson<{ categories?: ICategory[] }>('/api/categories?includeHidden=true')
             setCategories(data.categories ?? [])
         } catch (err) {
             setError(

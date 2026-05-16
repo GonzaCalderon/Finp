@@ -423,10 +423,53 @@ export const spaceEntryVoidSchema = z.object({
     ),
 })
 
+export const spaceInviteLinkSchema = z.object({
+    expiresInDays: z
+        .union([z.literal(1), z.literal(3), z.literal(7)])
+        .default(7),
+    regenerate: z.boolean().optional(),
+})
+
+export const spacePersonalSettingsSchema = z
+    .object({
+        categoryStrategy: z.enum([
+            'manual',
+            'space_name_virtual',
+            'fixed_personal_category',
+            'map_space_categories',
+        ]),
+        defaultPersonalCategoryId: optionalMongoId,
+        categoryMappings: z
+            .array(
+                z.object({
+                    spaceCategoryId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'CategorÃ­a del espacio invÃ¡lida'),
+                    personalCategoryId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'CategorÃ­a personal invÃ¡lida'),
+                })
+            )
+            .default([]),
+    })
+    .superRefine((data, ctx) => {
+        if (data.categoryStrategy === 'fixed_personal_category' && !data.defaultPersonalCategoryId) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'ElegÃ­ una categorÃ­a personal.',
+                path: ['defaultPersonalCategoryId'],
+            })
+        }
+    })
+
+export const migrateSpaceVirtualCategorySchema = z.object({
+    targetCategoryId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'CategorÃ­a destino invÃ¡lida'),
+})
+
 export type SpaceEntryEditInput = z.input<typeof spaceEntryEditSchema>
 export type SpaceEntryEditData = z.output<typeof spaceEntryEditSchema>
 export type SpaceEntryVoidInput = z.input<typeof spaceEntryVoidSchema>
 export type SpaceEntryVoidData = z.output<typeof spaceEntryVoidSchema>
+export type SpaceInviteLinkInput = z.input<typeof spaceInviteLinkSchema>
+export type SpaceInviteLinkData = z.output<typeof spaceInviteLinkSchema>
+export type SpacePersonalSettingsInput = z.input<typeof spacePersonalSettingsSchema>
+export type SpacePersonalSettingsData = z.output<typeof spacePersonalSettingsSchema>
 
 export type SpaceSettlementInput = z.input<typeof spaceSettlementSchema>
 export type SpaceSettlementData = z.output<typeof spaceSettlementSchema>

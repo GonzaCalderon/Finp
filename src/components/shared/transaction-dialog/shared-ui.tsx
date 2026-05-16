@@ -155,7 +155,14 @@ export function CategoryChip({
                 outlineOffset: '2px',
             }}
         >
-            {category.name}
+            <span className="inline-flex items-center gap-2">
+                {category.name}
+                {category.isVirtual || category.sourceType === 'space' ? (
+                    <span className="rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] font-semibold text-foreground/75">
+                        Espacio
+                    </span>
+                ) : null}
+            </span>
         </motion.button>
     )
 }

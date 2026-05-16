@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Suspense, useMemo, useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Coins, Plus, Users } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Coins, Plus, Users } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -222,6 +222,7 @@ function SpaceDetailPageInner() {
     const params = useParams<{ id: string }>()
     const searchParams = useSearchParams()
     const focusEntryId = searchParams?.get('entryId') ?? null
+    const joinedFromInvite = searchParams?.get('joined') === '1'
     const spaceId = params?.id
     const { hidden } = useHideAmounts()
     const { success, error: toastError } = useToast()
@@ -249,6 +250,7 @@ function SpaceDetailPageInner() {
     const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false })
     const [settlementDialogOpen, setSettlementDialogOpen] = useState(false)
     const [settlementPrefill, setSettlementPrefill] = useState<SettlementPrefill | undefined>()
+    const [showJoinedNotice, setShowJoinedNotice] = useState(joinedFromInvite)
 
     const currentUserId = data?.currentUserId ?? ''
     const { setAction, clearAction } = useSpaceAction()
@@ -597,6 +599,46 @@ function SpaceDetailPageInner() {
                     }}
                 />
 
+                {showJoinedNotice ? (
+                    <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+                    >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex gap-3">
+                                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                                <div className="space-y-1">
+                                    <p className="font-semibold">Te uniste al espacio.</p>
+                                    <p className="text-sm text-emerald-800/80 dark:text-emerald-100/80">
+                                        Podés configurar cómo este espacio impacta en tu Finp.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => {
+                                        setActiveTab('settings')
+                                        setSettingsSheetOpen(true)
+                                    }}
+                                >
+                                    Configurar Mi Finp
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setShowJoinedNotice(false)}
+                                >
+                                    Más tarde
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                ) : null}
+
                 {/* Summary tab */}
                 {activeTab === 'summary' ? (
                     <div className="space-y-4">
@@ -793,6 +835,7 @@ function SpaceDetailPageInner() {
                         reportingCurrency: data.space.reportingCurrency,
                         defaultSplitMode: data.space.defaultSplitMode,
                         simplifyDebts: data.space.simplifyDebts,
+                        debtMode: data.space.debtMode,
                     }}
                 />
             ) : null}

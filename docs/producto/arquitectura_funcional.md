@@ -92,6 +92,41 @@ Cada usuario puede:
 
 Por eso existe `SpaceEntryPersonalImpact` y no un estado global "linked" sobre el movimiento compartido.
 
+### Onboarding space-first
+
+Un usuario puede llegar a Finp desde una invitacion a un espacio y usar el producto sin configurar su Finp personal.
+
+Reglas de arquitectura:
+
+- aceptar una invitacion por link crea o reutiliza un `SpaceParticipant` activo;
+- el registro normal conserva defaults personales;
+- el registro desde invite callback seguro puede omitir cuentas y categorias iniciales;
+- dashboard, layout y espacios deben tolerar usuarios sin cuentas ni categorias;
+- la configuracion personal se ofrece despues de entrar, pero no bloquea el espacio.
+
+### Configuracion personal por participante
+
+`SpaceParticipant.personalSettings` guarda preferencias privadas del usuario para el espacio.
+
+Incluye:
+
+- estrategia de categoria personal;
+- categoria fija opcional;
+- mapping entre categorias internas y categorias personales;
+- fecha de actualizacion.
+
+Las categorias internas (`SpaceCategory`) siguen siendo compartidas. Las categorias personales (`Category`) siguen siendo privadas y se validan por ownership antes de usarse.
+
+### Invitaciones por link
+
+`SpaceInvite` soporta invitaciones directas y links:
+
+- documentos legacy sin `inviteType` se tratan como `direct`;
+- `direct` usa `pending`, `accepted`, `declined`, `revoked` o `expired`;
+- `link` usa `active`, `revoked` o `expired`;
+- el token plano no se persiste, solo `tokenHash`;
+- un indice parcial asegura un unico link activo por espacio.
+
 ## 3. Deudas
 
 En Finp una deuda es una obligacion pendiente de pagar o cobrar.

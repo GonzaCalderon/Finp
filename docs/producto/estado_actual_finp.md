@@ -74,6 +74,9 @@ Capacidades actuales:
 - actividad del espacio;
 - adjuntos persistentes de imagen y PDF;
 - edicion y anulacion logica con trazabilidad.
+- invitaciones por link con expiracion y revocacion;
+- onboarding `space-first` para usuarios invitados;
+- configuracion separada entre General y Mi Finp.
 
 Sincronizacion personal desde Espacios:
 
@@ -82,6 +85,21 @@ Sincronizacion personal desde Espacios:
 - el movimiento compartido no cambia a "linked" como estado global;
 - el detalle del movimiento expone una seccion "Tu Finp";
 - si el movimiento cambia materialmente o se anula, el impacto personal pasa a `needs_review`.
+- cada participante puede definir estrategia personal de categoria:
+  - elegir al impactar;
+  - usar el nombre del espacio como categoria automatica;
+  - usar categoria fija;
+  - mapear categorias internas a categorias personales.
+- la categoria automatica queda oculta del CRUD normal de categorias, pero aparece en transacciones/reportes si tiene uso;
+- la migracion de categoria automatica solo toca transacciones personales del usuario y del espacio.
+
+Invitaciones:
+
+- un owner/admin puede generar, regenerar o revocar el link activo del espacio;
+- el link vence en 1, 3 o 7 dias;
+- no se guarda token plano;
+- antes de aceptar no se muestran movimientos, balances, deudas ni detalles financieros;
+- un usuario nuevo puede registrarse, aceptar y entrar al espacio sin configurar cuentas ni categorias.
 
 Tipos de espacio:
 

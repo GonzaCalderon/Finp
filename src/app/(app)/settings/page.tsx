@@ -842,8 +842,9 @@ function CategoriesSection() {
     } | null>(null)
     const [loadingDefaults, setLoadingDefaults] = useState(false)
 
-    const incomeCategories = categories.filter((c) => c.type === 'income')
-    const expenseCategories = categories.filter((c) => c.type === 'expense')
+    const visibleCategories = categories.filter((c) => !c.isVirtual && !c.hiddenFromSettings)
+    const incomeCategories = visibleCategories.filter((c) => c.type === 'income')
+    const expenseCategories = visibleCategories.filter((c) => c.type === 'expense')
 
     const handleCreate = () => { setSelectedCategory(null); setDialogOpen(true) }
     const handleEdit = (category: ICategory) => { setSelectedCategory(category); setDialogOpen(true) }
@@ -954,7 +955,7 @@ function CategoriesSection() {
         <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {categories.length} categoría{categories.length !== 1 ? 's' : ''} en total
+                    {visibleCategories.length} categoría{visibleCategories.length !== 1 ? 's' : ''} en total
                 </p>
                 <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" size="sm" onClick={handleOpenDefaults} disabled={loadingDefaults}>
@@ -992,7 +993,7 @@ function CategoriesSection() {
 
             <DeleteCategoryDialog
                 category={categoryToDelete}
-                categories={categories}
+                categories={visibleCategories}
                 open={deleteDialogOpen}
                 onOpenChange={setDeleteDialogOpen}
                 onConfirm={handleDeleteConfirm}

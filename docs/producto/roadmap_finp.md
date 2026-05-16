@@ -42,7 +42,7 @@ Este roadmap reemplaza la logica de fases lineales gigantes. Ordena el trabajo p
 ## Alta prioridad
 
 ### Invitaciones por link
-- Estado: pendiente
+- Estado: implementado para pre-preprod
 - Prioridad: alta
 - Complejidad: media
 - Dependencias: participants/roles ya existentes, flujo de aceptacion y seguridad de acceso
@@ -51,10 +51,10 @@ Este roadmap reemplaza la logica de fases lineales gigantes. Ordena el trabajo p
 - Por que importa: sin invitaciones simples, Espacios queda limitado para adopcion real.
 - Costo relativo: medio
 - Riesgo tecnico: medio, por autenticacion, aceptacion y manejo de usuarios nuevos vs existentes.
-- Notas: el rol por defecto sigue siendo participante; la administracion fina de roles queda dentro del espacio.
+- Notas: un link activo por espacio, expiracion 1/3/7 dias, regeneracion con revocacion del anterior y pantalla publica de aceptacion sin exponer datos financieros.
 
 ### Configuracion personal de espacios
-- Estado: pendiente
+- Estado: implementado para pre-preprod
 - Prioridad: alta
 - Complejidad: media
 - Dependencias: `SpaceEntryPersonalImpact`, categorias personales, reporting operacional
@@ -63,10 +63,10 @@ Este roadmap reemplaza la logica de fases lineales gigantes. Ordena el trabajo p
 - Por que importa: es la pieza que termina de unir colaboracion con finanzas personales.
 - Costo relativo: medio
 - Riesgo tecnico: medio, porque toca UX, defaults y consistencia en reporting.
-- Notas: debe separar claramente configuracion global del espacio de "Mi Finp".
+- Notas: separa General y "Mi Finp"; cada participante edita solo su configuracion privada.
 
 ### Categorias virtuales y mapeo personal por espacio
-- Estado: pendiente
+- Estado: implementado para pre-preprod
 - Prioridad: alta
 - Complejidad: media
 - Dependencias: configuracion personal de espacios
@@ -75,7 +75,7 @@ Este roadmap reemplaza la logica de fases lineales gigantes. Ordena el trabajo p
 - Por que importa: hoy Espacios ya genera impacto, pero todavia no resuelve automatizacion semantica.
 - Costo relativo: medio
 - Riesgo tecnico: medio.
-- Notas: incluye nombre del espacio como categoria virtual, categoria fija, categorizacion manual y mapeo por categoria interna.
+- Notas: incluye nombre del espacio como categoria automatica, categoria fija, categorizacion manual, mapeo por categoria interna y migracion acotada de historicos personales.
 
 ## Prioridad media/alta
 

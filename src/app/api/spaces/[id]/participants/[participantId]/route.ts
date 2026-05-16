@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceInvite, SpaceParticipant } from '@/lib/models'
+import { SPACE_INVITE_TYPES } from '@/lib/constants'
 import {
     buildActivityAudience,
     createSpaceActivityEvent,
@@ -111,6 +112,10 @@ export async function PATCH(
                     spaceId: id,
                     participantId,
                     status: 'pending',
+                    $or: [
+                        { inviteType: SPACE_INVITE_TYPES.DIRECT },
+                        { inviteType: { $exists: false } },
+                    ],
                 },
                 {
                     $set: {

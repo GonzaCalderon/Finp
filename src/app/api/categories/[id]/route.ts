@@ -18,15 +18,32 @@ export async function PATCH(
 
         await connectDB()
 
-        const category = await Category.findOneAndUpdate(
-            { _id: id, userId: session.user.id },
-            { $set: body },
-            { new: true }
-        )
-
-        if (!category) {
+        const existingCategory = await Category.findOne({ _id: id, userId: session.user.id })
+        if (!existingCategory) {
             return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 })
         }
+
+        if (existingCategory.isVirtual || existingCategory.hiddenFromSettings) {
+            return NextResponse.json(
+                { error: 'Esta categoría automática no se edita desde Configuración.' },
+                { status: 400 }
+            )
+        }
+
+        const category = await Category.findOneAndUpdate(
+            { _id: id, userId: session.user.id },
+            {
+                $set: {
+                    name: body.name,
+                    type: body.type,
+                    icon: body.icon,
+                    color: body.color,
+                    sortOrder: body.sortOrder,
+                    isArchived: body.isArchived,
+                },
+            },
+            { new: true }
+        )
 
         return NextResponse.json({ category })
     } catch (error) {
@@ -56,7 +73,13 @@ export async function DELETE(
             return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 })
         }
 
-        // Migrar transacciones
+        if (category.isVirtual || category.hiddenFromSettings) {
+            return NextResponse.json(
+                { error: 'Esta categoría automática no se elimina desde Configuración.' },
+                { status: 400 }
+            )
+        }
+
         if (migrateTo) {
             await Transaction.updateMany(
                 { userId: session.user.id, categoryId: id },
@@ -67,7 +90,6 @@ export async function DELETE(
                 { $set: { categoryId: migrateTo } }
             )
         } else {
-            // Sin categoría destino — dejar sin categorizar
             await Transaction.updateMany(
                 { userId: session.user.id, categoryId: id },
                 { $unset: { categoryId: '' } }

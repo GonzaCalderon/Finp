@@ -7,7 +7,9 @@ import type {
     SpaceEntryStatus,
     SpaceEntryType,
     SpaceInviteStatus,
+    SpaceInviteType,
     SpaceMode,
+    SpacePersonalCategoryStrategy,
     SpaceParticipantKind,
     SpaceParticipantRole,
     SpacePersonalImpactKind,
@@ -72,6 +74,15 @@ export interface ISpaceParticipant {
     role: SpaceParticipantRole
     inviteStatus: SpaceInviteStatus
     isActive: boolean
+    personalSettings?: {
+        categoryStrategy: SpacePersonalCategoryStrategy
+        defaultPersonalCategoryId?: Types.ObjectId
+        categoryMappings?: Array<{
+            spaceCategoryId: Types.ObjectId
+            personalCategoryId: Types.ObjectId
+        }>
+        updatedAt?: Date
+    }
     createdAt: Date
     updatedAt: Date
 }
@@ -214,10 +225,20 @@ export interface ISpaceActivityEvent {
 export interface ISpaceInvite {
     _id: Types.ObjectId
     spaceId: Types.ObjectId
-    participantId: Types.ObjectId
-    senderUserId: Types.ObjectId
-    recipientUserId: Types.ObjectId
+    inviteType?: SpaceInviteType
+    participantId?: Types.ObjectId
+    senderUserId?: Types.ObjectId
+    recipientUserId?: Types.ObjectId
+    createdByUserId?: Types.ObjectId
+    tokenHash?: string
+    tokenPreview?: string
     status: SpaceInviteStatus
+    defaultRole?: SpaceParticipantRole
+    expiresAt?: Date
+    usedCount?: number
+    lastUsedAt?: Date
+    revokedAt?: Date
+    revokedByUserId?: Types.ObjectId
     message?: string
     respondedAt?: Date
     createdAt: Date

@@ -73,6 +73,9 @@ export const SPACE_INVITE_STATUS_LABELS: Record<SpaceInviteStatus, string> = {
     pending: 'Pendiente',
     accepted: 'Aceptado',
     declined: 'Rechazado',
+    active: 'Activo',
+    revoked: 'Revocado',
+    expired: 'Vencido',
 }
 
 export function createEmptySpaceTotals(): SpaceCurrencyTotals {

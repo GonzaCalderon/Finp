@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
     spaceEntrySchema,
+    spaceInviteLinkSchema,
     spaceParticipantSchema,
+    spacePersonalSettingsSchema,
     spaceSchema,
 } from '@/lib/validations/space'
 
@@ -57,6 +59,33 @@ describe('spaceParticipantSchema', () => {
         })
 
         expect(result.success).toBe(true)
+    })
+})
+
+describe('spaceInviteLinkSchema', () => {
+    it('acepta duraciones cerradas entre 1 y 7 dias', () => {
+        expect(spaceInviteLinkSchema.safeParse({ expiresInDays: 1 }).success).toBe(true)
+        expect(spaceInviteLinkSchema.safeParse({ expiresInDays: 3 }).success).toBe(true)
+        expect(spaceInviteLinkSchema.safeParse({ expiresInDays: 7 }).success).toBe(true)
+        expect(spaceInviteLinkSchema.safeParse({ expiresInDays: 9 }).success).toBe(false)
+    })
+})
+
+describe('spacePersonalSettingsSchema', () => {
+    it('manual no requiere categorias personales', () => {
+        const result = spacePersonalSettingsSchema.safeParse({
+            categoryStrategy: 'manual',
+        })
+
+        expect(result.success).toBe(true)
+    })
+
+    it('fixed_personal_category requiere categoria fija', () => {
+        const result = spacePersonalSettingsSchema.safeParse({
+            categoryStrategy: 'fixed_personal_category',
+        })
+
+        expect(result.success).toBe(false)
     })
 })
 

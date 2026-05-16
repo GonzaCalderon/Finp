@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceInvite, SpaceParticipant, User } from '@/lib/models'
+import { SPACE_INVITE_TYPES } from '@/lib/constants'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceParticipantSchema } from '@/lib/validations'
@@ -130,6 +131,7 @@ export async function POST(
 
             const invite = await SpaceInvite.create({
                 spaceId: id,
+                inviteType: SPACE_INVITE_TYPES.DIRECT,
                 participantId: participant._id,
                 senderUserId: session.user.id,
                 recipientUserId: recipient._id,

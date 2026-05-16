@@ -8,6 +8,7 @@ import {
     getPersonalImpactForEntries,
     resolveCurrentUserEntryShare,
 } from '@/lib/server/space-personal-impact'
+import { resolveSuggestedPersonalCategory } from '@/lib/server/space-personal-settings'
 import { resolveNotificationsForTarget } from '@/lib/server/notifications'
 import { NOTIFICATION_ACTION_STATUSES, SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
@@ -49,6 +50,14 @@ export async function GET(_request: Request, { params }: { params: Params }) {
             context.participants
         )
         const suggestion = resolveCurrentUserEntryShare(entry, context.participants, session.user.id)
+        const categorySuggestion = context.currentParticipant
+            ? await resolveSuggestedPersonalCategory({
+                userId: session.user.id,
+                space: context.space,
+                participant: context.currentParticipant,
+                entry,
+            })
+            : null
 
         const entryImpact = impacts[entryId]
         return NextResponse.json({
@@ -59,6 +68,8 @@ export async function GET(_request: Request, { params }: { params: Params }) {
                     amount: suggestion.amount,
                     currency: entry.currency,
                     impactKind: suggestion.impactKind,
+                    categoryId: categorySuggestion?.categoryId,
+                    categoryStrategy: categorySuggestion?.strategy,
                 }
                 : null,
         })
@@ -119,6 +130,8 @@ export async function POST(request: Request, { params }: { params: Params }) {
                 impactKind: parsed.data.impactKind,
                 amount: parsed.data.amount,
                 spaceNameSnapshot: context.space.name,
+                space: context.space,
+                currentParticipant: context.currentParticipant,
             })
 
             return NextResponse.json({ impact }, { status: 201 })

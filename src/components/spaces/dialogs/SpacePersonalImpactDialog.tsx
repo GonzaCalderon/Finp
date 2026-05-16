@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Link2, WalletCards } from 'lucide-react'
 import { apiJson } from '@/lib/client/auth-client'
@@ -44,6 +45,8 @@ type Suggestion = {
     amount: number
     currency: string
     impactKind: SpacePersonalImpactKind
+    categoryId?: string
+    categoryStrategy?: string
 }
 
 function getImpactCopy(kind?: SpacePersonalImpactKind) {
@@ -119,6 +122,7 @@ export function SpacePersonalImpactDialog({
                 setExistingImpact(impactData.impact)
                 setSuggestion(impactData.suggestion)
                 setAmount(String(impactData.suggestion?.amount ?? currentEntry.amount))
+                setCategoryId(impactData.suggestion?.categoryId)
 
                 const transactionsData = await apiJson<{ transactions: ITransaction[] }>(
                     `/api/transactions?limit=25&sort=date_desc&currency=${currentEntry.currency}`
@@ -282,26 +286,40 @@ export function SpacePersonalImpactDialog({
                                                 </div>
 
                                                 {mode === 'create_transaction' ? (
-                                                    <SpaceDialogField label="Cuenta">
-                                                        <Select
-                                                            value={accountId ?? ''}
-                                                            onValueChange={setAccountId}
-                                                        >
-                                                            <SelectTrigger className="w-full">
-                                                                <SelectValue placeholder="Elegi una cuenta" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {compatibleAccounts.map((account) => (
-                                                                    <SelectItem
-                                                                        key={extractId(account._id)}
-                                                                        value={extractId(account._id) ?? ''}
-                                                                    >
-                                                                        {account.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </SpaceDialogField>
+                                                    compatibleAccounts.length === 0 ? (
+                                                        <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                                                            <p className="font-medium">Para registrar esto en tu Finp necesitás crear una cuenta.</p>
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                <Button asChild size="sm">
+                                                                    <Link href="/accounts">Crear cuenta</Link>
+                                                                </Button>
+                                                                <Button type="button" size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
+                                                                    Más tarde
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <SpaceDialogField label="Cuenta">
+                                                            <Select
+                                                                value={accountId ?? ''}
+                                                                onValueChange={setAccountId}
+                                                            >
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Elegi una cuenta" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {compatibleAccounts.map((account) => (
+                                                                        <SelectItem
+                                                                            key={extractId(account._id)}
+                                                                            value={extractId(account._id) ?? ''}
+                                                                        >
+                                                                            {account.name}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </SpaceDialogField>
+                                                    )
                                                 ) : (
                                                     <SpaceDialogField label="Transaccion existente">
                                                         <Select
@@ -361,7 +379,14 @@ export function SpacePersonalImpactDialog({
                                                                     key={extractId(category._id)}
                                                                     value={extractId(category._id) ?? ''}
                                                                 >
-                                                                    {category.name}
+                                                                    <span className="inline-flex items-center gap-2">
+                                                                        {category.name}
+                                                                        {category.isVirtual || category.sourceType === 'space' ? (
+                                                                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                                                                Espacio
+                                                                            </span>
+                                                                        ) : null}
+                                                                    </span>
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectContent>
@@ -397,7 +422,12 @@ export function SpacePersonalImpactDialog({
                             <Button
                                 className="rounded-full"
                                 onClick={() => void handleSubmit()}
-                                disabled={submitting || loading || !entry}
+                                disabled={
+                                    submitting ||
+                                    loading ||
+                                    !entry ||
+                                    (mode === 'create_transaction' && compatibleAccounts.length === 0)
+                                }
                             >
                                 {submitting ? 'Registrando...' : 'Registrar en mi Finp'}
                             </Button>

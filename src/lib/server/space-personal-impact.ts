@@ -1,9 +1,14 @@
 import { Types } from 'mongoose'
-import { Category, SpaceEntryPersonalImpact, Transaction } from '@/lib/models'
+import { Space, SpaceEntryPersonalImpact, SpaceParticipant, Transaction } from '@/lib/models'
 import { createTransactionFromSpaceEntry } from '@/lib/server/space-transactions'
 import { resolveNotificationsForTarget } from '@/lib/server/notifications'
+import {
+    resolveSuggestedPersonalCategory,
+    validatePersonalCategoryForImpact,
+} from '@/lib/server/space-personal-settings'
 import { buildEntryShares, extractId, roundAmount } from '@/lib/utils/spaces'
 import type {
+    ISpace,
     ISpaceEntry,
     ISpaceEntryPersonalImpact,
     ISpaceEntryPersonalImpactByEntry,
@@ -27,6 +32,8 @@ type CreatePersonalImpactParams = {
     impactKind?: SpacePersonalImpactKind
     amount?: number
     spaceNameSnapshot?: string
+    space?: ISpace
+    currentParticipant?: ISpaceParticipant | null
 }
 
 type UpsertLinkedParams = {
@@ -128,7 +135,7 @@ async function validatePersonalCategory(categoryId: string | undefined, userId: 
         throw new Error('La categoria seleccionada no es valida.')
     }
 
-    const category = await Category.findOne({ _id: categoryId, userId }).lean()
+    const category = await validatePersonalCategoryForImpact(categoryId, userId)
     if (!category) {
         throw new Error('La categoria seleccionada no existe o no pertenece al usuario.')
     }
@@ -310,6 +317,8 @@ export async function createPersonalImpactFromSpaceEntry({
     impactKind,
     amount,
     spaceNameSnapshot,
+    space,
+    currentParticipant: providedParticipant,
 }: CreatePersonalImpactParams) {
     const entryId = extractId(entry._id)
     if (!entryId) throw new Error('Movimiento invalido.')
@@ -339,7 +348,29 @@ export async function createPersonalImpactFromSpaceEntry({
         throw new Error('No se pudo identificar tu participante en este espacio.')
     }
 
-    await validatePersonalCategory(categoryId, userId)
+    let resolvedCategoryId = categoryId
+    if (!resolvedCategoryId) {
+        const resolvedSpace = space ?? await Space.findById(spaceId).lean<ISpace | null>()
+        const resolvedParticipant =
+            providedParticipant ??
+            await SpaceParticipant.findOne({
+                spaceId,
+                userId,
+                isActive: true,
+            }).lean<ISpaceParticipant | null>()
+
+        if (resolvedSpace) {
+            const categorySuggestion = await resolveSuggestedPersonalCategory({
+                userId,
+                space: resolvedSpace,
+                participant: resolvedParticipant,
+                entry,
+            })
+            resolvedCategoryId = categorySuggestion.categoryId
+        }
+    }
+
+    await validatePersonalCategory(resolvedCategoryId, userId)
 
     const resolvedImpactKind = impactKind ?? suggested?.impactKind ?? 'participant_share'
     const resolvedAmount = roundAmount(amount ?? suggested?.amount ?? entry.amount)
@@ -372,7 +403,7 @@ export async function createPersonalImpactFromSpaceEntry({
             userId,
             accountId,
             description,
-            categoryId,
+            categoryId: resolvedCategoryId,
             amountOverride: resolvedAmount,
             operationalAmountOverride: payerPersonalShare,
             transactionTypeOverride: resolvedImpactKind === 'settlement_received' ? 'income' : undefined,

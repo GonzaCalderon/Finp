@@ -16,6 +16,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
+import { SpaceInviteLinkManager } from '@/components/spaces/settings/SpaceInviteLinkManager'
+import { SpacePersonalSettingsPanel } from '@/components/spaces/settings/SpacePersonalSettingsPanel'
 import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
 import { Badge } from '@/components/ui/badge'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
@@ -543,7 +545,7 @@ export function SpaceSettingsPanel({
     const [editingName, setEditingName] = useState(false)
     const [nameDraft, setNameDraft] = useState(space.name)
     const [periodOpen, setPeriodOpen] = useState(false)
-    const [configSection, setConfigSection] = useState<'general' | 'reparto' | 'categorias' | 'participantes' | 'cierre'>('general')
+    const [configSection, setConfigSection] = useState<'general' | 'mi_finp'>('general')
     const isClosed = space.status === 'closed'
     const isOwner = currentParticipantRole === 'owner'
     const isAdmin = currentParticipantRole === 'admin'
@@ -592,10 +594,7 @@ export function SpaceSettingsPanel({
 
     const CONFIG_SECTIONS = [
         { key: 'general' as const, label: 'General' },
-        { key: 'reparto' as const, label: 'Reparto y monedas' },
-        { key: 'categorias' as const, label: 'Categorías' },
-        { key: 'participantes' as const, label: 'Participantes' },
-        { key: 'cierre' as const, label: 'Cierre' },
+        { key: 'mi_finp' as const, label: 'Mi Finp' },
     ]
 
     return (
@@ -726,7 +725,7 @@ export function SpaceSettingsPanel({
                 </div>
             </SpaceSurface>}
 
-        {configSection === 'reparto' && <SpaceSurface>
+        {configSection === 'general' && <SpaceSurface>
                 <h2 className="text-base font-semibold text-foreground">Reparto y monedas</h2>
                 <div className="mt-4 divide-y divide-border/70">
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
@@ -775,7 +774,7 @@ export function SpaceSettingsPanel({
                 </div>
             </SpaceSurface>}
 
-        {configSection === 'categorias' && <SpaceSurface>
+        {configSection === 'general' && <SpaceSurface>
                 <div className="space-y-1">
                     <h2 className="text-base font-semibold text-foreground">Categorías</h2>
                     <p className="text-sm text-muted-foreground">
@@ -787,7 +786,7 @@ export function SpaceSettingsPanel({
                 </div>
             </SpaceSurface>}
 
-        {configSection === 'participantes' && <SpaceSurface>
+        {configSection === 'general' && <SpaceSurface>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-foreground">Participantes</h2>
                     {canManage ? (
@@ -856,9 +855,13 @@ export function SpaceSettingsPanel({
                         )
                     })}
                 </div>
+
+                <div className="mt-4">
+                    <SpaceInviteLinkManager spaceId={spaceId} canManage={canManage} />
+                </div>
             </SpaceSurface>}
 
-        {configSection === 'cierre' && <SpaceSurface>
+        {configSection === 'general' && <SpaceSurface>
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <h2 className="text-base font-semibold text-foreground">Cierre</h2>
@@ -879,6 +882,10 @@ export function SpaceSettingsPanel({
                     </Button>
                 ) : null}
             </SpaceSurface>}
+
+        {configSection === 'mi_finp' && (
+            <SpacePersonalSettingsPanel spaceId={spaceId} />
+        )}
         </div>
     )
 }
