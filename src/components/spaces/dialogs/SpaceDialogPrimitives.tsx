@@ -17,7 +17,7 @@ export function formatDateInput(value?: Date | string) {
     return new Date(value).toISOString().slice(0, 10)
 }
 
-export function normalizeDialogDate(value?: Date | string) {
+export function normalizeDialogDate(value?: Date | string | null) {
     if (!value) return undefined
     if (value instanceof Date) return value
 

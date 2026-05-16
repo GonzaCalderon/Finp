@@ -99,30 +99,36 @@ export async function PATCH(
             parsed.data.reportingCurrency
         )
 
-        const { simplifyDebts, ...restData } = parsed.data
+        const { simplifyDebts, endDate, ...restData } = parsed.data
         const shouldUnsetSimplifyDebts = simplifyDebts === null || simplifyDebts === undefined
+        const shouldUnsetEndDate = endDate === null
 
-        const baseSet = {
+        const baseSet: Record<string, unknown> = {
             ...restData,
             currencies: normalizedCurrencies,
             defaultSplitMode: parsed.data.mode === 'solo' ? 'none' : parsed.data.defaultSplitMode,
         }
         if (!shouldUnsetSimplifyDebts) {
-            (baseSet as Record<string, unknown>).simplifyDebts = simplifyDebts
+            baseSet.simplifyDebts = simplifyDebts
+        }
+        if (!shouldUnsetEndDate && endDate !== undefined) {
+            baseSet.endDate = endDate
+        }
+
+        const unsetFields: Record<string, 1> = {
+            ...(shouldUnsetSimplifyDebts ? { simplifyDebts: 1 } : {}),
+            ...(shouldUnsetEndDate ? { endDate: 1 } : {}),
         }
 
         const update =
             parsed.data.status === 'closed'
                 ? {
                     $set: { ...baseSet, closedAt: context.space.closedAt ?? new Date() },
-                    ...(shouldUnsetSimplifyDebts ? { $unset: { simplifyDebts: 1 } } : {}),
+                    ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {}),
                 }
                 : {
                     $set: baseSet,
-                    $unset: {
-                        closedAt: 1,
-                        ...(shouldUnsetSimplifyDebts ? { simplifyDebts: 1 } : {}),
-                    },
+                    $unset: { closedAt: 1, ...unsetFields },
                 }
 
         const space = await Space.findByIdAndUpdate(

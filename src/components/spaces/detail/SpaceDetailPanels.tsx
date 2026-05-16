@@ -708,9 +708,9 @@ export function SpaceSettingsPanel({
                                         type="button"
                                         className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                                         title="Quitar fecha de fin"
-                                        onClick={() => void updatePeriod({
-                                            from: space.startDate ? new Date(space.startDate) : undefined,
-                                            to: undefined,
+                                        onClick={() => void updateSetting('period', {
+                                            startDate: space.startDate ? new Date(space.startDate) : undefined,
+                                            endDate: null,
                                         })}
                                     >
                                         <X className="h-3.5 w-3.5" />

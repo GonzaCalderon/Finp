@@ -475,7 +475,7 @@ export function CreateSpaceDialog({
                                         />
                                         <DatePickerField
                                             label="Fecha de fin (opcional)"
-                                            value={form.endDate}
+                                            value={form.endDate ?? undefined}
                                             isOpen={endDateOpen}
                                             onOpenChange={setEndDateOpen}
                                             onChange={(d) => setField('endDate', d)}

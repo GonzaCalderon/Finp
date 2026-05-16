@@ -71,7 +71,15 @@ export const spaceSchema = z
         mode: z.enum(['solo', 'managed', 'synchronized']),
         status: z.enum(['active', 'paused', 'closed', 'archived']).default('active'),
         startDate: dateSchema.optional(),
-        endDate: dateSchema.optional(),
+        endDate: z.preprocess((value) => {
+            if (value === null) return null
+            if (value instanceof Date) return value
+            if (typeof value === 'string' || typeof value === 'number') {
+                const parsed = new Date(value)
+                if (!Number.isNaN(parsed.getTime())) return parsed
+            }
+            return value
+        }, z.date({ message: 'La fecha es inválida' }).nullable()).optional(),
         currencies: z.array(currencySchema).min(1, 'Seleccioná al menos una moneda'),
         reportingCurrency: currencySchema,
         defaultSplitMode: z.enum(['none', 'equal', 'percentage', 'fixed']).default('equal'),

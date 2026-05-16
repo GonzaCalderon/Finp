@@ -430,7 +430,7 @@ export function EditSpaceSettingsDialog({
                                     <div className="space-y-2">
                                         <DatePickerField
                                             label="Fin"
-                                            value={form.endDate}
+                                            value={form.endDate ?? undefined}
                                             isOpen={endDateOpen}
                                             onOpenChange={setEndDateOpen}
                                             onChange={(date) => setField('endDate', date)}
