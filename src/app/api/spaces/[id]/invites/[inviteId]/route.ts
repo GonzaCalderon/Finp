@@ -2,16 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { revokeSpaceInviteLink } from '@/lib/server/space-invites'
-import { getAccessibleSpaceContext } from '@/lib/server/spaces'
-
-function canManageInvites(context: Awaited<ReturnType<typeof getAccessibleSpaceContext>>) {
-    return Boolean(
-        context &&
-            (context.isOwner ||
-                context.currentParticipant?.role === 'owner' ||
-                context.currentParticipant?.role === 'admin')
-    )
-}
+import { canManageSpaceInvites, getAccessibleSpaceContext } from '@/lib/server/spaces'
 
 export async function DELETE(
     request: Request,
@@ -31,7 +22,7 @@ export async function DELETE(
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        if (!canManageInvites(context)) {
+        if (!canManageSpaceInvites(context)) {
             return NextResponse.json(
                 { error: 'No tenés permisos para revocar invitaciones.' },
                 { status: 403 }

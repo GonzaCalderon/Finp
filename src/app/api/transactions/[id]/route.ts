@@ -59,22 +59,7 @@ export async function PATCH(
         const { id } = await params
         const body = await request.json()
 
-        // Quick pre-check: fetch the existing type before full validation
         await connectDB()
-        const existingForTypeCheck = await Transaction.findOne(
-            { _id: id, userId: session.user.id },
-            { type: 1 }
-        ).lean<{ type: string } | null>()
-
-        if (existingForTypeCheck && isNonOperationalTransactionType(existingForTypeCheck.type)) {
-            return NextResponse.json(
-                {
-                    error: 'Esta transacción se gestiona desde Deudas y no puede editarse como transacción común.',
-                    code: 'NON_EDITABLE_TRANSACTION',
-                },
-                { status: 422 }
-            )
-        }
 
         const parsed = transactionSchema.safeParse(body)
 
@@ -103,6 +88,16 @@ export async function PATCH(
                 })
                 : Promise.resolve([]),
         ])
+
+        if (oldTransaction && isNonOperationalTransactionType(oldTransaction.type)) {
+            return NextResponse.json(
+                {
+                    error: 'Esta transacción se gestiona desde Deudas y no puede editarse como transacción común.',
+                    code: 'NON_EDITABLE_TRANSACTION',
+                },
+                { status: 422 }
+            )
+        }
 
         const accountMap = new Map(relatedAccounts.map((account) => [account._id.toString(), account]))
         const sourceAccount = data.sourceAccountId ? accountMap.get(data.sourceAccountId) : null

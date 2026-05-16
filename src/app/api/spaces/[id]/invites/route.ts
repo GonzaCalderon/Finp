@@ -5,17 +5,8 @@ import {
     createOrReuseSpaceInviteLink,
     getSpaceInviteLinkState,
 } from '@/lib/server/space-invites'
-import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { canManageSpaceInvites, getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceInviteLinkSchema } from '@/lib/validations'
-
-function canManageInvites(context: Awaited<ReturnType<typeof getAccessibleSpaceContext>>) {
-    return Boolean(
-        context &&
-            (context.isOwner ||
-                context.currentParticipant?.role === 'owner' ||
-                context.currentParticipant?.role === 'admin')
-    )
-}
 
 export async function GET(
     request: Request,
@@ -35,7 +26,7 @@ export async function GET(
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        if (!canManageInvites(context)) {
+        if (!canManageSpaceInvites(context)) {
             return NextResponse.json(
                 { error: 'No tenés permisos para administrar invitaciones.' },
                 { status: 403 }
@@ -78,7 +69,7 @@ export async function POST(
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        if (!canManageInvites(context)) {
+        if (!canManageSpaceInvites(context)) {
             return NextResponse.json(
                 { error: 'No tenés permisos para administrar invitaciones.' },
                 { status: 403 }

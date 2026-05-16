@@ -154,9 +154,8 @@ describe('syncSpaceDebtsForUser', () => {
             makeBalance(participantMeId, -100),
             makeBalance(participantJuanId, 100),
         ])
-        // findOne devuelve la deuda existente
-        mocks.Debt.findOne.mockResolvedValue(makeDebt(100))
-        mocks.Debt.find.mockResolvedValue([])
+        // find pre-carga la deuda existente (N+1 optimizado)
+        mocks.Debt.find.mockResolvedValue([makeDebt(100)])
         mocks.Debt.create.mockResolvedValue({})
         mocks.Debt.updateOne.mockResolvedValue({ modifiedCount: 1 })
         mocks.DebtMovement.create.mockResolvedValue({})
@@ -170,8 +169,7 @@ describe('syncSpaceDebtsForUser', () => {
     })
 
     it('deuda ignorada conserva status:ignored pero actualiza amount', async () => {
-        mocks.Debt.findOne.mockResolvedValue(makeDebt(100, 'ignored'))
-        mocks.Debt.find.mockResolvedValue([])
+        mocks.Debt.find.mockResolvedValue([makeDebt(100, 'ignored')])
         mocks.Debt.updateOne.mockResolvedValue({ modifiedCount: 1 })
         mocks.DebtMovement.create.mockResolvedValue({})
 
@@ -212,8 +210,7 @@ describe('syncSpaceDebtsForUser', () => {
     })
 
     it('recalcula remainingAmount de deudas de espacio respetando pagos previos', async () => {
-        mocks.Debt.findOne.mockResolvedValue(makeDebt(60, 'partially_paid', 100))
-        mocks.Debt.find.mockResolvedValue([])
+        mocks.Debt.find.mockResolvedValue([makeDebt(60, 'partially_paid', 100)])
         ;(buildSpaceBalances as ReturnType<typeof vi.fn>).mockReturnValue([
             makeBalance(participantMeId, -150),
             makeBalance(participantJuanId, 150),

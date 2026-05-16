@@ -46,7 +46,8 @@ export async function GET(request: Request) {
         const noInstallmentPlan = searchParams.get('noInstallmentPlan') === 'true'
         const sort = searchParams.get('sort') ?? 'date_desc'
         const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-        const limit = parseInt(searchParams.get('limit') ?? String(PAGE_LIMIT), 10)
+        const rawLimit = parseInt(searchParams.get('limit') ?? String(PAGE_LIMIT), 10)
+        const limit = Math.min(Math.max(rawLimit > 0 ? rawLimit : PAGE_LIMIT, 1), 200)
 
         await connectDB()
 

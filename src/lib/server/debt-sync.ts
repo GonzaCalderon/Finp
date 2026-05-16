@@ -77,12 +77,24 @@ export async function syncSpaceDebtsForUser(
     const now = new Date()
     const syncedKeys = new Set<string>()
 
+    // Pre-cargar todas las deudas del usuario para este espacio en una sola query
+    const existingDebtsForSpace = await Debt.find({
+        userId: userIdStr,
+        sourceType: 'space',
+        spaceId: spaceIdStr,
+    })
+    const existingDebtsByKey = new Map<string, (typeof existingDebtsForSpace)[number]>(
+        existingDebtsForSpace
+            .filter((d: (typeof existingDebtsForSpace)[number]) => d.spaceDebtKey)
+            .map((d: (typeof existingDebtsForSpace)[number]) => [d.spaceDebtKey as string, d])
+    )
+
     // Procesar cada relación de deuda calculada
     for (const item of debtItems) {
         const spaceDebtKey = buildSpaceDebtKey(userIdStr, spaceIdStr, item.counterpartyParticipantId, currency)
         syncedKeys.add(spaceDebtKey)
 
-        const existing = await Debt.findOne({ spaceDebtKey })
+        const existing = existingDebtsByKey.get(spaceDebtKey) ?? null
 
         const counterpartyParticipant = participants.find(
             (p) => p._id.toString() === item.counterpartyParticipantId
@@ -190,17 +202,24 @@ export async function syncSpaceDebtsForUser(
     }
 
     // Marcar como pagadas las deudas existentes cuya relación ya no aparece (balance llegó a cero)
-    const existingSpaceDebts = await Debt.find({
-        userId: userIdStr,
-        spaceId: spaceIdStr,
-        status: { $in: [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID, DEBT_STATUSES.IGNORED] },
-    })
+    const existingSpaceDebts = existingDebtsForSpace.filter(
+        (d: (typeof existingDebtsForSpace)[number]) =>
+            d.status === DEBT_STATUSES.ACTIVE ||
+            d.status === DEBT_STATUSES.PARTIALLY_PAID ||
+            d.status === DEBT_STATUSES.IGNORED
+    )
 
     for (const existingDebt of existingSpaceDebts) {
         if (!existingDebt.spaceDebtKey || syncedKeys.has(existingDebt.spaceDebtKey)) continue
 
         // Esta deuda ya no aparece en el cálculo actual → balance llegó a cero
-        if (existingDebt.status !== DEBT_STATUSES.IGNORED) {
+        if (existingDebt.status === DEBT_STATUSES.IGNORED) {
+            // Preservar la decisión del usuario de ignorarla, pero limpiar el saldo fantasma
+            await Debt.updateOne(
+                { _id: existingDebt._id },
+                { $set: { remainingAmount: 0 } }
+            )
+        } else {
             await Debt.updateOne(
                 { _id: existingDebt._id },
                 { $set: { remainingAmount: 0, status: DEBT_STATUSES.PAID } }

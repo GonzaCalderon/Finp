@@ -232,6 +232,7 @@ export interface ISpaceInvite {
     createdByUserId?: Types.ObjectId
     tokenHash?: string
     tokenPreview?: string
+    inviteUrl?: string
     status: SpaceInviteStatus
     defaultRole?: SpaceParticipantRole
     expiresAt?: Date

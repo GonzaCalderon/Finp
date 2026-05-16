@@ -6,7 +6,7 @@ import {
     SPACE_PARTICIPANT_ROLES,
 } from '@/lib/constants'
 
-const DIRECT_INVITE_STATUSES = [
+export const DIRECT_INVITE_STATUSES_LIST = [
     SPACE_INVITE_STATUSES.PENDING,
     SPACE_INVITE_STATUSES.ACCEPTED,
     SPACE_INVITE_STATUSES.DECLINED,
@@ -14,7 +14,7 @@ const DIRECT_INVITE_STATUSES = [
     SPACE_INVITE_STATUSES.EXPIRED,
 ]
 
-const LINK_INVITE_STATUSES = [
+export const LINK_INVITE_STATUSES_LIST = [
     SPACE_INVITE_STATUSES.ACTIVE,
     SPACE_INVITE_STATUSES.REVOKED,
     SPACE_INVITE_STATUSES.EXPIRED,
@@ -35,6 +35,7 @@ const SpaceInviteSchema = new Schema<ISpaceInvite>(
         createdByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
         tokenHash: { type: String },
         tokenPreview: { type: String },
+        inviteUrl: { type: String },
         status: {
             type: String,
             enum: Object.values(SPACE_INVITE_STATUSES),
@@ -60,8 +61,8 @@ const SpaceInviteSchema = new Schema<ISpaceInvite>(
 SpaceInviteSchema.path('status').validate(function validateStatusByInviteType(value: string) {
     const inviteType = this.inviteType ?? SPACE_INVITE_TYPES.DIRECT
     return inviteType === SPACE_INVITE_TYPES.LINK
-        ? LINK_INVITE_STATUSES.includes(value as never)
-        : DIRECT_INVITE_STATUSES.includes(value as never)
+        ? LINK_INVITE_STATUSES_LIST.includes(value as never)
+        : DIRECT_INVITE_STATUSES_LIST.includes(value as never)
 }, 'Estado de invitacion invalido para el tipo de invitacion.')
 
 SpaceInviteSchema.path('tokenHash').validate(function validateLinkToken(value?: string) {

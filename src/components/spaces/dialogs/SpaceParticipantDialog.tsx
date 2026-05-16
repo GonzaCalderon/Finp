@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ShieldCheck, UserRound, UsersRound } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, Copy, Link2, Loader2, RefreshCw, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { spaceParticipantSchema, type SpaceParticipantFormData } from '@/lib/validations'
 import { SPACE_ROLE_LABELS } from '@/lib/utils/spaces'
 import {
@@ -27,6 +27,7 @@ import {
     SpaceDialogPanel,
     SpaceDialogSectionEyebrow,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
+import { useSpaceInvites } from '@/hooks/useSpaceInvites'
 
 const INITIAL_FORM: SpaceParticipantFormData = {
     kind: 'finp_user',
@@ -39,18 +40,59 @@ export function SpaceParticipantDialog({
     open,
     onOpenChange,
     onSubmit,
+    spaceId,
+    canManage,
+    spaceMode,
 }: DialogProps & {
     onSubmit: (data: SpaceParticipantFormData) => Promise<unknown>
+    spaceId?: string
+    canManage?: boolean
+    spaceMode?: string
 }) {
     const [form, setForm] = useState<SpaceParticipantFormData>(INITIAL_FORM)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    const canManageLinks = canManage && spaceMode !== 'solo'
+    const { state: linkState, loading: linkLoading, createLink } = useSpaceInvites(
+        canManageLinks ? spaceId : undefined
+    )
+    const [linkBusy, setLinkBusy] = useState(false)
+    const [copied, setCopied] = useState(false)
+    const [lastUrl, setLastUrl] = useState<string | null>(null)
+
+    const visibleUrl = lastUrl ?? linkState?.inviteUrl ?? null
+    const hasActiveLink = Boolean(linkState?.hasActiveInvite && linkState?.invite)
+    const expiresLabel = useMemo(() => {
+        const raw = linkState?.invite?.expiresAt
+        if (!raw) return null
+        return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(raw))
+    }, [linkState?.invite?.expiresAt])
+
+    const generateLink = async (regenerate = false) => {
+        setLinkBusy(true)
+        try {
+            const result = await createLink({ expiresInDays: 7, regenerate })
+            setLastUrl(result.inviteUrl ?? null)
+        } finally {
+            setLinkBusy(false)
+        }
+    }
+
+    const copyLink = async () => {
+        if (!visibleUrl) return
+        await navigator.clipboard.writeText(visibleUrl)
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1800)
+    }
 
     useEffect(() => {
         if (!open) return
         setForm(INITIAL_FORM)
         setSubmitting(false)
         setError(null)
+        setLastUrl(null)
+        setCopied(false)
     }, [open])
 
     const handleSubmit = async () => {
@@ -91,12 +133,68 @@ export function SpaceParticipantDialog({
 
                     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
                         <div className="space-y-5">
+                            {canManageLinks && spaceId && (
+                                <SpaceDialogPanel>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="space-y-0.5">
+                                                <SpaceDialogSectionEyebrow>Invitar por link</SpaceDialogSectionEyebrow>
+                                                <p className="text-sm font-semibold">Link compartible</p>
+                                            </div>
+                                            {linkLoading && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+                                        </div>
+
+                                        {!linkLoading && hasActiveLink && visibleUrl && (
+                                            <div className="space-y-2">
+                                                <div className="flex gap-2">
+                                                    <div className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2 text-sm text-muted-foreground">
+                                                        <span className="block truncate">{visibleUrl}</span>
+                                                    </div>
+                                                    <Button type="button" size="icon" variant="secondary" onClick={copyLink} disabled={linkBusy}>
+                                                        {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                                                    </Button>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    {expiresLabel && (
+                                                        <p className="text-xs text-muted-foreground">Vence: {expiresLabel}</p>
+                                                    )}
+                                                    <Button type="button" size="sm" variant="ghost" onClick={() => generateLink(true)} disabled={linkBusy} className="h-7 gap-1.5 px-2 text-xs">
+                                                        {linkBusy ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                                                        Regenerar
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!linkLoading && hasActiveLink && !visibleUrl && (
+                                            <div className="space-y-2">
+                                                <p className="text-sm text-muted-foreground">Hay un link activo. Regeneralo para copiarlo.</p>
+                                                <Button type="button" size="sm" variant="secondary" onClick={() => generateLink(true)} disabled={linkBusy} className="gap-1.5">
+                                                    {linkBusy ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                                                    Regenerar
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {!linkLoading && !hasActiveLink && (
+                                            <div className="space-y-2">
+                                                <p className="text-sm text-muted-foreground">Generá un link temporal para que otros puedan unirse.</p>
+                                                <Button type="button" size="sm" onClick={() => generateLink(false)} disabled={linkBusy} className="gap-1.5">
+                                                    {linkBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Link2 className="size-3.5" />}
+                                                    Generar link
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </SpaceDialogPanel>
+                            )}
+
                             <SpaceDialogPanel>
                                 <div className="space-y-4">
                                     <div className="space-y-1">
-                                        <SpaceDialogSectionEyebrow>Tipo de participante</SpaceDialogSectionEyebrow>
-                                        <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                            Cómo querés incorporarlo
+                                        <SpaceDialogSectionEyebrow>Invitar directamente</SpaceDialogSectionEyebrow>
+                                        <h3 className="text-base font-semibold tracking-tight text-foreground">
+                                            Tipo de participante
                                         </h3>
                                     </div>
 

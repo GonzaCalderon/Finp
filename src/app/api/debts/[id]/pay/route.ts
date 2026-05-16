@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Debt, DebtMovement, Space, SpaceEntry, SpaceParticipant, Transaction } from '@/lib/models'
@@ -19,6 +20,11 @@ export async function POST(
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const { id } = await params
+
+        if (!Types.ObjectId.isValid(id)) {
+            return NextResponse.json({ error: 'ID de deuda inválido' }, { status: 400 })
+        }
+
         const body = await request.json()
         const parsed = payDebtSchema.safeParse(body)
 
@@ -88,7 +94,7 @@ export async function POST(
 
         // Si la deuda viene de un espacio, crear settlement automáticamente
         if (debt.sourceType === 'space' && debt.spaceId && debt.counterpartyParticipantId) {
-            const spaceDoc = await Space.findById(debt.spaceId, { name: 1 }).lean<{ name: string } | null>()
+            const spaceDoc = await Space.findById(debt.spaceId, { name: 1, reportingCurrency: 1 }).lean<{ name: string; reportingCurrency?: string } | null>()
             // Encontrar el participante del usuario actual en el espacio
             const currentParticipant = await SpaceParticipant.findOne({
                 spaceId: debt.spaceId,
@@ -109,7 +115,7 @@ export async function POST(
                     reportingAmount: calculateReportingAmount({
                         amount: parsed.data.amount,
                         currency: debt.currency,
-                        reportingCurrency: debt.currency,
+                        reportingCurrency: spaceDoc?.reportingCurrency ?? debt.currency,
                     }),
                     date: parsed.data.date,
                     paidByParticipantId: currentParticipant._id,

@@ -38,6 +38,15 @@ const directInviteFilter = {
     ],
 }
 
+export function canManageSpaceInvites(context: Awaited<ReturnType<typeof getAccessibleSpaceContext>>) {
+    return Boolean(
+        context &&
+            (context.isOwner ||
+                context.currentParticipant?.role === 'owner' ||
+                context.currentParticipant?.role === 'admin')
+    )
+}
+
 export async function getAccessibleSpaceContext(spaceId: string, userId: string) {
     if (!Types.ObjectId.isValid(spaceId)) {
         return null
@@ -71,8 +80,9 @@ export async function getAccessibleSpaceContext(spaceId: string, userId: string)
     }
 }
 
-export async function getSpaceEntries(spaceId: string) {
-    return SpaceEntry.find({ spaceId })
+export async function getSpaceEntries(spaceId: string, extraFilter?: Record<string, unknown>) {
+    const filter = extraFilter ?? { spaceId }
+    return SpaceEntry.find(filter)
         .sort({ date: -1, createdAt: -1 })
         .populate('categoryId', 'name color type')
         .populate('spaceCategoryId', 'name color type isArchived')
@@ -105,6 +115,8 @@ export async function buildSpaceListItems(userId: string) {
         SpaceParticipant.find({ spaceId: { $in: spaceIds }, isActive: true })
             .sort({ createdAt: 1 })
             .lean<ISpaceParticipant[]>(),
+        // TODO(perf): separar query de recentEntries (top-4 por espacio) del full query usado por
+        // buildSpaceSummary. Un limit global rompería los totales del summary. Requiere agregación.
         SpaceEntry.find({ spaceId: { $in: spaceIds } })
             .sort({ date: -1, createdAt: -1 })
             .populate('categoryId', 'name color type')

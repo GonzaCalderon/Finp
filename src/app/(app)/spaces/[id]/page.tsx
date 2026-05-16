@@ -190,22 +190,22 @@ function SpaceMovementsKpiRow({
     currency: string
     hidden: boolean
 }) {
-    const items = [
-        ['Total gastado', summary.totalReporting, `${summary.totalEntryCount} movimientos`, undefined],
-        ['Tu parte', summary.yourShareReporting, 'Correspondiente', 'var(--chart-1)'],
-        ['Confirmados', Math.max(0, summary.totalEntryCount - summary.pendingEntryCount), 'Movimientos cerrados', 'var(--chart-3)'],
-        ['Pendientes', summary.pendingEntryCount, 'Por confirmar', 'var(--destructive)'],
-    ] as const
+    const items: Array<{ label: string; value: number; footer: string; accent?: string; isAmount: boolean }> = [
+        { label: 'Total gastado', value: summary.totalReporting, footer: `${summary.totalEntryCount} movimientos`, accent: undefined, isAmount: true },
+        { label: 'Tu parte', value: summary.yourShareReporting, footer: 'Correspondiente', accent: 'var(--chart-1)', isAmount: true },
+        { label: 'Confirmados', value: Math.max(0, summary.totalEntryCount - summary.pendingEntryCount), footer: 'Movimientos cerrados', accent: 'var(--chart-3)', isAmount: false },
+        { label: 'Pendientes', value: summary.pendingEntryCount, footer: 'Por confirmar', accent: 'var(--destructive)', isAmount: false },
+    ]
 
     return (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {items.map(([label, value, footer, accent], index) => (
+            {items.map(({ label, value, footer, accent, isAmount }) => (
                 <div
                     key={label}
                     className="rounded-[22px] border border-foreground/[0.07] bg-background/78 p-3.5 backdrop-blur-sm"
                 >
                     <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-                    {index < 2 ? (
+                    {isAmount ? (
                         <SpaceAmountInline amount={value} currency={currency} hidden={hidden} color={accent} className="mt-2 block text-[1.35rem] font-semibold tracking-tight" />
                     ) : (
                         <p className="mt-2 text-[1.35rem] font-semibold tracking-tight" style={{ color: accent }}>{value}</p>
@@ -787,6 +787,9 @@ function SpaceDetailPageInner() {
                 open={participantDialogOpen}
                 onOpenChange={setParticipantDialogOpen}
                 onSubmit={handleAddParticipant}
+                spaceId={spaceId}
+                canManage={canManage}
+                spaceMode={data.space.mode}
             />
 
             <SpaceSettlementDialog

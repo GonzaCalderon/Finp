@@ -8,23 +8,15 @@ import {
     SPACE_PARTICIPANT_ROLES,
 } from '@/lib/constants'
 import { Space, SpaceInvite, SpaceParticipant, User } from '@/lib/models'
+import { DIRECT_INVITE_STATUSES_LIST, LINK_INVITE_STATUSES_LIST } from '@/lib/models/space-invite.model'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
+import { isDuplicateKeyError } from '@/lib/server/errors'
 import { extractId } from '@/lib/utils/spaces'
 import type { ISpace, ISpaceInvite, ISpaceParticipant, IUser } from '@/types'
 
 const LINK_INVITE_DURATION_DAYS = [1, 3, 7] as const
-const DIRECT_INVITE_STATUSES = new Set<string>([
-    SPACE_INVITE_STATUSES.PENDING,
-    SPACE_INVITE_STATUSES.ACCEPTED,
-    SPACE_INVITE_STATUSES.DECLINED,
-    SPACE_INVITE_STATUSES.REVOKED,
-    SPACE_INVITE_STATUSES.EXPIRED,
-])
-const LINK_INVITE_STATUSES = new Set<string>([
-    SPACE_INVITE_STATUSES.ACTIVE,
-    SPACE_INVITE_STATUSES.REVOKED,
-    SPACE_INVITE_STATUSES.EXPIRED,
-])
+const DIRECT_INVITE_STATUSES = new Set<string>(DIRECT_INVITE_STATUSES_LIST)
+const LINK_INVITE_STATUSES = new Set<string>(LINK_INVITE_STATUSES_LIST)
 
 type LinkInviteDurationDays = (typeof LINK_INVITE_DURATION_DAYS)[number]
 
@@ -61,9 +53,7 @@ function clampInviteDuration(expiresInDays?: number): LinkInviteDurationDays {
 }
 
 function addDays(days: number) {
-    const date = new Date()
-    date.setDate(date.getDate() + days)
-    return date
+    return new Date(Date.now() + days * 86_400_000)
 }
 
 function isExpired(invite: Pick<ISpaceInvite, 'expiresAt'>) {
@@ -123,7 +113,8 @@ export async function getSpaceInviteLinkState(spaceId: string) {
     return {
         hasActiveInvite: true,
         invite: serializeInviteMetadata(activeInvite),
-        tokenAvailable: false,
+        inviteUrl: activeInvite.inviteUrl ?? null,
+        tokenAvailable: Boolean(activeInvite.inviteUrl),
     }
 }
 
@@ -147,9 +138,10 @@ export async function createOrReuseSpaceInviteLink({
         return {
             created: false,
             regenerated: false,
+            hasActiveInvite: true,
             invite: serializeInviteMetadata(existingInvite),
-            inviteUrl: null,
-            tokenAvailable: false,
+            inviteUrl: existingInvite.inviteUrl ?? null,
+            tokenAvailable: Boolean(existingInvite.inviteUrl),
         }
     }
 
@@ -172,12 +164,14 @@ export async function createOrReuseSpaceInviteLink({
 
     const token = generateInviteToken()
     const expiresAt = addDays(duration)
+    const url = buildInviteUrl(origin, token)
     const invite = await SpaceInvite.create({
         spaceId: new Types.ObjectId(spaceId),
         inviteType: SPACE_INVITE_TYPES.LINK,
         createdByUserId: new Types.ObjectId(userId),
         tokenHash: hashInviteToken(token),
         tokenPreview: token.slice(0, 6),
+        inviteUrl: url,
         status: SPACE_INVITE_STATUSES.ACTIVE,
         defaultRole: SPACE_PARTICIPANT_ROLES.PARTICIPANT,
         expiresAt,
@@ -187,11 +181,12 @@ export async function createOrReuseSpaceInviteLink({
     return {
         created: true,
         regenerated: Boolean(existingInvite && regenerate),
+        hasActiveInvite: true,
         invite: {
             ...serializeInviteMetadata(invite.toObject() as ISpaceInvite),
             tokenAvailable: true,
         },
-        inviteUrl: buildInviteUrl(origin, token),
+        inviteUrl: url,
         tokenAvailable: true,
     }
 }
@@ -354,17 +349,33 @@ export async function acceptSpaceInviteToken({
         await externalParticipant.save()
         participant = externalParticipant.toObject() as ISpaceParticipant
     } else {
-        const createdParticipant = await SpaceParticipant.create({
-            spaceId: new Types.ObjectId(spaceId),
-            userId: new Types.ObjectId(userId),
-            kind: 'finp_user',
-            displayName: resolveParticipantDisplayName(user),
-            email: user.email?.toLowerCase(),
-            role: invite.defaultRole ?? SPACE_PARTICIPANT_ROLES.PARTICIPANT,
-            inviteStatus: SPACE_INVITE_STATUSES.ACCEPTED,
-            isActive: true,
-        })
-        participant = createdParticipant.toObject() as ISpaceParticipant
+        try {
+            const createdParticipant = await SpaceParticipant.create({
+                spaceId: new Types.ObjectId(spaceId),
+                userId: new Types.ObjectId(userId),
+                kind: 'finp_user',
+                displayName: resolveParticipantDisplayName(user),
+                email: user.email?.toLowerCase(),
+                role: invite.defaultRole ?? SPACE_PARTICIPANT_ROLES.PARTICIPANT,
+                inviteStatus: SPACE_INVITE_STATUSES.ACCEPTED,
+                isActive: true,
+            })
+            participant = createdParticipant.toObject() as ISpaceParticipant
+        } catch (err) {
+            if (isDuplicateKeyError(err)) {
+                // Race condition: another request already created the participant
+                const existing = await getAlreadyParticipant(spaceId, userId)
+                if (existing) {
+                    return {
+                        ok: true as const,
+                        alreadyParticipant: true,
+                        spaceId,
+                        participant: existing,
+                    }
+                }
+            }
+            throw err
+        }
     }
 
     await SpaceInvite.updateOne(

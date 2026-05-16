@@ -51,7 +51,14 @@ export async function GET(
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        const entries = await getSpaceEntries(id)
+        const queryFilter: Record<string, unknown> = { spaceId: id }
+        if (type) queryFilter.type = type
+        if (status) {
+            // 'confirmed' entries include 'linked' (linked to a personal transaction)
+            queryFilter.status = status === 'confirmed' ? { $in: ['confirmed', 'linked'] } : status
+        }
+
+        const entries = await getSpaceEntries(id, queryFilter)
         const personalImpactsByEntryId = await getPersonalImpactForEntries(
             id,
             session.user.id,
@@ -59,15 +66,8 @@ export async function GET(
             entries,
             context.participants
         )
-        const filteredEntries = entries.filter((entry) => {
-            if (type && entry.type !== type) return false
-            if (status && entry.status !== status) {
-                if (!(status === 'confirmed' && entry.status === 'linked')) return false
-            }
-            return true
-        })
 
-        return NextResponse.json({ entries: filteredEntries, personalImpactsByEntryId })
+        return NextResponse.json({ entries, personalImpactsByEntryId })
     } catch (error) {
         console.error('Error al obtener movimientos del espacio:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -340,8 +340,8 @@ export async function POST(
             entityType: isSettlement ? 'settlement' : 'entry',
             entityId: extractId(savedEntry._id),
             title: isSettlement
-                ? `${actor} registro un pago`
-                : `${actor} registro ${savedEntry.title}`,
+                ? `${actor} registró un pago`
+                : `${actor} registró ${savedEntry.title}`,
             metadata: isSettlement
                 ? {
                     amount: savedEntry.amount,

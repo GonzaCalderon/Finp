@@ -61,6 +61,14 @@ const SpaceParticipantSchema = new Schema<ISpaceParticipant>(
 
 SpaceParticipantSchema.index({ spaceId: 1, isActive: 1, createdAt: 1 })
 SpaceParticipantSchema.index({ userId: 1, inviteStatus: 1 })
+SpaceParticipantSchema.index(
+    { spaceId: 1, userId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { userId: { $exists: true, $type: 'objectId' } },
+        name: 'unique_participant_per_space_per_user',
+    }
+)
 
 export const SpaceParticipant =
     (mongoose.models.SpaceParticipant as mongoose.Model<ISpaceParticipant> | undefined) ||

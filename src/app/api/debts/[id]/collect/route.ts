@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Debt, DebtMovement, Space, SpaceEntry, SpaceParticipant, Transaction } from '@/lib/models'
@@ -19,6 +20,11 @@ export async function POST(
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const { id } = await params
+
+        if (!Types.ObjectId.isValid(id)) {
+            return NextResponse.json({ error: 'ID de deuda inválido' }, { status: 400 })
+        }
+
         const body = await request.json()
         const parsed = collectDebtSchema.safeParse(body)
 
@@ -89,7 +95,7 @@ export async function POST(
         // Si la deuda viene de un espacio, crear settlement reflejando que la contraparte pagó
         // El usuario actual (acreedor) registra que la contraparte (deudor) le pagó.
         if (debt.sourceType === 'space' && debt.spaceId && debt.counterpartyParticipantId) {
-            const spaceDoc = await Space.findById(debt.spaceId, { name: 1 }).lean<{ name: string } | null>()
+            const spaceDoc = await Space.findById(debt.spaceId, { name: 1, reportingCurrency: 1 }).lean<{ name: string; reportingCurrency?: string } | null>()
             const currentParticipant = await SpaceParticipant.findOne({
                 spaceId: debt.spaceId,
                 userId: session.user.id,
@@ -111,7 +117,7 @@ export async function POST(
                     reportingAmount: calculateReportingAmount({
                         amount: parsed.data.amount,
                         currency: debt.currency,
-                        reportingCurrency: debt.currency,
+                        reportingCurrency: spaceDoc?.reportingCurrency ?? debt.currency,
                     }),
                     date: parsed.data.date,
                     paidByParticipantId: debt.counterpartyParticipantId,
@@ -153,7 +159,10 @@ export async function POST(
                     const counterpartyParticipant = await SpaceParticipant.findById(
                         debt.counterpartyParticipantId
                     ).lean()
-                    if (counterpartyParticipant?.userId) {
+                    if (!counterpartyParticipant?.userId) {
+                        // Contraparte externa sin cuenta Finp — no se puede notificar ni sincronizar deuda en su lado
+                        console.info('[collect] settlement con contraparte externa, debtId=%s, counterpartyParticipantId=%s', id, debt.counterpartyParticipantId)
+                    } else {
                         await emitPersonalSyncEvent({
                             actorUserId: session.user.id,
                             spaceId: debt.spaceId.toString(),

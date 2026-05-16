@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Debt, DebtMovement } from '@/lib/models'
@@ -14,6 +15,10 @@ export async function GET(
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const { id } = await params
+
+        if (!Types.ObjectId.isValid(id)) {
+            return NextResponse.json({ error: 'ID de deuda inválido' }, { status: 400 })
+        }
 
         await connectDB()
 
@@ -39,6 +44,11 @@ export async function PATCH(
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const { id } = await params
+
+        if (!Types.ObjectId.isValid(id)) {
+            return NextResponse.json({ error: 'ID de deuda inválido' }, { status: 400 })
+        }
+
         const body = await request.json()
         const parsed = adjustDebtSchema.safeParse(body)
 
