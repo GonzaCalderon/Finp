@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState, useEffect } from 'react'
+import { Suspense, useMemo, useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Coins, Plus, Users } from 'lucide-react'
@@ -217,7 +217,7 @@ function SpaceMovementsKpiRow({
 }
 
 
-export default function SpaceDetailPage() {
+function SpaceDetailPageInner() {
     const params = useParams<{ id: string }>()
     const searchParams = useSearchParams()
     const focusEntryId = searchParams?.get('entryId') ?? null
@@ -265,8 +265,11 @@ export default function SpaceDetailPage() {
     }, [setAction, clearAction])
 
     useEffect(() => {
-        setFocusedEntryId(focusEntryId)
-        if (focusEntryId) setActiveTab('entries')
+        if (!focusEntryId) return
+        queueMicrotask(() => {
+            setFocusedEntryId((prev) => prev === focusEntryId ? prev : focusEntryId)
+            setActiveTab((prev) => prev === 'entries' ? prev : 'entries')
+        })
     }, [focusEntryId])
 
     useEffect(() => {
@@ -880,5 +883,13 @@ export default function SpaceDetailPage() {
                 onRemoveParticipant={handleRemoveParticipant}
             />
         </>
+    )
+}
+
+export default function SpaceDetailPage() {
+    return (
+        <Suspense fallback={null}>
+            <SpaceDetailPageInner />
+        </Suspense>
     )
 }

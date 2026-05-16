@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { COMMON_CURRENCIES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { CreateDebtPayload } from '@/hooks/useDebts'
@@ -28,13 +29,14 @@ interface CreateDebtDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     prefillName?: string
+    lockCounterparty?: boolean
     onSubmit: (payload: CreateDebtPayload) => Promise<void>
 }
 
-export function CreateDebtDialog({ open, onOpenChange, prefillName, onSubmit }: CreateDebtDialogProps) {
+export function CreateDebtDialog({ open, onOpenChange, prefillName, lockCounterparty, onSubmit }: CreateDebtDialogProps) {
     const [direction, setDirection] = useState<'payable' | 'receivable'>('payable')
     const [counterpartyName, setCounterpartyName] = useState(prefillName ?? '')
-    const [amount, setAmount] = useState('')
+    const [amountValue, setAmountValue] = useState<number | undefined>(undefined)
     const [currency, setCurrency] = useState('ARS')
     const [date, setDate] = useState<Date | undefined>(new Date())
     const [datePickerOpen, setDatePickerOpen] = useState(false)
@@ -45,7 +47,7 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, onSubmit }: 
     function reset() {
         setDirection('payable')
         setCounterpartyName(prefillName ?? '')
-        setAmount('')
+        setAmountValue(undefined)
         setCurrency('ARS')
         setDate(new Date())
         setNotes('')
@@ -55,8 +57,7 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, onSubmit }: 
     function validate() {
         const errs: Record<string, string> = {}
         if (!counterpartyName.trim()) errs.counterpartyName = 'Ingresá el nombre de la persona'
-        const parsed = parseFloat(amount.replace(',', '.'))
-        if (!amount || isNaN(parsed) || parsed <= 0) errs.amount = 'Ingresá un monto válido'
+        if (!amountValue || amountValue <= 0) errs.amount = 'Ingresá un monto válido'
         if (!date) errs.date = 'Seleccioná una fecha'
         return errs
     }
@@ -72,7 +73,7 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, onSubmit }: 
             await onSubmit({
                 direction,
                 counterpartyName: counterpartyName.trim(),
-                amount: parseFloat(amount.replace(',', '.')),
+                amount: amountValue!,
                 currency,
                 date: date!,
                 notes: notes.trim() || undefined,
@@ -95,6 +96,12 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, onSubmit }: 
                 </DialogHeader>
 
                 <div className="space-y-4">
+                    {lockCounterparty && counterpartyName && (
+                        <p className="text-xs text-muted-foreground rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+                            Esta acción se registrará dentro de la relación con <strong>{counterpartyName}</strong>.
+                        </p>
+                    )}
+
                     <div className="space-y-1.5">
                         <Label>Tipo</Label>
                         <div className="grid grid-cols-2 gap-2">
@@ -123,22 +130,20 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, onSubmit }: 
                             placeholder="Nombre de la persona"
                             value={counterpartyName}
                             onChange={(e) => setCounterpartyName(e.target.value)}
+                            disabled={lockCounterparty}
                         />
                         {errors.counterpartyName && <p className="text-xs text-destructive">{errors.counterpartyName}</p>}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="amount">Monto</Label>
-                            <Input
-                                id="amount"
-                                inputMode="decimal"
-                                placeholder="0,00"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                            />
-                            {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
-                        </div>
+                        <FormattedAmountInput
+                            id="amount"
+                            label="Monto"
+                            value={amountValue}
+                            currency={currency}
+                            error={errors.amount}
+                            onValueChangeAction={setAmountValue}
+                        />
                         <div className="space-y-1.5">
                             <Label>Moneda</Label>
                             <Select value={currency} onValueChange={setCurrency}>

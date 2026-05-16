@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Layers3, Plus, Sparkles } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
@@ -177,7 +177,7 @@ function SpacesQuickEntryFlow({
     )
 }
 
-export default function SpacesPage() {
+function SpacesPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const { hidden } = useHideAmounts()
@@ -188,7 +188,9 @@ export default function SpacesPage() {
     const [statusFilter, setStatusFilter] = useState<SpaceStatusFilter>('all')
     const [search, setSearch] = useState('')
     const [sort, setSort] = useState<SpaceSortOption>('recent')
-    const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    const [createDialogOpen, setCreateDialogOpen] = useState(
+        () => searchParams.get('create') === '1'
+    )
     const [spacePickerOpen, setSpacePickerOpen] = useState(false)
     const [entryDialogOpen, setEntryDialogOpen] = useState(false)
     const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
@@ -201,8 +203,10 @@ export default function SpacesPage() {
 
     useEffect(() => {
         if (searchParams.get('create') !== '1') return
-        setCreateDialogOpen(true)
-        router.replace('/spaces', { scroll: false })
+        queueMicrotask(() => {
+            setCreateDialogOpen(true)
+            router.replace('/spaces', { scroll: false })
+        })
     }, [router, searchParams])
 
     useEffect(() => {
@@ -470,5 +474,13 @@ export default function SpacesPage() {
                 onSubmit={handleConfirmPendingEntry}
             />
         </>
+    )
+}
+
+export default function SpacesPage() {
+    return (
+        <Suspense fallback={null}>
+            <SpacesPageInner />
+        </Suspense>
     )
 }

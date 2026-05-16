@@ -21,6 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { formatDebtAmount } from '@/components/debts/DebtsUi'
 import { isAccountCurrencyCompatible } from '@/lib/utils/debt'
 import type { IDebt } from '@/types/debt'
@@ -36,7 +37,7 @@ interface PayDebtDialogProps {
 }
 
 export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: PayDebtDialogProps) {
-    const [amount, setAmount] = useState('')
+    const [amountValue, setAmountValue] = useState<number | undefined>(undefined)
     const [accountId, setAccountId] = useState('')
     const [date, setDate] = useState<Date | undefined>(new Date())
     const [datePickerOpen, setDatePickerOpen] = useState(false)
@@ -51,12 +52,12 @@ export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: 
 
     const selectedAccount = compatibleAccounts.find((a) => a._id.toString() === accountId)
 
-    const parsedAmount = parseFloat((amount || '0').replace(',', '.'))
+    const parsedAmount = amountValue ?? 0
     const remaining = debt?.remainingAmount ?? 0
     const newRemaining = Math.max(0, remaining - parsedAmount)
 
     function reset() {
-        setAmount('')
+        setAmountValue(undefined)
         setAccountId('')
         setDate(new Date())
         setNotes('')
@@ -65,9 +66,8 @@ export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: 
 
     function validate() {
         const errs: Record<string, string> = {}
-        const parsed = parseFloat((amount || '0').replace(',', '.'))
-        if (!amount || isNaN(parsed) || parsed <= 0) errs.amount = 'Ingresá un monto válido'
-        if (parsed > remaining) errs.amount = `El monto no puede superar ${formatDebtAmount(remaining, debt?.currency ?? '')}`
+        if (!amountValue || amountValue <= 0) errs.amount = 'Ingresá un monto válido'
+        else if (amountValue > remaining) errs.amount = `El monto no puede superar ${formatDebtAmount(remaining, debt?.currency ?? '')}`
         if (!accountId) errs.accountId = 'Seleccioná una cuenta'
         if (!date) errs.date = 'Seleccioná una fecha'
         return errs
@@ -80,7 +80,7 @@ export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: 
         setSubmitting(true)
         try {
             await onSubmit(debt._id.toString(), {
-                amount: parseFloat(amount.replace(',', '.')),
+                amount: amountValue!,
                 accountId,
                 date: date!,
                 notes: notes.trim() || undefined,
@@ -112,21 +112,24 @@ export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: 
                         <span className="font-medium">{formatDebtAmount(debt.remainingAmount, debt.currency)}</span>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label htmlFor="pay-amount">Monto a pagar</Label>
-                        <div className="flex items-center gap-2">
-                            <Input
-                                id="pay-amount"
-                                inputMode="decimal"
-                                placeholder={String(debt.remainingAmount)}
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                className="flex-1"
-                            />
-                            <span className="text-sm text-muted-foreground shrink-0">{debt.currency}</span>
-                        </div>
-                        {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
-                    </div>
+                    <FormattedAmountInput
+                        id="pay-amount"
+                        label="Monto a pagar"
+                        value={amountValue}
+                        currency={debt.currency}
+                        error={errors.amount}
+                        placeholder="0"
+                        onValueChangeAction={setAmountValue}
+                        labelAction={
+                            <button
+                                type="button"
+                                className="text-xs font-medium text-primary hover:underline"
+                                onClick={() => setAmountValue(remaining)}
+                            >
+                                Pago total
+                            </button>
+                        }
+                    />
 
                     <div className="space-y-1.5">
                         <Label>Cuenta de salida</Label>

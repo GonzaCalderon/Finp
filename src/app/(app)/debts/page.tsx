@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CreditCard, Handshake } from 'lucide-react'
 import Link from 'next/link'
@@ -66,7 +66,7 @@ function emptyTitle(filter: DebtsFilter) {
     return 'No hay deudas activas'
 }
 
-export default function DebtsPage() {
+function DebtsPageInner() {
     usePageTitle('Deudas')
 
     const router = useRouter()
@@ -105,6 +105,7 @@ export default function DebtsPage() {
     const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
     const [createPrefillName, setCreatePrefillName] = useState('')
+    const [createFromRelation, setCreateFromRelation] = useState(false)
     const [payDebtTarget, setPayDebtTarget] = useState<IDebt | null>(null)
     const [collectDebtTarget, setCollectDebtTarget] = useState<IDebt | null>(null)
     const handledDebtParamRef = useRef<string | null>(null)
@@ -145,10 +146,18 @@ export default function DebtsPage() {
         return allRelationships.find((rel) => rel.key === selectedRelationKey) ?? null
     }, [allRelationships, selectedRelationKey])
 
+    function openCreate(prefillName = '', fromRelation = false) {
+        setCreatePrefillName(prefillName)
+        setCreateFromRelation(fromRelation)
+        setCreateOpen(true)
+    }
+
     useEffect(() => {
         if (searchParams.get('create') === '1') {
-            openCreate()
-            router.replace('/debts', { scroll: false })
+            queueMicrotask(() => {
+                openCreate()
+                router.replace('/debts', { scroll: false })
+            })
         }
 
         const debtId = searchParams.get('debtId')
@@ -179,18 +188,13 @@ export default function DebtsPage() {
         })
     }, [allDebts, debtsLoading, info, router, searchParams])
 
-    function openCreate(prefillName = '') {
-        setCreatePrefillName(prefillName)
-        setCreateOpen(true)
-    }
-
     function selectRelationship(rel: DebtRelationship) {
         setSelectedRelationKey(rel.key)
         setHighlightedDebtId(null)
     }
 
     function handlePanelNewDebt(name: string) {
-        openCreate(name)
+        openCreate(name, true)
     }
 
     async function handleCreateDebt(payload: Parameters<typeof createDebt>[0]) {
@@ -413,6 +417,7 @@ export default function DebtsPage() {
                 open={createOpen}
                 onOpenChange={setCreateOpen}
                 prefillName={createPrefillName}
+                lockCounterparty={createFromRelation}
                 onSubmit={handleCreateDebt}
             />
 
@@ -436,5 +441,13 @@ export default function DebtsPage() {
                 onSubmit={handleCollect}
             />
         </motion.div>
+    )
+}
+
+export default function DebtsPage() {
+    return (
+        <Suspense fallback={null}>
+            <DebtsPageInner />
+        </Suspense>
     )
 }

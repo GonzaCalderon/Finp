@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -256,7 +256,7 @@ function RuleCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function RulesPage() {
+function RulesPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     usePageTitle('Reglas automáticas')
@@ -476,5 +476,13 @@ export default function RulesPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </div>
+    )
+}
+
+export default function RulesPage() {
+    return (
+        <Suspense fallback={null}>
+            <RulesPageInner />
+        </Suspense>
     )
 }

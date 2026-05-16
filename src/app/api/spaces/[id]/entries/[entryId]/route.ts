@@ -307,6 +307,7 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
                                 reason: 'entry_edited',
                                 impactId: impact._id.toString(),
                                 changedFields: changedLabels,
+                                transactionId: impact.transactionId?.toString(),
                             })
                         )
                     )

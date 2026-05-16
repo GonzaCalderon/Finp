@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeftRight,
@@ -12,6 +12,7 @@ import {
     Pencil,
     SlidersHorizontal,
     Trash2,
+    Unlink,
     Upload,
     X,
 } from 'lucide-react'
@@ -797,6 +798,7 @@ function FilterSheet({
 
 function TransactionsPageInner() {
     const searchParams = useSearchParams()
+    const router = useRouter()
     const initialMonth = searchParams.get('month') ?? getCurrentMonth()
     const initialFilters: Filters = {
         type: searchParams.get('type') ?? DEFAULT_FILTERS.type,
@@ -807,6 +809,13 @@ function TransactionsPageInner() {
     const initialSort = SORT_OPTIONS.some((option) => option.value === searchParams.get('sort'))
         ? (searchParams.get('sort') as typeof SORT_OPTIONS[number]['value'])
         : DEFAULT_SORT
+
+    const deepLinkTransactionId = searchParams.get('transactionId')
+    const deepLinkHint = searchParams.get('hint')
+    const [highlightedId] = useState<string | null>(() =>
+        deepLinkHint === 'review' && deepLinkTransactionId ? deepLinkTransactionId : null
+    )
+    const highlightHandledRef = useRef(false)
 
     const [month, setMonth] = useState(() => initialMonth)
     const [appliedFilters, setAppliedFilters] = useState<Filters>(initialFilters)
@@ -867,6 +876,37 @@ function TransactionsPageInner() {
     const { hidden } = useHideAmounts()
 
     usePageTitle('Transacciones')
+
+    // Switch to the target transaction's month when deep-linking
+    useEffect(() => {
+        if (!highlightedId) return
+        void apiJson<{ transaction: ITransaction }>(`/api/transactions/${highlightedId}`)
+            .then(({ transaction }) => {
+                const targetMonth = getCurrentFinancialPeriod(
+                    new Date(transaction.date),
+                    preferences.monthStartDay
+                )
+                setMonth(targetMonth)
+            })
+            .catch(() => { /* stay on current month */ })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [highlightedId])
+
+    // Scroll + toast once the target transaction appears in the loaded list
+    useEffect(() => {
+        if (!highlightedId || loading || highlightHandledRef.current) return
+        const found = transactions.find((t) => t._id.toString() === highlightedId)
+        if (!found) return
+        highlightHandledRef.current = true
+        success('Revisá el movimiento vinculado al espacio')
+        router.replace('/transactions', { scroll: false })
+        setTimeout(() => {
+            document.querySelector(`[data-transaction-id="${highlightedId}"]`)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            })
+        }, 100)
+    }, [highlightedId, transactions, loading, success, router])
 
     const firstOperationalMonth = useMemo(
         () => getOperationalStartFinancialPeriod(preferences.operationalStartDate, preferences.monthStartDay),
@@ -1357,16 +1397,22 @@ function TransactionsPageInner() {
                                         (transaction.destinationAccountId as unknown as (IAccount & { color?: string }) | null)
                                     const category = transaction.categoryId as { name?: string; color?: string } | null
 
+                                    const isHighlighted = transaction._id.toString() === highlightedId
                                     return (
                                         <motion.div
                                             key={transaction._id.toString()}
                                             variants={staggerItem}
                                             className="group relative overflow-hidden rounded-2xl"
                                             data-testid="transaction-item"
+                                            data-transaction-id={transaction._id.toString()}
                                             style={{
                                                 background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                                                border: '0.5px solid var(--border)',
-                                                boxShadow: 'var(--card-shadow)',
+                                                border: isHighlighted
+                                                    ? '1.5px solid color-mix(in srgb, var(--amber-base, #f59e0b) 60%, transparent)'
+                                                    : '0.5px solid var(--border)',
+                                                boxShadow: isHighlighted
+                                                    ? '0 0 0 3px color-mix(in srgb, var(--amber-base, #f59e0b) 20%, transparent)'
+                                                    : 'var(--card-shadow)',
                                             }}
                                         >
                                             <div
@@ -1596,22 +1642,24 @@ function TransactionsPageInner() {
                                                     {!NON_EDITABLE_TYPES.has(transaction.type) && !transaction.spaceId && (
                                                         <div className="flex gap-1">
                                                             <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="h-8 rounded-xl text-xs bg-background/60"
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                aria-label="Editar transacción"
+                                                                title="Editar"
                                                                 onClick={() => handleEdit(transaction)}
                                                                 data-testid="btn-editar-transaccion"
                                                             >
-                                                                Editar
+                                                                <Pencil size={15} />
                                                             </Button>
                                                             <Button
                                                                 variant="ghost"
-                                                                size="sm"
-                                                                className="h-8 rounded-xl text-xs"
+                                                                size="icon-sm"
+                                                                aria-label="Eliminar transacción"
+                                                                title="Eliminar"
                                                                 onClick={() => handleDelete(transaction._id.toString())}
                                                                 data-testid="btn-eliminar-transaccion"
                                                             >
-                                                                Eliminar
+                                                                <Trash2 size={15} />
                                                             </Button>
                                                         </div>
                                                     )}
@@ -1619,15 +1667,17 @@ function TransactionsPageInner() {
                                                         <div className="flex gap-1">
                                                             <Button
                                                                 variant="ghost"
-                                                                size="sm"
-                                                                className="h-8 rounded-xl text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                size="icon-sm"
+                                                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                aria-label="Quitar de mi Finp"
+                                                                title="Quitar de mi Finp"
                                                                 onClick={() => setRemoveFromFinpTarget({
                                                                     transactionId: transaction._id.toString(),
                                                                     spaceId: transaction.spaceId!.toString(),
                                                                     spaceEntryId: transaction.spaceEntryId?.toString(),
                                                                 })}
                                                             >
-                                                                Quitar de mi Finp
+                                                                <Unlink size={15} />
                                                             </Button>
                                                         </div>
                                                     )}

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Notification } from '@/lib/models'
+import { Notification, SpaceEntryPersonalImpact } from '@/lib/models'
 import { Types } from 'mongoose'
 import { NOTIFICATION_STATUSES, NOTIFICATION_ACTION_STATUSES } from '@/lib/constants'
+import type { INotification } from '@/types/notification'
 
 const notActive = { $nin: [NOTIFICATION_STATUSES.DISMISSED, NOTIFICATION_STATUSES.ARCHIVED] }
 
@@ -78,7 +79,29 @@ export async function GET(request: Request) {
         ])
 
         const hasMore = notifications.length > limit
-        const page = hasMore ? notifications.slice(0, limit) : notifications
+        const page = (hasMore ? notifications.slice(0, limit) : notifications) as INotification[]
+
+        // Enrich review notifications: if action.href points to a space entry, override it
+        // with the personal transaction link using the impact's current transactionId.
+        // This fixes notifications created before the transactionId-aware href was introduced.
+        const reviewsToEnrich = page.filter(
+            (n) => n.entityRefs?.personalImpactId && !n.action?.href?.includes('/transactions')
+        )
+        if (reviewsToEnrich.length > 0) {
+            const impactIds = reviewsToEnrich.map((n) => n.entityRefs!.personalImpactId!)
+            const impacts = await SpaceEntryPersonalImpact.find(
+                { _id: { $in: impactIds } },
+                { transactionId: 1 }
+            ).lean<{ _id: Types.ObjectId; transactionId?: Types.ObjectId }[]>()
+            const impactMap = new Map(impacts.map((i) => [i._id.toString(), i.transactionId]))
+            for (const n of reviewsToEnrich) {
+                const txId = impactMap.get(n.entityRefs!.personalImpactId!.toString())
+                if (txId) {
+                    n.action = { label: n.action?.label ?? 'Ver transacción', href: `/transactions?transactionId=${txId.toString()}&hint=review` }
+                }
+            }
+        }
+
         const nextCursor = hasMore ? page[page.length - 1]?.createdAt?.toISOString() : undefined
 
         return NextResponse.json({

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -491,7 +491,7 @@ function AccountTypeSection({
     )
 }
 
-export default function AccountsPage() {
+function AccountsPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const { accounts, loading, error, fetchAccounts, createAccount, updateAccount, deleteAccount } = useAccounts()
@@ -751,5 +751,13 @@ export default function AccountsPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </motion.div>
+    )
+}
+
+export default function AccountsPage() {
+    return (
+        <Suspense fallback={null}>
+            <AccountsPageInner />
+        </Suspense>
     )
 }

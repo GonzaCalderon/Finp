@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Notification } from '@/lib/models'
+import { Notification, SpaceEntryPersonalImpact } from '@/lib/models'
 import { Types } from 'mongoose'
-import { NOTIFICATION_STATUSES, NOTIFICATION_ACTION_STATUSES } from '@/lib/constants'
+import { NOTIFICATION_STATUSES, NOTIFICATION_ACTION_STATUSES, SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 
 export async function GET() {
     try {
@@ -15,7 +15,9 @@ export async function GET() {
         const recipientUserId = new Types.ObjectId(session.user.id)
         const notActive = { $nin: [NOTIFICATION_STATUSES.DISMISSED, NOTIFICATION_STATUSES.ARCHIVED] }
 
-        const [unreadCount, pendingCount, allCount, spacesCount, debtsCount, archivedCount] = await Promise.all([
+        const userId = session.user.id
+
+        const [unreadCount, pendingCount, allCount, spacesCount, debtsCount, archivedCount, transactionReviewCount] = await Promise.all([
             Notification.countDocuments({
                 recipientUserId,
                 status: NOTIFICATION_STATUSES.UNREAD,
@@ -43,11 +45,16 @@ export async function GET() {
                 recipientUserId,
                 status: NOTIFICATION_STATUSES.ARCHIVED,
             }),
+            SpaceEntryPersonalImpact.countDocuments({
+                userId,
+                status: SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW,
+            }),
         ])
 
         return NextResponse.json({
             unreadCount,
             pendingCount,
+            transactionReviewCount,
             tabCounts: {
                 all: allCount,
                 pending: pendingCount,

@@ -54,7 +54,7 @@ export function buildNavInsightsFromSignals(signals: NavInsightSignals): NavInsi
             priority: 10,
             title: 'Revisa tu Finp',
             description: `${count} ${plural(count, 'movimiento cambio', 'movimientos cambiaron')} en espacios.`,
-            href: '/spaces',
+            href: '/transactions?hint=review',
             icon: 'scan-search',
             tone: 'amber',
             count,

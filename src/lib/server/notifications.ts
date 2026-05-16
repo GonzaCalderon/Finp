@@ -243,14 +243,19 @@ export function buildReviewNotification(params: {
     reason: 'entry_voided' | 'entry_edited'
     impactId: string
     changedFields?: string[]
+    transactionId?: string
 }): CreateNotificationInput & { dedupeKey: string } {
-    const { recipientUserId, actorUserId, entryId, spaceId, entryTitle, reason, impactId, changedFields } = params
+    const { recipientUserId, actorUserId, entryId, spaceId, entryTitle, reason, impactId, changedFields, transactionId } = params
     const isVoided = reason === 'entry_voided'
     const title = isVoided ? 'Un movimiento vinculado fue anulado' : 'Un movimiento vinculado fue modificado'
     const fieldsSuffix = !isVoided && changedFields?.length ? ` (${changedFields.join(', ')})` : ''
     const body = isVoided
         ? `"${entryTitle}" fue anulado. Revisá tu transacción vinculada para mantener tus finanzas consistentes.`
         : `"${entryTitle}" fue editado${fieldsSuffix}. Revisá tu transacción vinculada para mantener tus finanzas consistentes.`
+
+    const actionHref = transactionId
+        ? `/transactions?transactionId=${transactionId}&hint=review`
+        : `/spaces/${spaceId}?entryId=${entryId}`
 
     return {
         recipientUserId: new Types.ObjectId(recipientUserId),
@@ -270,7 +275,7 @@ export function buildReviewNotification(params: {
         },
         action: {
             label: 'Ver movimiento',
-            href: `/spaces/${spaceId}?entryId=${entryId}`,
+            href: actionHref,
         },
         dedupeKey: `review:${reason}:${recipientUserId}:${entryId}`,
     }

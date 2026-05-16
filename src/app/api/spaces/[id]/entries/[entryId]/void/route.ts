@@ -159,6 +159,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
                             entryTitle,
                             reason: 'entry_voided',
                             impactId: impact._id.toString(),
+                            transactionId: impact.transactionId?.toString(),
                         })
                     )
                 })

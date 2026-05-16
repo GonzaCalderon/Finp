@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -319,7 +319,7 @@ function CommitmentSection({
     )
 }
 
-export default function CommitmentsPage() {
+function CommitmentsPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const { commitments, loading, error, createCommitment, updateCommitment, deleteCommitment } = useCommitments()
@@ -647,5 +647,13 @@ export default function CommitmentsPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </motion.div>
+    )
+}
+
+export default function CommitmentsPage() {
+    return (
+        <Suspense fallback={null}>
+            <CommitmentsPageInner />
+        </Suspense>
     )
 }

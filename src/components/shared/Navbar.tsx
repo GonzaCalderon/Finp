@@ -521,7 +521,7 @@ function AvatarProgressRing({
 function SidebarContent({ insight, insightLoading }: { insight: NavInsightType; insightLoading: boolean }) {
     const pathname = usePathname()
     const { hidden, toggleHidden } = useHideAmounts()
-    const { pendingCount } = useNotifications()
+    const { pendingCount, transactionReviewCount } = useNotifications()
     const period = useMemo(() => getPeriodInfo(), [])
     const initials = getInitials()
 
@@ -574,7 +574,10 @@ function SidebarContent({ insight, insightLoading }: { insight: NavInsightType; 
                                 const item = NAV_BY_KEY[key]
                                 const Icon = item.icon
                                 const active = isRouteActive(pathname, item.href)
-                                const showPending = key === 'spaces' && pendingCount > 0
+                                const showPending =
+                                    (key === 'spaces' && pendingCount > 0) ||
+                                    (key === 'transactions' && transactionReviewCount > 0)
+                                const dotCount = key === 'spaces' ? pendingCount : transactionReviewCount
 
                                 return (
                                     <motion.div
@@ -613,7 +616,7 @@ function SidebarContent({ insight, insightLoading }: { insight: NavInsightType; 
                                                 style={{ color: active ? 'var(--sky)' : 'currentColor' }}
                                             />
                                             <span className="relative min-w-0 flex-1 truncate">{item.label}</span>
-                                            {showPending && <PulseDot count={pendingCount} />}
+                                            {showPending && <PulseDot count={dotCount} />}
                                         </Link>
                                     </motion.div>
                                 )
@@ -891,6 +894,7 @@ function MobileNavItem({
     active,
     onClick,
     loadDelay = 0,
+    dot = false,
 }: {
     href: string
     label: string
@@ -898,6 +902,7 @@ function MobileNavItem({
     active: boolean
     onClick: () => void
     loadDelay?: number
+    dot?: boolean
 }) {
     return (
         <motion.div
@@ -919,7 +924,10 @@ function MobileNavItem({
                         transition={{ type: 'spring', stiffness: 450, damping: 38 }}
                     />
                 )}
-                <Icon size={18} className="relative" />
+                <span className="relative">
+                    <Icon size={18} />
+                    {dot && <PulseDot className="absolute -right-1.5 -top-1" />}
+                </span>
                 <span className="relative max-w-full truncate text-[10px] font-medium leading-none">{label}</span>
             </Link>
         </motion.div>
@@ -1099,7 +1107,7 @@ function MobileMoreSheet({
 }) {
     const pathname = usePathname()
     const { hidden, toggleHidden } = useHideAmounts()
-    const { pendingCount } = useNotifications()
+    const { pendingCount, transactionReviewCount } = useNotifications()
     const period = useMemo(() => getPeriodInfo(), [])
     const initials = getInitials()
     const displayName = 'Finp'
@@ -1195,7 +1203,10 @@ function MobileMoreSheet({
                                                 const item = NAV_BY_KEY[key]
                                                 const Icon = item.icon
                                                 const active = isRouteActive(pathname, item.href)
-                                                const showPending = key === 'spaces' && pendingCount > 0
+                                                const showPending =
+                                                    (key === 'spaces' && pendingCount > 0) ||
+                                                    (key === 'transactions' && transactionReviewCount > 0)
+                                                const dotCount = key === 'spaces' ? pendingCount : transactionReviewCount
 
                                                 return (
                                                     <Link
@@ -1221,7 +1232,7 @@ function MobileMoreSheet({
                                                             <span className="block truncate text-sm font-semibold">{item.label}</span>
                                                             <span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.caption}</span>
                                                         </span>
-                                                        {showPending && <PulseDot count={pendingCount} />}
+                                                        {showPending && <PulseDot count={dotCount} />}
                                                         <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
                                                     </Link>
                                                 )
@@ -1254,7 +1265,7 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
     const [fabOpen, setFabOpen] = useState(false)
     const [fabKey, setFabKey] = useState(0)
     const { action: spaceAction } = useSpaceAction()
-    const { pendingCount } = useNotifications()
+    const { pendingCount, transactionReviewCount } = useNotifications()
     const {
         txDialogOpen,
         setTxDialogOpen,
@@ -1348,6 +1359,7 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
                         icon={NAV_BY_KEY.transactions.icon}
                         active={isBottomRouteActive(pathname, NAV_BY_KEY.transactions.href) && !moreOpen}
                         loadDelay={0.08}
+                        dot={transactionReviewCount > 0}
                         onClick={() => {
                             closeMore()
                             closeFab()

@@ -516,6 +516,7 @@ export function SpaceSettingsPanel({
     const [editingName, setEditingName] = useState(false)
     const [nameDraft, setNameDraft] = useState(space.name)
     const [periodOpen, setPeriodOpen] = useState(false)
+    const [configSection, setConfigSection] = useState<'general' | 'reparto' | 'categorias' | 'participantes' | 'cierre'>('general')
     const isClosed = space.status === 'closed'
     const isOwner = currentParticipantRole === 'owner'
     const isAdmin = currentParticipantRole === 'admin'
@@ -562,11 +563,35 @@ export function SpaceSettingsPanel({
         return isOwner || (isAdmin && participant.role === 'participant')
     }
 
+    const CONFIG_SECTIONS = [
+        { key: 'general' as const, label: 'General' },
+        { key: 'reparto' as const, label: 'Reparto y monedas' },
+        { key: 'categorias' as const, label: 'Categorías' },
+        { key: 'participantes' as const, label: 'Participantes' },
+        { key: 'cierre' as const, label: 'Cierre' },
+    ]
+
     return (
-        <div className="mx-auto w-full max-w-5xl">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="space-y-4">
-            <SpaceSurface>
+        <div className="w-full space-y-4">
+        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {CONFIG_SECTIONS.map(({ key, label }) => (
+                <button
+                    key={key}
+                    type="button"
+                    className={cn(
+                        'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                        configSection === key
+                            ? 'bg-foreground text-background'
+                            : 'bg-accent/50 text-muted-foreground hover:text-foreground'
+                    )}
+                    onClick={() => setConfigSection(key)}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+
+        {configSection === 'general' && <SpaceSurface>
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-foreground">General</h2>
                 </div>
@@ -637,7 +662,7 @@ export function SpaceSettingsPanel({
                                         {formatSpaceDateRange(space.startDate, space.endDate)}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-2" align="end">
+                                <PopoverContent className="w-auto p-0" align="end" sideOffset={4}>
                                     <Calendar
                                         mode="range"
                                         selected={{
@@ -645,8 +670,9 @@ export function SpaceSettingsPanel({
                                             to: space.endDate ? new Date(space.endDate) : undefined,
                                         }}
                                         onSelect={(range) => void updatePeriod(range)}
+                                        className="rounded-xl"
                                     />
-                                    <p className="px-2 pb-2 text-xs text-muted-foreground">
+                                    <p className="px-3 pb-3 text-xs text-muted-foreground">
                                         Seleccioná inicio y fin sobre el mismo calendario para ver la guía del período.
                                     </p>
                                 </PopoverContent>
@@ -658,9 +684,9 @@ export function SpaceSettingsPanel({
                         )}
                     </div>
                 </div>
-            </SpaceSurface>
+            </SpaceSurface>}
 
-            <SpaceSurface>
+        {configSection === 'reparto' && <SpaceSurface>
                 <h2 className="text-base font-semibold text-foreground">Reparto y monedas</h2>
                 <div className="mt-4 divide-y divide-border/70">
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
@@ -726,9 +752,9 @@ export function SpaceSettingsPanel({
                         <SpaceCurrencyStack currencies={space.currencies} className="max-w-[65%] justify-end" />
                     </div>
                 </div>
-            </SpaceSurface>
+            </SpaceSurface>}
 
-            <SpaceSurface>
+        {configSection === 'categorias' && <SpaceSurface>
                 <div className="space-y-1">
                     <h2 className="text-base font-semibold text-foreground">Categorías</h2>
                     <p className="text-sm text-muted-foreground">
@@ -738,12 +764,9 @@ export function SpaceSettingsPanel({
                 <div className="mt-4">
                     <SpaceCategoryManager spaceId={spaceId} canManage={canManage} />
                 </div>
-            </SpaceSurface>
+            </SpaceSurface>}
 
-            </div>
-
-            <div className="space-y-4">
-            <SpaceSurface>
+        {configSection === 'participantes' && <SpaceSurface>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-base font-semibold text-foreground">Participantes</h2>
                     {canManage ? (
@@ -812,9 +835,9 @@ export function SpaceSettingsPanel({
                         )
                     })}
                 </div>
-            </SpaceSurface>
+            </SpaceSurface>}
 
-            <SpaceSurface>
+        {configSection === 'cierre' && <SpaceSurface>
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <h2 className="text-base font-semibold text-foreground">Cierre</h2>
@@ -834,9 +857,7 @@ export function SpaceSettingsPanel({
                         {isClosed ? 'Reabrir espacio' : 'Cerrar espacio'}
                     </Button>
                 ) : null}
-            </SpaceSurface>
-            </div>
-        </div>
+            </SpaceSurface>}
         </div>
     )
 }
