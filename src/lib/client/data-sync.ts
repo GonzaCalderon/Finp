@@ -12,6 +12,11 @@ export const DATA_TAGS = [
     'categories',
     'preferences',
     'settings',
+    'spaces',
+    'debts',
+    'personal-pending-actions',
+    'notifications',
+    'nav-insights',
 ] as const
 
 export type DataTag = (typeof DATA_TAGS)[number]
@@ -50,6 +55,7 @@ export const TRANSACTION_INVALIDATION_TAGS: DataTag[] = [
     'accounts',
     'account-detail',
     'credit-card-expenses',
+    'nav-insights',
 ]
 
 export const INSTALLMENT_INVALIDATION_TAGS: DataTag[] = [
@@ -58,6 +64,7 @@ export const INSTALLMENT_INVALIDATION_TAGS: DataTag[] = [
     'projection',
     'accounts',
     'account-detail',
+    'nav-insights',
 ]
 
 export const COMMITMENT_INVALIDATION_TAGS: DataTag[] = [
@@ -66,6 +73,8 @@ export const COMMITMENT_INVALIDATION_TAGS: DataTag[] = [
     'projection',
     'transactions',
     'accounts',
+    'account-detail',
+    'nav-insights',
 ]
 
 export const ACCOUNT_INVALIDATION_TAGS: DataTag[] = [
@@ -97,4 +106,36 @@ export const PREFERENCE_INVALIDATION_TAGS: DataTag[] = [
     'projection',
 ]
 
+export const PERSONAL_PENDING_ACTIONS_INVALIDATION_TAGS: DataTag[] = [
+    'personal-pending-actions',
+    'notifications',
+    'nav-insights',
+]
+
+export const NOTIFICATION_INVALIDATION_TAGS: DataTag[] = ['notifications', 'nav-insights']
+
+export const SPACE_INVALIDATION_TAGS: DataTag[] = [
+    'spaces',
+    'debts',
+    'transactions',
+    'dashboard',
+    'accounts',
+    'account-detail',
+    'personal-pending-actions',
+    'notifications',
+    'nav-insights',
+]
+
 export const ALL_DATA_TAGS: DataTag[] = [...DATA_TAGS]
+
+export const DEBT_INVALIDATION_TAGS: DataTag[] = [
+    'debts',
+    'spaces',
+    'transactions',
+    'dashboard',
+    'accounts',
+    'account-detail',
+    'personal-pending-actions',
+    'notifications',
+    'nav-insights',
+]

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -58,8 +59,8 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
     const {
         register,
         handleSubmit,
+        control,
         setValue,
-        watch,
         reset,
         formState: { errors, isSubmitting, submitCount },
     } = useForm<AccountFormInput>({
@@ -82,13 +83,13 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
     const scrollRef = useRef<HTMLFormElement>(null)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
-    const type = watch('type')
-    const supportedCurrencies = watch('supportedCurrencies')
-    const defaultPaymentMethods = watch('defaultPaymentMethods')
-    const initialBalances = watch('initialBalances')
-    const currency = watch('currency')
-    const color = watch('color') ?? '#6366f1'
-    const allowNegativeBalance = watch('allowNegativeBalance') ?? true
+    const type = useWatch({ control, name: 'type' })
+    const supportedCurrencies = useWatch({ control, name: 'supportedCurrencies' })
+    const defaultPaymentMethods = useWatch({ control, name: 'defaultPaymentMethods' })
+    const initialBalances = useWatch({ control, name: 'initialBalances' })
+    const currency = useWatch({ control, name: 'currency' })
+    const color = useWatch({ control, name: 'color' }) ?? '#6366f1'
+    const allowNegativeBalance = useWatch({ control, name: 'allowNegativeBalance' }) ?? true
     const isCreditCard = type === 'credit_card'
     const isDualCurrency = (supportedCurrencies?.length ?? 0) > 1
     const availableDefaultPaymentMethods = getSupportedDefaultPaymentMethodsForAccountType(type)
@@ -204,6 +205,9 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
             <DialogContent variant="fullscreen-mobile" className="max-w-md p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{account ? 'Editar cuenta' : 'Nueva cuenta'}</DialogTitle>
+                    <DialogDescription>
+                        Configura el tipo, moneda y saldo inicial de la cuenta.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form

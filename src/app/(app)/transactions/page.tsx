@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeftRight,
     ChevronDown,
     CreditCard,
+    ExternalLink,
     Pencil,
+    RefreshCw,
     SlidersHorizontal,
     Trash2,
+    Unlink,
     Upload,
     X,
 } from 'lucide-react'
@@ -24,6 +27,7 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
+import { useNotifications } from '@/contexts/NotificationsContext'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { usePreferences } from '@/hooks/usePreferences'
 
@@ -59,6 +63,10 @@ import { DURATION, easeSmooth, fadeIn, staggerContainer, staggerItem } from '@/l
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
 import { buildMonthOptions, getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-start'
+import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
+import { isSplitTransaction } from '@/lib/utils/operational-amount'
+import { apiJson } from '@/lib/client/auth-client'
+import { invalidateData, NOTIFICATION_INVALIDATION_TAGS, TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/data-sync'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -70,8 +78,10 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
     transfer: 'Transferencia',
     exchange: 'Cambio',
     credit_card_payment: 'Pago de tarjeta',
-    debt_payment: 'Pago de tarjeta',      // backwards compat
+    debt_payment: 'Pago de tarjeta',          // backwards compat
     adjustment: 'Ajuste',
+    personal_debt_payment: 'Pago de deuda',
+    personal_debt_collect: 'Cobro de deuda',
 }
 
 const TRANSACTION_TYPE_COLORS: Record<
@@ -86,7 +96,12 @@ const TRANSACTION_TYPE_COLORS: Record<
     credit_card_payment: 'outline',
     debt_payment: 'outline',
     adjustment: 'secondary',
+    personal_debt_payment: 'secondary',
+    personal_debt_collect: 'secondary',
 }
+
+// Types that cannot be edited or deleted through the transaction form.
+const NON_EDITABLE_TYPES = new Set(['personal_debt_payment', 'personal_debt_collect'])
 
 const SORT_OPTIONS = [
     { value: 'date_desc', label: 'Más reciente' },
@@ -327,6 +342,8 @@ function TypeFilterChip({
         { value: 'exchange', label: 'Cambio' },
         { value: 'credit_card_payment', label: 'Pago de tarjeta' },
         { value: 'adjustment', label: 'Ajuste' },
+        { value: 'personal_debt_payment', label: 'Pago de deuda' },
+        { value: 'personal_debt_collect', label: 'Cobro de deuda' },
     ]
 
     return (
@@ -484,7 +501,7 @@ function CategoryFilterChip({
                             Todas
                         </button>
 
-                        <div className="mt-1 space-y-1">
+                        <div className="mt-1 max-h-64 overflow-y-auto space-y-1">
                             {options.map((option) => {
                                 const meta = CATEGORY_TYPE_META[option.type] ?? {
                                     bg: 'var(--secondary)',
@@ -783,6 +800,7 @@ function FilterSheet({
 
 function TransactionsPageInner() {
     const searchParams = useSearchParams()
+    const router = useRouter()
     const initialMonth = searchParams.get('month') ?? getCurrentMonth()
     const initialFilters: Filters = {
         type: searchParams.get('type') ?? DEFAULT_FILTERS.type,
@@ -794,6 +812,13 @@ function TransactionsPageInner() {
         ? (searchParams.get('sort') as typeof SORT_OPTIONS[number]['value'])
         : DEFAULT_SORT
 
+    const deepLinkTransactionId = searchParams.get('transactionId')
+    const deepLinkHint = searchParams.get('hint')
+    const [highlightedId, setHighlightedId] = useState<string | null>(() =>
+        deepLinkHint === 'review' && deepLinkTransactionId ? deepLinkTransactionId : null
+    )
+    const highlightHandledRef = useRef(false)
+
     const [month, setMonth] = useState(() => initialMonth)
     const [appliedFilters, setAppliedFilters] = useState<Filters>(initialFilters)
     const [draftFilters, setDraftFilters] = useState<Filters>(initialFilters)
@@ -803,11 +828,18 @@ function TransactionsPageInner() {
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(searchParams.get('new') === '1')
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
+    const [removeFromFinpTarget, setRemoveFromFinpTarget] = useState<{
+        transactionId: string
+        spaceId: string
+        spaceEntryId?: string
+    } | null>(null)
+    const [removingFromFinp, setRemovingFromFinp] = useState(false)
 
     const { accounts, loading: accountsLoading } = useAccounts()
     const { categories, loading: categoriesLoading } = useCategories()
     const { rules } = useTransactionRules()
     const { preferences } = usePreferences()
+    const { transactionReviewIds } = useNotifications()
 
     const categoryOptions = useMemo<CategoryOption[]>(
         () =>
@@ -848,6 +880,37 @@ function TransactionsPageInner() {
 
     usePageTitle('Transacciones')
 
+    // Switch to the target transaction's month when deep-linking
+    useEffect(() => {
+        if (!highlightedId) return
+        void apiJson<{ transaction: ITransaction }>(`/api/transactions/${highlightedId}`)
+            .then(({ transaction }) => {
+                const targetMonth = getCurrentFinancialPeriod(
+                    new Date(transaction.date),
+                    preferences.monthStartDay
+                )
+                setMonth(targetMonth)
+            })
+            .catch(() => { /* stay on current month */ })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [highlightedId])
+
+    // Scroll + toast once the target transaction appears in the loaded list
+    useEffect(() => {
+        if (!highlightedId || loading || highlightHandledRef.current) return
+        const found = transactions.find((t) => t._id.toString() === highlightedId)
+        if (!found) return
+        highlightHandledRef.current = true
+        success('Revisá el movimiento vinculado al espacio')
+        router.replace('/transactions', { scroll: false })
+        setTimeout(() => {
+            document.querySelector(`[data-transaction-id="${highlightedId}"]`)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            })
+        }, 100)
+    }, [highlightedId, transactions, loading, success, router])
+
     const firstOperationalMonth = useMemo(
         () => getOperationalStartFinancialPeriod(preferences.operationalStartDate, preferences.monthStartDay),
         [preferences.operationalStartDate, preferences.monthStartDay]
@@ -880,6 +943,21 @@ function TransactionsPageInner() {
 
     useKeyboardShortcuts([{ key: 'n', handler: handleNewTransaction }])
 
+    const handleSyncImpact = async (transaction: ITransaction) => {
+        if (!transaction.spaceId || !transaction.spaceEntryId) return
+        try {
+            await apiJson(
+                `/api/spaces/${transaction.spaceId.toString()}/entries/${transaction.spaceEntryId.toString()}/personal-impact/sync`,
+                { method: 'POST' }
+            )
+            setHighlightedId(null)
+            success('Transacción actualizada')
+            invalidateData([...NOTIFICATION_INVALIDATION_TAGS, ...TRANSACTION_INVALIDATION_TAGS])
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'No se pudo sincronizar la transacción')
+        }
+    }
+
     const handleEdit = (transaction: ITransaction) => {
         setSelectedTransaction(transaction)
         setTransactionDialogOpen(true)
@@ -899,6 +977,28 @@ function TransactionsPageInner() {
             toastError(err instanceof Error ? err.message : 'Error al eliminar transacción')
         } finally {
             setDeleteId(null)
+        }
+    }
+
+    const handleRemoveFromFinpConfirm = async () => {
+        if (!removeFromFinpTarget) return
+        setRemovingFromFinp(true)
+        try {
+            const { transactionId, spaceId, spaceEntryId } = removeFromFinpTarget
+            if (spaceEntryId) {
+                await apiJson(`/api/spaces/${spaceId}/entries/${spaceEntryId}/personal-impact`, { method: 'DELETE' })
+            }
+            await deleteTransaction(transactionId)
+            await Promise.all([
+                invalidateData(TRANSACTION_INVALIDATION_TAGS),
+                invalidateData(NOTIFICATION_INVALIDATION_TAGS),
+            ])
+            success('Movimiento quitado de tu Finp')
+            setRemoveFromFinpTarget(null)
+        } catch (err) {
+            toastError(err instanceof Error ? err.message : 'Error al quitar de tu Finp')
+        } finally {
+            setRemovingFromFinp(false)
         }
     }
 
@@ -992,8 +1092,10 @@ function TransactionsPageInner() {
             { value: 'credit_card_expense', label: 'Gasto con TC' },
             { value: 'transfer', label: 'Transferencia' },
             { value: 'exchange', label: 'Cambio' },
-        { value: 'credit_card_payment', label: 'Pago de tarjeta' },
+            { value: 'credit_card_payment', label: 'Pago de tarjeta' },
             { value: 'adjustment', label: 'Ajuste' },
+            { value: 'personal_debt_payment', label: 'Pago de deuda' },
+            { value: 'personal_debt_collect', label: 'Cobro de deuda' },
         ],
         []
     )
@@ -1316,16 +1418,24 @@ function TransactionsPageInner() {
                                         (transaction.destinationAccountId as unknown as (IAccount & { color?: string }) | null)
                                     const category = transaction.categoryId as { name?: string; color?: string } | null
 
+                                    const isHighlighted = transaction._id.toString() === highlightedId
+                                    const needsReview = transactionReviewIds.includes(transaction._id.toString())
+                                    const isAmbered = isHighlighted || needsReview
                                     return (
                                         <motion.div
                                             key={transaction._id.toString()}
                                             variants={staggerItem}
                                             className="group relative overflow-hidden rounded-2xl"
                                             data-testid="transaction-item"
+                                            data-transaction-id={transaction._id.toString()}
                                             style={{
                                                 background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                                                border: '0.5px solid var(--border)',
-                                                boxShadow: 'var(--card-shadow)',
+                                                border: isAmbered
+                                                    ? '1.5px solid color-mix(in srgb, var(--amber-base, #f59e0b) 60%, transparent)'
+                                                    : '0.5px solid var(--border)',
+                                                boxShadow: isAmbered
+                                                    ? '0 0 0 3px color-mix(in srgb, var(--amber-base, #f59e0b) 20%, transparent)'
+                                                    : 'var(--card-shadow)',
                                             }}
                                         >
                                             <div
@@ -1334,9 +1444,11 @@ function TransactionsPageInner() {
                                             />
                                             <div className="px-4 py-3.5 flex flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between">
                                                 <div className="flex items-center justify-between sm:hidden">
-                                                    <Badge variant={TRANSACTION_TYPE_COLORS[transaction.type]} className="shrink-0 rounded-full px-2.5">
-                                                        {TRANSACTION_TYPE_LABELS[transaction.type]}
-                                                    </Badge>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Badge variant={getTransactionTypeBadgeVariant(transaction)} className="shrink-0 rounded-full px-2.5">
+                                                            {getTransactionTypeLabel(transaction)}
+                                                        </Badge>
+                                                    </div>
                                                     <div className="flex items-center gap-2">
                                                         <p
                                                             className="font-semibold tabular-nums text-sm"
@@ -1350,36 +1462,55 @@ function TransactionsPageInner() {
                                                                 color={getTransactionAmountColor(transaction)}
                                                             />
                                                         </p>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            className="rounded-xl"
-                                                            onClick={() => handleEdit(transaction)}
-                                                            aria-label="Editar"
-                                                            data-testid="btn-editar-transaccion"
-                                                        >
-                                                            <Pencil />
-                                                        </Button>
-                                                        <Button
-                                                            variant="destructive"
-                                                            size="icon-sm"
-                                                            className="rounded-xl"
-                                                            onClick={() => handleDelete(transaction._id.toString())}
-                                                            aria-label="Eliminar"
-                                                            data-testid="btn-eliminar-transaccion"
-                                                        >
-                                                            <Trash2 />
-                                                        </Button>
+                                                        {(isHighlighted || needsReview) && transaction.spaceEntryId && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                className="rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                                                                onClick={() => void handleSyncImpact(transaction)}
+                                                                aria-label="Resolver"
+                                                            >
+                                                                <RefreshCw />
+                                                            </Button>
+                                                        )}
+                                                        {!NON_EDITABLE_TYPES.has(transaction.type) && (
+                                                            <>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    className="rounded-xl"
+                                                                    onClick={() => handleEdit(transaction)}
+                                                                    aria-label="Editar"
+                                                                    data-testid="btn-editar-transaccion"
+                                                                >
+                                                                    <Pencil />
+                                                                </Button>
+                                                                {!transaction.spaceId && (
+                                                                    <Button
+                                                                        variant="destructive"
+                                                                        size="icon-sm"
+                                                                        className="rounded-xl"
+                                                                        onClick={() => handleDelete(transaction._id.toString())}
+                                                                        aria-label="Eliminar"
+                                                                        data-testid="btn-eliminar-transaccion"
+                                                                    >
+                                                                        <Trash2 />
+                                                                    </Button>
+                                                                )}
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
 
                                                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                                                    <Badge
-                                                        variant={TRANSACTION_TYPE_COLORS[transaction.type]}
-                                                        className="shrink-0 hidden sm:flex rounded-full px-2.5 mt-0.5"
-                                                    >
-                                                        {TRANSACTION_TYPE_LABELS[transaction.type]}
-                                                    </Badge>
+                                                    <div className="hidden sm:flex flex-col items-start gap-1 mt-0.5 shrink-0">
+                                                        <Badge
+                                                            variant={getTransactionTypeBadgeVariant(transaction)}
+                                                            className="rounded-full px-2.5"
+                                                        >
+                                                            {getTransactionTypeLabel(transaction)}
+                                                        </Badge>
+                                                    </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="text-[15px] font-semibold tracking-tight leading-tight">
                                                             {transaction.description}
@@ -1401,6 +1532,37 @@ function TransactionsPageInner() {
                                                                     )}
                                                                     {category.name}
                                 </span>
+                                                            )}
+
+                                                            {transaction.spaceId && (
+                                                                <span className="flex items-center gap-1 text-xs text-muted-foreground/90">
+                                                                    ·
+                                                                    <Link
+                                                                        href={`/spaces/${transaction.spaceId.toString()}${transaction.spaceEntryId ? `?entryId=${transaction.spaceEntryId.toString()}` : ''}`}
+                                                                        aria-label={`Ver espacio${transaction.spaceNameSnapshot ? ` ${transaction.spaceNameSnapshot}` : ''}`}
+                                                                        className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors"
+                                                                    >
+                                                                        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                                                                        {transaction.spaceNameSnapshot ?? 'Espacio'}
+                                                                    </Link>
+                                                                </span>
+                                                            )}
+
+                                                            {transaction.spaceId && !NON_EDITABLE_TYPES.has(transaction.type) && (
+                                                                <span className="flex items-center sm:hidden">
+                                                                    ·
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setRemoveFromFinpTarget({
+                                                                            transactionId: transaction._id.toString(),
+                                                                            spaceId: transaction.spaceId!.toString(),
+                                                                            spaceEntryId: transaction.spaceEntryId?.toString(),
+                                                                        })}
+                                                                        className="ml-1 text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors"
+                                                                    >
+                                                                        Quitar de mi Finp
+                                                                    </button>
+                                                                </span>
                                                             )}
 
                                                             {sourceAccount?.name && (
@@ -1468,6 +1630,12 @@ function TransactionsPageInner() {
                                                                     · pago dual
                                                                 </span>
                                                             )}
+
+                                                            {isSplitTransaction(transaction) && (
+                                                                <span className="text-xs text-muted-foreground/80">
+                                                                    · Total pagado: {hidden ? '•••' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: transaction.currency, maximumFractionDigits: 2 }).format(transaction.amount)}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1492,27 +1660,75 @@ function TransactionsPageInner() {
                                                         <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                                                             {transaction.currency}
                                                         </p>
+                                                        {isSplitTransaction(transaction) && (
+                                                            <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                                                                Total pagado: {hidden ? '•••' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: transaction.currency, maximumFractionDigits: 2 }).format(transaction.amount)}
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                    <div className="flex gap-1">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-8 rounded-xl text-xs bg-background/60"
-                                                            onClick={() => handleEdit(transaction)}
-                                                            data-testid="btn-editar-transaccion"
-                                                        >
-                                                            Editar
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-8 rounded-xl text-xs"
-                                                            onClick={() => handleDelete(transaction._id.toString())}
-                                                            data-testid="btn-eliminar-transaccion"
-                                                        >
-                                                            Eliminar
-                                                        </Button>
-                                                    </div>
+                                                    {!NON_EDITABLE_TYPES.has(transaction.type) && !transaction.spaceId && (
+                                                        <div className="flex gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                aria-label="Editar transacción"
+                                                                title="Editar"
+                                                                onClick={() => handleEdit(transaction)}
+                                                                data-testid="btn-editar-transaccion"
+                                                            >
+                                                                <Pencil size={15} />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                aria-label="Eliminar transacción"
+                                                                title="Eliminar"
+                                                                onClick={() => handleDelete(transaction._id.toString())}
+                                                                data-testid="btn-eliminar-transaccion"
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {transaction.spaceId && !NON_EDITABLE_TYPES.has(transaction.type) && (
+                                                        <div className="flex gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                aria-label="Editar transacción"
+                                                                title="Editar"
+                                                                onClick={() => handleEdit(transaction)}
+                                                            >
+                                                                <Pencil size={15} />
+                                                            </Button>
+                                                            {(isHighlighted || needsReview) && transaction.spaceEntryId && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                                                                    aria-label="Resolver"
+                                                                    title="Resolver"
+                                                                    onClick={() => void handleSyncImpact(transaction)}
+                                                                >
+                                                                    <RefreshCw size={15} />
+                                                                </Button>
+                                                            )}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                aria-label="Quitar de mi Finp"
+                                                                title="Quitar de mi Finp"
+                                                                onClick={() => setRemoveFromFinpTarget({
+                                                                    transactionId: transaction._id.toString(),
+                                                                    spaceId: transaction.spaceId!.toString(),
+                                                                    spaceEntryId: transaction.spaceEntryId?.toString(),
+                                                                })}
+                                                            >
+                                                                <Unlink size={15} />
+                                                            </Button>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                             </div>
@@ -1588,6 +1804,25 @@ function TransactionsPageInner() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <AlertDialog open={Boolean(removeFromFinpTarget)} onOpenChange={(open) => !open && setRemoveFromFinpTarget(null)}>
+                <AlertDialogContent
+                    className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl"
+                >
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Quitar de tu Finp?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esto solo quitará el movimiento de tus finanzas personales. El movimiento seguirá vigente en el espacio y el balance del grupo no cambia.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={removingFromFinp}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleRemoveFromFinpConfirm} disabled={removingFromFinp}>
+                            {removingFromFinp ? 'Quitando…' : 'Quitar de mi Finp'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </motion.div>
     )
 }
@@ -1601,39 +1836,47 @@ export default function TransactionsPage() {
 }
 
 function isPositiveAdjustment(transaction: ITransaction) {
-    return transaction.type === 'adjustment' && transaction.amount < 0
+    return transaction.type === 'adjustment' && getTransactionAccountImpact(transaction)?.direction === 'increase'
 }
 
 function getTransactionAmountColor(transaction: ITransaction) {
-    if (transaction.type === 'income') return '#10B981'
-    if (transaction.type === 'expense') return 'var(--destructive)'
     if (transaction.type === 'credit_card_expense') return '#6366F1'
+    const impact = getTransactionAccountImpact(transaction)
+    if (impact?.direction === 'increase') return '#10B981'
+    if (impact?.direction === 'decrease') return 'var(--destructive)'
     if (transaction.type === 'exchange') return 'var(--sky-dark)'
-    if (transaction.type === 'adjustment') {
-        return isPositiveAdjustment(transaction) ? '#10B981' : 'var(--destructive)'
-    }
     return 'var(--foreground)'
 }
 
 function getTransactionAccentColor(transaction: ITransaction) {
-    if (transaction.type === 'income') return 'rgba(16,185,129,0.42)'
-    if (transaction.type === 'expense') return 'rgba(239,68,68,0.42)'
     if (transaction.type === 'credit_card_expense') return 'rgba(99,102,241,0.42)'
+    const impact = getTransactionAccountImpact(transaction)
+    if (impact?.direction === 'increase') return 'rgba(16,185,129,0.42)'
+    if (impact?.direction === 'decrease') return 'rgba(239,68,68,0.42)'
     if (transaction.type === 'exchange') return 'rgba(74,158,204,0.42)'
-    if (transaction.type === 'transfer') return 'rgba(148,163,184,0.28)'
-    if (transaction.type === 'credit_card_payment') return 'rgba(217,119,6,0.42)'
-    if (transaction.type === 'adjustment') {
-        return isPositiveAdjustment(transaction) ? 'rgba(16,185,129,0.42)' : 'rgba(239,68,68,0.42)'
-    }
     return 'rgba(148,163,184,0.28)'
 }
 
 function getTransactionDisplayAmount(transaction: ITransaction) {
-    return transaction.type === 'adjustment' ? Math.abs(transaction.amount) : transaction.amount
+    if (transaction.operationalAmount !== undefined) return transaction.operationalAmount
+    const impact = getTransactionAccountImpact(transaction)
+    return Math.abs(impact?.delta ?? transaction.amount)
+}
+
+function getTransactionTypeLabel(transaction: ITransaction): string {
+    if (transaction.spaceId && transaction.type === 'expense') return 'Gasto de espacio'
+    if (transaction.spaceId && transaction.type === 'income') return 'Ingreso de espacio'
+    return TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type
+}
+
+function getTransactionTypeBadgeVariant(transaction: ITransaction): 'default' | 'destructive' | 'secondary' | 'outline' {
+    if (transaction.spaceId && (transaction.type === 'expense' || transaction.type === 'income')) return 'secondary'
+    return TRANSACTION_TYPE_COLORS[transaction.type] ?? 'secondary'
 }
 
 function getTransactionDisplayPrefix(transaction: ITransaction) {
-    if (transaction.type === 'exchange') return '↔ '
-    if (transaction.type !== 'adjustment') return ''
-    return isPositiveAdjustment(transaction) ? '+' : '-'
+    const impact = getTransactionAccountImpact(transaction)
+    if (impact?.direction === 'increase') return '+'
+    if (impact?.direction === 'decrease') return '-'
+    return ''
 }

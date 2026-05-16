@@ -1,22 +1,26 @@
 import { auth } from '@/lib/auth'
+import { normalizeSafeInviteCallbackUrl } from '@/lib/utils/invite-callback'
 import { NextResponse } from 'next/server'
 
 export default auth((req) => {
-    const isLoggedIn = !!req.auth
-    const isAuthRoute = req.nextUrl.pathname.startsWith('/login') ||
-        req.nextUrl.pathname.startsWith('/register')
-    const isApiAuthRoute = req.nextUrl.pathname.startsWith('/api/auth')
-    // Rutas de API de auth siempre permitidas
-    if (isApiAuthRoute) return NextResponse.next()
+    const isLoggedIn = Boolean(req.auth)
+    const pathname = req.nextUrl.pathname
+    const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register')
+    const isApiAuthRoute = pathname.startsWith('/api/auth')
+    const isPublicInviteRoute =
+        pathname.startsWith('/spaces/invite/') || pathname.startsWith('/api/spaces/invites/')
 
-    // Si no está logueado y no es ruta de auth, redirigir a login
+    if (isApiAuthRoute || isPublicInviteRoute) return NextResponse.next()
+
     if (!isLoggedIn && !isAuthRoute) {
-        return NextResponse.redirect(new URL('/login', req.nextUrl))
+        const loginUrl = new URL('/login', req.nextUrl)
+        loginUrl.searchParams.set('callbackUrl', `${pathname}${req.nextUrl.search}`)
+        return NextResponse.redirect(loginUrl)
     }
 
-    // Si está logueado y va a login/register, redirigir a dashboard
     if (isLoggedIn && isAuthRoute) {
-        return NextResponse.redirect(new URL('/dashboard', req.nextUrl))
+        const callbackUrl = normalizeSafeInviteCallbackUrl(req.nextUrl.searchParams.get('callbackUrl'))
+        return NextResponse.redirect(new URL(callbackUrl ?? '/dashboard', req.nextUrl))
     }
 
     return NextResponse.next()
@@ -25,4 +29,3 @@ export default auth((req) => {
 export const config = {
     matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
-

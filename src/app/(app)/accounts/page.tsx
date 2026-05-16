@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
     AlertCircle,
@@ -490,7 +491,9 @@ function AccountTypeSection({
     )
 }
 
-export default function AccountsPage() {
+function AccountsPageInner() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const { accounts, loading, error, fetchAccounts, createAccount, updateAccount, deleteAccount } = useAccounts()
     const { success, error: toastError } = useToast()
     const { hidden } = useHideAmounts()
@@ -507,6 +510,13 @@ export default function AccountsPage() {
     useEffect(() => {
         void fetchAccounts()
     }, [fetchAccounts, preferences.operationalStartDate])
+
+    useEffect(() => {
+        if (searchParams.get('create') !== '1') return
+        setSelectedAccount(null)
+        setDialogOpen(true)
+        router.replace('/accounts', { scroll: false })
+    }, [router, searchParams])
 
     const groupedAccounts = useMemo(() => {
         const source = accounts as AccountWithBalance[]
@@ -741,5 +751,13 @@ export default function AccountsPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </motion.div>
+    )
+}
+
+export default function AccountsPage() {
+    return (
+        <Suspense fallback={null}>
+            <AccountsPageInner />
+        </Suspense>
     )
 }

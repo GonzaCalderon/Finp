@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -35,8 +36,8 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
     const {
         register,
         handleSubmit,
+        control,
         setValue,
-        watch,
         reset,
         formState: { errors, isSubmitting },
     } = useForm<CategoryFormData>({
@@ -44,8 +45,8 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
         defaultValues: { color: '#6366f1' },
     })
 
-    const color = watch('color') ?? '#6366f1'
-    const type = watch('type')
+    const color = useWatch({ control, name: 'color' }) ?? '#6366f1'
+    const type = useWatch({ control, name: 'type' })
 
     useEffect(() => {
         if (open) {
@@ -66,6 +67,9 @@ export function CategoryDialog({ open, onOpenChange, category, onSubmit }: Categ
             <DialogContent variant="fullscreen-mobile" className="max-w-sm p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{category ? 'Editar categoría' : 'Nueva categoría'}</DialogTitle>
+                    <DialogDescription>
+                        Elegi nombre, tipo y color para identificarla en Finp.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col sm:max-h-[85vh]">

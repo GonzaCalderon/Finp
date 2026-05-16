@@ -13,7 +13,7 @@ export function StartupSplash({ blocking = true }: { blocking?: boolean }) {
             transition={{ duration: reducedMotion ? 0.12 : 0.18 }}
             className="fixed inset-0 z-[140] flex items-center justify-center overflow-hidden px-6"
             style={{
-                pointerEvents: blocking ? 'auto' : 'none',
+                pointerEvents: 'none',
                 background: `
                     radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--sky) 16%, transparent), transparent 18%),
                     radial-gradient(circle at 34% 62%, color-mix(in srgb, var(--chart-3) 9%, transparent), transparent 24%),
@@ -24,7 +24,7 @@ export function StartupSplash({ blocking = true }: { blocking?: boolean }) {
                 backdropFilter: 'blur(14px)',
             }}
             aria-live="polite"
-            aria-busy="true"
+            aria-busy={blocking}
         >
             <motion.div
                 className="relative flex flex-col items-center justify-center"

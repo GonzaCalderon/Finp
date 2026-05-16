@@ -1,5 +1,6 @@
 import type { IInstallmentPlan, ITransaction } from '@/types'
 import { buildMonthlyCardPaymentSummary, isCreditCardPaymentType } from '@/lib/utils/credit-card'
+import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
 
 export type CurrencyTotals = {
     ars: number
@@ -52,14 +53,14 @@ export function buildTransactionPeriodSummary({
     const income = transactions
         .filter((transaction) => transaction.type === 'income')
         .reduce((totals, transaction) => {
-            addCurrencyAmount(totals, transaction.currency, transaction.amount)
+            addCurrencyAmount(totals, transaction.currency, getOperationalIncomeAmount(transaction))
             return totals
         }, emptyCurrencyTotals())
 
     const regularExpense = transactions
         .filter((transaction) => transaction.type === 'expense' && !transaction.installmentPlanId)
         .reduce((totals, transaction) => {
-            addCurrencyAmount(totals, transaction.currency, transaction.amount)
+            addCurrencyAmount(totals, transaction.currency, getOperationalExpenseAmount(transaction))
             return totals
         }, emptyCurrencyTotals())
 

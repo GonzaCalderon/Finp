@@ -11,6 +11,8 @@ import {
     BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { RouteTransitionButton } from '@/components/shared/RouteTransitionButton'
+import { useBreadcrumbAction } from '@/contexts/BreadcrumbActionContext'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const ROUTE_LABELS: Record<string, string> = {
     dashboard: 'Dashboard',
@@ -20,28 +22,34 @@ const ROUTE_LABELS: Record<string, string> = {
     commitments: 'Compromisos',
     projection: 'Proyección',
     rules: 'Reglas',
+    spaces: 'Espacios',
+    debts: 'Deudas',
     settings: 'Configuración',
     import: 'Importar',
     history: 'Historial',
     'credit-card': 'Gastos con TC',
 }
 
-function segmentLabel(segment: string): string {
+function segmentLabel(segment: string, previousSegment?: string): string {
     if (ROUTE_LABELS[segment]) return ROUTE_LABELS[segment]
     // MongoDB ObjectId — 24-char hex string
-    if (/^[0-9a-f]{24}$/i.test(segment)) return 'Revisión'
+    if (/^[0-9a-f]{24}$/i.test(segment)) {
+        if (previousSegment === 'spaces') return 'Detalle'
+        return 'Revisión'
+    }
     return segment
 }
 
 export function AppBreadcrumb() {
     const pathname = usePathname()
+    const { action } = useBreadcrumbAction()
     const segments = pathname.split('/').filter(Boolean)
 
     if (segments.length === 0) return null
 
     return (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-            <Breadcrumb>
+        <div className="flex items-center justify-between gap-3">
+            <Breadcrumb className="min-w-0">
                 <BreadcrumbList>
                     <BreadcrumbItem>
                         <BreadcrumbLink
@@ -54,7 +62,7 @@ export function AppBreadcrumb() {
 
                     {segments.map((segment, index) => {
                         const href = '/' + segments.slice(0, index + 1).join('/')
-                        const label = segmentLabel(segment)
+                        const label = segmentLabel(segment, segments[index - 1])
                         const isLast = index === segments.length - 1
 
                         return (
@@ -80,23 +88,28 @@ export function AppBreadcrumb() {
                 </BreadcrumbList>
             </Breadcrumb>
 
-            {pathname === '/transactions' && (
-                <RouteTransitionButton
-                    href="/transactions/credit-card"
-                    direction="forward"
-                    ariaLabel="Ir a Gastos con TC"
-                    className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                    style={{
-                        background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                        borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
-                        boxShadow: 'var(--card-shadow)',
-                    }}
-                >
-                    <CreditCard className="h-3.5 w-3.5" />
-                    <span>Gastos con TC</span>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                </RouteTransitionButton>
-            )}
+            {/* Acciones a la derecha: acción contextual + campana */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+                {action ?? (pathname === '/transactions' ? (
+                    <RouteTransitionButton
+                        href="/transactions/credit-card"
+                        direction="forward"
+                        ariaLabel="Ir a Gastos con TC"
+                        className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        style={{
+                            background: 'color-mix(in srgb, var(--card) 92%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--foreground) 8%, transparent)',
+                            boxShadow: 'var(--card-shadow)',
+                        }}
+                    >
+                        <CreditCard className="h-3.5 w-3.5" />
+                        <span>Gastos con TC</span>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </RouteTransitionButton>
+                ) : null)}
+
+                <NotificationBell />
+            </div>
         </div>
     )
 }

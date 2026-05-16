@@ -12,6 +12,7 @@ interface ResponsiveAmountProps {
     fullClassName?: string
     compactMaximumFractionDigits?: number
     fullMaximumFractionDigits?: number
+    loading?: boolean
 }
 
 export function ResponsiveAmount({
@@ -24,7 +25,21 @@ export function ResponsiveAmount({
     fullClassName = 'hidden md:inline',
     compactMaximumFractionDigits = 1,
     fullMaximumFractionDigits = 0,
+    loading = false,
 }: ResponsiveAmountProps) {
+    if (loading) {
+        return (
+            <span
+                className={cn(
+                    'inline-block h-[1em] w-[7.5ch] animate-pulse rounded-md align-[-0.12em]',
+                    className
+                )}
+                style={{ background: 'color-mix(in srgb, currentColor 16%, transparent)', color }}
+                aria-label="Cargando importe"
+            />
+        )
+    }
+
     if (hidden) {
         return <span className={className} style={{ color }}>••••</span>
     }

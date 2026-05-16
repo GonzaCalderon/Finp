@@ -1,0 +1,28 @@
+export const COMMON_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL', 'CLP', 'UYU', 'GBP', 'MXN'] as const
+
+export const ISO_CURRENCIES: Array<{ code: string; name: string; countryCode: string }> = [
+    { code: 'ARS', name: 'Peso argentino', countryCode: 'AR' },
+    { code: 'USD', name: 'Dólar estadounidense', countryCode: 'US' },
+    { code: 'EUR', name: 'Euro', countryCode: 'EU' },
+    { code: 'BRL', name: 'Real brasileño', countryCode: 'BR' },
+    { code: 'CLP', name: 'Peso chileno', countryCode: 'CL' },
+    { code: 'UYU', name: 'Peso uruguayo', countryCode: 'UY' },
+    { code: 'GBP', name: 'Libra esterlina', countryCode: 'GB' },
+    { code: 'MXN', name: 'Peso mexicano', countryCode: 'MX' },
+    { code: 'BOB', name: 'Boliviano', countryCode: 'BO' },
+    { code: 'CAD', name: 'Dólar canadiense', countryCode: 'CA' },
+    { code: 'CHF', name: 'Franco suizo', countryCode: 'CH' },
+    { code: 'COP', name: 'Peso colombiano', countryCode: 'CO' },
+    { code: 'CNY', name: 'Yuan renminbi', countryCode: 'CN' },
+    { code: 'JPY', name: 'Yen japonés', countryCode: 'JP' },
+    { code: 'PEN', name: 'Sol peruano', countryCode: 'PE' },
+    { code: 'PYG', name: 'Guaraní paraguayo', countryCode: 'PY' },
+    { code: 'AUD', name: 'Dólar australiano', countryCode: 'AU' },
+    { code: 'NZD', name: 'Dólar neozelandés', countryCode: 'NZ' },
+    { code: 'SEK', name: 'Corona sueca', countryCode: 'SE' },
+    { code: 'NOK', name: 'Corona noruega', countryCode: 'NO' },
+    { code: 'DKK', name: 'Corona danesa', countryCode: 'DK' },
+    { code: 'ZAR', name: 'Rand sudafricano', countryCode: 'ZA' },
+    { code: 'KRW', name: 'Won surcoreano', countryCode: 'KR' },
+    { code: 'INR', name: 'Rupia india', countryCode: 'IN' },
+]

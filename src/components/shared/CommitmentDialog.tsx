@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -45,8 +46,8 @@ export function CommitmentDialog({
     const {
         register,
         handleSubmit,
+        control,
         setValue,
-        watch,
         reset,
         formState: { errors, isSubmitting, submitCount },
     } = useForm<CommitmentFormData>({
@@ -64,12 +65,12 @@ export function CommitmentDialog({
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const expenseCategories = categories.filter((c) => c.type === 'expense')
-    const recurrence = watch('recurrence')
-    const currency = watch('currency')
-    const categoryId = watch('categoryId')
-    const applyMode = watch('applyMode')
-    const startDate = watch('startDate')
-    const endDate = watch('endDate')
+    const recurrence = useWatch({ control, name: 'recurrence' })
+    const currency = useWatch({ control, name: 'currency' })
+    const categoryId = useWatch({ control, name: 'categoryId' })
+    const applyMode = useWatch({ control, name: 'applyMode' })
+    const startDate = useWatch({ control, name: 'startDate' })
+    const endDate = useWatch({ control, name: 'endDate' })
 
     useEffect(() => {
         if (open) {
@@ -105,6 +106,9 @@ export function CommitmentDialog({
             <DialogContent variant="fullscreen-mobile" className="max-w-md p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>{commitment ? 'Editar compromiso' : 'Nuevo compromiso'}</DialogTitle>
+                    <DialogDescription>
+                        Defini monto, recurrencia y modo de aplicacion del compromiso.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form ref={scrollRef} onSubmit={handleSubmit(onSubmit)} className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">
@@ -162,7 +166,7 @@ export function CommitmentDialog({
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="manual">Manual</SelectItem>
-                                <SelectItem value="auto_month_start">Automático al inicio del mes</SelectItem>
+                                <SelectItem value="auto_month_start">Preparado para automatización</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

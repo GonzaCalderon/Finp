@@ -17,6 +17,8 @@ import {
     getPrimaryCurrency,
     isDualCurrencyAccount,
 } from '@/lib/utils/accounts'
+import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
+import { isSplitTransaction } from '@/lib/utils/operational-amount'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import { apiJson } from '@/lib/client/auth-client'
 
@@ -31,6 +33,7 @@ interface RecentTransaction {
     _id: string
     type: string
     amount: number
+    operationalAmount?: number
     currency: string
     destinationAmount?: number
     destinationCurrency?: string
@@ -284,32 +287,28 @@ export function AccountDetailSheet({ open, onOpenChange, accountId }: AccountDet
                             ) : (
                                 <div className="space-y-2">
                                     {detail.recentTransactions.map((t) => {
-                                        const isSource = (() => {
-                                            const src = t.sourceAccountId
-                                            if (!src) return false
-                                            if (typeof src === 'string') return src === accountId
-                                            return src._id?.toString() === accountId
-                                        })()
                                         const isDestination = (() => {
                                             const dest = t.destinationAccountId
                                             if (!dest) return false
                                             if (typeof dest === 'string') return dest === accountId
                                             return dest._id?.toString() === accountId
                                         })()
-                                        const displayAmount =
-                                            t.type === 'exchange' && isDestination && t.destinationAmount
-                                                ? t.destinationAmount
-                                                : t.amount
-                                        const displayCurrency =
-                                            t.type === 'exchange' && isDestination && t.destinationCurrency
-                                                ? t.destinationCurrency
-                                                : t.currency
+                                        const accountImpact = getTransactionAccountImpact(t, accountId ?? undefined)
+                                        const displayAmount = Math.abs(accountImpact?.delta ?? t.amount)
+                                        const personalShare = isSplitTransaction(t) ? t.operationalAmount : undefined
+                                        const displayCurrency = accountImpact?.currency ?? t.currency
                                         const displayPrefix =
-                                            t.type === 'exchange' && isSource && isDestination
-                                                ? '↔'
-                                                : isSource
+                                            accountImpact?.direction === 'increase'
+                                                ? '+'
+                                                : accountImpact?.direction === 'decrease'
                                                     ? '-'
-                                                    : '+'
+                                                    : ''
+                                        const impactLabel =
+                                            (t.type === 'credit_card_payment' || t.type === 'debt_payment') && isDestination
+                                                ? detail.account.type === 'debt'
+                                                    ? 'Reducción de deuda'
+                                                    : 'Pago aplicado'
+                                                : ''
                                         return (
                                             <div key={t._id} className="flex items-center justify-between py-2 border-b last:border-0">
                                                 <div className="flex items-center gap-2">
@@ -330,12 +329,20 @@ export function AccountDetailSheet({ open, onOpenChange, accountId }: AccountDet
                                                             {t.type === 'credit_card_payment' && t.paymentGroupId
                                                                 ? ' · pago dual'
                                                                 : ''}
+                                                            {impactLabel ? ` · ${impactLabel}` : ''}
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <span className={`text-sm font-semibold ${isSource && !isDestination ? 'text-red-600' : 'text-green-600'}`}>
-                          {displayPrefix}{fmt(displayAmount, displayCurrency)}
-                        </span>
+                                                <div className="text-right">
+                                                    <span className={`text-sm font-semibold ${accountImpact?.direction === 'decrease' ? 'text-red-600' : 'text-green-600'}`}>
+                                                        {displayPrefix}{fmt(displayAmount, displayCurrency)}
+                                                    </span>
+                                                    {personalShare !== undefined && (
+                                                        <p className="text-[10px] text-muted-foreground/70">
+                                                            Tu parte: {fmt(personalShare, displayCurrency)}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
                                         )
                                     })}

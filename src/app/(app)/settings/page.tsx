@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/select'
 import { CategoryDialog } from '@/components/shared/CategoryDialog'
 import { fadeIn, fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { cn } from '@/lib/utils'
 import {
     User,
     Lock,
@@ -841,8 +842,9 @@ function CategoriesSection() {
     } | null>(null)
     const [loadingDefaults, setLoadingDefaults] = useState(false)
 
-    const incomeCategories = categories.filter((c) => c.type === 'income')
-    const expenseCategories = categories.filter((c) => c.type === 'expense')
+    const visibleCategories = categories.filter((c) => !c.isVirtual && !c.hiddenFromSettings)
+    const incomeCategories = visibleCategories.filter((c) => c.type === 'income')
+    const expenseCategories = visibleCategories.filter((c) => c.type === 'expense')
 
     const handleCreate = () => { setSelectedCategory(null); setDialogOpen(true) }
     const handleEdit = (category: ICategory) => { setSelectedCategory(category); setDialogOpen(true) }
@@ -953,7 +955,7 @@ function CategoriesSection() {
         <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {categories.length} categoría{categories.length !== 1 ? 's' : ''} en total
+                    {visibleCategories.length} categoría{visibleCategories.length !== 1 ? 's' : ''} en total
                 </p>
                 <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" size="sm" onClick={handleOpenDefaults} disabled={loadingDefaults}>
@@ -991,7 +993,7 @@ function CategoriesSection() {
 
             <DeleteCategoryDialog
                 category={categoryToDelete}
-                categories={categories}
+                categories={visibleCategories}
                 open={deleteDialogOpen}
                 onOpenChange={setDeleteDialogOpen}
                 onConfirm={handleDeleteConfirm}
@@ -1045,30 +1047,20 @@ function SettingsContent() {
             <h1 className="text-xl font-semibold tracking-tight">Configuración</h1>
 
             {/* Tab nav */}
-            <div
-                className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-0 md:overflow-visible"
-                style={{ borderBottom: '0.5px solid var(--border)' }}
-            >
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {tabs.map(({ key, label }) => (
                     <button
                         key={key}
                         type="button"
                         onClick={() => setActiveTab(key)}
-                        className="relative shrink-0 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors md:rounded-none md:px-4"
-                        style={{
-                            color: activeTab === key ? 'var(--sky)' : 'var(--muted-foreground)',
-                            background: activeTab === key ? 'rgba(96,184,224,0.14)' : 'transparent',
-                        }}
+                        className={cn(
+                            'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                            activeTab === key
+                                ? 'bg-foreground text-background'
+                                : 'bg-accent/50 text-muted-foreground hover:text-foreground'
+                        )}
                     >
                         {label}
-                        {activeTab === key && (
-                            <motion.div
-                                layoutId="tab-indicator"
-                                className="absolute bottom-0 left-0 right-0 h-0.5 hidden md:block"
-                                style={{ background: 'var(--sky)', marginBottom: '-0.5px' }}
-                                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                            />
-                        )}
                     </button>
                 ))}
             </div>

@@ -4,6 +4,7 @@ import { connectDB } from '@/lib/db'
 import { Transaction, User } from '@/lib/models'
 import { getCurrentFinancialPeriod, parseFinancialPeriod, shiftFinancialPeriod } from '@/lib/utils/period'
 import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
+import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
 
 type CurrencyTotals = {
     ars: number
@@ -63,14 +64,14 @@ export async function GET(request: Request) {
             const income = monthTransactions
                 .filter((t) => t.type === 'income')
                 .reduce((totals, transaction) => {
-                    addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                    addCurrencyAmount(totals, transaction.currency, getOperationalIncomeAmount(transaction))
                     return totals
                 }, emptyCurrencyTotals())
 
             const expense = monthTransactions
                 .filter((t) => t.type === 'expense' && !t.installmentPlanId)
                 .reduce((totals, transaction) => {
-                    addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                    addCurrencyAmount(totals, transaction.currency, getOperationalExpenseAmount(transaction))
                     return totals
                 }, emptyCurrencyTotals())
 

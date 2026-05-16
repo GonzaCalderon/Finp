@@ -15,8 +15,7 @@ import { StartupSplash } from '@/components/shared/StartupSplash'
 
 const STARTUP_PENDING_KEY = 'finp-startup-pending'
 const STARTUP_MIN_DURATION_MS = 650
-const STARTUP_AUTO_RELEASE_MS = 2200
-const STARTUP_MAX_DURATION_MS = 9000
+const STARTUP_MAX_DURATION_MS = 12000
 
 type AppStartupContextValue = {
     isActive: boolean
@@ -48,11 +47,11 @@ export function AppStartupGate({ children }: { children: ReactNode }) {
     })
     const startedAtRef = useRef<number | null>(null)
     const deferredReleaseTimerRef = useRef<number | null>(null)
-    const autoReleaseTimerRef = useRef<number | null>(null)
     const fallbackTimerRef = useRef<number | null>(null)
     const releaseTimerRef = useRef<number | null>(null)
     const releasedRef = useRef(false)
     const readyRequestedRef = useRef(false)
+    const appShellRef = useRef<HTMLDivElement | null>(null)
 
     const release = useCallback(() => {
         if (releasedRef.current) return
@@ -66,7 +65,6 @@ export function AppStartupGate({ children }: { children: ReactNode }) {
 
         releasedRef.current = true
         setIsBlocking(false)
-        clearTimer(autoReleaseTimerRef)
         clearTimer(fallbackTimerRef)
 
         const elapsed = Date.now() - startedAt
@@ -99,15 +97,10 @@ export function AppStartupGate({ children }: { children: ReactNode }) {
             return () => {
                 document.body.style.overflow = previousOverflow
                 clearTimer(deferredReleaseTimerRef)
-                clearTimer(autoReleaseTimerRef)
                 clearTimer(fallbackTimerRef)
                 clearTimer(releaseTimerRef)
             }
         }
-
-        autoReleaseTimerRef.current = window.setTimeout(() => {
-            release()
-        }, STARTUP_AUTO_RELEASE_MS)
 
         fallbackTimerRef.current = window.setTimeout(() => {
             release()
@@ -116,11 +109,32 @@ export function AppStartupGate({ children }: { children: ReactNode }) {
         return () => {
             document.body.style.overflow = previousOverflow
             clearTimer(deferredReleaseTimerRef)
-            clearTimer(autoReleaseTimerRef)
             clearTimer(fallbackTimerRef)
             clearTimer(releaseTimerRef)
         }
     }, [isActive, release])
+
+    useEffect(() => {
+        const node = appShellRef.current
+        if (!node) return
+
+        if (isBlocking) {
+            node.setAttribute('inert', '')
+            node.style.pointerEvents = 'none'
+            return () => {
+                node.removeAttribute('inert')
+                node.style.pointerEvents = ''
+            }
+        }
+
+        node.removeAttribute('inert')
+        node.style.pointerEvents = ''
+
+        return () => {
+            node.removeAttribute('inert')
+            node.style.pointerEvents = ''
+        }
+    }, [isBlocking])
 
     const value = useMemo<AppStartupContextValue>(
         () => ({
@@ -132,7 +146,7 @@ export function AppStartupGate({ children }: { children: ReactNode }) {
 
     return (
         <AppStartupContext.Provider value={value}>
-            {children}
+            <div ref={appShellRef}>{children}</div>
 
             <AnimatePresence>{isActive && <StartupSplash blocking={isBlocking} />}</AnimatePresence>
         </AppStartupContext.Provider>
@@ -144,6 +158,19 @@ export function useAppStartupReady(isReady: boolean) {
 
     useEffect(() => {
         if (!context?.isActive || !isReady) return
-        context.markReady()
+
+        let frameA = 0
+        let frameB = 0
+
+        frameA = window.requestAnimationFrame(() => {
+            frameB = window.requestAnimationFrame(() => {
+                context.markReady()
+            })
+        })
+
+        return () => {
+            window.cancelAnimationFrame(frameA)
+            window.cancelAnimationFrame(frameB)
+        }
     }, [context, isReady])
 }

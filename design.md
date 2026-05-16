@@ -226,6 +226,18 @@ Cards:
 
 El lenguaje visual actual usa separación sutil, no contenedores pesados.
 
+Reglas de composición:
+
+- Evitar cards dentro de cards como patrón de layout. Ensucia la jerarquía, vuelve la interfaz más pesada y hace que el producto se sienta menos serio.
+- Si una sección ya está en una superficie, los elementos internos deben resolverse como filas, listas, divisores, badges o bloques sin sombra.
+- Usar cards internas sólo cuando representen entidades repetibles con entidad propia, por ejemplo una cuenta, una tarjeta o un movimiento en una lista.
+- Los gradientes en cards y superficies deben ser muy sutiles. La referencia es el prototipo de espacios: acento de baja opacidad, suficiente para orientar pero no para decorar.
+- En pantallas operativas, priorizar lectura y estructura sobre ornamentación.
+- En heroes operativos, los metadatos como estado, moneda de reporte o cantidad de movimientos no deben resolverse como cards grandes. Deben ser badges/chips informativos o texto secundario para no competir con el nombre, la acción primaria y el resumen financiero.
+- Los KPI secundarios deben dimensionarse según su función: si acompañan una pantalla de administración, tienen que ser compactos, escaneables y no dominar la primera pantalla.
+- En vistas de configuración, preferir filas con divisores y grupos semánticos antes que tarjetas internas. La configuración se lee como ficha técnica editable, no como tablero.
+- Editar una entidad existente no debe reutilizar visualmente el flujo de creación cuando eso implique pasos, lenguaje o jerarquía de onboarding. La edición debe ser directa, contextual y con campos disponibles en una sola superficie cuando sea razonable.
+
 ### Movimiento
 
 Librerías:
@@ -243,6 +255,87 @@ Reglas:
 - Cambios de estado deben sentirse rápidos.
 - No usar animación para esconder latencia de datos.
 - Respetar `prefers-reduced-motion`.
+
+#### Cards seleccionables
+
+La animación de referencia para cards seleccionables es la de los KPI del hero del dashboard (`Ingresos`, `Gastos`, `Deuda mensual`, `Compromisos del mes`): debe sentirse suave, mínima y directa.
+
+Patrón obligatorio:
+
+- El elemento clickeable externo debe actuar como `group`.
+- La superficie visual interna de la card es la única capa que se desplaza.
+- Usar `transition-transform duration-200 group-hover:-translate-y-0.5`.
+- El movimiento debe ser corto; no usar `hover:-translate-y-1` ni transformaciones más amplias para cards de selección.
+- No animar varias sub-cards internas al mismo tiempo. Si la card tiene bloques internos, pueden cambiar borde/color de forma sutil, pero no deben desplazarse.
+- El icono de navegación puede moverse apenas con `group-hover:translate-x-0.5`.
+
+Aplicar este patrón a:
+
+- KPI seleccionables del dashboard.
+- Tarjetas de crédito seleccionables o navegables.
+- Espacios.
+- Cards que actúan como filtro o acceso a detalle.
+
+#### Barras de opciones contextuales
+
+Cuando una pantalla tiene sub-vistas operativas, preferir una barra horizontal de opciones clara antes que tabs genéricos con mucha presencia visual.
+
+En espacios, la barra operativa de referencia contiene:
+
+- Resumen.
+- Movimientos, con badge de pendientes cuando aplique.
+- Balance.
+
+Participantes, configuración y cierre no viven en esa barra operativa. Son administración del espacio y deben quedar en una zona separada en desktop o detrás del engranaje/context menu en mobile. Esta separación evita mezclar uso diario del espacio con mantenimiento del espacio.
+
+La barra debe sentirse como navegación operativa del contexto, no como otra card. Debe ser baja, escaneable, con estado activo claro y sin ocupar altura excesiva.
+
+En desktop, distribuir las opciones de forma pareja cuando el set es estable. Evitar que queden agrupadas a la izquierda con un vacío grande a la derecha, porque la barra pasa a leerse como un contenedor incompleto.
+
+En mobile, no usar scroll horizontal para navegación estructural. Si hay muchas secciones, usar labels cortos, dos filas compactas o un patrón de selección explícito; el usuario no debe tener que descubrir opciones ocultas arrastrando lateralmente.
+
+#### Mobile en espacios
+
+Espacios concentra resumen, movimientos, balance, participantes, configuración y cierre. En mobile no se intenta mostrar todo a la vez:
+
+- La barra principal muestra sólo Resumen, Movimientos y Balance.
+- Los KPI del espacio se agrupan como resumen financiero corto; no deben aparecer como cuatro cards verticales grandes.
+- Las secciones profundas deben quedar detrás de la navegación contextual, manteniendo una primera pantalla liviana.
+- Las acciones primarias pueden ocupar ancho completo, pero deben conservar separación clara respecto del borde inferior y de la bottom bar.
+- El header del detalle conserva back, selector de espacios, engranaje y menú contextual cuando aplique.
+- La configuración se abre desde el engranaje y debe sentirse como administración del espacio, no como un formulario suelto.
+
+#### Refactor de Espacios 2026
+
+La home de espacios tiene dos comportamientos principales:
+
+- Desktop: header fuerte con métricas, búsqueda, filtros compactos, grid de 2 o 3 columnas y rail lateral para pendientes/lectura rápida. Si hay uno o pocos espacios, el rail evita que la pantalla quede vacía.
+- Mobile: orden compacto de título, CTA, búsqueda/filtros, cards y pendientes. El contenedor debe dejar `pb-28` o equivalente para que nada quede tapado por la bottom bar.
+
+El detalle del espacio se divide en:
+
+- Uso operativo: Resumen, Movimientos y Balance.
+- Administración: General, Participantes, Reparto, Monedas, Funcionamiento y Cierre.
+
+En desktop, la administración puede mostrarse como zona propia debajo del uso operativo, con participantes, ficha de configuración y cierre. En mobile, se accede desde el engranaje del header y mantiene el nombre real del espacio como título.
+
+La bottom bar mobile es contextual:
+
+- Fuera de un espacio, el botón central conserva el significado global de `Nuevo`.
+- Dentro de `/spaces/[id]`, el botón central crea `Movimiento`.
+- La señal contextual debe ser clara y breve: label corto en el FAB y continuidad con el header del espacio.
+
+El wizard de nuevo espacio tiene cinco pasos más éxito:
+
+1. Información básica: nombre, descripción, tipo y preview.
+2. Modo y participantes: Solo, Administrado o Sincronizado, con invitaciones opcionales.
+3. Monedas y reporte del espacio.
+4. Reparto y funcionamiento.
+5. Revisión final.
+
+La pantalla de éxito ofrece ir al espacio, crear otro o cerrar. Las monedas del espacio pueden incluir CLP, EUR, BRL u otras monedas informativas para el módulo Espacios; esto no extiende todavía el soporte global multi-moneda del core de Finp.
+
+En claro y oscuro, Espacios usa los tokens de `globals.css`: fondo general claro/oscuro, cards sobre `--card`, bordes `--border`, acento primario `--primary`/`--sky` y verde sólo para estados positivos, confirmaciones o saldos a favor.
 
 ## Layout
 
@@ -977,3 +1070,603 @@ Antes de cerrar una nueva funcionalidad, verificar:
 ## Conclusión
 
 El diseño actual de Finp ya tiene una dirección clara: una app financiera personal sobria, densa en datos pero usable, con navegación mobile cuidada y una capa visual consistente basada en tokens. El próximo salto no debería ser cambiar la estética, sino formalizar más patrones, reducir complejidad en formularios grandes y preparar estados nuevos para mobile/offline si ese camino avanza.
+
+---
+
+## Módulo Espacios
+
+### Propósito y posición dentro de Finp
+
+Espacios es el módulo de referencia para la nueva etapa visual de Finp.
+Es el primer módulo completamente diseñado en clave mobile-first, con jerarquía clara entre resumen, movimientos y balance, y con una experiencia de configuración separada del detalle operativo.
+
+El objetivo de Espacios no es reemplazar la contabilidad personal de Finp, sino ser el lugar donde los gastos compartidos —en pareja, con compañeros de depto, en un viaje, en un proyecto— se registran, distribuyen y cierran de forma ordenada.
+
+---
+
+### Reglas fijas del producto
+
+Estas reglas no son configurables. No deben aparecer como toggles en ninguna pantalla.
+
+#### Comprobantes
+
+- Son **siempre opcionales**.
+- El usuario puede adjuntar imágenes o PDFs a un movimiento, pero no está obligado.
+- No existe un toggle de "solicitar comprobante" en los settings del espacio.
+- En el formulario de movimiento, la sección de comprobantes lleva el badge "Opcional" visible.
+
+#### Confirmación del pagador
+
+- Está **siempre activa**.
+- Cuando alguien registra un movimiento donde otra persona pagó, esa persona recibe una confirmación pendiente.
+- No existe un toggle de "activar/desactivar confirmación del pagador".
+- El flujo de confirmación siempre existe; lo que varía es si hay pendientes o no.
+
+#### Fotos de personas
+
+- **Prohibido usar fotos de perfil** en cualquier parte del módulo.
+- Los participantes se representan exclusivamente con iniciales en avatares circulares.
+- Esto aplica a cards, listas de participantes, settings, balance y cualquier componente que muestre una persona.
+
+#### Semántica de tipos: pareja vs. hogar
+
+- Un espacio como "Casa con Roro" (compartida con pareja) es tipo **Pareja** (`couple`), no Hogar (`home`).
+- `home`: departamento o casa compartida con no-pareja (compañeros, familia).
+- `couple`: convivencia o gastos compartidos con una pareja.
+- Los placeholders del wizard reflejan esto: el tipo `couple` sugiere "Ej. Casa con Roro".
+
+#### Ingresos
+
+- Los ingresos **no son el eje principal** del overview en la mayoría de los espacios.
+- Un espacio de tipo Pareja o Casa no asume que todos los ingresos pasan por ahí.
+- Los ingresos (`income`) son un tipo de movimiento disponible, pero no se muestran como métrica destacada por defecto.
+- Las KPIs del detalle priorizan: total gastado, tu parte, pendiente, saldo a favor.
+
+---
+
+### Arquitectura visual del módulo
+
+#### Home de Espacios (`/spaces`)
+
+**Desktop layout:** grid principal (1fr) + columna lateral sticky de 360px.
+
+Componentes:
+- `SpacesPageHeader`: hero con nombre del módulo, descripción contextual, métricas (Activos / Movimientos / Pendientes), alerta de pendientes cuando existe.
+- `SpacesFiltersBar`: buscador de texto libre + filtros por estado (Todos / Activo / Pausado / Cerrado / Archivado).
+- Grid de `SpaceOverviewCard`: responsive, compacto en mobile, card completa en desktop.
+- Columna lateral (`aside`, solo desktop):
+  - `RecentPendingPanel`: pendientes de acción (invitaciones + confirmaciones).
+  - "Vista actual": panel contextual que muestra resultado del filtro, búsqueda activa y breakdown de pendientes por tipo. Solo visible si hay espacios o filtros activos.
+
+**Mobile:** sin columna lateral. La barra de pendientes del header es el punto de entrada principal a las acciones.
+
+---
+
+#### Detalle del espacio (`/spaces/[id]`)
+
+**Principio:** detalle operativo separado de configuración.
+
+##### Mobile
+
+- Header fijo: `← | [icono + nombre ∨] | ⚙`
+  - ← vuelve a `/spaces`.
+  - Selector de espacio abre bottom sheet para cambiar sin volver al home.
+  - ⚙ abre `SpaceMobileSettingsSheet`.
+- Título compacto: `h1` con nombre + descripción + pills (tipo / modo / estado / participantes / monedas).
+- KPIs: scroll horizontal de 4 cards, 3 visibles + 4to parcialmente visible como hint.
+- Tabs: **3 tabs fijos** — Resumen | Movimientos | Balance.
+  - Configuración, participantes y cierre se acceden desde ⚙.
+
+##### Desktop
+
+- Back button + `SpaceHero` (presentación completa con badges, descripción, CTAs).
+- KPIs: grid de 4 cards (`SpaceMetricCard`).
+- Tabs: **6 tabs** — Resumen | Movimientos | Balance | Participantes | Configuración | Cierre.
+
+##### Contenido por tab
+
+| Tab | Contenido |
+|---|---|
+| Resumen | Settlement panel + Charts + Balance + Movimientos recientes + Adjuntos + Pendientes |
+| Movimientos | Filtros por tipo + lista completa |
+| Balance | Saldo por participante + highlight del saldo neto dominante |
+| Participantes | Lista con roles y estado de invitación (desktop) |
+| Configuración | Settings legibles + descripción (desktop) |
+| Cierre | Estado operativo + toggle abrir/cerrar (desktop) |
+
+---
+
+#### Configuración mobile (`SpaceMobileSettingsSheet`)
+
+Triggered by: ⚙ en el header del detalle.
+
+Diseño: bottom sheet de hasta 92dvh, con handle visual, scroll interno. Estructura settings estilo iOS.
+
+No es un resumen. Es una superficie de configuración real.
+
+Estructura:
+1. **Header**: eyebrow "Configuración del espacio" + nombre del espacio (h2, protagonista) + badges + botón ✎ (abre EditSpaceSettingsDialog) + botón ✕.
+2. **General**: filas Tipo / Estado / Modo. Descripción del espacio si existe.
+3. **Participantes**: lista con iniciales, nombre, email, rol, estado de invitación. Botón "Invitar" en el header de la sección.
+4. **Reparto y monedas**: filas Split por defecto / Moneda de reporte / Monedas operativas / Período.
+5. **Estado operativo**: estado actual + botón abrir/cerrar. Zona separada visualmente.
+
+---
+
+### Wizard de creación (`CreateSpaceDialog`)
+
+5 pasos:
+
+1. **Información**: tipo (grid con descripción) + nombre (placeholder dinámico por tipo) + descripción.
+2. **Modo**: Sincronizado / Administrado / Solo + participantes (oculto si Solo).
+3. **Monedas**: monedas activas + moneda de reporte + período.
+4. **Reparto**: split por defecto + editor visual de porcentajes.
+5. **Revisión**: resumen + botón de crear.
+
+Post-creación: pantalla de éxito con "Ir al espacio" / "Crear otro" / "Cerrar".
+
+Reglas del wizard:
+- Sin toggles de confirmación del pagador (siempre activa).
+- Sin solicitud de comprobantes (siempre opcionales).
+- Modo Solo → oculta participantes y fuerza split a `none`.
+
+---
+
+### Formulario de nuevo movimiento (`SpaceEntryDialog`)
+
+Modal fullscreen en mobile, modal ancho (max 1120px) en desktop.
+
+Secciones:
+- Tipo (Gasto / Ingreso / Ajuste / Liquidación).
+- Monto, moneda, fecha.
+- Descripción.
+- Pagó + Categoría.
+- Cotización (solo si moneda ≠ reporte).
+- Split configurator (si modo ≠ Solo).
+- Resumen rápido.
+- Impacto personal (solo si el usuario actual es el pagador).
+- **Comprobantes** — badge "Opcional". No obligatorio.
+- Borrador (sessionStorage, sin adjuntos).
+- Notas.
+
+Footer sticky: Guardar / Guardar borrador / Cancelar.
+
+---
+
+### Bottom bar contextual (`SpaceActionContext`)
+
+Al entrar a un espacio, el contexto registra una acción que reemplaza el botón central:
+- Icono Plus dentro del círculo azul.
+- Label "Movimiento" **debajo** del círculo (no dentro).
+- Al salir (unmount), la acción se limpia y el botón vuelve al comportamiento global.
+
+---
+
+### Componentes principales
+
+| Componente | Ubicación | Propósito |
+|---|---|---|
+| `SpaceUi.tsx` | `spaces/` | Primitivos: badges, avatars, metric cards, surface, icons |
+| `SpaceOverviewCard` | `index/` | Card del home |
+| `SpacesPageHeader` | `index/` | Hero del home con métricas y alerta |
+| `SpacesFiltersBar` | `index/` | Filtros de estado + búsqueda |
+| `SpaceDetailMobileHeader` | `detail/` | Header mobile (← / selector / ⚙) |
+| `SpaceHero` | `detail/` | Presentación completa (desktop) |
+| `SpaceKpiRow` | `detail/` | KPIs (scroll horizontal mobile / grid desktop) |
+| `SpaceMobileSettingsSheet` | `detail/` | Settings sheet mobile |
+| `SpaceSettlementPanel` | `detail/` | Banner de deuda/crédito con CTAs |
+| `SpaceBalanceSection` | `detail/` | Balance entre participantes |
+| `SpaceEvolutionChart` | `detail/` | Gráfico de evolución mensual (LineChart) |
+| `SpaceCategoryBreakdown` | `detail/` | Distribución por categoría |
+| `SpaceMovementsPanel` | `detail/` | Lista filtrada de movimientos |
+| `SpaceParticipantsPanel` | `detail/` | Lista de participantes (desktop) |
+| `SpaceSettingsPanel` | `detail/` | Settings legibles (desktop) |
+| `SpaceClosurePanel` | `detail/` | Estado operativo (desktop) |
+| `SpaceSummaryPanels` | `detail/` | Cards de resumen en tab Resumen |
+| `CreateSpaceDialog` | `dialogs/` | Wizard 5 pasos + éxito |
+| `EditSpaceSettingsDialog` | `dialogs/` | Edición de configuración existente |
+| `SpaceEntryDialog` | `dialogs/` | Formulario de movimiento |
+| `ConfirmSpaceEntryDialog` | `dialogs/` | Confirmación del pagador |
+| `SpaceParticipantDialog` | `dialogs/` | Invitar participante |
+| `SpaceAttachmentsUploader` | `dialogs/` | Uploader de comprobantes (siempre opcional) |
+| `SpaceSplitConfigurator` | `dialogs/` | Configurador de split |
+| `RecentPendingPanel` | `pending/` | Panel de acciones pendientes |
+
+---
+
+### Mobile vs desktop — tabla resumen
+
+| Aspecto | Mobile | Desktop |
+|---|---|---|
+| Header detalle | `SpaceDetailMobileHeader` | Back button + `SpaceHero` |
+| Título del espacio | h1 compacto + pills | Dentro de `SpaceHero` |
+| KPIs | Scroll horizontal 3+1 | Grid 4 columnas |
+| Tabs | 3 (Resumen / Mov. / Balance) | 6 (+ Participantes / Config. / Cierre) |
+| Configuración | `SpaceMobileSettingsSheet` desde ⚙ | Tab "Configuración" |
+| Participantes | En settings sheet | Tab "Participantes" |
+| Cierre | En settings sheet | Tab "Cierre" |
+| Charts | Visibles en Resumen (apilados) | Side by side |
+| Adjuntos recientes | Ocultos | Visibles en Resumen |
+| Bottom bar | Botón "Movimiento" con label bajo círculo | No aplica |
+
+---
+
+### Patrones de diseño del módulo
+
+- **Surfaces**: `SpaceSurface` con accent color en borde superior izquierdo.
+- **Section headings**: eyebrow uppercase + título + descripción + action opcional.
+- **Bottom sheets**: `AnimatePresence` + `motion.div` slide desde abajo, handle visual, fondo oscuro semitransparente, scroll interno.
+- **Avatars**: `SpaceInitialsAvatar` con iniciales. Nunca fotos de perfil.
+- **Tone pills**: `SpaceTonePill` verde (positivo) / rojo (negativo).
+- **Amount inline**: `SpaceAmountInline` respeta el contexto de ocultamiento de montos global.
+- **Charts**: `LineChart` de Recharts sin área rellena. `ResponsiveContainer` para respetar el ancho.
+# Fase 4 - Categorías de espacio y comprobantes
+
+- Cada espacio administra categorías propias mediante `SpaceCategory`, con defaults por tipo de espacio y seed manual para espacios existentes.
+- Los movimientos soportan `spaceCategoryId` sin eliminar `categoryId` legacy, y los reportes prefieren la categoría del espacio cuando existe.
+- Los comprobantes se suben a Vercel Blob privado, se guardan como `storageKey` en `SpaceEntry.attachments[]` y se sirven desde endpoints autenticados que resuelven el attachment desde DB.
+- El detalle de movimiento vive en `SpaceEntryDetailSheet`, con vista de montos, participantes, categoría, notas y adjuntos en modo live.
+
+## Follow-up post Fase 4
+
+- La categoría del espacio (`spaceCategoryId`) y la categoría personal (`categoryId`) son conceptos separados: la primera organiza reportes compartidos, la segunda sólo se usa cuando el pagador impacta el gasto en su Finp personal.
+- Las transacciones personales creadas desde Espacios guardan origen mediante `spaceId`, `spaceEntryId` y `spaceNameSnapshot`, y la UI de Transacciones muestra una referencia "Espacio" con navegación al espacio.
+- La UI de Espacios oculta Ingreso y Ajuste por ahora. El modelo y las APIs siguen soportando `income` y `adjustment` para compatibilidad, pero la experiencia principal sólo ofrece gastos y liquidaciones.
+- La moneda del movimiento debe pertenecer a `space.currencies`; si el usuario quiere impactar en Finp personal, sólo puede elegir cuentas compatibles con esa moneda. La conversión avanzada espacio EUR -> Finp personal ARS/USD queda para una fase posterior como operación de cambio explícita.
+- Los movimientos editados/anulados quedan fuera de esta fase: la dirección posterior del MVP es aplicar cambios si el usuario tiene permiso, conservar historial/trazabilidad y notificar de forma informativa, sin aprobación obligatoria.
+- URL amigable de espacios: no se migra ahora. Plan técnico recomendado: agregar `slug` estable a `Space`, generarlo desde el nombre al crear, resolver colisiones con sufijo corto, permitir que la ruta `[id]` acepte ObjectId o slug para compatibilidad, y hacer que links internos nuevos prefieran `slug` cuando exista. El slug no debería cambiar automáticamente al renombrar para no romper enlaces.
+
+# Fase 5 — Saldos, movimientos y edición controlada
+
+## Propósito
+
+Cerrar el ciclo económico de un Espacio: liquidar saldos de forma guiada, visualizar movimientos con el mismo nivel de detalle que Transacciones personales, y sentar las bases de edición/anulación con historial, trazabilidad y notificaciones informativas.
+
+## Cambios planeados
+
+### SpaceSettlementDialog — opciones rápidas de pago
+
+- Unificar el diálogo de liquidación existente en `SpaceSettlementDialog`.
+- Mostrar saldo actual antes del pago.
+- Opciones rápidas: **Total**, **50%**, **Otro monto** (input numérico).
+- Mostrar preview: saldo antes / pago / saldo restante.
+- Confirmar pago → crea movimiento de tipo `settlement` y actualiza saldo en tiempo real.
+
+### Rediseño visual de movimientos en Espacios
+
+- Tabla/lista de movimientos del espacio con diseño similar a Transacciones personales.
+- Mostrar: descripción, monto, fecha, categoría del espacio, pagador, participantes incluidos.
+- Badge de estado (pendiente / liquidado / parcial).
+- Acciones rápidas por movimiento: ver detalle, iniciar liquidación parcial.
+- Adaptar al contexto compartido: mostrar quién pagó y quién debe qué.
+
+### Edición y anulación con trazabilidad
+
+- Editar un movimiento se permite si el usuario tiene permisos.
+- El movimiento editado muestra tag "Editado" y permite ver la versión anterior.
+- Anular es lógico: el movimiento queda gris y marcado como anulado, no desaparece.
+- Los cambios sensibles se registran en actividad y generan notificaciones informativas.
+
+## Componentes implementados / diferidos
+
+| Componente | Estado |
+|---|---|
+| `SpaceSettlementDialog` | ✅ Implementado — header de contexto deuda, presets rápidos, preview saldo antes/después |
+| `SpaceBalanceSection` | ✅ Implementado — títulos "Debés"/"Te deben", descripción corta, hint simplificación |
+| `MovementCard` (en `SpaceDetailPanels`) | ✅ Implementado — layout denso tipo Transacciones, dot de color, settlement Pagador→Receptor |
+| `SpaceEntryDetailSheet` | ✅ Implementado — "Recibió" para settlements, badge "En Finp personal" |
+| `SpaceEntryList` (nuevo) | Diferido |
+| `SpaceEntryRow` (nuevo) | Diferido |
+| `SpaceEditRequestDialog` (futuro) | No previsto para el MVP |
+
+## No implementar todavía
+
+- Aprobación obligatoria de edición/anulación.
+- Movimiento editado con historial de versiones.
+- Eliminación lógica (soft delete).
+- Pago múltiple.
+- Slug de espacios.
+- Mejoras a categorías personales (archivar, restaurar).
+
+## Pendiente verificación / Fase 5C
+
+- **DatePicker y validaciones de Nuevo movimiento** — revisar que la fecha, monto y campos requeridos tengan validación robusta en el formulario de creación de movimientos.
+- **Resumen con deuda total y CTA a Balance** — panel o card en la vista del espacio que muestre la deuda total del usuario con un acceso directo a la pestaña Balance.
+- **Acción rápida "Registrar pago recomendado"** — en la sección de pagos recomendados, permitir confirmar el pago total con un solo click (con modal de confirmación) sin abrir el diálogo completo.
+- **Compactación visual de pagos recomendados** — reducir el tamaño de cada fila de pago recomendado en SpaceBalanceSection para que quepan más items sin scroll.
+- **Verificar que Balance usa la versión actualizada del dialog** — confirmar que el botón "Registrar pago" en SpaceBalanceSection abre `SpaceSettlementDialog` con el prefill correcto (no una versión vieja o sin contexto).
+
+# Fase 5C — Pulido UX: validación, datepicker, saldo rápido
+
+## Propósito
+
+Pulir la experiencia de creación de movimientos y la gestión de pagos en espacios.
+
+## Cambios implementados
+
+### SpaceEntryDialog — DatePicker consistente
+- Reemplaza `<Input type="date">` por `Popover + Calendar` (mismo patrón que Transacciones personales).
+- Muestra la fecha en formato `es-AR` (localeDateString).
+
+### SpaceEntryDialog — Validación inline por campo
+- Errores Zod se mapean por `path[0]` a `fieldErrors: Record<string, string>`.
+- Cada `SpaceDialogField` recibe `error={fieldErrors.campo}` y muestra el mensaje en rojo debajo del input.
+- Al interactuar con un campo, su error se limpia (`clearFieldError`).
+- Al enviar con errores, hace scroll automático al primer error visible.
+
+### SpaceSettlementPanel — Deuda total + CTA Ver balance
+- Muestra saldo neto del usuario ("Debés en total" / "Te deben en total" / "Todo saldado").
+- CTA redirige a la pestaña Balance en lugar de abrir el dialog de liquidación.
+
+### SpaceBalanceSection — Pagos recomendados compactos con confirmación rápida
+- Layout compacto: avatar pequeño (h-7 w-7) + nombre truncado + flecha + avatar + nombre + monto + botón.
+- Scroll vertical (`max-h-60 overflow-y-auto`) cuando hay 4 o más pagos recomendados.
+- Click en "Pagar" actúa como toggle: muestra panel de confirmación inline (sin abrir dialog completo); click de nuevo cancela.
+- Panel de confirmación: payer → receiver, monto, botones Cancelar / Confirmar pago.
+- Confirmar llama `onCreateSettlementDirect` directamente, crea el settlement sin abrir ningún dialog.
+
+## Componentes modificados
+
+| Componente | Cambio |
+|---|---|
+| `SpaceEntryDialog` | DatePicker (Popover+Calendar), validación inline por campo, scroll al primer error |
+| `SpaceDialogPrimitives` → `SpaceDialogField` | Prop `error?: string` para mensaje de error por campo |
+| `SpaceSettlementPanel` | Deuda total neta, CTA "Ver balance" → navega a tab Balance |
+| `SpaceBalanceSection` | Filas compactas, scroll 4+, confirmación rápida inline sin dialog |
+
+## No implementado en esta fase
+- Aprobación obligatoria de edición/anulación.
+- Pago múltiple.
+- Cuotas y reintegros.
+- Slug de espacios.
+
+## Balance — Dos flujos de pago (adenda Fase 5C)
+
+### Flujo 1: Pago rápido (recomendaciones)
+- Cada fila de pago recomendado tiene un botón "Pagar" (toggle).
+- Al tocarlo: muestra panel de confirmación inline con payer → receiver y monto.
+- Confirmar: crea el settlement directamente sin abrir ningún dialog.
+- Ideal para aceptar la sugerencia tal como viene.
+
+### Flujo 2: Registrar pago manual/avanzado
+- Botón "Registrar pago" en el aside Resumen de la pestaña Balance.
+- Abre `SpaceSettlementDialog` con funcionalidades avanzadas:
+  - **Panel de sugerencias**: lista de pagos recomendados seleccionables.
+    Al seleccionar una: precarga pagador, receptor y monto (total).
+  - **Selectores de participante**: payer y receiver editables manualmente.
+  - **Presets de monto**: Total / 50% / Otro (activos cuando hay contexto o sugerencia seleccionada).
+  - **Preview saldo**: saldo pendiente, este pago, saldo restante.
+  - **Moneda y fecha** seleccionables.
+  - **Comentario** opcional.
+- Permite pago parcial: usuario modifica el monto libremente.
+- Permite pago manual: ignora sugerencias y completa todos los campos.
+
+### Preparación para pago múltiple (diferido)
+- La estructura `SuggestedPayment[]` está lista para recibir múltiples pagos.
+- El dialog tiene sección "Sugerencias" que puede extenderse a selección múltiple.
+- Pago múltiple completo no implementado: requiere cambios de modelo y flujo de confirmación.
+
+# Fase 5D — Edición y anulación de movimientos
+
+## Propósito
+
+Agregar edición controlada (con historial de versiones embebido) y anulación lógica de movimientos de espacios, sin eliminar físicamente ningún dato. Los movimientos anulados siguen visibles en el historial con badge "Anulado" pero no impactan en el balance.
+
+## Cambios implementados
+
+### Modelo de datos (`SpaceEntry`)
+
+Campos nuevos:
+
+```
+isVoided         boolean   default false — anulación lógica
+voidedAt         Date
+voidedByUserId   ObjectId
+voidReason       string    max 200 chars, opcional
+
+editedAt         Date      última edición
+editedByUserId   ObjectId
+editCount        number    default 0
+previousVersions ISpaceEntrySnapshot[]   embebidos, max 5, LIFO
+```
+
+`ISpaceEntrySnapshot` guarda un snapshot de los campos mutables antes de cada edición (title, description, amount, currency, reportingAmount, exchangeRate, date, spaceCategoryId, paidByParticipantId, sharedWithParticipantIds, splitMode, splitAllocations, notes). Los adjuntos se excluyen del snapshot porque se gestionan por endpoints propios.
+
+Índice nuevo: `{ spaceId: 1, isVoided: 1, date: -1 }`.
+
+### Reglas de visibilidad
+
+Los movimientos anulados (`isVoided: true`) se excluyen de `buildSpaceBalances()` y `buildSpaceSummary()`, pero `getSpaceEntries()` los retorna igual para que la UI los muestre en gris con badge "Anulado". No se eliminan físicamente.
+
+| Estado | Balance | Summaries | Lista visual |
+|---|---|---|---|
+| Normal | ✅ | ✅ | activo |
+| Anulado (`isVoided`) | ❌ | ❌ | gris + badge "Anulado" |
+| Editado (`editCount > 0`) | ✅ versión actual | ✅ versión actual | badge "Editado" |
+
+### API
+
+```
+GET   /api/spaces/[id]/entries/[entryId]          — detalle individual
+PATCH /api/spaces/[id]/entries/[entryId]          — editar (creador | owner | admin)
+POST  /api/spaces/[id]/entries/[entryId]/void     — anular (creador | owner | admin)
+GET   /api/spaces/[id]/entries/[entryId]/revisions — historial de versiones (todos)
+```
+
+- El PATCH recalcula `reportingAmount` server-side (ignora el valor enviado por el cliente), valida que `currency` pertenezca a `space.currencies`, y exige `exchangeRate` si `currency !== reportingCurrency`.
+- El PATCH y el POST de void incluyen el flag `hasSubsequentSettlement` en la respuesta cuando existe un settlement con `createdAt > entry.createdAt`.
+- La anulación no es reversible en MVP y no elimina adjuntos en Vercel Blob (quedan como evidencia histórica).
+- Se usan `entry.previousVersions ?? []` en toda la codebase para compatibilidad con documentos legacy.
+
+### UI
+
+- `VoidEntryDialog` — AlertDialog con textarea para motivo (opcional, max 200 chars) y advertencias amber si hay settlements posteriores o `linkedTransactionId`.
+- `SpaceEntryRevisionSheet` — sheet lateral read-only que muestra un snapshot previo con fecha y editor.
+- `SpaceEntryDetailSheet` — badges "Anulado" (destructive) y "Editado" (secondary), botones Editar / Anular con permisos, "Ver versión anterior" cuando hay snapshots.
+- `SpaceEntryDialog mode='edit'` — pre-carga el formulario desde `initialData`, oculta draft/adjuntos/sección de impacto personal, llama PATCH al guardar.
+- `MovementCard` — texto muted + monto tachado + badge "Anulado" para movimientos anulados; badge "Editado" para movimientos con `editCount > 0`.
+
+### Integración con Finp personal
+
+Al editar o anular un movimiento con `linkedTransactionId`, la transacción personal vinculada no se modifica automáticamente. Se muestra una advertencia clara en el dialog y la acción queda trazada en actividad. No hay sincronización automática con Finp personal en el MVP.
+
+## No implementado en esta fase
+
+### Otros diferidos
+
+- **Sincronización automática con transacción personal**: al editar monto/moneda/fecha de un movimiento con `linkedTransactionId`, no se propaga el cambio a la transacción personal.
+- **Reversa contable al anular**: al anular un movimiento con `linkedTransactionId`, no se crea una transacción de reversa en Finp personal.
+- **Desanular (undo void)**: no implementado. Requiere definir permisos y reglas de trazabilidad.
+- **Historial en colección separada**: si el volumen de ediciones lo justifica, migrar `previousVersions` de array embebido a una colección `SpaceEntryRevision`.
+
+## Componentes nuevos / modificados
+
+| Componente/Archivo | Estado |
+|---|---|
+| `SpaceEntry` model + `ISpaceEntrySnapshot` type | ✅ Implementado |
+| `spaceEntryEditSchema`, `spaceEntryVoidSchema` | ✅ Implementado |
+| `buildSpaceBalances()` + `buildSpaceSummary()` — filtro `isVoided` | ✅ Implementado |
+| `GET/PATCH /entries/[entryId]` | ✅ Implementado |
+| `POST /entries/[entryId]/void` | ✅ Implementado |
+| `GET /entries/[entryId]/revisions` | ✅ Implementado |
+| `VoidEntryDialog` | ✅ Implementado |
+| `SpaceEntryRevisionSheet` | ✅ Implementado |
+| `SpaceEntryDetailSheet` — badges, botones, warnings | ✅ Implementado |
+| `SpaceDetailPanels` — `MovementCard` visual anulado/editado | ✅ Implementado |
+| `SpaceEntryDialog mode='edit'` | ✅ Implementado |
+| `SpaceEditRequestDialog` — flujo de aprobación | No previsto para el MVP |
+
+---
+
+## Fase 5E — Actividad y notificaciones informativas
+
+### Contexto
+
+Fase 5E cierra Fase 5 agregando una capa de actividad y notificaciones in-app informativas para Espacios. La decisión de producto del MVP es no exigir aprobaciones obligatorias para editar o anular movimientos.
+
+Regla principal: si un usuario tiene permiso para editar o anular, el cambio se aplica. Si el cambio afecta a otros, se registra en actividad y se notifica a los involucrados dentro de Finp.
+
+---
+
+### Conceptos
+
+- **Actividad**: historial informativo de lo que ocurrió en un espacio.
+- **Notificación**: evento relevante para un usuario, visible como no leído hasta que lo marque leído.
+- **Pendiente**: algo que requiere acción del usuario.
+
+En Fase 5E los pendientes siguen siendo invitaciones y confirmaciones actuales. No se agregan pendientes de aprobación.
+
+---
+
+### Modelo implementado
+
+`SpaceActivityEvent` guarda eventos inmutables con:
+
+- `spaceId`, actor opcional, tipo de evento, entidad afectada, título, descripción y metadata.
+- `visibleToUserIds`: usuarios Finp activos del espacio que pueden ver la actividad.
+- `readByUserIds`: usuarios que ya leyeron el evento. El actor se agrega automáticamente para que su propia acción no aparezca como no leída.
+
+---
+
+### Eventos implementados
+
+- Movimientos: `entry_created`, `entry_edited`, `entry_voided`.
+- Pagos: `settlement_created`.
+- Comprobantes: `attachment_uploaded`, `attachment_deleted`.
+- Categorías: `category_created`, `category_archived`, `category_restored`.
+- Participantes: `participant_invited`, `participant_joined`, `participant_removed`, `role_changed`.
+- Espacio: `space_updated`.
+
+---
+
+### UI y campana
+
+- El resumen del espacio muestra “Última actividad” desde `SpaceActivityEvent`; un movimiento anulado aparece como `entry_voided`, no como movimiento normal.
+- La campana suma pendientes de acción + actividad no leída.
+- `SpacesPendingSheet` separa “Pendientes” y “Actividad”.
+- El detalle de movimiento muestra actividad relacionada con ese movimiento.
+
+---
+
+### Política del MVP
+
+- No hay aprobaciones obligatorias, `approve`, `reject`, `cancel` ni `SpaceEntryChangeRequest`.
+- La trazabilidad reemplaza a la aprobación obligatoria para mantener el flujo ágil en grupos grandes.
+- Finp personal no sincroniza automáticamente cambios sensibles; sólo se muestra advertencia y se registra actividad.
+- Usuarios externos sin `userId` no reciben notificación in-app, aunque la actividad queda visible dentro del espacio para usuarios Finp activos.
+
+### Diferidos
+
+- Aprobaciones configurables por espacio.
+- Emails, push notifications y Telegram.
+- Sincronización automática con Finp personal.
+- Reversas contables.
+- Desanular.
+- Cuotas.
+- Slugs.
+- Actividad global avanzada.
+
+---
+
+## Fase 5F - Impacto personal por usuario en Espacios
+
+### Contexto
+
+Fase 5F separa definitivamente el movimiento compartido del espacio del impacto personal de cada usuario en su Finp.
+
+Regla principal:
+
+- Movimiento del espacio = compartido.
+- Impacto en Finp personal = contextual y privado por usuario.
+
+`SpaceEntryPersonalImpact` es la nueva fuente de verdad para saber si un usuario registro o vinculo un movimiento del espacio en su Finp personal.
+
+---
+
+### Modelo implementado
+
+`SpaceEntryPersonalImpact` guarda:
+
+- `spaceId`, `entryId`, `userId`, `participantId`.
+- `transactionId`, `accountId`, `categoryId` personales opcionales.
+- `impactKind`: `payer_full_amount`, `participant_share`, `settlement_paid`, `settlement_received`.
+- `amount`, `currency`, `status`.
+
+Hay indices por espacio/movimiento, usuario/movimiento y transaccion. La regla de negocio evita mas de un impacto activo `linked` por `userId + entryId`.
+
+---
+
+### Legacy
+
+`SpaceEntry.linkedTransactionId`, `SpaceEntry.categoryId` y `status: linked` quedan solo por compatibilidad:
+
+- Los flujos nuevos escriben impactos en `SpaceEntryPersonalImpact`.
+- `SpaceEntry.status` no vuelve a setearse en `linked`.
+- `status === 'linked'` se muestra como "Confirmado".
+- Si un movimiento legacy tiene `linkedTransactionId`, solo se trata como "En tu Finp" para `confirmedByUserId` o para el pagador inferido.
+- No hay migracion destructiva automatica.
+
+---
+
+### UI
+
+- `En tu Finp` aparece solo si existe impacto personal del usuario actual o fallback legacy seguro.
+- La categoria visual compartida del espacio se resuelve desde `spaceCategoryId`; las categorias personales no se usan como categoria visual del espacio.
+- `SpaceEntryDetailSheet` agrega la seccion "Tu Finp" con estado contextual y CTA "Registrar en mi Finp".
+- `SpacePersonalImpactDialog` permite crear una transaccion personal o vincular una existente, eligiendo cuenta, categoria personal y monto sugerido.
+
+---
+
+### Privacidad y actividad
+
+Registrar un movimiento en Finp personal es una accion personal. En esta fase no se genera actividad global publica por `SpaceEntryPersonalImpact`, para no revelar cuentas ni categorias personales ni sugerir que el movimiento quedo vinculado para todos.
+
+---
+
+### Diferidos
+
+- Migracion masiva de impactos legacy.
+- Sync automatica al editar/anular.
+- Reversas contables.
+- Reintegros avanzados.
+- Cuotas en espacios.

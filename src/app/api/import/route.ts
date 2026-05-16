@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     let parseResult
     try {
-        parseResult = parseImportFile(buffer)
+        parseResult = await parseImportFile(buffer)
     } catch {
         return NextResponse.json(
             { error: 'No se pudo leer el archivo. Verificá que sea una plantilla Finp válida.' },

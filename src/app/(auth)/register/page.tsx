@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,11 +11,15 @@ import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { markAppStartupPending } from '@/components/shared/AppStartupGate'
+import { normalizeSafeInviteCallbackUrl } from '@/lib/utils/invite-callback'
 import { registerSchema, type RegisterFormData } from '@/lib/validations/auth'
 import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 
-export default function RegisterPage() {
+function RegisterForm() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const callbackUrl = normalizeSafeInviteCallbackUrl(searchParams.get('callbackUrl'))
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
@@ -35,6 +40,10 @@ export default function RegisterPage() {
                 email: data.email,
                 password: data.password,
                 displayName: data.displayName,
+                ...(callbackUrl && {
+                    setupPersonalFinp: false,
+                    callbackUrl,
+                }),
             }),
         })
 
@@ -53,6 +62,23 @@ export default function RegisterPage() {
             return
         }
 
+        if (callbackUrl) {
+            const result = await signIn('credentials', {
+                email: data.email,
+                password: data.password,
+                redirect: false,
+            })
+
+            if (result?.error) {
+                router.push(`/login?registered=true&callbackUrl=${encodeURIComponent(callbackUrl)}`)
+                return
+            }
+
+            markAppStartupPending()
+            router.push(callbackUrl)
+            return
+        }
+
         router.push('/login?registered=true')
     }
 
@@ -63,20 +89,19 @@ export default function RegisterPage() {
             initial="initial"
             animate="animate"
         >
-            {/* Header */}
             <motion.div variants={staggerItem} className="space-y-1">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">
                     Creá tu cuenta
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                    Es gratis y solo lleva un minuto
+                    {callbackUrl
+                        ? 'Registrate para aceptar la invitación al espacio'
+                        : 'Es gratis y solo lleva un minuto'}
                 </p>
             </motion.div>
 
-            {/* Form */}
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <div className="space-y-5">
-                    {/* Full name */}
                     <motion.div variants={staggerItem} className="space-y-1.5">
                         <Label htmlFor="displayName" className="text-sm font-medium">
                             Nombre completo
@@ -107,7 +132,6 @@ export default function RegisterPage() {
                         </AnimatePresence>
                     </motion.div>
 
-                    {/* Email */}
                     <motion.div variants={staggerItem} className="space-y-1.5">
                         <Label htmlFor="email" className="text-sm font-medium">
                             Email
@@ -138,7 +162,6 @@ export default function RegisterPage() {
                         </AnimatePresence>
                     </motion.div>
 
-                    {/* Password */}
                     <motion.div variants={staggerItem} className="space-y-1.5">
                         <Label htmlFor="password" className="text-sm font-medium">
                             Contraseña
@@ -160,11 +183,7 @@ export default function RegisterPage() {
                                 onClick={() => setShowPassword((v) => !v)}
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                             >
-                                {showPassword ? (
-                                    <EyeOff className="size-4" />
-                                ) : (
-                                    <Eye className="size-4" />
-                                )}
+                                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                             </button>
                         </div>
                         <AnimatePresence>
@@ -194,7 +213,6 @@ export default function RegisterPage() {
                         </AnimatePresence>
                     </motion.div>
 
-                    {/* Confirm password */}
                     <motion.div variants={staggerItem} className="space-y-1.5">
                         <Label htmlFor="confirmPassword" className="text-sm font-medium">
                             Confirmar contraseña
@@ -216,11 +234,7 @@ export default function RegisterPage() {
                                 onClick={() => setShowConfirmPassword((v) => !v)}
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                             >
-                                {showConfirmPassword ? (
-                                    <EyeOff className="size-4" />
-                                ) : (
-                                    <Eye className="size-4" />
-                                )}
+                                {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                             </button>
                         </div>
                         <AnimatePresence>
@@ -239,7 +253,6 @@ export default function RegisterPage() {
                         </AnimatePresence>
                     </motion.div>
 
-                    {/* Root/server error */}
                     <AnimatePresence>
                         {errors.root && (
                             <motion.div
@@ -258,7 +271,6 @@ export default function RegisterPage() {
                         )}
                     </AnimatePresence>
 
-                    {/* Submit */}
                     <motion.div variants={staggerItem}>
                         <Button
                             type="submit"
@@ -278,19 +290,26 @@ export default function RegisterPage() {
                 </div>
             </form>
 
-            {/* Footer link */}
             <motion.p
                 variants={staggerItem}
                 className="text-center text-sm text-muted-foreground pb-4"
             >
                 ¿Ya tenés cuenta?{' '}
                 <Link
-                    href="/login"
+                    href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'}
                     className="font-medium text-primary hover:underline underline-offset-4 transition-colors"
                 >
                     Ingresá
                 </Link>
             </motion.p>
         </motion.div>
+    )
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense fallback={null}>
+            <RegisterForm />
+        </Suspense>
     )
 }

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { markAppStartupPending } from '@/components/shared/AppStartupGate'
 import { resetAuthExpired } from '@/lib/client/auth-client'
+import { normalizeSafeInviteCallbackUrl } from '@/lib/utils/invite-callback'
 import { loginSchema, type LoginFormData } from '@/lib/validations/auth'
 import { staggerContainer, staggerItem, fadeIn } from '@/lib/utils/animations'
 import type { DefaultView } from '@/hooks/usePreferences'
@@ -50,6 +51,7 @@ function LoginForm() {
     const [showPassword, setShowPassword] = useState(false)
     const registeredBanner = searchParams.get('registered') === 'true'
     const sessionExpiredBanner = searchParams.get('reason') === 'session-expired'
+    const callbackUrl = normalizeSafeInviteCallbackUrl(searchParams.get('callbackUrl'))
     const emailRef = useRef<HTMLInputElement | null>(null)
 
     const {
@@ -87,7 +89,7 @@ function LoginForm() {
         }
 
         markAppStartupPending()
-        router.push(await getDefaultRoute())
+        router.push(callbackUrl ?? await getDefaultRoute())
     }
 
     return (
@@ -277,7 +279,7 @@ function LoginForm() {
             >
                 ¿No tenés cuenta?{' '}
                 <Link
-                    href="/register"
+                    href={callbackUrl ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/register'}
                     className="font-medium text-primary hover:underline underline-offset-4 transition-colors"
                 >
                     Registrate gratis

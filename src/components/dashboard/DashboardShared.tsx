@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/button'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import {
+    selectableCardIconMotion,
+    selectableCardMotion,
+} from '@/components/shared/selectable-card-motion'
+import {
     ACCOUNT_TYPE_LABELS,
     formatDayOfMonth,
     getCategoryHref,
@@ -19,6 +23,7 @@ import {
     getTransactionPrimaryMeta,
     getTopExpenseCategories,
     TRANSACTION_TYPE_LABELS,
+    getEffectiveTransactionLabel,
 } from '@/components/dashboard/dashboard-utils'
 import type {
     CommitmentItem,
@@ -31,19 +36,20 @@ import type {
 import { getAccountBalancesByCurrency, getAccountCurrencyLabel, isDualCurrencyAccount } from '@/lib/utils/accounts'
 import { cn } from '@/lib/utils'
 
-function TransactionTypeBadge({ type }: { type: string }) {
+function TransactionTypeBadge({ type, spaceId }: { type: string; spaceId?: string }) {
+    const isSpaceExpenseOrIncome = Boolean(spaceId) && (type === 'expense' || type === 'income')
     const variant =
         type === 'income'
             ? 'default'
             : type === 'expense'
-                ? 'destructive'
-                : type === 'credit_card_expense' || type === 'credit_card_payment'
+                ? isSpaceExpenseOrIncome ? 'secondary' : 'destructive'
+                : type === 'credit_card_expense' || type === 'credit_card_payment' || type === 'debt_payment'
                     ? 'outline'
                     : 'secondary'
 
     return (
         <Badge variant={variant} className="rounded-full px-2.5 py-0 text-[10px] font-medium">
-            {TRANSACTION_TYPE_LABELS[type] ?? 'Movimiento'}
+            {getEffectiveTransactionLabel(type, spaceId)}
         </Badge>
     )
 }
@@ -134,6 +140,7 @@ export function DashboardMetricLinkCard({
     trend,
     subtitle,
     className,
+    loading = false,
 }: {
     title: string
     totals: DashboardCurrencyTotals
@@ -146,11 +153,15 @@ export function DashboardMetricLinkCard({
     trend?: React.ReactNode
     subtitle?: string
     className?: string
+    loading?: boolean
 }) {
     return (
         <Link href={href} className={cn('group block', className)}>
             <Card
-                className="h-full gap-3 rounded-[28px] border-foreground/[0.08] bg-card/90 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:border-foreground/[0.14]"
+                className={cn(
+                    'h-full gap-3 rounded-[28px] border-foreground/[0.08] bg-card/90 group-hover:border-foreground/[0.14]',
+                    selectableCardMotion
+                )}
                 style={{
                     background:
                         'linear-gradient(180deg, color-mix(in srgb, var(--card) 94%, transparent) 0%, color-mix(in srgb, var(--card) 88%, transparent) 100%)',
@@ -171,7 +182,7 @@ export function DashboardMetricLinkCard({
                                 color: 'var(--muted-foreground)',
                             }}
                         >
-                            <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                            <ChevronRight className={cn('h-4 w-4', selectableCardIconMotion)} />
                         </span>
                     </div>
                 </CardHeader>
@@ -188,6 +199,7 @@ export function DashboardMetricLinkCard({
                         hideZeroSecondary
                         preserveSecondarySpace
                         className="text-[1.35rem] font-semibold tracking-tight"
+                        loading={loading}
                     />
                     {(supporting || trend) && (
                         <div className="mt-4 flex items-center justify-between gap-3 border-t border-foreground/[0.07] pt-3 text-xs text-muted-foreground">
@@ -279,7 +291,7 @@ export function DashboardRecentTransactionsList({
                                     </p>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                                    <TransactionTypeBadge type={transaction.type} />
+                                    <TransactionTypeBadge type={transaction.type} spaceId={transaction.spaceId} />
                                     <span>{getCompactDateLabel(transaction.date)}</span>
                                     {transaction.category?.name && (
                                         <span className="inline-flex items-center gap-1 rounded-full bg-secondary/70 px-2 py-0.5">
@@ -293,6 +305,11 @@ export function DashboardRecentTransactionsList({
                                     {meta && <span>{meta}</span>}
                                     {transaction.installmentCount && transaction.installmentCount > 1 && (
                                         <span>{transaction.installmentCount} cuotas</span>
+                                    )}
+                                    {transaction.spaceId && (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                            Espacio{transaction.spaceNameSnapshot ? `: ${transaction.spaceNameSnapshot}` : ''}
+                                        </span>
                                     )}
                                 </div>
                             </div>
@@ -312,6 +329,11 @@ export function DashboardRecentTransactionsList({
                                 <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                                     {transaction.currency}
                                 </p>
+                                {transaction.totalAmount != null && (
+                                    <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                                        total {hidden ? '•••' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: transaction.currency, maximumFractionDigits: 2 }).format(transaction.totalAmount)}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </Link>

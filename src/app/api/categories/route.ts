@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Category } from '@/lib/models'
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const session = await auth()
         if (!session) {
@@ -12,9 +12,11 @@ export async function GET() {
 
         await connectDB()
 
+        const includeHidden = new URL(request.url).searchParams.get('includeHidden') === 'true'
         const categories = await Category.find({
             userId: session.user.id,
             isArchived: false,
+            ...(includeHidden ? {} : { hiddenFromSettings: { $ne: true }, isVirtual: { $ne: true } }),
         }).sort({ sortOrder: 1, name: 1 })
 
         return NextResponse.json({ categories })

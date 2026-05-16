@@ -33,23 +33,33 @@ function MetricSupportingRow({
     value,
     hidden,
     currency,
+    loading = false,
 }: {
     label: string
     value: number
     hidden: boolean
     currency: 'ARS' | 'USD'
+    loading?: boolean
 }) {
+    const formatted = hidden
+        ? '••••'
+        : new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 0,
+        }).format(value)
+
     return (
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <span>{label}</span>
-            <span className="font-medium">
-                {hidden
-                    ? '••••'
-                    : new Intl.NumberFormat('es-AR', {
-                        style: 'currency',
-                        currency,
-                        maximumFractionDigits: 0,
-                    }).format(value)}
+            <span className="font-medium tabular-nums">
+                {loading ? (
+                    <span
+                        className="inline-block h-[1em] w-[7ch] animate-pulse rounded-md align-[-0.12em]"
+                        style={{ background: 'color-mix(in srgb, currentColor 16%, transparent)' }}
+                        aria-label="Cargando importe"
+                    />
+                ) : formatted}
             </span>
         </div>
     )
@@ -229,6 +239,7 @@ export function DashboardDesktop({
                                 hideZeroSecondary
                                 preserveSecondarySpace
                                 className="text-[2.4rem] font-semibold tracking-tight"
+                                loading={refreshing}
                             />
 
                             <div className="flex flex-wrap gap-2">
@@ -335,12 +346,14 @@ export function DashboardDesktop({
                                     value={data.netWorth.total.ars}
                                     hidden={hidden}
                                     currency="ARS"
+                                    loading={refreshing}
                                 />
                                 <MetricSupportingRow
                                     label="Deuda pendiente"
                                     value={data.summary.totalDebt.ars}
                                     hidden={hidden}
                                     currency="ARS"
+                                    loading={refreshing}
                                 />
                             </div>
                         </div>
@@ -356,6 +369,7 @@ export function DashboardDesktop({
                             primaryColor="#10B981"
                             secondaryColor="rgba(16,185,129,0.78)"
                             trend={<TrendBadge value={data.trends.income} />}
+                            loading={refreshing}
                         />
                         <DashboardMetricLinkCard
                             title="Gastos"
@@ -372,10 +386,12 @@ export function DashboardDesktop({
                                         value={data.summary.totalExpense.ars - data.summary.totalIncome.ars}
                                         hidden={hidden}
                                         currency="ARS"
+                                        loading={refreshing}
                                     />
                                     : undefined
                             }
                             trend={<TrendBadge value={data.trends.expense} inverse />}
+                            loading={refreshing}
                         />
                         <DashboardMetricLinkCard
                             title="Deuda mensual"
@@ -391,9 +407,11 @@ export function DashboardDesktop({
                                     value={data.summary.totalDebt.ars}
                                     hidden={hidden}
                                     currency="ARS"
+                                    loading={refreshing}
                                 />
                             }
                             trend={<TrendBadge value={data.trends.debt} inverse />}
+                            loading={refreshing}
                         />
                         <DashboardMetricLinkCard
                             title="Compromisos del mes"
@@ -413,6 +431,7 @@ export function DashboardDesktop({
                                     )}
                                 </span>
                             }
+                            loading={refreshing}
                         />
                     </div>
                 </section>
@@ -473,6 +492,7 @@ export function DashboardDesktop({
                                 hideZeroSecondary
                                 preserveSecondarySpace
                                 className="mt-2 text-[1.5rem] font-semibold tracking-tight"
+                                loading={refreshing}
                             />
                         </div>
 

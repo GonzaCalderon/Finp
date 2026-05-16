@@ -21,6 +21,7 @@ interface CurrencyBreakdownAmountProps {
         currency: 'ARS' | 'USD'
         rateLabel: string
     } | null
+    loading?: boolean
 }
 
 export function CurrencyBreakdownAmount({
@@ -33,6 +34,7 @@ export function CurrencyBreakdownAmount({
     hideZeroSecondary = false,
     preserveSecondarySpace = false,
     consolidated,
+    loading = false,
 }: CurrencyBreakdownAmountProps) {
     const showSecondary = !hideZeroSecondary || totals.usd !== 0
 
@@ -44,6 +46,7 @@ export function CurrencyBreakdownAmount({
                     currency="ARS"
                     hidden={hidden}
                     color={primaryColor}
+                    loading={loading}
                 />
             </div>
             {(showSecondary || preserveSecondarySpace) && (
@@ -60,6 +63,7 @@ export function CurrencyBreakdownAmount({
                         hidden={hidden}
                         color={secondaryColor}
                         compactMaximumFractionDigits={1}
+                        loading={loading}
                     />
                 </div>
             )}

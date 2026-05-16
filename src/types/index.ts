@@ -78,6 +78,10 @@ export interface ICategory {
     isDefault: boolean
     isArchived: boolean
     sortOrder: number
+    isVirtual?: boolean
+    hiddenFromSettings?: boolean
+    sourceType?: 'space'
+    sourceSpaceId?: Types.ObjectId
     createdAt: Date
     updatedAt: Date
 }
@@ -108,6 +112,15 @@ export interface ITransaction {
     importBatchId?: Types.ObjectId
     importedAt?: Date
     importSourceType?: ImportSourceType
+    spaceId?: Types.ObjectId
+    spaceEntryId?: Types.ObjectId
+    spaceNameSnapshot?: string
+    /**
+     * For space payer transactions: the portion of the amount that counts for
+     * personal reporting (their own share, not the full payment they advanced).
+     * Undefined for most transactions — falls back to `amount`.
+     */
+    operationalAmount?: number
     createdAt: Date
     updatedAt: Date
 }
@@ -236,3 +249,5 @@ export interface ICommitmentApplication {
     appliedAt: Date
     appliedBy: 'manual' | 'system'
 }
+
+export * from './space'

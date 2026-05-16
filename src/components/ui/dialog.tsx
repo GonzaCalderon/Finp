@@ -57,9 +57,9 @@ function DialogContent({
                 className={cn(
                     variant === 'fullscreen-mobile'
                         ? [
-                            "fixed inset-0 z-50 flex flex-col w-full bg-background text-sm outline-none",
+                            "fixed inset-0 z-50 flex max-h-[100dvh] w-full flex-col overflow-hidden bg-background text-sm outline-none",
                             "border border-foreground/[0.07] shadow-2xl shadow-black/20 dark:shadow-black/50",
-                            "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:w-full sm:rounded-xl",
+                            "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[calc(100dvh-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:w-full sm:rounded-xl",
                             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-200",
                             "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95",
                         ]
@@ -104,7 +104,7 @@ function DialogFooter({
     return (
         <div
             data-slot="dialog-footer"
-            className={cn("-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end", className)}
+            className={cn("flex flex-col-reverse gap-2 border-t bg-muted/50 p-4 sm:flex-row sm:justify-end", className)}
             {...props}
         >
             {children}

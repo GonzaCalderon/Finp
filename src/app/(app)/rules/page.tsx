@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Plus,
@@ -65,35 +66,6 @@ const CONDITION_LABELS: Record<string, string> = {
     contains: 'contiene',
     equals: 'es igual a',
     starts_with: 'empieza con',
-}
-
-function buildRuleDescription(
-    rule: ITransactionRule,
-    categories: ICategory[]
-): string {
-    const fieldLabel = FIELD_LABELS[rule.field] ?? rule.field
-    const conditionLabel = CONDITION_LABELS[rule.condition] ?? rule.condition
-    const appliesToLabel = APPLIES_TO_LABELS[rule.appliesTo] ?? rule.appliesTo
-
-    const categoryObj = categories.find(
-        (c) =>
-            c._id.toString() ===
-            ((rule.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
-                rule.categoryId?.toString())
-    )
-
-    let desc = `Si ${appliesToLabel === 'cualquier tipo' ? 'la' : `la`} ${fieldLabel} ${conditionLabel} "${rule.value}"`
-
-    const actions: string[] = []
-    if (categoryObj) actions.push(`→ ${categoryObj.name}`)
-    if (rule.setType) actions.push(`tipo: ${rule.setType === 'expense' ? 'gasto' : 'ingreso'}`)
-    if (rule.normalizeMerchant) actions.push(`comercio: ${rule.normalizeMerchant}`)
-
-    if (actions.length > 0) {
-        desc += `  ${actions.join(' · ')}`
-    }
-
-    return desc
 }
 
 // ─── Rule Card ────────────────────────────────────────────────────────────────
@@ -284,7 +256,9 @@ function RuleCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function RulesPage() {
+function RulesPageInner() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     usePageTitle('Reglas automáticas')
 
     const { rules, loading, createRule, updateRule, toggleRule, deleteRule } =
@@ -299,6 +273,13 @@ export default function RulesPage() {
 
     const activeRules = rules.filter((r) => r.isActive)
     const inactiveRules = rules.filter((r) => !r.isActive)
+
+    useEffect(() => {
+        if (searchParams.get('create') !== '1') return
+        setEditingRule(null)
+        setDialogOpen(true)
+        router.replace('/rules', { scroll: false })
+    }, [router, searchParams])
 
     const handleOpenCreate = () => {
         setEditingRule(null)
@@ -495,5 +476,13 @@ export default function RulesPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </div>
+    )
+}
+
+export default function RulesPage() {
+    return (
+        <Suspense fallback={null}>
+            <RulesPageInner />
+        </Suspense>
     )
 }

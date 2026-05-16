@@ -14,12 +14,14 @@ import {
     normalizeLegacyTransactionType,
 } from '@/lib/utils/credit-card'
 import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
+import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
 import {
     clampRangeStartToOperationalStart,
     hasOperationalCoverage,
     parseOperationalStartDate,
     startsOnOrAfterOperationalStart,
 } from '@/lib/utils/operational-start'
+import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
@@ -120,11 +122,12 @@ function getPopulatedCategoryRef(value: unknown): PopulatedCategoryRef | null {
     }
 }
 
-type PopulatedRef = string | { _id?: { toString(): string }; name?: string; color?: string; currency?: string } | null | undefined
+type PopulatedRef = string | { _id?: { toString(): string }; name?: string; color?: string; currency?: string; type?: string } | null | undefined
 
 function buildRecentTransactionContext(transaction: {
     type?: string
     amount: number
+    operationalAmount?: number
     description: string
     currency: string
     date: Date | string
@@ -150,16 +153,13 @@ function buildRecentTransactionContext(transaction: {
             ? (transaction.installmentPlanId as { installmentCount?: number })
             : null
 
+    const primaryImpact = getTransactionAccountImpact(transaction)
     const impact =
-        normalizedType === 'income'
+        primaryImpact?.direction === 'increase'
             ? 'positive'
-            : normalizedType === 'transfer' || normalizedType === 'exchange'
+            : primaryImpact?.direction === 'neutral'
                 ? 'neutral'
-                : normalizedType === 'adjustment'
-                    ? transaction.amount >= 0
-                        ? 'positive'
-                        : 'negative'
-                    : 'negative'
+                : 'negative'
 
     const primaryAccount =
         normalizedType === 'income'
@@ -206,6 +206,12 @@ function buildRecentTransactionContext(transaction: {
             : null,
         installmentCount: installmentPlan?.installmentCount,
         merchant: typeof transaction.merchant === 'string' ? transaction.merchant : undefined,
+        displayAmount: transaction.operationalAmount ?? Math.abs(primaryImpact?.delta ?? transaction.amount),
+        displayCurrency: primaryImpact?.currency ?? transaction.currency,
+        totalAmount:
+            transaction.operationalAmount !== undefined && transaction.operationalAmount !== transaction.amount
+                ? Math.abs(primaryImpact?.delta ?? transaction.amount)
+                : undefined,
     }
 }
 
@@ -331,7 +337,7 @@ export async function GET(request: Request) {
         const allIncome = transactions
             .filter((t) => t.type === 'income')
             .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                addCurrencyAmount(totals, transaction.currency, getOperationalIncomeAmount(transaction))
                 return totals
             }, emptyCurrencyTotals())
 
@@ -339,14 +345,14 @@ export async function GET(request: Request) {
         const totalIncome = transactions
             .filter((t) => !isLoanIncome(t) && t.type === 'income')
             .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                addCurrencyAmount(totals, transaction.currency, getOperationalIncomeAmount(transaction))
                 return totals
             }, emptyCurrencyTotals())
 
         const regularExpense = transactions
             .filter((t) => t.type === 'expense' && !t.installmentPlanId)
             .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                addCurrencyAmount(totals, transaction.currency, getOperationalExpenseAmount(transaction))
                 return totals
             }, emptyCurrencyTotals())
         const totalExpense = {
@@ -357,21 +363,21 @@ export async function GET(request: Request) {
         const prevAllIncome = prevTransactions
             .filter((t) => t.type === 'income')
             .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                addCurrencyAmount(totals, transaction.currency, getOperationalIncomeAmount(transaction))
                 return totals
             }, emptyCurrencyTotals())
 
         const prevIncome = prevTransactions
             .filter((t) => !isLoanIncome(t) && t.type === 'income')
             .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                addCurrencyAmount(totals, transaction.currency, getOperationalIncomeAmount(transaction))
                 return totals
             }, emptyCurrencyTotals())
 
         const prevRegularExpense = prevTransactions
             .filter((t) => t.type === 'expense' && !t.installmentPlanId)
             .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+                addCurrencyAmount(totals, transaction.currency, getOperationalExpenseAmount(transaction))
                 return totals
             }, emptyCurrencyTotals())
         const prevCardPayments = prevTransactions
@@ -470,7 +476,7 @@ export async function GET(request: Request) {
                 if (!expenseByCategory[key]) {
                     expenseByCategory[key] = { key, name: cat.name, color: cat.color, ars: 0, usd: 0 }
                 }
-                addCurrencyAmount(expenseByCategory[key], t.currency, t.amount)
+                addCurrencyAmount(expenseByCategory[key], t.currency, getOperationalExpenseAmount(t))
             })
         currentCardSummary.forEach((cardSummary) => {
             cardSummary.items.forEach((item) => {
@@ -677,8 +683,8 @@ export async function GET(request: Request) {
                     _id: transaction._id.toString(),
                     type: normalizeLegacyTransactionType(transaction.type) ?? transaction.type,
                     description: transaction.description,
-                    amount: transaction.amount,
-                    currency: transaction.currency,
+                    amount: context.displayAmount,
+                    currency: context.displayCurrency,
                     date: transaction.date instanceof Date
                         ? transaction.date.toISOString()
                         : new Date(transaction.date).toISOString(),
@@ -689,6 +695,9 @@ export async function GET(request: Request) {
                     sourceAccount: context.sourceAccount,
                     destinationAccount: context.destinationAccount,
                     installmentCount: context.installmentCount,
+                    spaceId: transaction.spaceId?.toString(),
+                    spaceNameSnapshot: transaction.spaceNameSnapshot,
+                    totalAmount: context.totalAmount,
                 }
             })
 

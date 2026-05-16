@@ -28,6 +28,10 @@ const TransactionSchema = new Schema<ITransaction>(
         importBatchId: { type: Schema.Types.ObjectId, ref: 'ImportBatch' },
         importedAt: { type: Date },
         importSourceType: { type: String, enum: Object.values(IMPORT_SOURCE_TYPES) },
+        spaceId: { type: Schema.Types.ObjectId, ref: 'Space' },
+        spaceEntryId: { type: Schema.Types.ObjectId, ref: 'SpaceEntry' },
+        spaceNameSnapshot: { type: String },
+        operationalAmount: { type: Number },
     },
     { timestamps: true }
 )
@@ -38,18 +42,30 @@ TransactionSchema.index({ userId: 1, sourceAccountId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, destinationAccountId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, categoryId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, paymentGroupId: 1, date: -1 })
+TransactionSchema.index({ userId: 1, spaceId: 1, date: -1 })
+TransactionSchema.index({ userId: 1, spaceEntryId: 1 })
 
 const existingTransactionModel = mongoose.models.Transaction as mongoose.Model<ITransaction> | undefined
 const currentTypeEnum = existingTransactionModel?.schema.path('type')?.options?.enum as string[] | undefined
 const hasDestinationAmountPath = Boolean(existingTransactionModel?.schema.path('destinationAmount'))
 const hasPaymentGroupIdPath = Boolean(existingTransactionModel?.schema.path('paymentGroupId'))
+const hasSpaceIdPath = Boolean(existingTransactionModel?.schema.path('spaceId'))
+const hasSpaceEntryIdPath = Boolean(existingTransactionModel?.schema.path('spaceEntryId'))
+const hasSpaceNameSnapshotPath = Boolean(existingTransactionModel?.schema.path('spaceNameSnapshot'))
+const hasOperationalAmountPath = Boolean(existingTransactionModel?.schema.path('operationalAmount'))
 const needsSchemaRefresh =
     !!existingTransactionModel &&
     (!currentTypeEnum ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.CREDIT_CARD_EXPENSE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.EXCHANGE) ||
+        !currentTypeEnum.includes(TRANSACTION_TYPES.PERSONAL_DEBT_PAYMENT) ||
+        !currentTypeEnum.includes(TRANSACTION_TYPES.PERSONAL_DEBT_COLLECT) ||
         !hasDestinationAmountPath ||
-        !hasPaymentGroupIdPath)
+        !hasPaymentGroupIdPath ||
+        !hasSpaceIdPath ||
+        !hasSpaceEntryIdPath ||
+        !hasSpaceNameSnapshotPath ||
+        !hasOperationalAmountPath)
 
 if (needsSchemaRefresh) {
     delete mongoose.models.Transaction

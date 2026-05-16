@@ -28,6 +28,7 @@ import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
+import { selectableCardRootMotion } from '@/components/shared/selectable-card-motion'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -48,6 +49,7 @@ import type { ITransaction } from '@/types'
 import type { InstallmentPlanWithTransaction } from '@/hooks/useCreditCardExpenses'
 import { getSingleCreditCardExpenseStatusForMonth } from '@/lib/utils/credit-card'
 import { apiJson } from '@/lib/client/auth-client'
+import { cn } from '@/lib/utils'
 import {
     invalidateData,
     TRANSACTION_INVALIDATION_TAGS,
@@ -1150,7 +1152,10 @@ function CreditCardExpensesPageInner() {
                                         onClick={() =>
                                             setFilter('cardFilter', selected ? DEFAULT_FILTERS.cardFilter : card.cardId)
                                         }
-                                        className="min-w-[248px] rounded-2xl border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
+                                        className={cn(
+                                            'min-w-[248px] rounded-2xl border px-4 py-3.5 text-left',
+                                            selectableCardRootMotion
+                                        )}
                                         style={{
                                             background: card.color
                                                 ? `linear-gradient(180deg, ${card.color}12 0%, color-mix(in srgb, var(--card) 94%, transparent) 34%)`
@@ -1235,7 +1240,10 @@ function CreditCardExpensesPageInner() {
                                         onClick={() =>
                                             setFilter('cardFilter', selected ? DEFAULT_FILTERS.cardFilter : card.cardId)
                                         }
-                                        className="min-w-[248px] rounded-2xl border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px"
+                                        className={cn(
+                                            'min-w-[248px] rounded-2xl border px-4 py-3.5 text-left',
+                                            selectableCardRootMotion
+                                        )}
                                         style={{
                                             background: card.color
                                                 ? `linear-gradient(180deg, ${card.color}12 0%, color-mix(in srgb, var(--card) 94%, transparent) 34%)`
