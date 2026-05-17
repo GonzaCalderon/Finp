@@ -450,7 +450,7 @@ export function getMobileFabConfig(params: {
 function PulseDot({ count, className = '' }: { count?: number; className?: string }) {
     return (
         <span
-            className={`finp-pulse-dot relative inline-flex h-2 w-2 shrink-0 rounded-full ${className}`}
+            className={`finp-pulse-dot relative inline-flex h-1.5 w-1.5 shrink-0 rounded-full ${className}`}
             style={{ background: 'var(--warning)' }}
             aria-label={count ? `${count} pendientes` : 'Pendiente'}
         />
@@ -926,7 +926,11 @@ function MobileNavItem({
                 )}
                 <span className="relative">
                     <Icon size={18} />
-                    {dot && <PulseDot className="absolute -right-1.5 -top-1" />}
+                    {dot && (
+                        <span className="absolute -top-5 left-1/2 -translate-x-1/2">
+                            <PulseDot />
+                        </span>
+                    )}
                 </span>
                 <span className="relative max-w-full truncate text-[10px] font-medium leading-none">{label}</span>
             </Link>
@@ -1411,7 +1415,7 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
                         <span className="relative">
                             <MoreHorizontal size={18} />
                             {pendingCount > 0 && !moreOpen && (
-                                <span className="absolute -right-1 -top-1">
+                                <span className="absolute -top-5 left-1/2 -translate-x-1/2">
                                     <PulseDot count={pendingCount} />
                                 </span>
                             )}

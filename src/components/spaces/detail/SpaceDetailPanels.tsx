@@ -29,6 +29,41 @@ import type { SpaceParticipantRole } from '@/lib/constants'
 export type SpaceEntryFilter = 'all' | ISpaceEntry['type']
 type SpaceEntrySort = 'recent' | 'amount' | 'status'
 
+function round2(value: number) {
+    return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+function getUserShare(entry: ISpaceEntry, currentParticipantId: string | null): number | null {
+    if (!currentParticipantId) return null
+    if (entry.type === 'settlement') return null
+    if (entry.isVoided) return null
+    if (entry.splitMode === 'none') return null
+
+    const sharedWith = (entry.sharedWithParticipantIds ?? []).map((id) => extractId(id))
+    if (!sharedWith.includes(currentParticipantId)) return null
+
+    if (entry.splitMode === 'equal') {
+        const count = sharedWith.length
+        if (count <= 1) return null
+        return round2(entry.amount / count)
+    }
+
+    if (entry.splitMode === 'percentage') {
+        const alloc = entry.splitAllocations?.find((a) => extractId(a.participantId) === currentParticipantId)
+        if (!alloc?.percentage) return null
+        const share = round2(entry.amount * alloc.percentage / 100)
+        return Math.abs(share - entry.amount) < 0.01 ? null : share
+    }
+
+    if (entry.splitMode === 'fixed') {
+        const alloc = entry.splitAllocations?.find((a) => extractId(a.participantId) === currentParticipantId)
+        if (alloc?.amount == null) return null
+        return Math.abs(alloc.amount - entry.amount) < 0.01 ? null : alloc.amount
+    }
+
+    return null
+}
+
 function resolveCategoryInfo(entry: ISpaceEntry) {
     if (
         entry.spaceCategoryId &&
@@ -120,6 +155,12 @@ function MovementCard({
     const canEditEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onEdit)
     const canVoidEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onVoid)
     const hasActions = canEditEntry || canVoidEntry
+
+    const currentParticipant = currentUserId
+        ? participants.find((p) => extractId(p.userId) === currentUserId)
+        : null
+    const currentParticipantId = extractId(currentParticipant?._id) ?? null
+    const userShare = getUserShare(entry, currentParticipantId)
 
     // Resolve who voided
     const voidedBy = isVoided && entry.voidedByUserId
@@ -235,6 +276,17 @@ function MovementCard({
                     hidden={hidden}
                     className={cn('text-sm font-semibold tabular-nums', isVoided ? 'text-muted-foreground line-through' : '')}
                 />
+                {userShare !== null ? (
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <span>tu parte</span>
+                        <SpaceAmountInline
+                            amount={userShare}
+                            currency={entry.currency}
+                            hidden={hidden}
+                            className="font-medium text-foreground/70"
+                        />
+                    </div>
+                ) : null}
                 {/* Badges + desktop quick actions + mobile tap affordance — single row */}
                 <div className="flex items-center gap-1.5">
                     {isVoided ? (

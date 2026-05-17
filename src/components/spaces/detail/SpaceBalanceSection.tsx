@@ -174,18 +174,20 @@ export function SpaceBalanceSection({
                                 {directPayments.map((payment) => (
                                     <div
                                         key={`d-${payment.from.participantId}-${payment.to.participantId}`}
-                                        className="flex items-center gap-2 rounded-xl px-2 py-2"
+                                        className="flex flex-col gap-1.5 rounded-xl px-2 py-2.5 sm:flex-row sm:items-center sm:gap-2"
                                     >
-                                        <SpaceInitialsAvatar name={payment.from.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
-                                        <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
-                                            {payment.from.displayName}
-                                        </span>
-                                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                        <SpaceInitialsAvatar name={payment.to.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
-                                        <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
-                                            {payment.to.displayName}
-                                        </span>
-                                        <div className="ml-auto shrink-0">
+                                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                                            <SpaceInitialsAvatar name={payment.from.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                            <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                                {payment.from.displayName}
+                                            </span>
+                                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                            <SpaceInitialsAvatar name={payment.to.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                            <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                                {payment.to.displayName}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-end sm:ml-auto sm:shrink-0">
                                             <SpaceAmountInline
                                                 amount={payment.amount}
                                                 currency={currency}
@@ -209,18 +211,20 @@ export function SpaceBalanceSection({
                                     return (
                                         <div
                                             key={`${payment.from.participantId}-${payment.to.participantId}`}
-                                            className={`flex items-center gap-2 rounded-xl px-2 py-2 transition-colors ${isConfirming ? 'bg-primary/5' : 'hover:bg-muted/40'}`}
+                                            className={`flex flex-col gap-1.5 rounded-xl px-2 py-2.5 transition-colors sm:flex-row sm:items-center sm:gap-2 ${isConfirming ? 'bg-primary/5' : 'hover:bg-muted/40'}`}
                                         >
-                                            <SpaceInitialsAvatar name={payment.from.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
-                                            <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
-                                                {payment.from.displayName}
-                                            </span>
-                                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                            <SpaceInitialsAvatar name={payment.to.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
-                                            <span className="min-w-0 max-w-[5rem] truncate text-sm font-medium text-foreground">
-                                                {payment.to.displayName}
-                                            </span>
-                                            <div className="ml-auto flex shrink-0 items-center gap-2">
+                                            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                                                <SpaceInitialsAvatar name={payment.from.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                                <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                                    {payment.from.displayName}
+                                                </span>
+                                                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                <SpaceInitialsAvatar name={payment.to.displayName} className="h-7 w-7 shrink-0 text-[10px]" />
+                                                <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                                    {payment.to.displayName}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-end gap-2 sm:ml-auto sm:shrink-0">
                                                 <SpaceAmountInline
                                                     amount={payment.amount}
                                                     currency={currency}
