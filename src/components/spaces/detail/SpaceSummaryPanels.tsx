@@ -90,11 +90,9 @@ function formatActivityMetadata(event: ISpaceActivityEvent) {
 export function RecentSpaceActivityCard({
     events,
     participants,
-    onViewAll,
 }: {
     events: ISpaceActivityEvent[]
     participants: ISpaceParticipant[]
-    onViewAll: () => void
 }) {
     const visibleEvents = events.slice(0, 5)
     const participantsById = new Map(
@@ -103,18 +101,13 @@ export function RecentSpaceActivityCard({
 
     return (
         <section className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                        Actividad
-                    </p>
-                    <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-                        Última actividad
-                    </h2>
-                </div>
-                <Button variant="ghost" className="rounded-full" onClick={onViewAll}>
-                    Ver actividad
-                </Button>
+            <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Actividad
+                </p>
+                <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+                    Última actividad
+                </h2>
             </div>
 
             <motion.div

@@ -51,10 +51,7 @@ import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobile
 import { SpaceEntryDetailSheet } from '@/components/spaces/detail/SpaceEntryDetailSheet'
 import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
 import { SpaceSettlementPanel } from '@/components/spaces/detail/SpaceSettlementPanel'
-import {
-    RecentSpaceActivityCard,
-    SpacePendingConfirmationsCard,
-} from '@/components/spaces/detail/SpaceSummaryPanels'
+import { RecentSpaceActivityCard } from '@/components/spaces/detail/SpaceSummaryPanels'
 import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingViews'
 import { apiJson } from '@/lib/client/auth-client'
 import {
@@ -297,15 +294,6 @@ function SpaceDetailPageInner() {
     const canManage =
         currentParticipant?.role === 'owner' ||
         currentParticipant?.role === 'admin'
-
-    const pendingConfirmations = useMemo(
-        () =>
-            data?.pendingActions.filter(
-                (action): action is Extract<ISpacePendingAction, { kind: 'confirmation' }> =>
-                    action.kind === 'confirmation'
-            ) ?? [],
-        [data?.pendingActions]
-    )
 
     const suggestedPayments = data?.summary.balances ? buildRecommendedPayments(data.summary.balances) : []
 
@@ -642,6 +630,11 @@ function SpaceDetailPageInner() {
                 {/* Summary tab */}
                 {activeTab === 'summary' ? (
                     <div className="space-y-4">
+                        <RecentSpaceActivityCard
+                            events={spaceActivity.events}
+                            participants={data.participants}
+                        />
+
                         <SpaceKpiRow
                             summary={data.summary}
                             reportingCurrency={data.space.reportingCurrency}
@@ -672,22 +665,6 @@ function SpaceDetailPageInner() {
                                 hidden={hidden}
                             />
                         </div>
-
-                        <RecentSpaceActivityCard
-                            events={spaceActivity.events}
-                            participants={data.participants}
-                            onViewAll={() => {
-                                setPendingSheetTab('activity')
-                                setPendingSheetOpen(true)
-                            }}
-                        />
-
-                        {pendingConfirmations.length > 0 ? (
-                            <SpacePendingConfirmationsCard
-                                actions={pendingConfirmations}
-                                onReview={handleReviewPending}
-                            />
-                        ) : null}
                     </div>
                 ) : null}
 

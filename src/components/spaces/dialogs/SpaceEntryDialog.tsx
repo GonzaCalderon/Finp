@@ -64,6 +64,7 @@ import {
 } from '@/components/spaces/dialogs/SpaceAttachmentsUploader'
 import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitConfigurator'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 
 // ── Account type helpers ──────────────────────────────────────────────────────
 
@@ -921,20 +922,18 @@ export function SpaceEntryDialog({
                                     <SpaceDialogPanel>
                                         <div className="grid gap-4">
                                             <div className="grid gap-4 lg:grid-cols-[1.1fr_0.55fr_0.7fr]">
-                                                <SpaceDialogField label="Monto" error={fieldErrors.amount}>
-                                                    <Input
-                                                        value={form.amount === 0 ? '' : String(form.amount)}
-                                                        onChange={(event) => {
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                amount: Number(event.target.value.replace(',', '.')),
-                                                            }))
-                                                            clearFieldError('amount')
-                                                        }}
-                                                        placeholder="45000"
-                                                        className={fieldErrors.amount ? 'border-destructive focus-visible:ring-destructive/25' : ''}
-                                                    />
-                                                </SpaceDialogField>
+                                                <FormattedAmountInput
+                                                    id="entry-amount"
+                                                    label="Monto"
+                                                    value={form.amount || undefined}
+                                                    currency={form.currency}
+                                                    error={fieldErrors.amount}
+                                                    labelClassName="text-sm font-medium text-foreground"
+                                                    onValueChangeAction={(value) => {
+                                                        setForm((previous) => ({ ...previous, amount: value }))
+                                                        clearFieldError('amount')
+                                                    }}
+                                                />
 
                                                 <SpaceDialogField label="Moneda" error={fieldErrors.currency}>
                                                     <Select

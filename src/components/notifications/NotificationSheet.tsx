@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
     SheetContent,
     SheetHeader,
@@ -154,25 +155,35 @@ export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: Notif
 
             {/* Área scrollable */}
             <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
-                {loading ? (
-                    <div className="flex items-center justify-center py-16">
-                        <Loader2 size={20} className="animate-spin text-muted-foreground" />
-                    </div>
-                ) : notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-                        <p className="text-sm text-muted-foreground">{emptyMessageFor(activeTab)}</p>
-                    </div>
-                ) : (
-                    <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                        {notifications.map((notification) => (
-                            <NotificationItem
-                                key={notification._id.toString()}
-                                notification={notification}
-                                onClose={onClose}
-                            />
-                        ))}
-                    </div>
-                )}
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                    >
+                        {loading ? (
+                            <div className="flex items-center justify-center py-16">
+                                <Loader2 size={20} className="animate-spin text-muted-foreground" />
+                            </div>
+                        ) : notifications.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+                                <p className="text-sm text-muted-foreground">{emptyMessageFor(activeTab)}</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                                {notifications.map((notification) => (
+                                    <NotificationItem
+                                        key={notification._id.toString()}
+                                        notification={notification}
+                                        onClose={onClose}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </motion.div>
+                </AnimatePresence>
             </div>
         </SheetContent>
     )

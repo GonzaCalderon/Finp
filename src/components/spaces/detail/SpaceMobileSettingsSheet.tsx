@@ -20,6 +20,7 @@ import {
     SpaceStatusBadge,
     SpaceTypeBadge,
 } from '@/components/spaces/SpaceUi'
+import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
 import { SpaceInviteLinkManager } from '@/components/spaces/settings/SpaceInviteLinkManager'
 import { SpacePersonalSettingsPanel } from '@/components/spaces/settings/SpacePersonalSettingsPanel'
 import {
@@ -94,7 +95,7 @@ export function SpaceMobileSettingsSheet({
     onUpdateParticipantRole: (participantId: string, role: 'admin' | 'participant') => Promise<unknown>
     onRemoveParticipant: (participantId: string) => Promise<unknown>
 }) {
-    const [section, setSection] = useState<'general' | 'mi_finp'>('general')
+    const [section, setSection] = useState<'general' | 'categorias' | 'mi_finp'>('general')
     const isClosed = space.status === 'closed'
     const isOwner = currentParticipantRole === 'owner'
     const isAdmin = currentParticipantRole === 'admin'
@@ -186,6 +187,7 @@ export function SpaceMobileSettingsSheet({
                             <div className="flex gap-2 overflow-x-auto px-5 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                                 {[
                                     { key: 'general' as const, label: 'General' },
+                                    { key: 'categorias' as const, label: 'Categorías' },
                                     { key: 'mi_finp' as const, label: 'Mi Finp' },
                                 ].map((item) => (
                                     <button
@@ -361,6 +363,15 @@ export function SpaceMobileSettingsSheet({
                                 </div>
                             </section>
                                 </>
+                            )}
+
+                            {section === 'categorias' && (
+                                <section className="px-5 pb-6 pt-1">
+                                    <SpaceCategoryManager
+                                        spaceId={extractId(space._id) ?? ''}
+                                        canManage={canManage}
+                                    />
+                                </section>
                             )}
 
                             {section === 'mi_finp' && (
