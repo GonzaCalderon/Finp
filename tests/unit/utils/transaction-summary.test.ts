@@ -137,4 +137,27 @@ describe('buildTransactionPeriodSummary', () => {
         expect(summary.income).toEqual({ ars: 0, usd: 0 })
         expect(summary.expense).toEqual({ ars: 0, usd: 0 })
     })
+
+    it('incluye desembolsos y pagos de préstamos en el resultado del período', () => {
+        const summary = buildTransactionPeriodSummary({
+            month: '2026-03',
+            transactions: [
+                transaction({
+                    type: 'transfer',
+                    amount: 500,
+                    sourceAccountId: { _id: 'loan', type: 'debt' },
+                    destinationAccountId: { _id: 'cash', type: 'cash' },
+                }),
+                transaction({
+                    type: 'transfer',
+                    amount: 125,
+                    sourceAccountId: { _id: 'cash', type: 'cash' },
+                    destinationAccountId: { _id: 'loan', type: 'debt' },
+                }),
+            ],
+            plans: [],
+        })
+
+        expect(summary.balance).toEqual({ ars: 375, usd: 0 })
+    })
 })

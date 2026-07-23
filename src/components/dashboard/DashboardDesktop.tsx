@@ -225,16 +225,21 @@ export function DashboardDesktop({
                                 {refreshing && <p className="text-sm text-muted-foreground">Actualizando</p>}
                             </div>
 
-                            <CurrencyBreakdownAmount
-                                totals={data.summary.balance}
-                                hidden={hidden}
-                                primaryColor={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                secondaryColor={data.summary.balance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                                hideZeroSecondary
-                                preserveSecondarySpace
-                                className="text-[2.4rem] font-semibold tracking-tight"
-                                loading={refreshing}
-                            />
+                            <div className="space-y-1">
+                                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                    Saldo disponible
+                                </p>
+                                <CurrencyBreakdownAmount
+                                    totals={data.summary.availableBalance}
+                                    hidden={hidden}
+                                    primaryColor={data.summary.availableBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    secondaryColor={data.summary.availableBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                                    hideZeroSecondary
+                                    preserveSecondarySpace
+                                    className="text-[2.4rem] font-semibold tracking-tight"
+                                    loading={refreshing}
+                                />
+                            </div>
 
                             <div className="flex flex-wrap gap-2">
                                 <TrendBadge value={data.trends.income} />
@@ -260,13 +265,13 @@ export function DashboardDesktop({
                             <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                 Período
                             </p>
-                    <PeriodSelector
-                        value={month}
-                        options={monthOptions}
-                        onValueChange={onMonthChange}
-                        compact={false}
-                        className="mt-3 h-10 w-full rounded-2xl border-foreground/[0.08] bg-background/70"
-                    />
+                            <PeriodSelector
+                                value={month}
+                                options={monthOptions}
+                                onValueChange={onMonthChange}
+                                compact={false}
+                                className="mt-3 h-10 w-full rounded-2xl border-foreground/[0.08] bg-background/70"
+                            />
 
                             <div className="mt-5 space-y-2">
                                 <div className="flex items-center justify-between text-xs">
@@ -330,6 +335,13 @@ export function DashboardDesktop({
                             )}
 
                             <div className="mt-5 space-y-2 text-xs text-muted-foreground">
+                                <MetricSupportingRow
+                                    label="Resultado del período"
+                                    value={data.summary.balance.ars}
+                                    hidden={hidden}
+                                    currency="ARS"
+                                    loading={refreshing}
+                                />
                                 <MetricSupportingRow
                                     label="Patrimonio"
                                     value={data.netWorth.total.ars}

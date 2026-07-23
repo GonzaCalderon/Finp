@@ -1129,11 +1129,13 @@ function TransactionsPageInner() {
     const totalIncome = summary.income
     const totalExpense = summary.expense
     const totalCreditCardExpense = summary.creditCardExpense
-    const totalBalance = summary.balance
+    const periodResult = summary.balance
+    const availableBalance = summary.availableBalance
     const animatedIncome = useAnimatedTotals(totalIncome)
     const animatedExpense = useAnimatedTotals(totalExpense)
     const animatedCreditCardExpense = useAnimatedTotals(totalCreditCardExpense)
-    const animatedBalance = useAnimatedTotals(totalBalance)
+    const animatedPeriodResult = useAnimatedTotals(periodResult)
+    const animatedAvailableBalance = useAnimatedTotals(availableBalance)
 
     useAppStartupReady(!loading && !accountsLoading && !categoriesLoading)
 
@@ -1189,7 +1191,7 @@ function TransactionsPageInner() {
                         <p className="text-sm font-medium md:hidden">Resumen del período</p>
                         <div className="hidden md:flex items-baseline gap-2">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mensual</p>
-                            <p className="text-[10px] text-muted-foreground">Resumen operativo del período</p>
+                            <p className="text-[10px] text-muted-foreground">Resultado del período y saldo acumulado</p>
                         </div>
                     </div>
                     {activeFilterCount > 0 && (
@@ -1198,7 +1200,7 @@ function TransactionsPageInner() {
                         </Badge>
                     )}
                 </div>
-                <div className="grid grid-cols-3">
+                <div className="grid grid-cols-2 md:grid-cols-4">
                     <SummaryMetricCard
                         title="Ingresos"
                         totals={animatedIncome}
@@ -1244,12 +1246,21 @@ function TransactionsPageInner() {
                         </AnimatePresence>
                     </SummaryMetricCard>
                     <SummaryMetricCard
-                        title="Balance"
-                        totals={animatedBalance}
+                        title="Resultado"
+                        totals={animatedPeriodResult}
                         hidden={hidden}
                         accent="rgba(74,158,204,0.30)"
-                        primaryColor={totalBalance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                        secondaryColor={totalBalance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        primaryColor={periodResult.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        secondaryColor={periodResult.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        align="center"
+                    />
+                    <SummaryMetricCard
+                        title="Saldo disponible"
+                        totals={animatedAvailableBalance}
+                        hidden={hidden}
+                        accent="rgba(16,185,129,0.24)"
+                        primaryColor={availableBalance.ars >= 0 ? 'var(--foreground)' : 'var(--destructive)'}
+                        secondaryColor={availableBalance.usd >= 0 ? 'var(--foreground)' : 'var(--destructive)'}
                         align="center"
                     />
                 </div>

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account, ScheduledCommitment, CommitmentApplication, InstallmentPlan, User } from '@/lib/models'
-import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
+import { Transaction, Account, Debt, ScheduledCommitment, CommitmentApplication, InstallmentPlan, User } from '@/lib/models'
+import { calculateAccountBalancesByCurrency, sumAvailableAccountBalances } from '@/lib/utils/balance'
 import { parseFinancialPeriod, getCurrentFinancialPeriod } from '@/lib/utils/period'
 import {
     buildMonthlyCardPaymentSummary,
@@ -22,6 +22,7 @@ import {
     startsOnOrAfterOperationalStart,
 } from '@/lib/utils/operational-start'
 import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
+import { DEBT_STATUSES } from '@/lib/constants'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
@@ -518,9 +519,7 @@ export async function GET(request: Request) {
                     {
                         initialBalances: getInitialBalancesByCurrency(account),
                         sinceDate: operationalStart,
-                        includeCreditCardInstallmentDebt: account.type === 'credit_card',
-                        monthStartDay,
-                        operationalStartDate,
+                        untilDate: new Date(now.getTime() + 1),
                     }
                 )
 
@@ -540,7 +539,26 @@ export async function GET(request: Request) {
             })
         )
 
-        // Patrimonio
+        const selectedAccountsWithBalance =
+            endOfMonth < now
+                ? await Promise.all(
+                    accounts.map(async (account) => ({
+                        type: account.type,
+                        balancesByCurrency: await calculateAccountBalancesByCurrency(
+                            account._id,
+                            account.userId,
+                            {
+                                initialBalances: getInitialBalancesByCurrency(account),
+                                sinceDate: operationalStart,
+                                untilDate: endOfMonth,
+                            }
+                        ),
+                    }))
+                )
+                : accountsWithBalance
+        const availableBalance = sumAvailableAccountBalances(selectedAccountsWithBalance)
+
+        // Patrimonio actual
         const netWorthAccounts = accountsWithBalance.filter((a) => a.includeInNetWorth)
         const assets = netWorthAccounts
             .filter((a) => !['credit_card', 'debt'].includes(a.type))
@@ -550,12 +568,31 @@ export async function GET(request: Request) {
                 return totals
             }, emptyCurrencyTotals())
         const liabilities = netWorthAccounts
-            .filter((a) => a.type === 'debt')
+            .filter((a) => ['credit_card', 'debt'].includes(a.type))
             .reduce((totals, account) => {
-                totals.ars += Math.abs(account.balancesByCurrency.ARS)
-                totals.usd += Math.abs(account.balancesByCurrency.USD)
+                totals.ars += account.type === 'credit_card'
+                    ? Math.max(0, -account.balancesByCurrency.ARS)
+                    : Math.abs(account.balancesByCurrency.ARS)
+                totals.usd += account.type === 'credit_card'
+                    ? Math.max(0, -account.balancesByCurrency.USD)
+                    : Math.abs(account.balancesByCurrency.USD)
                 return totals
             }, emptyCurrencyTotals())
+
+        const personalDebts = await Debt.find({
+            userId,
+            status: { $in: [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID] },
+        }, {
+            direction: 1,
+            currency: 1,
+            remainingAmount: 1,
+        })
+
+        personalDebts.forEach((debt) => {
+            const target = debt.direction === 'receivable' ? assets : liabilities
+            addCurrencyAmount(target, debt.currency, debt.remainingAmount)
+        })
+
         const netWorth = subtractCurrencyTotals(assets, liabilities)
 
         // Compromisos pendientes del mes
@@ -707,6 +744,7 @@ export async function GET(request: Request) {
                 totalIncome,
                 totalExpense,
                 balance: currentBalance,
+                availableBalance,
                 totalCreditCardExpense,
                 totalDebt: totalRemainingDebt,
                 totalMonthlyCommitments,

@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, User, InstallmentPlan } from '@/lib/models'
+import { Account, Transaction, User, InstallmentPlan } from '@/lib/models'
 import { parseFinancialPeriod } from '@/lib/utils/period'
 import { buildTransactionPeriodSummary } from '@/lib/utils/transaction-summary'
-import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
+import { clampRangeStartToOperationalStart, parseOperationalStartDate } from '@/lib/utils/operational-start'
+import { calculateAccountBalancesByCurrency, sumAvailableAccountBalances } from '@/lib/utils/balance'
+import { getInitialBalancesByCurrency } from '@/lib/utils/accounts'
 import { createTransactionForUser, getTransactionListTypeFilter } from '@/lib/server/transactions'
 import { isServiceError } from '@/lib/server/errors'
 import type { Currency } from '@/lib/constants'
@@ -65,13 +67,16 @@ export async function GET(request: Request) {
             expense: CurrencySummary
             creditCardExpense: CurrencySummary
             balance: CurrencySummary
+            availableBalance: CurrencySummary
         } | undefined
+        let balanceUntilDate = new Date(Date.now() + 1)
 
         if (month) {
             const [year, m] = month.split('-').map(Number)
             if (!Number.isNaN(year) && !Number.isNaN(m)) {
                 const { start, end } = parseFinancialPeriod(month, monthStartDay)
                 baseFilter.date = { $gte: start, $lt: end }
+                if (end < balanceUntilDate) balanceUntilDate = end
 
                 const [summaryTransactions, installmentPlans] = await Promise.all([
                     Transaction.find({
@@ -89,13 +94,16 @@ export async function GET(request: Request) {
                         .populate('categoryId', 'name color type'),
                 ])
 
-                summary = buildTransactionPeriodSummary({
-                    month,
-                    monthStartDay,
-                    transactions: summaryTransactions as unknown as ITransaction[],
-                    plans: installmentPlans as unknown as IInstallmentPlan[],
-                    operationalStartDate,
-                })
+                summary = {
+                    ...buildTransactionPeriodSummary({
+                        month,
+                        monthStartDay,
+                        transactions: summaryTransactions as unknown as ITransaction[],
+                        plans: installmentPlans as unknown as IInstallmentPlan[],
+                        operationalStartDate,
+                    }),
+                    availableBalance: emptyCurrencySummary(),
+                }
             }
         }
 
@@ -131,8 +139,27 @@ export async function GET(request: Request) {
                     ars: income.ars - expense.ars,
                     usd: income.usd - expense.usd,
                 },
+                availableBalance: emptyCurrencySummary(),
             }
         }
+
+        const operationalStart = parseOperationalStartDate(operationalStartDate)
+        const activeAccounts = await Account.find({ userId: session.user.id, isActive: true })
+        const accountBalances = await Promise.all(
+            activeAccounts.map(async (account) => ({
+                type: account.type,
+                balancesByCurrency: await calculateAccountBalancesByCurrency(
+                    account._id,
+                    account.userId,
+                    {
+                        initialBalances: getInitialBalancesByCurrency(account),
+                        sinceDate: operationalStart,
+                        untilDate: balanceUntilDate,
+                    }
+                ),
+            }))
+        )
+        summary.availableBalance = sumAvailableAccountBalances(accountBalances)
 
         // List filter: base plus user-applied filters.
         const filter: Record<string, unknown> = { ...baseFilter }

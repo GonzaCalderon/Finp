@@ -61,13 +61,13 @@ function InsightTile({
 function MobileSummaryCard({
     href,
     hidden,
-    balance,
+    totals,
     debtRatio,
     loading = false,
 }: {
     href: string
     hidden: boolean
-    balance: { ars: number; usd: number }
+    totals: { ars: number; usd: number }
     debtRatio: number
     loading?: boolean
 }) {
@@ -83,12 +83,12 @@ function MobileSummaryCard({
         >
             <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Balance</p>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Saldo disponible</p>
                     <CurrencyBreakdownAmount
-                        totals={balance}
+                        totals={totals}
                         hidden={hidden}
-                        primaryColor={balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
-                        secondaryColor={balance.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        primaryColor={totals.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        secondaryColor={totals.usd >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
                         hideZeroSecondary
                         preserveSecondarySpace
                         className="text-[1.85rem] font-semibold tracking-tight"
@@ -241,7 +241,7 @@ export function DashboardMobile({
                 <MobileSummaryCard
                     href={`/transactions?month=${month}`}
                     hidden={hidden}
-                    balance={data.summary.balance}
+                    totals={data.summary.availableBalance}
                     debtRatio={debtToIncomeRatio}
                     loading={refreshing}
                 />
@@ -284,13 +284,21 @@ export function DashboardMobile({
                         loading={refreshing}
                     />
                     <MobileMetricTile
+                        title="Resultado del período"
+                        href={`/transactions?month=${month}`}
+                        hidden={hidden}
+                        totals={data.summary.balance}
+                        primaryColor={data.summary.balance.ars >= 0 ? 'var(--sky-dark)' : 'var(--destructive)'}
+                        secondaryColor={data.summary.balance.usd >= 0 ? 'rgba(96,184,224,0.78)' : 'var(--destructive)'}
+                        loading={refreshing}
+                    />
+                    <MobileMetricTile
                         title="Compromisos del mes"
                         href="/commitments"
                         hidden={hidden}
                         totals={data.summary.totalMonthlyCommitments}
                         primaryColor="var(--sky-dark)"
                         secondaryColor="rgba(96,184,224,0.78)"
-                        className="col-span-2"
                         loading={refreshing}
                     />
                 </div>
