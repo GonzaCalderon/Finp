@@ -4,14 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { CurrencyPillSelector } from '@/components/shared/CurrencyPillSelector'
 import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { ITransaction, ITransactionRule } from '@/types'
@@ -79,6 +73,7 @@ export function TransactionMainStep({
 }: TransactionMainStepProps) {
     const typeSurface = getTypeSurface(type, type === 'expense')
     const typeLabel = type === 'expense' ? 'Gasto' : type === 'income' ? 'Ingreso' : null
+    const currencyOptions = allowedCurrencies.length > 0 ? allowedCurrencies : [currency]
 
     return (
         <StepSection>
@@ -148,6 +143,7 @@ export function TransactionMainStep({
                                 label={isExchange ? 'Monto origen' : 'Monto'}
                                 value={amount}
                                 currency={currency}
+                                showCurrencyFlag
                                 error={undefined}
                                 autoFocus
                                 wrapperClassName="space-y-1.5"
@@ -158,22 +154,12 @@ export function TransactionMainStep({
 
                             <div className="space-y-1.5 md:self-start">
                                 <Label>{isExchange ? 'Moneda origen' : 'Moneda'}</Label>
-                                <Select
+                                <CurrencyPillSelector
                                     value={currency}
-                                    onValueChange={(value) => onCurrencyChange(value as TransactionFormInput['currency'])}
-                                    disabled={allowedCurrencies.length === 1}
-                                >
-                                    <SelectTrigger className="h-10 rounded-[1rem]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {allowedCurrencies.map((allowedCurrency) => (
-                                            <SelectItem key={allowedCurrency} value={allowedCurrency}>
-                                                {allowedCurrency}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    options={currencyOptions}
+                                    readOnly={currencyOptions.length <= 1}
+                                    onValueChange={onCurrencyChange}
+                                />
                                 {allowedCurrencies.length === 1 && (
                                     <p className="text-xs text-muted-foreground">Se fija automaticamente segun la cuenta elegida.</p>
                                 )}

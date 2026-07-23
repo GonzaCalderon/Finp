@@ -3,6 +3,10 @@ import { staggerContainer } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount } from '@/types'
 import type {
+    DolarApiQuoteHouse,
+    ExchangeRateQuote,
+} from '@/lib/utils/exchange-rates'
+import type {
     DescriptionTextSuggestion,
     DuplicateTransactionWarning,
     SimilarTransactionSuggestion,
@@ -49,6 +53,11 @@ interface TransactionOtherDetailsStepProps {
     exchangeDestinationAmount: number
     exchangeDestinationCurrency: TransactionFormInput['currency']
     exchangeRate: number
+    exchangeRateMode: 'automatic' | 'manual'
+    exchangeRateQuotes: ExchangeRateQuote[]
+    selectedExchangeRateHouse: DolarApiQuoteHouse
+    isExchangeRateLoading: boolean
+    exchangeRateLoadError: string | null
     currency: TransactionFormInput['currency']
     destinationAmountError: string | undefined
     exchangeRateError: string | undefined
@@ -68,6 +77,12 @@ interface TransactionOtherDetailsStepProps {
     amountError: string | undefined
     dateError: string | undefined
     exchangeConfigurationError: string | null
+    exchangeBalanceError: string | null
+    exchangeOperationLabel: string
+    exchangeSourceBalance: number | null
+    exchangeDestinationBalance: number | null
+    exchangeSourceResultingBalance: number | null
+    exchangeDestinationResultingBalance: number | null
     canSwapExchangeDirection: boolean
     showErrors: boolean
     transferSourceLabel: string | undefined
@@ -97,6 +112,8 @@ interface TransactionOtherDetailsStepProps {
     onSwitchToExchange: () => void
     onDestinationAmountChange: (amount: number) => void
     onExchangeRateChange: (rate: number) => void
+    onExchangeRateHouseChange: (house: DolarApiQuoteHouse) => void
+    onRefreshExchangeRates: () => void
     onSwapExchangeDirection: () => void
     onAdjustmentSignChange: (sign: '+' | '-') => void
 }
@@ -199,9 +216,20 @@ export function TransactionOtherDetailsStep(props: TransactionOtherDetailsStepPr
                         exchangeDestinationAmount={props.exchangeDestinationAmount}
                         exchangeDestinationCurrency={props.exchangeDestinationCurrency}
                         exchangeRate={props.exchangeRate}
+                        exchangeRateMode={props.exchangeRateMode}
+                        exchangeRateQuotes={props.exchangeRateQuotes}
+                        selectedExchangeRateHouse={props.selectedExchangeRateHouse}
+                        isExchangeRateLoading={props.isExchangeRateLoading}
+                        exchangeRateLoadError={props.exchangeRateLoadError}
                         exchangeRateError={props.exchangeRateError}
                         destinationAmountError={props.destinationAmountError}
                         exchangeConfigurationError={props.exchangeConfigurationError}
+                        exchangeBalanceError={props.exchangeBalanceError}
+                        exchangeOperationLabel={props.exchangeOperationLabel}
+                        exchangeSourceBalance={props.exchangeSourceBalance}
+                        exchangeDestinationBalance={props.exchangeDestinationBalance}
+                        exchangeSourceResultingBalance={props.exchangeSourceResultingBalance}
+                        exchangeDestinationResultingBalance={props.exchangeDestinationResultingBalance}
                         canSwapExchangeDirection={props.canSwapExchangeDirection}
                         showErrors={props.showErrors}
                         fmtCurrency={props.fmtCurrency}
@@ -212,6 +240,8 @@ export function TransactionOtherDetailsStep(props: TransactionOtherDetailsStepPr
                         onAmountChange={props.onAmountChange}
                         onDestinationAmountChange={props.onDestinationAmountChange}
                         onExchangeRateChange={props.onExchangeRateChange}
+                        onExchangeRateHouseChange={props.onExchangeRateHouseChange}
+                        onRefreshExchangeRates={props.onRefreshExchangeRates}
                         onSwapExchangeDirection={props.onSwapExchangeDirection}
                     />
                 )}

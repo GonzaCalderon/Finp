@@ -1,10 +1,12 @@
 import type { IAccount } from '@/types'
+import { getExchangeOperationLabel } from '@/lib/utils/exchange'
 
 type TransactionDescriptionInput = {
     type: string
     description?: string
     amount: number
     currency: 'ARS' | 'USD'
+    destinationCurrency?: 'ARS' | 'USD'
     sourceAccount?: Pick<IAccount, 'name'> | null
     destinationAccount?: Pick<IAccount, 'name'> | null
 }
@@ -24,7 +26,9 @@ export function resolveTransactionDescription(input: TransactionDescriptionInput
             }
             return 'Transferencia entre cuentas'
         case 'exchange':
-            return `Cambio ${input.currency}`
+            return input.destinationCurrency
+                ? getExchangeOperationLabel(input.currency, input.destinationCurrency)
+                : `Cambio ${input.currency}`
         case 'credit_card_payment':
         case 'debt_payment':
             if (input.destinationAccount?.name) {

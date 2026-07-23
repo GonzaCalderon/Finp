@@ -88,6 +88,7 @@ export function AdjustmentFlow({
                         label="Monto del ajuste"
                         value={amount}
                         currency={currency}
+                        showCurrencyFlag
                         error={undefined}
                         wrapperClassName="space-y-1.5"
                         inputClassName="h-10 rounded-[1rem] text-[1.1rem] font-semibold tracking-tight"

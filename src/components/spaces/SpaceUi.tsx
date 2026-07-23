@@ -1,8 +1,7 @@
 'use client'
 
-import type { ComponentType, CSSProperties, ReactNode, SVGProps } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import * as FlagIcons from 'country-flag-icons/react/1x1'
 import {
     ArrowDownLeft,
     ArrowUpRight,
@@ -20,8 +19,8 @@ import {
     UsersRound,
 } from 'lucide-react'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
+import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { Badge } from '@/components/ui/badge'
-import { ISO_CURRENCIES } from '@/lib/constants/iso-currencies'
 import { cn } from '@/lib/utils'
 import {
     SPACE_ENTRY_TYPE_LABELS,
@@ -42,8 +41,6 @@ import type {
     SpaceStatus,
     SpaceType,
 } from '@/lib/constants'
-
-type FlagComponent = ComponentType<SVGProps<SVGSVGElement>>
 
 export const SPACE_TYPE_META: Record<
     SpaceType,
@@ -183,10 +180,6 @@ export function SpaceInitialsAvatar({
     )
 }
 
-function resolveCurrencyMeta(currency: string) {
-    return ISO_CURRENCIES.find((item) => item.code === currency)
-}
-
 export function SpaceCurrencyIcon({
     currency,
     className,
@@ -194,29 +187,7 @@ export function SpaceCurrencyIcon({
     currency: string
     className?: string
 }) {
-    const meta = resolveCurrencyMeta(currency)
-    const flagKey = meta?.countryCode.replaceAll('-', '_')
-    const Flag = flagKey
-        ? (FlagIcons as unknown as Record<string, FlagComponent>)[flagKey]
-        : undefined
-
-    return (
-        <span
-            className={cn(
-                'inline-flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted align-middle shadow-sm',
-                className
-            )}
-            title={meta ? `${currency} · ${meta.name}` : currency}
-        >
-            {Flag ? (
-                <Flag className="h-full w-full object-cover" aria-hidden="true" />
-            ) : (
-                <span className="text-[10px] font-semibold text-muted-foreground">
-                    {currency.slice(0, 2)}
-                </span>
-            )}
-        </span>
-    )
+    return <CurrencyFlagIcon currency={currency} className={className} />
 }
 
 export function SpaceCurrencyBadge({

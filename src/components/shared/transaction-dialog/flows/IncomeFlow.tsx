@@ -13,8 +13,8 @@ import type {
 import { SURFACE, getTypeSurface } from '../shared-ui'
 import { AccountSelectorField } from '../fields/AccountSelectorField'
 import { DatePickerField } from '../fields/DatePickerField'
+import { CurrencyToggleButtons } from '../fields/CurrencyToggleButtons'
 import { SmartDescriptionInput } from '../SmartDescriptionInput'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const SURFACE_ACCENT = getTypeSurface('income', false)
 
@@ -116,6 +116,7 @@ export function IncomeFlow({
                         label="Monto"
                         value={amount}
                         currency={currency}
+                        showCurrencyFlag
                         error={undefined}
                         wrapperClassName="space-y-1.5"
                         inputClassName="h-10 rounded-[1rem] text-[1.1rem] font-semibold tracking-tight"
@@ -123,22 +124,12 @@ export function IncomeFlow({
                         onValueChangeAction={onAmountChange}
                     />
 
-                    <div className="space-y-1.5 md:self-start">
-                        <Label>Moneda</Label>
-                        <Select
+                    <div className="md:self-start">
+                        <CurrencyToggleButtons
                             value={currency}
-                            onValueChange={(value) => onCurrencyChange(value as TransactionFormInput['currency'])}
-                            disabled={allowedCurrencies.length === 1}
-                        >
-                            <SelectTrigger className="h-10 rounded-[1rem]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {allowedCurrencies.map((c) => (
-                                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            allowed={allowedCurrencies}
+                            onChange={onCurrencyChange}
+                        />
                         {allowedCurrencies.length === 1 && (
                             <p className="text-xs text-muted-foreground">Se fija automaticamente segun la cuenta elegida.</p>
                         )}

@@ -197,6 +197,7 @@ export function TransactionExpenseDetailsStep({
                                                 label="Valor de cuota"
                                                 value={installmentQuoteAmount}
                                                 currency={currency}
+                                                showCurrencyFlag
                                                 placeholder="Ej. valor del resumen"
                                                 onValueChangeAction={onInstallmentQuoteAmountChange}
                                             />

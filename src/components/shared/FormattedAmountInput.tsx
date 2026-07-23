@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { cn } from '@/lib/utils'
 
 type FormattedAmountInputProps = {
@@ -21,6 +22,7 @@ type FormattedAmountInputProps = {
     inputWrapperClassName?: string
     prefixClassName?: string
     helperText?: ReactNode
+    showCurrencyFlag?: boolean
     onNegativeInputDetectedAction?: () => void
     onValueChangeAction: (value: number) => void
 }
@@ -96,6 +98,7 @@ export function FormattedAmountInput({
                                          inputWrapperClassName,
                                          prefixClassName,
                                          helperText,
+                                         showCurrencyFlag = false,
                                          onNegativeInputDetectedAction,
                                          onValueChangeAction,
                                      }: FormattedAmountInputProps) {
@@ -113,7 +116,15 @@ export function FormattedAmountInput({
             </div>
 
             <div className={cn('relative', inputWrapperClassName)}>
-                <span className={cn('absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground', prefixClassName)}>
+                <span
+                    className={cn(
+                        'absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-sm text-muted-foreground',
+                        prefixClassName
+                    )}
+                >
+                    {showCurrencyFlag ? (
+                        <CurrencyFlagIcon currency={currency} className="h-5 w-5" />
+                    ) : null}
                     {currencyLabel}
                 </span>
 
@@ -146,7 +157,13 @@ export function FormattedAmountInput({
                         if (isNegative) onNegativeInputDetectedAction?.()
                         onValueChangeAction(parseDisplayToNumber(signedDisplay))
                     }}
-                    className={cn('pl-9 text-base md:text-sm', inputClassName)}
+                    className={cn(
+                        'text-base md:text-sm',
+                        showCurrencyFlag
+                            ? currency === 'USD' ? 'pl-[4.8rem]' : 'pl-[4.2rem]'
+                            : currency === 'USD' ? 'pl-12' : 'pl-9',
+                        inputClassName
+                    )}
                 />
             </div>
 

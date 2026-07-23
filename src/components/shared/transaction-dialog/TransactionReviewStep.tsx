@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { getExchangeOperationLabel } from '@/lib/utils/exchange'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount, ICategory } from '@/types'
 import { StepSection } from './StepSection'
@@ -157,6 +158,7 @@ export function TransactionReviewStep({
         transferDestinationBalance !== null &&
         transferSourceResultingBalance !== null &&
         transferDestinationResultingBalance !== null
+    const exchangeOperationLabel = getExchangeOperationLabel(currency, exchangeDestinationCurrency)
 
     return (
         <StepSection>
@@ -172,35 +174,60 @@ export function TransactionReviewStep({
                             className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
                             style={{ borderColor: headerSurface.borderColor, color: headerSurface.color, background: headerSurface.background }}
                         >
-                            {primaryFlowType === 'expense' ? 'Gasto' : TRANSACTION_TYPE_LABELS[type]}
+                            {type === 'exchange'
+                                ? exchangeOperationLabel
+                                : primaryFlowType === 'expense'
+                                    ? 'Gasto'
+                                    : TRANSACTION_TYPE_LABELS[type]}
                         </span>
                         {isExpense && <span className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">{paymentMethodLabel}</span>}
                         {usesCardExpensePlanFlow && <span className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">{installmentPlanSummary}</span>}
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <SummaryCard title="Monto" value={fmtCurrency(type === 'adjustment' ? Math.abs(amount) : amount)} />
+                        {type === 'exchange' ? (
+                            <>
+                                <SummaryCard title="Entregás" value={fmtCurrency(amount, currency)} currency={currency} />
+                                <SummaryCard
+                                    title="Recibís"
+                                    value={fmtCurrency(exchangeDestinationAmount, exchangeDestinationCurrency)}
+                                    currency={exchangeDestinationCurrency}
+                                />
+                            </>
+                        ) : (
+                            <SummaryCard
+                                title="Monto"
+                                value={fmtCurrency(type === 'adjustment' ? Math.abs(amount) : amount)}
+                                currency={currency}
+                            />
+                        )}
                         <SummaryCard title="Fecha" value={date ? date.toLocaleDateString('es-AR') : '-'} />
-                        {showSource && <SummaryCard title={type === 'adjustment' ? 'Cuenta' : 'Origen'} value={selectedSourceAccount?.name ?? 'Sin definir'} />}
-                        {showDestination && <SummaryCard title={type === 'credit_card_payment' ? 'Tarjeta' : 'Destino'} value={selectedDestinationAccount?.name ?? 'Sin definir'} />}
+                        {showSource && <SummaryCard title={type === 'adjustment' ? 'Cuenta' : type === 'exchange' ? 'Sale de' : 'Origen'} value={selectedSourceAccount?.name ?? 'Sin definir'} />}
+                        {showDestination && <SummaryCard title={type === 'credit_card_payment' ? 'Tarjeta' : type === 'exchange' ? 'Entra en' : 'Destino'} value={selectedDestinationAccount?.name ?? 'Sin definir'} />}
                         {type === 'credit_card_payment' && <SummaryCard title="Pago" value={cardPaymentLabel} />}
                         {hasAdditionalCardPayment && secondaryCardPaymentCurrency && (
                             <SummaryCard
                                 title={`Monto ${secondaryCardPaymentCurrency}`}
                                 value={fmtCurrency(secondaryCardPaymentAmount, secondaryCardPaymentCurrency)}
+                                currency={secondaryCardPaymentCurrency}
                             />
                         )}
                         {showCategory && <SummaryCard title="Categoria" value={selectedCategory?.name ?? 'Sin categoria'} />}
                         {!descriptionIsOptional && <SummaryCard title="Descripcion" value={description || 'Sin descripcion'} />}
                         {usesCardExpensePlanFlow && <SummaryCard title="Plan" value={installmentPlanSummary} />}
                         {type === 'exchange' && (
-                            <>
-                                <SummaryCard title="Monto destino" value={fmtCurrency(exchangeDestinationAmount, exchangeDestinationCurrency)} />
-                                <SummaryCard title="Cotizacion" value={exchangeRate > 0 ? String(exchangeRate) : 'Sin definir'} />
-                            </>
+                            <SummaryCard
+                                title="Cotización"
+                                value={exchangeRate > 0 ? `1 USD = ${fmtCurrency(exchangeRate, 'ARS')}` : 'Sin definir'}
+                                currency="ARS"
+                            />
                         )}
                         {type === 'credit_card_payment' && paymentSummary && !hasAdditionalCardPayment && cardPaymentSelection !== 'ars_usd' && (
-                            <SummaryCard title="Pendiente de la moneda elegida" value={fmtCurrency(paymentSummary.pending, currency)} />
+                            <SummaryCard
+                                title="Pendiente de la moneda elegida"
+                                value={fmtCurrency(paymentSummary.pending, currency)}
+                                currency={currency}
+                            />
                         )}
                         {type === 'adjustment' && <SummaryCard title="Impacto" value={adjustmentSign === '+' ? 'Suma saldo' : 'Descuenta saldo'} />}
                         {type === 'credit_card_expense' && existingInstallmentCount && (

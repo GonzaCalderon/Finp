@@ -9,6 +9,7 @@ import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
 import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
+import { getBalanceBeforeReplacingTransaction } from '@/lib/utils/transaction-account-impact'
 
 export async function GET(
     request: Request,
@@ -107,6 +108,7 @@ export async function PATCH(
             description: data.description,
             amount: data.amount,
             currency: data.currency,
+            destinationCurrency: data.destinationCurrency,
             sourceAccount,
             destinationAccount,
         })
@@ -169,23 +171,21 @@ export async function PATCH(
                 )
                 const currentBalance = currentBalances[data.currency]
 
-                // Si la transacción anterior ya debitaba de esta misma cuenta,
-                // devolver ese monto al saldo para evaluar el nuevo débito limpiamente
-                const previousDebit =
-                    oldTransaction &&
-                    oldTransaction.sourceAccountId?.toString() === data.sourceAccountId &&
-                    oldTransaction.currency === data.currency
-                        ? oldTransaction.amount
-                        : 0
+                const availableBalance = getBalanceBeforeReplacingTransaction({
+                    currentBalance,
+                    previousTransaction: oldTransaction,
+                    accountId: data.sourceAccountId!,
+                    currency: data.currency,
+                })
 
-                if (currentBalance + previousDebit - data.amount < 0) {
+                if (availableBalance - data.amount < 0) {
                     return NextResponse.json(
                         {
                             error: `Saldo insuficiente en "${sourceAccount.name}". Disponible: ${new Intl.NumberFormat('es-AR', {
                                 style: 'currency',
                                 currency: data.currency,
                                 maximumFractionDigits: 0,
-                            }).format(currentBalance + previousDebit)}`,
+                            }).format(availableBalance)}`,
                         },
                         { status: 400 }
                     )
@@ -193,9 +193,10 @@ export async function PATCH(
             }
         }
 
+        let normalizedExchange: ReturnType<typeof normalizeManualExchange> | undefined
         if (data.type === 'exchange') {
             try {
-                normalizeManualExchange({
+                normalizedExchange = normalizeManualExchange({
                     sourceCurrency: data.currency,
                     sourceAmount: data.amount,
                     destinationCurrency: data.destinationCurrency!,
@@ -227,13 +228,26 @@ export async function PATCH(
                     categoryId: data.categoryId,
                     sourceAccountId: data.sourceAccountId,
                     destinationAccountId: data.destinationAccountId,
-                    destinationAmount: data.type === 'exchange' ? data.destinationAmount : undefined,
-                    destinationCurrency: data.type === 'exchange' ? data.destinationCurrency : undefined,
-                    exchangeRate: data.type === 'exchange' ? data.exchangeRate : undefined,
+                    ...(data.type === 'exchange'
+                        ? {
+                            destinationAmount: data.destinationAmount,
+                            destinationCurrency: data.destinationCurrency,
+                            exchangeRate: normalizedExchange?.exchangeRate,
+                        }
+                        : {}),
                     paymentGroupId: data.paymentGroupId ?? existingTransaction?.paymentGroupId,
                     notes: data.notes,
                     merchant: data.merchant,
                 },
+                ...(data.type !== 'exchange'
+                    ? {
+                        $unset: {
+                            destinationAmount: 1,
+                            destinationCurrency: 1,
+                            exchangeRate: 1,
+                        },
+                    }
+                    : {}),
             },
             {
                 new: true,

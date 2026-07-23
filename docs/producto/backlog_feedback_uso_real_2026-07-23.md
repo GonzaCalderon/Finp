@@ -15,9 +15,10 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Compra de dolares
 
-- Estado: pendiente de reproduccion.
-- Alcance: revisar el flujo `exchange`, el impacto en ambas cuentas, monedas y cotizacion.
-- Criterio de cierre: una compra de USD descuenta el monto ARS correcto, acredita el monto USD correcto y puede editarse o eliminarse sin desbalance.
+- Estado: implementado y auditado el 2026-07-23.
+- Bugs corregidos: invertir la operación ahora intercambia cuentas, monedas y montos; editar una compra como venta ya no reutiliza como saldo disponible el crédito de la operación anterior; la cotización persistida se normaliza contra los montos reales.
+- UX: el flujo separa "Entregás" y "Recibís", filtra cuentas compatibles, anticipa ambos saldos resultantes y distingue compra de venta de dólares. La cotización aparece arriba, parte de una referencia Blue/Oficial/MEP de DolarAPI, puede editarse manualmente y recalcula cualquiera de los dos montos según cuál complete el usuario. Los montos y selectores ARS/USD reutilizan las banderas de moneda de Espacios.
+- Criterio de cierre: una compra de USD descuenta el monto ARS correcto, acredita el monto USD correcto y puede invertirse, editarse o eliminarse sin desbalance.
 - Zonas probables: `src/lib/utils/exchange.ts`, `src/components/shared/transaction-dialog/flows/ExchangeFlow.tsx` y API de transacciones.
 
 ## P1 - Flujos bloqueantes o confusos

@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { Check } from 'lucide-react'
 import type { ICategory } from '@/types'
 import type { TransactionFormInput } from '@/lib/validations'
@@ -180,7 +181,15 @@ export function CategoryChip({
     )
 }
 
-export function SummaryCard({ title, value }: { title: string; value: string }) {
+export function SummaryCard({
+    title,
+    value,
+    currency,
+}: {
+    title: string
+    value: string
+    currency?: string
+}) {
     return (
         <motion.div
             variants={staggerItem}
@@ -190,7 +199,10 @@ export function SummaryCard({ title, value }: { title: string; value: string }) 
             style={{ borderColor: SURFACE.panel.borderColor, background: 'var(--background)' }}
         >
             <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{title}</p>
-            <p className="mt-1 text-sm font-semibold">{value}</p>
+            <div className="mt-1 flex items-center gap-2">
+                {currency ? <CurrencyFlagIcon currency={currency} className="h-5 w-5" /> : null}
+                <p className="min-w-0 text-sm font-semibold">{value}</p>
+            </div>
         </motion.div>
     )
 }
