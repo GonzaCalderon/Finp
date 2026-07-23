@@ -37,6 +37,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { CategoryDialog } from '@/components/shared/CategoryDialog'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { fadeIn, fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { cn } from '@/lib/utils'
 import {
@@ -793,23 +794,25 @@ function PreferencesSection() {
                         </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                        <Input
-                            type="date"
-                            value={preferences.operationalStartDate ?? ''}
-                            onChange={(event) => handleOperationalStartDateChange(event.target.value)}
-                            className="h-9 sm:max-w-xs"
-                        />
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-9"
-                            onClick={handleOperationalStartDateClear}
-                            disabled={!preferences.operationalStartDate}
-                        >
-                            Limpiar
-                        </Button>
-                    </div>
+                    <DatePickerField
+                        label=""
+                        value={
+                            preferences.operationalStartDate
+                                ? new Date(`${preferences.operationalStartDate}T12:00:00`)
+                                : undefined
+                        }
+                        onChange={(date) => {
+                            if (!date) {
+                                handleOperationalStartDateClear()
+                                return
+                            }
+                            handleOperationalStartDateChange(
+                                `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                            )
+                        }}
+                        clearable
+                        className="w-full sm:max-w-xs"
+                    />
                 </div>
             </motion.div>
         </motion.div>

@@ -65,6 +65,7 @@ import {
 import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitConfigurator'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
 
 // ── Account type helpers ──────────────────────────────────────────────────────
 
@@ -935,31 +936,20 @@ export function SpaceEntryDialog({
                                                     }}
                                                 />
 
-                                                <SpaceDialogField label="Moneda" error={fieldErrors.currency}>
-                                                    <Select
-                                                        value={form.currency}
-                                                        onValueChange={(value) => {
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                currency: value,
-                                                                personalAccountId: undefined,
-                                                                categoryId: undefined,
-                                                            }))
-                                                            clearFieldError('currency')
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {spaceCurrencies.map((currency) => (
-                                                                <SelectItem key={currency} value={currency}>
-                                                                    {currency}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </SpaceDialogField>
+                                                <CurrencySelector
+                                                    value={form.currency}
+                                                    options={spaceCurrencies}
+                                                    onValueChange={(currency) => {
+                                                        setForm((previous) => ({
+                                                            ...previous,
+                                                            currency,
+                                                            personalAccountId: undefined,
+                                                            categoryId: undefined,
+                                                        }))
+                                                        clearFieldError('currency')
+                                                    }}
+                                                    error={fieldErrors.currency}
+                                                />
 
                                                 <DatePickerField
                                                     label="Fecha"
@@ -1073,25 +1063,22 @@ export function SpaceEntryDialog({
                                             </div>
 
                                             {form.currency !== reportingCurrency ? (
-                                                <SpaceDialogField
+                                                <FormattedAmountInput
+                                                    id="space-exchange-rate"
                                                     label={`Cotización a ${reportingCurrency}`}
-                                                    hint="Necesaria para reflejar el movimiento correctamente en la moneda de reporte."
+                                                    value={form.exchangeRate}
+                                                    currency={reportingCurrency}
+                                                    helperText="Necesaria para reflejar el movimiento correctamente en la moneda de reporte."
                                                     error={fieldErrors.exchangeRate}
-                                                >
-                                                    <Input
-                                                        value={form.exchangeRate ? String(form.exchangeRate) : ''}
-                                                        onChange={(event) => {
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                exchangeRate: event.target.value
-                                                                    ? Number(event.target.value.replace(',', '.'))
-                                                                    : undefined,
-                                                            }))
-                                                            clearFieldError('exchangeRate')
-                                                        }}
-                                                        placeholder={`Ingresá cuánto vale 1 ${form.currency} en ${reportingCurrency}`}
-                                                    />
-                                                </SpaceDialogField>
+                                                    placeholder={`Valor de 1 ${form.currency}`}
+                                                    onValueChangeAction={(exchangeRate) => {
+                                                        setForm((previous) => ({
+                                                            ...previous,
+                                                            exchangeRate: exchangeRate || undefined,
+                                                        }))
+                                                        clearFieldError('exchangeRate')
+                                                    }}
+                                                />
                                             ) : null}
                                         </div>
                                     </SpaceDialogPanel>

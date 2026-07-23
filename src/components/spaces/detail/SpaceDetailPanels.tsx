@@ -2,12 +2,11 @@
 
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { Ban, CalendarRange, ChevronRight, Coins, FileBadge2, History, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users, X } from 'lucide-react'
+import { Ban, ChevronRight, Coins, FileBadge2, History, Lock, Pencil, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { DateRangePickerField } from '@/components/shared/DateRangePickerField'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
     Select,
     SelectContent,
@@ -18,7 +17,7 @@ import {
 import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
 import { SpaceInviteLinkManager } from '@/components/spaces/settings/SpaceInviteLinkManager'
 import { SpacePersonalSettingsPanel } from '@/components/spaces/settings/SpacePersonalSettingsPanel'
-import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
+import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyStack, SpaceEntryStatusBadge, SpaceInviteStatusBadge, SpaceMetaBadge, SpaceRoleBadge, SpaceSectionHeading, SpaceStatusBadge, SpaceSurface, SpaceTonePill } from '@/components/spaces/SpaceUi'
 import { Badge } from '@/components/ui/badge'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
@@ -596,7 +595,6 @@ export function SpaceSettingsPanel({
     const [savingKey, setSavingKey] = useState<string | null>(null)
     const [editingName, setEditingName] = useState(false)
     const [nameDraft, setNameDraft] = useState(space.name)
-    const [periodOpen, setPeriodOpen] = useState(false)
     const [configSection, setConfigSection] = useState<'general' | 'mi_finp'>('general')
     const isClosed = space.status === 'closed'
     const isOwner = currentParticipantRole === 'owner'
@@ -733,41 +731,26 @@ export function SpaceSettingsPanel({
                     <div className="flex items-center justify-between gap-4 py-3 text-sm">
                         <span className="text-muted-foreground">Período</span>
                         {canManage ? (
-                            <div className="flex items-center gap-1">
-                                <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" size="sm" className="rounded-full bg-background/80">
-                                            <CalendarRange className="h-3.5 w-3.5" />
-                                            {formatSpaceDateRange(space.startDate, space.endDate)}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="end" sideOffset={4}>
-                                        <Calendar
-                                            mode="range"
-                                            showOutsideDays={false}
-                                            selected={{
-                                                from: space.startDate ? new Date(space.startDate) : undefined,
-                                                to: space.endDate ? new Date(space.endDate) : undefined,
-                                            }}
-                                            onSelect={(range) => void updatePeriod(range)}
-                                            className="rounded-xl"
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                                {space.endDate ? (
-                                    <button
-                                        type="button"
-                                        className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                        title="Quitar fecha de fin"
-                                        onClick={() => void updateSetting('period', {
-                                            startDate: space.startDate ? new Date(space.startDate) : undefined,
-                                            endDate: null,
-                                        })}
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                ) : null}
-                            </div>
+                            <DateRangePickerField
+                                label=""
+                                density="compact"
+                                value={{
+                                    from: space.startDate ? new Date(space.startDate) : undefined,
+                                    to: space.endDate ? new Date(space.endDate) : undefined,
+                                }}
+                                onChange={(range) => {
+                                    if (range?.from) {
+                                        void updatePeriod(range)
+                                        return
+                                    }
+                                    void updateSetting('period', {
+                                        startDate: space.startDate ? new Date(space.startDate) : undefined,
+                                        endDate: null,
+                                    })
+                                }}
+                                clearable={Boolean(space.endDate)}
+                                className="max-w-[260px]"
+                            />
                         ) : (
                             <span className="text-right font-medium text-foreground">
                                 {formatSpaceDateRange(space.startDate, space.endDate)}

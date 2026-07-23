@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -2344,6 +2345,11 @@ export function TransactionDialog({
                                     {currentStepIndex + 1} / {steps.length}
                                 </span>
                             </div>
+                            <DialogDescription className="sr-only">
+                                {transaction
+                                    ? 'Modificá los datos de la transacción y revisá el resumen antes de guardar.'
+                                    : 'Completá los pasos para registrar una nueva transacción en Finp.'}
+                            </DialogDescription>
                             <div className="flex flex-wrap items-center gap-2 text-[11px]">
                                 <span
                                     className="inline-flex items-center rounded-full border px-2.5 py-1 font-medium"

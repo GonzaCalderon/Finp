@@ -3,14 +3,8 @@
 import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
+import { PeriodSelector } from '@/components/shared/PeriodSelector'
 import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { SankeyChart } from '@/components/shared/SankeyChart'
 import { DashboardCardVisual } from '@/components/dashboard/DashboardCardVisual'
@@ -224,18 +218,12 @@ export function DashboardMobile({
                         <h1 className="text-[1.7rem] font-semibold tracking-tight">Dashboard</h1>
                         <p className="text-sm text-muted-foreground">{getPeriodMonthLabel(month)}</p>
                     </div>
-                    <Select value={month} onValueChange={onMonthChange}>
-                        <SelectTrigger className="h-10 w-[148px] rounded-2xl border-foreground/[0.08] bg-background/60 text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-72">
-                            {monthOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <PeriodSelector
+                        value={month}
+                        options={monthOptions}
+                        onValueChange={onMonthChange}
+                        className="h-10 w-[148px] rounded-2xl border-foreground/[0.08] bg-background/60 text-xs"
+                    />
                 </div>
 
                 {!operationalStartConfigured && (

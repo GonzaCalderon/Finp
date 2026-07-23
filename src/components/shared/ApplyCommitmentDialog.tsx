@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/select'
 import type { IAccount } from '@/types'
 import {Spinner} from "@/components/shared/Spinner";
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 
 interface CommitmentToApply {
     _id: string
@@ -66,6 +68,8 @@ export function ApplyCommitmentDialog({
     })
 
     const accountId = useWatch({ control, name: 'accountId' })
+    const amount = useWatch({ control, name: 'amount' })
+    const date = useWatch({ control, name: 'date' })
 
     useEffect(() => {
         if (open && commitment) {
@@ -107,18 +111,16 @@ export function ApplyCommitmentDialog({
 
                 <form onSubmit={handleSubmit(handleFormSubmit)} className="flex max-h-[100dvh] flex-col sm:max-h-[85vh]">
                     <div className="overflow-y-auto px-5 py-4 space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="amount">Monto</Label>
-                        <Input
-                            id="amount"
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                            autoFocus
-                            {...register('amount', { valueAsNumber: true })}
-                        />
-                    </div>
+                    <FormattedAmountInput
+                        id="amount"
+                        label="Monto"
+                        value={amount}
+                        currency={commitment.currency}
+                        autoFocus
+                        onValueChangeAction={(value) =>
+                            setValue('amount', value, { shouldDirty: true })
+                        }
+                    />
 
                     <div className="space-y-2">
                         <Label>Cuenta de débito</Label>
@@ -153,14 +155,14 @@ export function ApplyCommitmentDialog({
                         </Select>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="date">Fecha</Label>
-                        <Input
-                            id="date"
-                            type="date"
-                            {...register('date')}
-                        />
-                    </div>
+                    <DatePickerField
+                        value={date ? new Date(`${date}T12:00:00`) : undefined}
+                        onChange={(nextDate) => {
+                            if (!nextDate) return
+                            const nextValue = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`
+                            setValue('date', nextValue, { shouldDirty: true })
+                        }}
+                    />
 
                     <div className="space-y-2">
                         <Label htmlFor="notes">Notas (opcional)</Label>

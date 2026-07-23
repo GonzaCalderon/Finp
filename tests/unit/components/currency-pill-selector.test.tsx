@@ -40,4 +40,18 @@ describe('CurrencyPillSelector', () => {
         fireEvent.click(arsPill)
         expect(onValueChange).not.toHaveBeenCalled()
     })
+
+    it('permite navegar entre monedas con el teclado', () => {
+        const onValueChange = vi.fn()
+        render(
+            <CurrencyPillSelector
+                value="ARS"
+                options={['ARS', 'USD'] as const}
+                onValueChange={onValueChange}
+            />
+        )
+
+        fireEvent.keyDown(screen.getByRole('radio', { name: 'ARS' }), { key: 'ArrowRight' })
+        expect(onValueChange).toHaveBeenCalledWith('USD')
+    })
 })

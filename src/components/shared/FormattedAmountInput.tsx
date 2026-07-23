@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode, type Ref } from 'react'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
+import { FieldShell } from '@/components/shared/FieldShell'
 import { cn } from '@/lib/utils'
 
 type FormattedAmountInputProps = {
@@ -23,6 +23,13 @@ type FormattedAmountInputProps = {
     prefixClassName?: string
     helperText?: ReactNode
     showCurrencyFlag?: boolean
+    density?: 'default' | 'compact'
+    disabled?: boolean
+    readOnly?: boolean
+    name?: string
+    required?: boolean
+    inputRef?: Ref<HTMLInputElement>
+    onBlurAction?: () => void
     onNegativeInputDetectedAction?: () => void
     onValueChangeAction: (value: number) => void
 }
@@ -82,6 +89,20 @@ function parseDisplayToNumber(display: string) {
     return isNegative ? -parsed : parsed
 }
 
+function getCurrencySymbol(currency: string) {
+    try {
+        return new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency,
+            currencyDisplay: 'narrowSymbol',
+        })
+            .formatToParts(0)
+            .find((part) => part.type === 'currency')?.value ?? currency
+    } catch {
+        return currency
+    }
+}
+
 export function FormattedAmountInput({
                                          id,
                                          label,
@@ -98,40 +119,58 @@ export function FormattedAmountInput({
                                          inputWrapperClassName,
                                          prefixClassName,
                                          helperText,
-                                         showCurrencyFlag = false,
+                                         showCurrencyFlag = true,
+                                         density = 'default',
+                                         disabled,
+                                         readOnly,
+                                         name,
+                                         required,
+                                         inputRef,
+                                         onBlurAction,
                                          onNegativeInputDetectedAction,
                                          onValueChangeAction,
                                      }: FormattedAmountInputProps) {
     const [displayValue, setDisplayValue] = useState(displayFromNumber(value))
     const [isFocused, setIsFocused] = useState(false)
 
-    const currencyLabel = useMemo(() => (currency === 'USD' ? 'US$' : '$'), [currency])
+    const currencyLabel = useMemo(() => getCurrencySymbol(currency), [currency])
     const renderedValue = isFocused ? displayValue : displayFromNumber(value)
+    const compact = density === 'compact'
 
     return (
-        <div className={cn('space-y-2', wrapperClassName)}>
-            <div className="flex items-center justify-between gap-2">
-                <Label htmlFor={id} className={cn('min-w-0', labelClassName)}>{label}</Label>
-                {labelAction ? <div className="shrink-0">{labelAction}</div> : null}
-            </div>
-
+        <FieldShell
+            id={id}
+            label={label}
+            error={error}
+            helperText={helperText}
+            labelAction={labelAction}
+            className={cn(compact ? 'space-y-1' : 'space-y-2', wrapperClassName)}
+            labelClassName={labelClassName}
+        >
             <div className={cn('relative', inputWrapperClassName)}>
                 <span
                     className={cn(
-                        'absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-sm text-muted-foreground',
+                        'pointer-events-none absolute top-1/2 flex -translate-y-1/2 items-center text-muted-foreground',
+                        compact ? 'left-2 gap-1 text-xs' : 'left-3 gap-1.5 text-sm',
                         prefixClassName
                     )}
                 >
                     {showCurrencyFlag ? (
-                        <CurrencyFlagIcon currency={currency} className="h-5 w-5" />
+                        <CurrencyFlagIcon currency={currency} size={compact ? 'xs' : 'sm'} />
                     ) : null}
                     {currencyLabel}
                 </span>
 
                 <Input
+                    ref={inputRef}
                     id={id}
                     inputMode="decimal"
+                    name={name}
                     autoFocus={autoFocus}
+                    disabled={disabled}
+                    readOnly={readOnly}
+                    required={required}
+                    aria-invalid={Boolean(error)}
                     placeholder={placeholder}
                     value={renderedValue}
                     onFocus={() => {
@@ -140,6 +179,7 @@ export function FormattedAmountInput({
                     }}
                     onBlur={() => {
                         setIsFocused(false)
+                        onBlurAction?.()
                     }}
                     onChange={(e) => {
                         const sanitized = sanitizeRawInput(e.target.value, allowNegative)
@@ -158,17 +198,14 @@ export function FormattedAmountInput({
                         onValueChangeAction(parseDisplayToNumber(signedDisplay))
                     }}
                     className={cn(
-                        'text-base md:text-sm',
+                        compact ? 'h-7 rounded-md text-right text-xs' : 'text-base md:text-sm',
                         showCurrencyFlag
-                            ? currency === 'USD' ? 'pl-[4.8rem]' : 'pl-[4.2rem]'
-                            : currency === 'USD' ? 'pl-12' : 'pl-9',
+                            ? compact ? 'pl-[3.9rem]' : 'pl-[4.8rem]'
+                            : compact ? 'pl-7' : 'pl-12',
                         inputClassName
                     )}
                 />
             </div>
-
-            {helperText ? <div className="text-xs text-muted-foreground">{helperText}</div> : null}
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        </div>
+        </FieldShell>
     )
 }

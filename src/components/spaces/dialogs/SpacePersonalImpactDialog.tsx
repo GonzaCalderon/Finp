@@ -24,7 +24,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import {
     Select,
     SelectContent,
@@ -349,15 +349,15 @@ export function SpacePersonalImpactDialog({
                                                     </SpaceDialogField>
                                                 )}
 
-                                                <SpaceDialogField label="Monto">
-                                                    <Input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        value={amount}
-                                                        onChange={(event) => setAmount(event.target.value)}
-                                                    />
-                                                </SpaceDialogField>
+                                                <FormattedAmountInput
+                                                    id="personal-impact-amount"
+                                                    label="Monto"
+                                                    value={amount ? Number(amount) : undefined}
+                                                    currency={entry?.currency ?? suggestion?.currency ?? 'ARS'}
+                                                    onValueChangeAction={(value) =>
+                                                        setAmount(value ? String(value) : '')
+                                                    }
+                                                />
 
                                                 <SpaceDialogField
                                                     label="Categoria personal"

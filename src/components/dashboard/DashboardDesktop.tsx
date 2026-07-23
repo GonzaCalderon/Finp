@@ -4,14 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
+import { PeriodSelector } from '@/components/shared/PeriodSelector'
 import { SankeyChart } from '@/components/shared/SankeyChart'
 import { DashboardCardVisual } from '@/components/dashboard/DashboardCardVisual'
 import {
@@ -266,18 +260,13 @@ export function DashboardDesktop({
                             <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                 Período
                             </p>
-                            <Select value={month} onValueChange={onMonthChange}>
-                                <SelectTrigger className="mt-3 h-10 rounded-2xl border-foreground/[0.08] bg-background/70">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-72">
-                                    {monthOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                    <PeriodSelector
+                        value={month}
+                        options={monthOptions}
+                        onValueChange={onMonthChange}
+                        compact={false}
+                        className="mt-3 h-10 w-full rounded-2xl border-foreground/[0.08] bg-background/70"
+                    />
 
                             <div className="mt-5 space-y-2">
                                 <div className="flex items-center justify-between text-xs">

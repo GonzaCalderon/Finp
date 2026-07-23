@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { fadeIn } from '@/lib/utils/animations'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
+import { CurrencyPillSelector } from '@/components/shared/CurrencyPillSelector'
+import { PeriodSelector } from '@/components/shared/PeriodSelector'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import {
@@ -181,105 +183,47 @@ function ModeToggle({
     months: number
     setMonths: (m: number) => void
 }) {
-    const [annualOpen, setAnnualOpen] = useState(false)
-    const [monthlyOpen, setMonthlyOpen] = useState(false)
-    const annualRef = useRef<HTMLDivElement>(null)
-    const monthlyRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        const handler = (event: MouseEvent) => {
-            if (annualRef.current && !annualRef.current.contains(event.target as Node)) setAnnualOpen(false)
-            if (monthlyRef.current && !monthlyRef.current.contains(event.target as Node)) setMonthlyOpen(false)
-        }
-        document.addEventListener('mousedown', handler)
-        return () => document.removeEventListener('mousedown', handler)
-    }, [])
-
     return (
-        <div className="flex gap-2">
-            <div className="relative" ref={annualRef}>
-                <button
-                    onClick={() => {
-                        setMode('annual')
-                        setAnnualOpen((prev) => !prev)
-                        setMonthlyOpen(false)
-                    }}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors"
-                    style={{
-                        background: mode === 'annual' ? 'var(--sky)' : 'transparent',
-                        color: mode === 'annual' ? '#FFFFFF' : 'var(--muted-foreground)',
-                        borderColor: mode === 'annual' ? 'var(--sky)' : 'var(--border)',
-                    }}
-                >
-                    Vista anual
-                    <ChevronDown size={14} className={annualOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                </button>
-                {annualOpen && (
-                    <div
-                        className="absolute top-full mt-1 left-0 z-50 rounded-lg overflow-y-auto max-h-48 w-32 shadow-sm"
-                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
+        <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-full border border-border bg-background/70 p-0.5">
+                {([
+                    ['annual', 'Anual'],
+                    ['monthly', 'Mensual'],
+                ] as const).map(([value, label]) => (
+                    <button
+                        key={value}
+                        type="button"
+                        onClick={() => setMode(value)}
+                        className="rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+                        style={{
+                            background: mode === value ? 'var(--sky)' : 'transparent',
+                            color: mode === value ? '#FFFFFF' : 'var(--muted-foreground)',
+                        }}
                     >
-                        {YEARS.map((value) => (
-                            <button
-                                key={value}
-                                onClick={() => {
-                                    setYear(value)
-                                    setAnnualOpen(false)
-                                }}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-                                style={{
-                                    color: value === year ? 'var(--sky)' : 'var(--foreground)',
-                                    fontWeight: value === year ? 500 : 400,
-                                }}
-                            >
-                                {value}
-                            </button>
-                        ))}
-                    </div>
-                )}
+                        {label}
+                    </button>
+                ))}
             </div>
-
-            <div className="relative" ref={monthlyRef}>
-                <button
-                    onClick={() => {
-                        setMode('monthly')
-                        setMonthlyOpen((prev) => !prev)
-                        setAnnualOpen(false)
-                    }}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors"
-                    style={{
-                        background: mode === 'monthly' ? 'var(--sky)' : 'transparent',
-                        color: mode === 'monthly' ? '#FFFFFF' : 'var(--muted-foreground)',
-                        borderColor: mode === 'monthly' ? 'var(--sky)' : 'var(--border)',
-                    }}
-                >
-                    Proyección mensual
-                    <ChevronDown size={14} className={monthlyOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                </button>
-                {monthlyOpen && (
-                    <div
-                        className="absolute top-full mt-1 left-0 z-50 rounded-lg w-40 shadow-sm"
-                        style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                    >
-                        {MONTH_OPTIONS.map((value) => (
-                            <button
-                                key={value}
-                                onClick={() => {
-                                    setMonths(value)
-                                    setMonthlyOpen(false)
-                                }}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-                                style={{
-                                    color: value === months ? 'var(--sky)' : 'var(--foreground)',
-                                    fontWeight: value === months ? 500 : 400,
-                                }}
-                            >
-                                {value === 1 ? '1 mes' : `${value} meses`}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
+            {mode === 'annual' ? (
+                <PeriodSelector
+                    value={String(year)}
+                    options={YEARS.map((value) => ({ value: String(value), label: String(value) }))}
+                    onValueChange={(value) => setYear(Number(value))}
+                    ariaLabel="Año de proyección"
+                    className="w-28"
+                />
+            ) : (
+                <PeriodSelector
+                    value={String(months)}
+                    options={MONTH_OPTIONS.map((value) => ({
+                        value: String(value),
+                        label: value === 1 ? '1 mes' : `${value} meses`,
+                    }))}
+                    onValueChange={(value) => setMonths(Number(value))}
+                    ariaLabel="Horizonte de proyección"
+                    className="w-36"
+                />
+            )}
         </div>
     )
 }
@@ -475,25 +419,13 @@ export default function ProjectionPage() {
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                 Gastos proyectados
                             </p>
-                            <div
-                                className="flex rounded-md overflow-hidden"
-                                style={{ border: '0.5px solid var(--border)' }}
-                            >
-                                {(['ARS', 'USD'] as const).map((currency) => (
-                                    <button
-                                        key={currency}
-                                        onClick={() => setChartCurrency(currency)}
-                                        className="px-3 py-1 text-xs transition-colors"
-                                        style={{
-                                            background: chartCurrency === currency ? 'var(--sky)' : 'transparent',
-                                            color: chartCurrency === currency ? '#FFFFFF' : 'var(--muted-foreground)',
-                                            borderRight: currency === 'ARS' ? '0.5px solid var(--border)' : 'none',
-                                        }}
-                                    >
-                                        {currency}
-                                    </button>
-                                ))}
-                            </div>
+                            <CurrencyPillSelector
+                                value={chartCurrency}
+                                options={['ARS', 'USD']}
+                                onValueChange={setChartCurrency}
+                                compact
+                                ariaLabel="Moneda del gráfico"
+                            />
                         </div>
 
                         <div className="[&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none [&_*:focus]:outline-none">

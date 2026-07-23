@@ -58,6 +58,8 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { Spinner } from '@/components/shared/Spinner'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
+import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
+import { PeriodSelector } from '@/components/shared/PeriodSelector'
 
 import { DURATION, easeSmooth, fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { getCategoryTypeForTransactionType, isCategoryCompatible, normalizeFilters } from '@/lib/utils/transactions'
@@ -232,12 +234,14 @@ function BasicFilterChip({
                              options,
                              value,
                              onChange,
+                             showCurrencyFlags = false,
                          }: {
     label: string
     active: boolean
     options: BasicOption[]
     value: string
     onChange: (v: string) => void
+    showCurrencyFlags?: boolean
 }) {
     const [open, setOpen] = useState(false)
 
@@ -256,6 +260,7 @@ function BasicFilterChip({
                     boxShadow: open ? '0 10px 24px rgba(0,0,0,0.12)' : undefined,
                 }}
             >
+                {active && showCurrencyFlags ? <CurrencyFlagIcon currency={value} size="xs" /> : null}
                 {active ? selectedLabel : label}
                 <motion.span
                     animate={{ rotate: open ? 180 : 0 }}
@@ -311,7 +316,12 @@ function BasicFilterChip({
                                     fontWeight: value === option.value ? 500 : 400,
                                 }}
                             >
-                                {option.label}
+                                <span className="flex items-center gap-2">
+                                    {showCurrencyFlags ? (
+                                        <CurrencyFlagIcon currency={option.value} size="xs" />
+                                    ) : null}
+                                    {option.label}
+                                </span>
                             </button>
                         ))}
                     </div>
@@ -752,13 +762,16 @@ function FilterSheet({
                                                 key={option.value || 'all-currency'}
                                                 type="button"
                                                 onClick={() => onChange('currency', option.value)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                                                 style={{
                                                     background:
                                                         filters.currency === option.value ? 'var(--sky)' : 'var(--secondary)',
                                                     color: filters.currency === option.value ? '#fff' : 'var(--foreground)',
                                                 }}
                                             >
+                                                {option.value ? (
+                                                    <CurrencyFlagIcon currency={option.value} size="xs" />
+                                                ) : null}
                                                 {option.label}
                                             </button>
                                         ))}
@@ -1253,18 +1266,12 @@ function TransactionsPageInner() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-1">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mes</p>
-                        <Select value={month} onValueChange={setMonth}>
-                            <SelectTrigger className="h-8 w-full text-sm md:w-48">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-72">
-                                {monthOptions.map((monthOption) => (
-                                    <SelectItem key={monthOption.value} value={monthOption.value}>
-                                        {monthOption.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <PeriodSelector
+                            value={month}
+                            options={monthOptions}
+                            onValueChange={setMonth}
+                            className="h-8 w-full text-sm md:w-48"
+                        />
                     </div>
 
                     <div className="hidden md:flex items-center gap-2.5 flex-wrap">
@@ -1298,6 +1305,7 @@ function TransactionsPageInner() {
                             ]}
                             value={appliedFilters.currency ?? ''}
                             onChange={(value) => setAppliedFilter('currency', value)}
+                            showCurrencyFlags
                         />
 
                         <BasicFilterChip
