@@ -139,23 +139,36 @@ export function CategoryChip({
     onClick: () => void
     animateOnMount?: boolean
 }) {
+    const categoryColor = category.color || (category.type === 'income' ? '#059669' : '#DC2626')
+
     return (
         <motion.button
             type="button"
             onClick={onClick}
+            aria-pressed={selected}
             className="rounded-full border px-3 py-2 text-sm font-medium transition-colors"
             variants={animateOnMount ? staggerItem : undefined}
             initial={animateOnMount ? undefined : false}
             {...MOTION_CHIP}
             style={{
-                background: selected ? category.color || 'var(--sky)' : category.type === 'income' ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',
-                color: selected ? '#fff' : category.type === 'income' ? '#059669' : '#DC2626',
-                borderColor: selected ? category.color || 'var(--sky)' : category.type === 'income' ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)',
-                outline: selected ? `2px solid ${category.color || 'var(--sky)'}` : 'none',
+                background: selected ? categoryColor : `color-mix(in srgb, ${categoryColor} 11%, transparent)`,
+                color: selected ? '#fff' : 'var(--foreground)',
+                borderColor: selected ? categoryColor : `color-mix(in srgb, ${categoryColor} 34%, var(--border))`,
+                outline: selected ? `2px solid ${categoryColor}` : 'none',
                 outlineOffset: '2px',
             }}
         >
             <span className="inline-flex items-center gap-2">
+                <span
+                    aria-hidden="true"
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{
+                        background: selected ? 'rgba(255,255,255,0.92)' : categoryColor,
+                        boxShadow: selected
+                            ? '0 0 0 1px rgba(255,255,255,0.28)'
+                            : `0 0 0 2px color-mix(in srgb, ${categoryColor} 18%, transparent)`,
+                    }}
+                />
                 {category.name}
                 {category.isVirtual || category.sourceType === 'space' ? (
                     <span className="rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] font-semibold text-foreground/75">

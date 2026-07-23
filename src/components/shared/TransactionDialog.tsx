@@ -41,12 +41,24 @@ import {
     supportsCurrency,
 } from '@/lib/utils/accounts'
 import { getArsPerUsdRate } from '@/lib/utils/exchange'
+import {
+    orderCategoryIds,
+    type CategoryHistoryRanking,
+} from '@/lib/utils/category-ranking'
+import type {
+    DescriptionIntelligenceSignals,
+    DescriptionTextSuggestion,
+    SimilarTransactionSuggestion,
+} from '@/lib/utils/transaction-description-intelligence'
+import { apiJson } from '@/lib/client/auth-client'
 import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
 import {
+    getDescriptionAlias,
     getRecentCategoryIds,
     getStoredAccountId,
     getStoredExpensePaymentMethod,
     getStoredTransactionType,
+    persistDescriptionAlias,
     persistTransactionDialogPrefs,
     type DialogAccountContext,
     type PaymentMethod,
@@ -61,6 +73,7 @@ interface TransactionDialogProps {
     onSubmit: (data: TransactionFormData) => Promise<void>
     onBatchSubmit?: (items: TransactionFormData[]) => Promise<void>
     onInstallmentSubmit?: (data: InstallmentFormData) => Promise<void>
+    onCreateRule?: (data: Partial<ITransactionRule>) => Promise<ITransactionRule>
     rules?: ITransactionRule[]
     defaultAccountId?: string
     monthStartDay?: number
@@ -269,6 +282,7 @@ export function TransactionDialog({
     onSubmit,
     onBatchSubmit,
     onInstallmentSubmit,
+    onCreateRule,
     rules = [],
     defaultAccountId,
     monthStartDay = 1,
@@ -305,7 +319,10 @@ export function TransactionDialog({
     const [categoryRuleLocked, setCategoryRuleLocked] = useState(false)
     const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
     const [categoryQuery, setCategoryQuery] = useState('')
-    const [showAllCategories, setShowAllCategories] = useState(false)
+    const [categoryHistoryRanking, setCategoryHistoryRanking] = useState<CategoryHistoryRanking[]>([])
+    const [descriptionSignals, setDescriptionSignals] = useState<DescriptionIntelligenceSignals>({})
+    const [isCreatingSuggestedRule, setIsCreatingSuggestedRule] = useState(false)
+    const [createdRuleProposalValue, setCreatedRuleProposalValue] = useState<string | null>(null)
     const [adjustmentSign, setAdjustmentSign] = useState<'+' | '-'>('+')
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('debit')
     const [installmentCount, setInstallmentCount] = useState(1)
@@ -583,51 +600,69 @@ export function TransactionDialog({
 
     const categoryStorageType = type === 'income' ? 'income' : showCategory ? 'expense' : undefined
     const recentCategoryIds = useMemo(
-        () => (categoryStorageType ? getRecentCategoryIds(categoryStorageType) : []),
-        [categoryStorageType]
-    )
-    const recentCategories = useMemo(
-        () =>
-            recentCategoryIds
-                .map((storedId) => filteredCategories.find((category) => category._id.toString() === storedId))
-                .filter((category): category is ICategory => Boolean(category)),
-        [filteredCategories, recentCategoryIds]
+        () => (open && categoryStorageType ? getRecentCategoryIds(categoryStorageType) : []),
+        [categoryStorageType, open]
     )
 
     const normalizedCategoryQuery = categoryQuery.trim().toLowerCase()
-    const matchingCategories = useMemo(
+    const rankedCategoryIds = useMemo(
         () =>
-            filteredCategories.filter((category) =>
-                category.name.toLowerCase().includes(normalizedCategoryQuery)
-            ),
-        [filteredCategories, normalizedCategoryQuery]
+            orderCategoryIds({
+                categoryIds: filteredCategories.map((category) => category._id.toString()),
+                historyRanking: categoryHistoryRanking,
+                recentCategoryIds,
+                selectedCategoryId: categoryId || undefined,
+            }),
+        [categoryHistoryRanking, categoryId, filteredCategories, recentCategoryIds]
     )
-
-    const suggestedCategories = useMemo(() => {
-        if (normalizedCategoryQuery) return matchingCategories
-
-        const selected = categoryId
-            ? filteredCategories.find((category) => category._id.toString() === categoryId)
+    const rankedCategories = useMemo(
+        () =>
+            rankedCategoryIds
+                .map((rankedId) =>
+                    filteredCategories.find((category) => category._id.toString() === rankedId)
+                )
+                .filter((category): category is ICategory => Boolean(category)),
+        [filteredCategories, rankedCategoryIds]
+    )
+    const visibleCategories = useMemo(
+        () =>
+            normalizedCategoryQuery
+                ? rankedCategories.filter((category) =>
+                    category.name.toLowerCase().includes(normalizedCategoryQuery)
+                )
+                : rankedCategories,
+        [normalizedCategoryQuery, rankedCategories]
+    )
+    const storedDescriptionAlias = description ? getDescriptionAlias(description) : undefined
+    const effectiveTextSuggestion: DescriptionTextSuggestion | undefined =
+        storedDescriptionAlias
+            ? {
+                kind: 'correction',
+                value: storedDescriptionAlias.description,
+                merchant: storedDescriptionAlias.merchant,
+                confidence: 1,
+                reason: 'Alias que corregiste anteriormente.',
+            }
+            : descriptionSignals.textSuggestion
+    const selectedCategoryRanking = categoryId
+        ? categoryHistoryRanking.find((item) => item.categoryId === categoryId)
+        : undefined
+    const suggestedRuleProposal =
+        descriptionSignals.ruleProposal &&
+        descriptionSignals.ruleProposal.value !== createdRuleProposalValue &&
+        !rules.some((rule) => {
+            const ruleCategoryId = resolveId(rule.categoryId)
+            return (
+                rule.isActive &&
+                rule.field === 'description' &&
+                rule.appliesTo !== 'any' &&
+                rule.appliesTo === categoryStorageType &&
+                rule.value.trim().toLowerCase() === descriptionSignals.ruleProposal?.value.trim().toLowerCase() &&
+                ruleCategoryId === descriptionSignals.ruleProposal?.categoryId
+            )
+        })
+            ? descriptionSignals.ruleProposal
             : undefined
-        const ordered = [...recentCategories]
-
-        if (selected && !ordered.some((category) => category._id.toString() === selected._id.toString())) {
-            ordered.unshift(selected)
-        }
-
-        const remaining = filteredCategories.filter(
-            (category) => !ordered.some((item) => item._id.toString() === category._id.toString())
-        )
-
-        return [...ordered, ...remaining.slice(0, 8)]
-    }, [categoryId, filteredCategories, matchingCategories, normalizedCategoryQuery, recentCategories])
-
-    const extraCategories = useMemo(() => {
-        if (normalizedCategoryQuery) return []
-        return filteredCategories.filter(
-            (category) => !suggestedCategories.some((item) => item._id.toString() === category._id.toString())
-        )
-    }, [filteredCategories, normalizedCategoryQuery, suggestedCategories])
 
     const installmentPlanSummary = useMemo(
         () => getInstallmentSummaryLabel(installmentCount, firstClosingMonth),
@@ -742,7 +777,9 @@ export function TransactionDialog({
         setCategoryRuleLocked(false)
         setAppliedRuleName(null)
         setCategoryQuery('')
-        setShowAllCategories(false)
+        setDescriptionSignals({})
+        setIsCreatingSuggestedRule(false)
+        setCreatedRuleProposalValue(null)
         setFirstMonthError(null)
         setInstallmentQuoteAmount(0)
         setAdditionalCardPaymentEnabled(false)
@@ -845,6 +882,58 @@ export function TransactionDialog({
         resolveStoredAccount,
         transaction,
     ])
+
+    useEffect(() => {
+        if (!open || !categoryStorageType) {
+            setCategoryHistoryRanking([])
+            setDescriptionSignals({})
+            return
+        }
+
+        const controller = new AbortController()
+        const params = new URLSearchParams({ type: categoryStorageType })
+        const normalizedDescription = description.trim()
+        const normalizedMerchant = merchant.trim()
+        if (normalizedDescription) params.set('description', normalizedDescription)
+        if (normalizedMerchant) params.set('merchant', normalizedMerchant)
+        if (categoryId) params.set('categoryId', categoryId)
+        if (amount > 0) params.set('amount', String(amount))
+        params.set('currency', currency)
+        if (date) params.set('date', date.toISOString())
+        const transactionId = resolveId(transaction?._id)
+        if (transactionId) params.set('transactionId', transactionId)
+
+        const timeoutId = window.setTimeout(() => {
+            void apiJson<{
+                ranking: CategoryHistoryRanking[]
+                signals?: DescriptionIntelligenceSignals
+            }>(
+                `/api/categories/ranking?${params.toString()}`,
+                { cache: 'no-store', signal: controller.signal }
+            )
+                .then((data) => {
+                    setCategoryHistoryRanking(data.ranking ?? [])
+                    setDescriptionSignals(data.signals ?? {})
+                })
+                .catch((error: unknown) => {
+                    if (
+                        typeof error === 'object' &&
+                        error !== null &&
+                        'name' in error &&
+                        error.name === 'AbortError'
+                    ) {
+                        return
+                    }
+                    setCategoryHistoryRanking([])
+                    setDescriptionSignals({})
+                })
+        }, 220)
+
+        return () => {
+            window.clearTimeout(timeoutId)
+            controller.abort()
+        }
+    }, [amount, categoryId, categoryStorageType, currency, date, description, merchant, open, transaction])
 
     useEffect(() => {
         if (currentStepIndex <= steps.length - 1) return
@@ -1316,6 +1405,125 @@ export function TransactionDialog({
         setValue('destinationAccountId', value || undefined, { shouldValidate: true, shouldDirty: true })
     }, [setValue])
 
+    const handleAcceptDescriptionSuggestion = useCallback((suggestion: DescriptionTextSuggestion) => {
+        const previousDescription = description
+        persistDescriptionAlias(
+            previousDescription,
+            suggestion.value,
+            suggestion.merchant
+        )
+        setValue('description', suggestion.value, {
+            shouldValidate: true,
+            shouldDirty: true,
+        })
+        if (suggestion.merchant && !merchant.trim()) {
+            setValue('merchant', suggestion.merchant, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+    }, [description, merchant, setValue])
+
+    const handleApplySimilarTransaction = useCallback((suggestion: SimilarTransactionSuggestion) => {
+        persistDescriptionAlias(description, suggestion.description, suggestion.merchant)
+        setValue('description', suggestion.description, {
+            shouldValidate: true,
+            shouldDirty: true,
+        })
+        if (suggestion.merchant) {
+            setValue('merchant', suggestion.merchant, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+
+        const suggestedCategoryIsAvailable =
+            suggestion.categoryId &&
+            filteredCategories.some((category) => category._id.toString() === suggestion.categoryId)
+        if (suggestedCategoryIsAvailable && suggestion.categoryId) {
+            setValue('categoryId', suggestion.categoryId, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+            setCategoryManuallySet(true)
+            setAutoSelectedCategoryId(null)
+            setAppliedRuleName(null)
+        }
+
+        const suggestedSourceAccount = suggestion.sourceAccountId
+            ? accounts.find((account) => account._id.toString() === suggestion.sourceAccountId)
+            : undefined
+        const suggestedDestinationAccount = suggestion.destinationAccountId
+            ? accounts.find((account) => account._id.toString() === suggestion.destinationAccountId)
+            : undefined
+
+        if (suggestedSourceAccount) {
+            setValue('sourceAccountId', suggestedSourceAccount._id.toString(), {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+            if (isExpense) {
+                setPaymentMethod(
+                    suggestedSourceAccount.type === 'credit_card'
+                        ? 'credit_card'
+                        : suggestedSourceAccount.type === 'cash'
+                            ? 'cash'
+                            : 'debit'
+                )
+            }
+        }
+        if (suggestedDestinationAccount) {
+            setValue('destinationAccountId', suggestedDestinationAccount._id.toString(), {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+
+        const currencyAccount = suggestedSourceAccount ?? suggestedDestinationAccount
+        if (!currencyAccount || supportsCurrency(currencyAccount, suggestion.currency)) {
+            setValue('currency', suggestion.currency, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+    }, [accounts, description, filteredCategories, isExpense, setValue])
+
+    const handleCreateSuggestedRule = useCallback(async () => {
+        if (!onCreateRule || !suggestedRuleProposal || !selectedCategory || !categoryStorageType) return
+
+        setIsCreatingSuggestedRule(true)
+        try {
+            const createdRule = await onCreateRule({
+                name: `${suggestedRuleProposal.value} → ${selectedCategory.name}`.slice(0, 100),
+                isActive: true,
+                priority: 10,
+                appliesTo: categoryStorageType,
+                field: 'description',
+                condition: 'contains',
+                value: suggestedRuleProposal.value,
+                categoryId: selectedCategory._id,
+                setType: categoryStorageType,
+                normalizeMerchant:
+                    descriptionSignals.textSuggestion?.merchant ||
+                    merchant.trim() ||
+                    undefined,
+            })
+            setAppliedRuleName(createdRule.name)
+            setCreatedRuleProposalValue(suggestedRuleProposal.value)
+        } catch {
+            // El hook muestra el error y mantenemos la sugerencia disponible para reintentar.
+        } finally {
+            setIsCreatingSuggestedRule(false)
+        }
+    }, [
+        categoryStorageType,
+        descriptionSignals.textSuggestion?.merchant,
+        merchant,
+        onCreateRule,
+        selectedCategory,
+        suggestedRuleProposal,
+    ])
+
     const handleFirstClosingMonthChange = useCallback((value: string) => {
         setFirstClosingMonth(value)
         setFirstMonthError(null)
@@ -1686,7 +1894,12 @@ export function TransactionDialog({
             isDatePopoverOpen={isDatePopoverOpen}
             descriptionError={errors.description?.message}
             amountError={errors.amount?.message}
+            textSuggestion={effectiveTextSuggestion}
+            similarTransaction={descriptionSignals.similarTransaction}
+            duplicate={descriptionSignals.duplicate}
             onDescriptionChange={handleDescriptionChange}
+            onAcceptDescriptionSuggestion={handleAcceptDescriptionSuggestion}
+            onApplySimilarTransaction={handleApplySimilarTransaction}
             onAmountChange={handleAmountChange}
             onCurrencyChange={handleCurrencyChange}
             onDateChange={handleDateChange}
@@ -1751,6 +1964,9 @@ export function TransactionDialog({
             descriptionError={stepErrorsVisible.details || submitCount > 0 ? errors.description?.message : undefined}
             appliedRuleName={appliedRuleName}
             hasCategoryRules={rules.length > 0}
+            textSuggestion={effectiveTextSuggestion}
+            similarTransaction={descriptionSignals.similarTransaction}
+            duplicate={descriptionSignals.duplicate}
             exchangeDestinationAmount={exchangeDestinationAmount}
             exchangeDestinationCurrency={exchangeDestinationCurrency}
             exchangeRate={exchangeRate}
@@ -1790,6 +2006,8 @@ export function TransactionDialog({
             onDateChange={handleDateChange}
             onDatePopoverOpenChange={setIsDatePopoverOpen}
             onDescriptionChange={handleDescriptionChange}
+            onAcceptDescriptionSuggestion={handleAcceptDescriptionSuggestion}
+            onApplySimilarTransaction={handleApplySimilarTransaction}
             onCardPaymentModeChange={handleCardPaymentModeChange}
             onCardPaymentSelectionChange={handleCardPaymentSelectionChange}
             onPartialCardPaymentAmountChange={handlePartialCardPaymentAmountChange}
@@ -1805,21 +2023,20 @@ export function TransactionDialog({
 
     const renderClassificationStep = () => (
         <TransactionClassificationStep
-            type={type}
             showCategory={showCategory}
             categoryId={categoryId}
             appliedRuleName={appliedRuleName}
             categoryQuery={categoryQuery}
-            showAllCategories={showAllCategories}
             normalizedCategoryQuery={normalizedCategoryQuery}
-            filteredCategories={filteredCategories}
-            recentCategories={recentCategories}
-            suggestedCategories={suggestedCategories}
-            extraCategories={extraCategories}
+            availableCategories={filteredCategories}
+            visibleCategories={visibleCategories}
             selectedCategory={selectedCategory}
+            categoryReason={selectedCategoryRanking?.reason}
+            ruleProposal={suggestedRuleProposal}
+            isCreatingRule={isCreatingSuggestedRule}
             onCategorySelect={handleSelectCategory}
             onCategoryQueryChange={setCategoryQuery}
-            onToggleShowAllCategories={() => setShowAllCategories((previous) => !previous)}
+            onCreateSuggestedRule={onCreateRule ? () => { void handleCreateSuggestedRule() } : undefined}
         />
     )
 

@@ -2,7 +2,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { CalendarIcon, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -16,7 +15,13 @@ import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { ITransaction, ITransactionRule } from '@/types'
+import type {
+    DescriptionTextSuggestion,
+    DuplicateTransactionWarning,
+    SimilarTransactionSuggestion,
+} from '@/lib/utils/transaction-description-intelligence'
 import { StepSection } from './StepSection'
+import { SmartDescriptionInput } from './SmartDescriptionInput'
 import { SURFACE, getTypeSurface } from './shared-ui'
 
 interface TransactionMainStepProps {
@@ -34,7 +39,12 @@ interface TransactionMainStepProps {
     isDatePopoverOpen: boolean
     descriptionError: string | undefined
     amountError: string | undefined
+    textSuggestion?: DescriptionTextSuggestion
+    similarTransaction?: SimilarTransactionSuggestion
+    duplicate?: DuplicateTransactionWarning
     onDescriptionChange: (value: string) => void
+    onAcceptDescriptionSuggestion: (suggestion: DescriptionTextSuggestion) => void
+    onApplySimilarTransaction: (suggestion: SimilarTransactionSuggestion) => void
     onAmountChange: (nextAmount: number) => void
     onCurrencyChange: (value: TransactionFormInput['currency']) => void
     onDateChange: (date: Date | undefined) => void
@@ -56,7 +66,12 @@ export function TransactionMainStep({
     isDatePopoverOpen,
     descriptionError,
     amountError,
+    textSuggestion,
+    similarTransaction,
+    duplicate,
     onDescriptionChange,
+    onAcceptDescriptionSuggestion,
+    onApplySimilarTransaction,
     onAmountChange,
     onCurrencyChange,
     onDateChange,
@@ -104,17 +119,20 @@ export function TransactionMainStep({
                                 )}
                             </div>
 
-                            <Input
+                            <SmartDescriptionInput
                                 id="description"
                                 value={description}
-                                onChange={(event) => onDescriptionChange(event.target.value)}
+                                onChange={onDescriptionChange}
                                 placeholder={type === 'income' ? 'Ej: Sueldo marzo' : 'Ej: Compra en kiosco'}
-                                aria-invalid={Boolean(descriptionError)}
+                                error={descriptionError}
+                                textSuggestion={textSuggestion}
+                                similarTransaction={similarTransaction}
+                                duplicate={duplicate}
+                                onAcceptSuggestion={onAcceptDescriptionSuggestion}
+                                onApplySimilarTransaction={onApplySimilarTransaction}
                             />
 
-                            {descriptionError ? (
-                                <p className="text-sm text-destructive">{descriptionError}</p>
-                            ) : appliedRuleName && !transaction ? (
+                            {!descriptionError && appliedRuleName && !transaction ? (
                                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <Wand2 className="h-3 w-3" />
                                     Regla aplicada: {appliedRuleName}

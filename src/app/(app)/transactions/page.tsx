@@ -837,7 +837,7 @@ function TransactionsPageInner() {
 
     const { accounts, loading: accountsLoading } = useAccounts()
     const { categories, loading: categoriesLoading } = useCategories()
-    const { rules } = useTransactionRules()
+    const { rules, createRule } = useTransactionRules()
     const { preferences } = usePreferences()
     const { transactionReviewIds } = useNotifications()
 
@@ -1783,6 +1783,7 @@ function TransactionsPageInner() {
                 onSubmit={handleTransactionSubmit}
                 onBatchSubmit={handleTransactionBatchSubmit}
                 onInstallmentSubmit={handleInstallmentSubmit}
+                onCreateRule={createRule}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}

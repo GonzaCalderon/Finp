@@ -2,6 +2,11 @@ import { motion } from 'framer-motion'
 import { staggerContainer } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount } from '@/types'
+import type {
+    DescriptionTextSuggestion,
+    DuplicateTransactionWarning,
+    SimilarTransactionSuggestion,
+} from '@/lib/utils/transaction-description-intelligence'
 import { StepSection } from './StepSection'
 import { IncomeFlow } from './flows/IncomeFlow'
 import { TransferFlow } from './flows/TransferFlow'
@@ -37,6 +42,9 @@ interface TransactionOtherDetailsStepProps {
     descriptionError: string | undefined
     appliedRuleName: string | null
     hasCategoryRules: boolean
+    textSuggestion?: DescriptionTextSuggestion
+    similarTransaction?: SimilarTransactionSuggestion
+    duplicate?: DuplicateTransactionWarning
     // exchange
     exchangeDestinationAmount: number
     exchangeDestinationCurrency: TransactionFormInput['currency']
@@ -79,6 +87,8 @@ interface TransactionOtherDetailsStepProps {
     onDateChange: (date: Date | undefined) => void
     onDatePopoverOpenChange: (open: boolean) => void
     onDescriptionChange: (value: string) => void
+    onAcceptDescriptionSuggestion: (suggestion: DescriptionTextSuggestion) => void
+    onApplySimilarTransaction: (suggestion: SimilarTransactionSuggestion) => void
     onCardPaymentModeChange: (mode: CardPaymentMode) => void
     onCardPaymentSelectionChange: (selection: CardPaymentSelection) => void
     onPartialCardPaymentAmountChange: (currency: TransactionFormInput['currency'], amount: number) => void
@@ -120,6 +130,9 @@ export function TransactionOtherDetailsStep(props: TransactionOtherDetailsStepPr
                         hasCategoryRules={props.hasCategoryRules}
                         isEditing={props.isEditing}
                         showErrors={props.showErrors}
+                        textSuggestion={props.textSuggestion}
+                        similarTransaction={props.similarTransaction}
+                        duplicate={props.duplicate}
                         fmtCurrency={props.fmtCurrency}
                         onDestinationAccountChange={props.onDestinationAccountChange}
                         onDateChange={props.onDateChange}
@@ -127,6 +140,8 @@ export function TransactionOtherDetailsStep(props: TransactionOtherDetailsStepPr
                         onAmountChange={props.onAmountChange}
                         onCurrencyChange={props.onCurrencyChange}
                         onDescriptionChange={props.onDescriptionChange}
+                        onAcceptDescriptionSuggestion={props.onAcceptDescriptionSuggestion}
+                        onApplySimilarTransaction={props.onApplySimilarTransaction}
                     />
                 )}
 

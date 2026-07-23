@@ -1,14 +1,19 @@
 import { motion } from 'framer-motion'
 import { Wand2 } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount } from '@/types'
+import type {
+    DescriptionTextSuggestion,
+    DuplicateTransactionWarning,
+    SimilarTransactionSuggestion,
+} from '@/lib/utils/transaction-description-intelligence'
 import { SURFACE, getTypeSurface } from '../shared-ui'
 import { AccountSelectorField } from '../fields/AccountSelectorField'
 import { DatePickerField } from '../fields/DatePickerField'
+import { SmartDescriptionInput } from '../SmartDescriptionInput'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const SURFACE_ACCENT = getTypeSurface('income', false)
@@ -30,6 +35,9 @@ interface IncomeFlowProps {
     hasCategoryRules: boolean
     isEditing: boolean
     showErrors: boolean
+    textSuggestion?: DescriptionTextSuggestion
+    similarTransaction?: SimilarTransactionSuggestion
+    duplicate?: DuplicateTransactionWarning
     fmtCurrency: (value: number, currency?: TransactionFormInput['currency']) => string
     onDestinationAccountChange: (id: string | undefined) => void
     onDateChange: (date: Date | undefined) => void
@@ -37,6 +45,8 @@ interface IncomeFlowProps {
     onAmountChange: (amount: number) => void
     onCurrencyChange: (currency: TransactionFormInput['currency']) => void
     onDescriptionChange: (value: string) => void
+    onAcceptDescriptionSuggestion: (suggestion: DescriptionTextSuggestion) => void
+    onApplySimilarTransaction: (suggestion: SimilarTransactionSuggestion) => void
 }
 
 export function IncomeFlow({
@@ -56,12 +66,17 @@ export function IncomeFlow({
     hasCategoryRules,
     isEditing,
     showErrors,
+    textSuggestion,
+    similarTransaction,
+    duplicate,
     onDestinationAccountChange,
     onDateChange,
     onDatePopoverOpenChange,
     onAmountChange,
     onCurrencyChange,
     onDescriptionChange,
+    onAcceptDescriptionSuggestion,
+    onApplySimilarTransaction,
 }: IncomeFlowProps) {
     return (
         <motion.div
@@ -149,18 +164,21 @@ export function IncomeFlow({
                         )}
                     </div>
 
-                    <Input
+                    <SmartDescriptionInput
                         id="incomeDescription"
                         value={description}
-                        onChange={(event) => onDescriptionChange(event.target.value)}
+                        onChange={onDescriptionChange}
                         placeholder="Ej: Sueldo marzo"
-                        aria-invalid={Boolean(descriptionError)}
+                        error={descriptionError}
                         className="h-10 rounded-[1rem]"
+                        textSuggestion={textSuggestion}
+                        similarTransaction={similarTransaction}
+                        duplicate={duplicate}
+                        onAcceptSuggestion={onAcceptDescriptionSuggestion}
+                        onApplySimilarTransaction={onApplySimilarTransaction}
                     />
 
-                    {descriptionError ? (
-                        <p className="text-sm text-destructive">{descriptionError}</p>
-                    ) : appliedRuleName && !isEditing ? (
+                    {!descriptionError && appliedRuleName && !isEditing ? (
                         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Wand2 className="h-3 w-3" />
                             Regla aplicada: {appliedRuleName}

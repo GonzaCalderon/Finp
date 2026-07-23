@@ -21,10 +21,12 @@ type StoredDialogPrefs = {
     lastExpensePaymentMethod?: PaymentMethod
     accounts?: Partial<Record<DialogAccountContext, string>>
     recentCategories?: Partial<Record<RecentCategoryType, string[]>>
+    descriptionAliases?: Record<string, DescriptionAlias>
 }
 
 const STORAGE_KEY = 'finp-transaction-dialog-prefs'
 const MAX_RECENT_CATEGORIES = 6
+const MAX_DESCRIPTION_ALIASES = 50
 const VALID_TYPES: TransactionFormInput['type'][] = [
     'income',
     'expense',
@@ -56,6 +58,40 @@ function normalizeCategoryIds(value: unknown): string[] {
         .slice(0, MAX_RECENT_CATEGORIES)
 }
 
+export interface DescriptionAlias {
+    description: string
+    merchant?: string
+}
+
+function normalizeAliasKey(value: string) {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+}
+
+function normalizeDescriptionAliases(value: unknown): Record<string, DescriptionAlias> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+    return Object.fromEntries(
+        Object.entries(value)
+            .filter((entry): entry is [string, DescriptionAlias] => {
+                const [, alias] = entry
+                return (
+                    Boolean(alias) &&
+                    typeof alias === 'object' &&
+                    typeof alias.description === 'string' &&
+                    alias.description.trim().length > 0 &&
+                    (alias.merchant === undefined || typeof alias.merchant === 'string')
+                )
+            })
+            .slice(-MAX_DESCRIPTION_ALIASES)
+    )
+}
+
 function readStoredPrefs(): StoredDialogPrefs {
     if (!canUseStorage()) return {}
 
@@ -82,6 +118,7 @@ function readStoredPrefs(): StoredDialogPrefs {
                 income: normalizeCategoryIds(parsed.recentCategories?.income),
                 expense: normalizeCategoryIds(parsed.recentCategories?.expense),
             },
+            descriptionAliases: normalizeDescriptionAliases(parsed.descriptionAliases),
         }
     } catch {
         return {}
@@ -122,6 +159,38 @@ export function getStoredAccountId(context: DialogAccountContext) {
 
 export function getRecentCategoryIds(type: RecentCategoryType) {
     return readStoredPrefs().recentCategories?.[type] ?? []
+}
+
+export function getDescriptionAlias(value: string): DescriptionAlias | undefined {
+    const key = normalizeAliasKey(value)
+    if (!key) return undefined
+    return readStoredPrefs().descriptionAliases?.[key]
+}
+
+export function persistDescriptionAlias(
+    source: string,
+    description: string,
+    merchant?: string
+) {
+    const sourceKey = normalizeAliasKey(source)
+    const targetKey = normalizeAliasKey(description)
+    if (!sourceKey || !targetKey || sourceKey === targetKey) return
+
+    updateStoredPrefs((current) => {
+        const aliases = normalizeDescriptionAliases(current.descriptionAliases)
+        const nextAliases = Object.fromEntries([
+            ...Object.entries(aliases).filter(([key]) => key !== sourceKey),
+            [sourceKey, {
+                description: description.trim(),
+                merchant: merchant?.trim() || undefined,
+            }],
+        ].slice(-MAX_DESCRIPTION_ALIASES))
+
+        return {
+            ...current,
+            descriptionAliases: nextAliases,
+        }
+    })
 }
 
 type PersistDialogPrefsParams = {

@@ -679,7 +679,7 @@ function useTransactionLauncher() {
     const [txDialogOpen, setTxDialogOpen] = useState(false)
     const { accounts } = useAccounts()
     const { categories } = useCategories()
-    const { rules } = useTransactionRules()
+    const { rules, createRule } = useTransactionRules()
     const { preferences } = usePreferences()
     const { success, error: toastError } = useToast()
     const { createPlan } = useInstallments()
@@ -733,6 +733,7 @@ function useTransactionLauncher() {
         accounts,
         categories,
         rules,
+        createRule,
         preferences,
         handleCreateTransaction,
         handleCreateTransactionBatch,
@@ -751,6 +752,7 @@ function DesktopFloatingTransactionButton() {
         accounts,
         categories,
         rules,
+        createRule,
         preferences,
         handleCreateTransaction,
         handleCreateTransactionBatch,
@@ -879,6 +881,7 @@ function DesktopFloatingTransactionButton() {
                 onSubmit={handleCreateTransaction}
                 onBatchSubmit={handleCreateTransactionBatch}
                 onInstallmentSubmit={handleCreateInstallment}
+                onCreateRule={createRule}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}
@@ -1276,6 +1279,7 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
         accounts,
         categories,
         rules,
+        createRule,
         preferences,
         handleCreateTransaction,
         handleCreateTransactionBatch,
@@ -1434,6 +1438,7 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
                 onSubmit={handleCreateTransaction}
                 onBatchSubmit={handleCreateTransactionBatch}
                 onInstallmentSubmit={handleCreateInstallment}
+                onCreateRule={createRule}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}

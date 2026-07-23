@@ -620,7 +620,7 @@ function CreditCardExpensesPageInner() {
 
     const { accounts } = useAccounts()
     const { categories } = useCategories()
-    const { rules } = useTransactionRules()
+    const { rules, createRule } = useTransactionRules()
     const { preferences } = usePreferences()
     const skipRouteTransitionAnimations = useSkipRouteTransitionAnimations()
     const { hidden } = useHideAmounts()
@@ -1632,6 +1632,7 @@ function CreditCardExpensesPageInner() {
                 onSubmit={handleSubmitTransaction}
                 onBatchSubmit={handleSubmitTransactionBatch}
                 onInstallmentSubmit={handleSubmitInstallment}
+                onCreateRule={createRule}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}

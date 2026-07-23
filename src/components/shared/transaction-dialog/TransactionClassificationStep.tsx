@@ -1,48 +1,47 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Search, Sparkles, Wand2 } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import type { TransactionFormInput } from '@/lib/validations'
+import { staggerContainer, staggerItem } from '@/lib/utils/animations'
+import type { TransactionRuleProposal } from '@/lib/utils/transaction-description-intelligence'
 import type { ICategory } from '@/types'
 import { StepSection } from './StepSection'
 import { CategoryChip, SURFACE } from './shared-ui'
 
 interface TransactionClassificationStepProps {
-    type: TransactionFormInput['type']
     showCategory: boolean
     categoryId: string | undefined
     appliedRuleName: string | null
     categoryQuery: string
-    showAllCategories: boolean
     normalizedCategoryQuery: string
-    filteredCategories: ICategory[]
-    recentCategories: ICategory[]
-    suggestedCategories: ICategory[]
-    extraCategories: ICategory[]
+    availableCategories: ICategory[]
+    visibleCategories: ICategory[]
     selectedCategory: ICategory | undefined
+    categoryReason?: string
+    ruleProposal?: TransactionRuleProposal
+    isCreatingRule?: boolean
     onCategorySelect: (id: string) => void
     onCategoryQueryChange: (query: string) => void
-    onToggleShowAllCategories: () => void
+    onCreateSuggestedRule?: () => void
 }
 
 export function TransactionClassificationStep({
-    type,
     showCategory,
     categoryId,
     appliedRuleName,
     categoryQuery,
-    showAllCategories,
     normalizedCategoryQuery,
-    filteredCategories,
-    recentCategories,
-    suggestedCategories,
-    extraCategories,
+    availableCategories,
+    visibleCategories,
     selectedCategory,
+    categoryReason,
+    ruleProposal,
+    isCreatingRule,
     onCategorySelect,
     onCategoryQueryChange,
-    onToggleShowAllCategories,
+    onCreateSuggestedRule,
 }: TransactionClassificationStepProps) {
     return (
         <StepSection>
@@ -58,7 +57,7 @@ export function TransactionClassificationStep({
                             <div>
                                 <Label>Categorias</Label>
                                 <p className="text-xs text-muted-foreground">
-                                    {type === 'income' ? 'Mostramos ingresos compatibles.' : 'Mostramos gastos compatibles.'}
+                                    Ordenadas segun tu uso reciente y movimientos similares.
                                 </p>
                             </div>
                             {selectedCategory && (
@@ -78,7 +77,50 @@ export function TransactionClassificationStep({
                             </motion.div>
                         )}
 
-                        {filteredCategories.length > 0 && (
+                        {!appliedRuleName && selectedCategory && categoryReason && normalizedCategoryQuery.length === 0 && (
+                            <motion.p
+                                variants={staggerItem}
+                                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                            >
+                                <Sparkles className="h-3.5 w-3.5 text-[var(--sky)]" />
+                                {categoryReason}
+                            </motion.p>
+                        )}
+
+                        {!appliedRuleName &&
+                            ruleProposal &&
+                            selectedCategory &&
+                            ruleProposal.categoryId === selectedCategory._id.toString() &&
+                            onCreateSuggestedRule &&
+                            normalizedCategoryQuery.length === 0 && (
+                                <motion.div
+                                    variants={staggerItem}
+                                    className="flex items-center justify-between gap-3 rounded-[1.35rem] border px-3 py-2.5"
+                                    style={SURFACE.panel}
+                                >
+                                    <div className="min-w-0">
+                                        <p className="flex items-center gap-1.5 text-xs font-medium">
+                                            <Wand2 className="h-3.5 w-3.5 text-[var(--sky)]" />
+                                            Automatizar próximos movimientos
+                                        </p>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                            {ruleProposal.reason}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+                                        disabled={isCreatingRule}
+                                        onClick={onCreateSuggestedRule}
+                                    >
+                                        {isCreatingRule ? 'Creando...' : 'Crear regla'}
+                                    </Button>
+                                </motion.div>
+                            )}
+
+                        {availableCategories.length > 0 && (
                             <motion.div variants={staggerItem} className="relative">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                                 <Input
@@ -90,29 +132,17 @@ export function TransactionClassificationStep({
                             </motion.div>
                         )}
 
-                        {recentCategories.length > 0 && normalizedCategoryQuery.length === 0 && (
-                            <motion.div variants={staggerItem} className="space-y-2">
-                                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Frecuentes</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {recentCategories.map((category) => (
-                                        <CategoryChip
-                                            key={`recent-${category._id.toString()}`}
-                                            category={category}
-                                            selected={categoryId === category._id.toString()}
-                                            onClick={() => onCategorySelect(category._id.toString())}
-                                        />
-                                    ))}
-                                </div>
-                            </motion.div>
-                        )}
-
-                        <motion.div variants={staggerItem} className="space-y-2">
-                            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                {normalizedCategoryQuery.length > 0 ? 'Resultados' : 'Sugeridas'}
-                            </p>
-                            {suggestedCategories.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                    {suggestedCategories.map((category) => (
+                        <motion.div variants={staggerItem}>
+                            {visibleCategories.length > 0 ? (
+                                <div
+                                    className="flex flex-wrap gap-2"
+                                    aria-label={
+                                        normalizedCategoryQuery
+                                            ? 'Resultados de categorias'
+                                            : 'Categorias ordenadas por relevancia'
+                                    }
+                                >
+                                    {visibleCategories.map((category) => (
                                         <CategoryChip
                                             key={category._id.toString()}
                                             category={category}
@@ -129,42 +159,6 @@ export function TransactionClassificationStep({
                                 </p>
                             )}
                         </motion.div>
-
-                        {extraCategories.length > 0 && normalizedCategoryQuery.length === 0 && (
-                            <motion.div variants={staggerItem} className="space-y-3">
-                                <button
-                                    type="button"
-                                    onClick={onToggleShowAllCategories}
-                                    className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                                    data-testid="transaction-toggle-all-categories"
-                                >
-                                    <span>{showAllCategories ? 'Ver menos' : `Ver todas (${extraCategories.length})`}</span>
-                                    {showAllCategories ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                </button>
-
-                                <AnimatePresence initial={false}>
-                                    {showAllCategories && (
-                                        <motion.div
-                                            initial={{ opacity: 0, height: 0 }}
-                                            animate={{ opacity: 1, height: 'auto', transition: { duration: DURATION.normal, ease: easeSmooth } }}
-                                            exit={{ opacity: 0, height: 0, transition: { duration: DURATION.fast, ease: easeSoft } }}
-                                            className="flex flex-wrap gap-2 overflow-hidden rounded-[1.6rem] border p-4"
-                                            style={SURFACE.panel}
-                                        >
-                                            {extraCategories.map((category) => (
-                                                <CategoryChip
-                                                    key={`extra-${category._id.toString()}`}
-                                                    category={category}
-                                                    selected={categoryId === category._id.toString()}
-                                                    onClick={() => onCategorySelect(category._id.toString())}
-                                                    animateOnMount={false}
-                                                />
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </motion.div>
-                        )}
                     </motion.div>
                 )}
             </motion.div>
