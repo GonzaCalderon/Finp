@@ -13,6 +13,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { MonthPickerField } from '@/components/shared/MonthPickerField'
 import { getAccountCurrencyLabel } from '@/lib/utils/accounts'
 import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
@@ -169,25 +170,13 @@ export function TransactionExpenseDetailsStep({
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label>Primera cuota</Label>
-                                            <Select
-                                                value={firstClosingMonth}
-                                                onValueChange={onFirstClosingMonthChange}
-                                            >
-                                                <SelectTrigger style={{ borderColor: firstMonthError ? 'var(--destructive)' : undefined }}>
-                                                    <SelectValue placeholder="Selecciona mes" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {monthOptions.map((option) => (
-                                                        <SelectItem key={option.value} value={option.value}>
-                                                            {option.label}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {firstMonthError && <p className="text-sm text-destructive">{firstMonthError}</p>}
-                                        </div>
+                                        <MonthPickerField
+                                            label="Primera cuota"
+                                            value={firstClosingMonth}
+                                            options={monthOptions}
+                                            onValueChange={onFirstClosingMonthChange}
+                                            error={firstMonthError ?? undefined}
+                                        />
                                     </div>
 
                                     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -197,6 +186,7 @@ export function TransactionExpenseDetailsStep({
                                                 label="Valor de cuota"
                                                 value={installmentQuoteAmount}
                                                 currency={currency}
+                                                showCurrencyFlag
                                                 placeholder="Ej. valor del resumen"
                                                 onValueChangeAction={onInstallmentQuoteAmountChange}
                                             />

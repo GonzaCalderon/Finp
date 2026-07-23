@@ -1,14 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { spaceSchema, type SpaceFormData } from '@/lib/validations'
 import { SPACE_TYPE_LABELS } from '@/lib/utils/spaces'
-import { SPACE_TYPE_META, SpaceCurrencyBadge, SpaceCurrencyIcon, SpaceCurrencyStack, SpaceTypeIcon } from '@/components/spaces/SpaceUi'
+import { SPACE_TYPE_META, SpaceCurrencyBadge, SpaceCurrencyStack, SpaceTypeIcon } from '@/components/spaces/SpaceUi'
 import { COMMON_CURRENCIES, ISO_CURRENCIES } from '@/lib/constants/iso-currencies'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
+import { CurrencyMultiSelector } from '@/components/shared/CurrencyMultiSelector'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
 import {
     Dialog,
     DialogContent,
@@ -20,15 +22,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-} from '@/components/ui/select'
-import {
     type DialogProps,
     normalizeDialogDate,
-    SpaceDialogChoice,
     SpaceDialogField,
     SpaceDialogSectionEyebrow,
     SpaceDialogTextArea,
@@ -38,6 +33,12 @@ import type { ISpace } from '@/types'
 
 const WIZARD_STEPS = ['Información', 'Monedas', 'Revisión'] as const
 type WizardStep = (typeof WIZARD_STEPS)[number]
+const CURRENCY_OPTIONS = [
+    ...COMMON_CURRENCIES,
+    ...ISO_CURRENCIES
+        .map((currency) => currency.code)
+        .filter((currency) => !(COMMON_CURRENCIES as readonly string[]).includes(currency)),
+] as string[]
 
 const NAME_PLACEHOLDER: Record<SpaceFormData['type'], string> = {
     couple: 'Ej. Casa con Roro',
@@ -135,8 +136,6 @@ export function CreateSpaceDialog({
     const [globalError, setGlobalError] = useState<string | null>(null)
     const [createdSpace, setCreatedSpace] = useState<ISpace | null>(null)
 
-    const [currencyQuery, setCurrencyQuery] = useState('')
-
     // Date pickers
     const [startDateOpen, setStartDateOpen] = useState(false)
     const [endDateOpen, setEndDateOpen] = useState(false)
@@ -148,7 +147,6 @@ export function CreateSpaceDialog({
         setSubmitting(false)
         setFieldErrors({})
         setGlobalError(null)
-        setCurrencyQuery('')
         setCreatedSpace(null)
     }, [open])
 
@@ -162,38 +160,6 @@ export function CreateSpaceDialog({
             })
         }
     }
-
-    const toggleCurrency = (currency: string) => {
-        setForm((prev) => {
-            const next = prev.currencies.includes(currency)
-                ? prev.currencies.filter((c) => c !== currency)
-                : [...prev.currencies, currency]
-            const safe = next.length > 0 ? next : [currency]
-            return {
-                ...prev,
-                currencies: safe,
-                reportingCurrency: safe.includes(prev.reportingCurrency) ? prev.reportingCurrency : safe[0],
-            }
-        })
-    }
-
-    const currencyOptions = useMemo(() => {
-        const query = currencyQuery.trim().toLowerCase()
-        const common = ISO_CURRENCIES.filter((currency) =>
-            (COMMON_CURRENCIES as readonly string[]).includes(currency.code)
-        )
-        const rest = ISO_CURRENCIES.filter((currency) =>
-            !(COMMON_CURRENCIES as readonly string[]).includes(currency.code)
-        )
-        const options = query
-            ? ISO_CURRENCIES.filter((currency) =>
-                currency.code.toLowerCase().includes(query) ||
-                currency.name.toLowerCase().includes(query)
-            )
-            : [...common, ...rest]
-
-        return options
-    }, [currencyQuery])
 
     const validateStep = (stepIndex: number): boolean => {
         const errors: Record<string, string> = {}
@@ -390,76 +356,34 @@ export function CreateSpaceDialog({
                                 <WizardSection>
                                     <div className="space-y-3">
                                         <SpaceDialogSectionEyebrow>Monedas</SpaceDialogSectionEyebrow>
-                                        <Input
-                                            value={currencyQuery}
-                                            onChange={(e) => setCurrencyQuery(e.target.value)}
-                                            placeholder="Buscar por código o nombre"
-                                            className="h-9"
+                                        <CurrencyMultiSelector
+                                            value={form.currencies}
+                                            options={CURRENCY_OPTIONS}
+                                            onValueChange={(currencies) => {
+                                                setForm((previous) => ({
+                                                    ...previous,
+                                                    currencies,
+                                                    reportingCurrency: currencies.includes(previous.reportingCurrency)
+                                                        ? previous.reportingCurrency
+                                                        : currencies[0],
+                                                }))
+                                                setFieldErrors((previous) => {
+                                                    const next = { ...previous }
+                                                    delete next.currencies
+                                                    return next
+                                                })
+                                            }}
+                                            label="Monedas del espacio"
+                                            error={fieldErrors.currencies}
+                                            helperText="Podés buscar por código o nombre y seleccionar más de una."
                                         />
-                                        <div className="grid max-h-[260px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-                                            {currencyOptions.map((currency) => {
-                                                const active = form.currencies.includes(currency.code)
-
-                                                return (
-                                                    <button
-                                                        key={currency.code}
-                                                        type="button"
-                                                        onClick={() => toggleCurrency(currency.code)}
-                                                        className={cn(
-                                                            'flex items-center justify-between gap-3 rounded-[16px] border px-3 py-2 text-left transition-colors',
-                                                            active
-                                                                ? 'border-primary/25 bg-primary/10 text-primary'
-                                                                : 'border-border bg-background/80 text-foreground hover:bg-accent/30'
-                                                        )}
-                                                    >
-                                                        <SpaceCurrencyIcon currency={currency.code} />
-                                                        <span className="min-w-0 flex-1">
-                                                            <span className="block text-sm font-semibold">{currency.code}</span>
-                                                            <span className="block truncate text-xs text-muted-foreground">
-                                                                {currency.name}
-                                                            </span>
-                                                        </span>
-                                                        {active ? (
-                                                            <Check className="h-4 w-4 shrink-0" />
-                                                        ) : null}
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
-                                        {fieldErrors.currencies && (
-                                            <p className="text-xs text-destructive">{fieldErrors.currencies}</p>
-                                        )}
-
-                                        <SpaceDialogField label="Moneda de reporte">
-                                            <Select
-                                                value={form.reportingCurrency}
-                                                onValueChange={(v) => setField('reportingCurrency', v)}
-                                            >
-                                                <SelectTrigger className="w-full">
-                                                    <span className="flex min-w-0 items-center gap-2">
-                                                        <SpaceCurrencyIcon currency={form.reportingCurrency} className="h-5 w-5" />
-                                                        <span className="truncate">{form.reportingCurrency}</span>
-                                                    </span>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {form.currencies.map((c) => {
-                                                        return (
-                                                        <SelectItem key={c} value={c}>
-                                                            <span className="flex items-center gap-2">
-                                                                <SpaceCurrencyIcon currency={c} className="h-5 w-5" />
-                                                                <span>{c}</span>
-                                                            </span>
-                                                        </SelectItem>
-                                                        )
-                                                    })}
-                                                </SelectContent>
-                                            </Select>
-                                            {fieldErrors.reportingCurrency && (
-                                                <p className="text-xs text-destructive">
-                                                    {fieldErrors.reportingCurrency}
-                                                </p>
-                                            )}
-                                        </SpaceDialogField>
+                                        <CurrencySelector
+                                            value={form.reportingCurrency}
+                                            options={form.currencies}
+                                            onValueChange={(currency) => setField('reportingCurrency', currency)}
+                                            label="Moneda de reporte"
+                                            error={fieldErrors.reportingCurrency}
+                                        />
                                     </div>
                                 </WizardSection>
 

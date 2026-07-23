@@ -26,11 +26,9 @@ export async function GET() {
         await connectDB()
 
         const userDoc = await User.findById(session.user.id, {
-            'preferences.monthStartDay': 1,
             'preferences.operationalStartDate': 1,
         })
         const operationalStart = parseOperationalStartDate(userDoc?.preferences?.operationalStartDate)
-        const monthStartDay = userDoc?.preferences?.monthStartDay ?? 1
 
         const accounts = await Account.find({ userId: session.user.id, isActive: true })
             .sort({ createdAt: 1 })
@@ -81,9 +79,7 @@ export async function GET() {
                     {
                         initialBalances: account.initialBalances,
                         sinceDate: operationalStart,
-                        includeCreditCardInstallmentDebt: account.type === 'credit_card',
-                        monthStartDay,
-                        operationalStartDate: userDoc?.preferences?.operationalStartDate,
+                        untilDate: new Date(Date.now() + 1),
                     }
                 ),
             }))

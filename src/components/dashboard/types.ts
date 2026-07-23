@@ -17,6 +17,7 @@ export interface DashboardSummaryData {
     totalIncome: DashboardCurrencyTotals
     totalExpense: DashboardCurrencyTotals
     balance: DashboardCurrencyTotals
+    availableBalance: DashboardCurrencyTotals
     totalDebt: DashboardCurrencyTotals
     totalCreditCardExpense: DashboardCurrencyTotals
     totalMonthlyCommitments: DashboardCurrencyTotals

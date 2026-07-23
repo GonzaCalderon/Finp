@@ -28,6 +28,7 @@ import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
+import { PeriodSelector } from '@/components/shared/PeriodSelector'
 import { selectableCardRootMotion } from '@/components/shared/selectable-card-motion'
 import {
     AlertDialog,
@@ -620,7 +621,7 @@ function CreditCardExpensesPageInner() {
 
     const { accounts } = useAccounts()
     const { categories } = useCategories()
-    const { rules } = useTransactionRules()
+    const { rules, createRule } = useTransactionRules()
     const { preferences } = usePreferences()
     const skipRouteTransitionAnimations = useSkipRouteTransitionAnimations()
     const { hidden } = useHideAmounts()
@@ -1331,18 +1332,12 @@ function CreditCardExpensesPageInner() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div className="space-y-1">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mes</p>
-                            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                <SelectTrigger className="h-8 w-full text-sm md:w-48">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {MONTHS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <PeriodSelector
+                                value={selectedMonth}
+                                options={MONTHS}
+                                onValueChange={setSelectedMonth}
+                                className="h-8 w-full text-sm md:w-48"
+                            />
                         </div>
 
                         <div className="hidden md:flex items-center gap-2.5 flex-wrap">
@@ -1632,6 +1627,7 @@ function CreditCardExpensesPageInner() {
                 onSubmit={handleSubmitTransaction}
                 onBatchSubmit={handleSubmitTransactionBatch}
                 onInstallmentSubmit={handleSubmitInstallment}
+                onCreateRule={createRule}
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}

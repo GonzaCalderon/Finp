@@ -18,7 +18,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
     Select,
     SelectContent,
@@ -37,6 +36,8 @@ import {
     SpaceDialogTextArea,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
 import { cn } from '@/lib/utils'
 
 export interface SettlementPrefill {
@@ -446,44 +447,26 @@ export function SpaceSettlementDialog({
                             ) : null}
 
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <SpaceDialogField label="Monto pagado">
-                                    <Input
-                                        ref={amountInputRef}
-                                        type="number"
-                                        inputMode="decimal"
-                                        min={0}
-                                        step="any"
-                                        value={form.amount}
-                                        onChange={(e) => {
-                                            setForm((prev) => ({ ...prev, amount: e.target.value }))
-                                            if (preset !== 'custom') setPreset('custom')
-                                        }}
-                                        placeholder="0"
-                                    />
-                                    {errors.amount ? (
-                                        <p className="text-xs text-destructive">{errors.amount}</p>
-                                    ) : null}
-                                </SpaceDialogField>
+                                <FormattedAmountInput
+                                    id="settlement-amount"
+                                    inputRef={amountInputRef}
+                                    label="Monto pagado"
+                                    value={form.amount ? Number(form.amount) : undefined}
+                                    currency={form.currency}
+                                    error={errors.amount}
+                                    onValueChangeAction={(amount) => {
+                                        setForm((prev) => ({ ...prev, amount: amount ? String(amount) : '' }))
+                                        if (preset !== 'custom') setPreset('custom')
+                                    }}
+                                />
 
-                                <SpaceDialogField label="Moneda">
-                                    <Select
-                                        value={form.currency}
-                                        onValueChange={(value) =>
-                                            setForm((prev) => ({ ...prev, currency: value }))
-                                        }
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {currencies.map((currency) => (
-                                                <SelectItem key={currency} value={currency}>
-                                                    {currency}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </SpaceDialogField>
+                                <CurrencySelector
+                                    value={form.currency}
+                                    options={currencies}
+                                    onValueChange={(currency) =>
+                                        setForm((prev) => ({ ...prev, currency }))
+                                    }
+                                />
                             </div>
 
                             <div className="mt-4">

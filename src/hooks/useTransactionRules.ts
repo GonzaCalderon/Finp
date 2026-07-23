@@ -37,17 +37,22 @@ export function useTransactionRules() {
 
     const createRule = useCallback(
         async (data: Partial<ITransactionRule>) => {
-            const json = await apiJson<{ rule: ITransactionRule }>('/api/transaction-rules', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            })
-            setRules((prev) => [json.rule, ...prev])
-            success('Regla creada')
-            invalidateData(RULE_INVALIDATION_TAGS)
-            return json.rule as ITransactionRule
+            try {
+                const json = await apiJson<{ rule: ITransactionRule }>('/api/transaction-rules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                })
+                setRules((prev) => [json.rule, ...prev])
+                success('Regla creada')
+                invalidateData(RULE_INVALIDATION_TAGS)
+                return json.rule as ITransactionRule
+            } catch (err) {
+                toastError(err instanceof Error ? err.message : 'Error al crear la regla')
+                throw err
+            }
         },
-        [success]
+        [success, toastError]
     )
 
     const updateRule = useCallback(

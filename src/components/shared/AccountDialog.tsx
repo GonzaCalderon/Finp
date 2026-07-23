@@ -22,6 +22,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { ColorPicker } from '@/components/shared/ColorPicker'
+import { CurrencyMultiSelector } from '@/components/shared/CurrencyMultiSelector'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import {accountSchema, type AccountFormData, AccountFormInput} from '@/lib/validations'
 import type { IAccount } from '@/types'
 import { Spinner } from '@/components/shared/Spinner'
@@ -39,20 +41,6 @@ interface AccountDialogProps {
     onOpenChange: (open: boolean) => void
     account: IAccount | null
     onSubmit: (data: AccountFormData) => Promise<void>
-}
-
-type CurrencyCapabilityOption = 'ARS' | 'USD' | 'ARS_USD'
-
-function getCurrencyCapabilityValue(supportedCurrencies?: string[]): CurrencyCapabilityOption {
-    const normalized = normalizeSupportedCurrencies(supportedCurrencies as ('ARS' | 'USD')[] | undefined)
-    if (normalized.length > 1) return 'ARS_USD'
-    return normalized[0]
-}
-
-function getSupportedCurrenciesFromCapability(value: CurrencyCapabilityOption): ('ARS' | 'USD')[] {
-    if (value === 'USD') return ['USD']
-    if (value === 'ARS_USD') return ['ARS', 'USD']
-    return ['ARS']
 }
 
 export function AccountDialog({ open, onOpenChange, account, onSubmit }: AccountDialogProps) {
@@ -90,13 +78,11 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
     const currency = useWatch({ control, name: 'currency' })
     const color = useWatch({ control, name: 'color' }) ?? '#6366f1'
     const allowNegativeBalance = useWatch({ control, name: 'allowNegativeBalance' }) ?? true
+    const creditLimit = useWatch({ control, name: 'creditCardConfig.creditLimit' })
     const isCreditCard = type === 'credit_card'
     const isDualCurrency = (supportedCurrencies?.length ?? 0) > 1
     const availableDefaultPaymentMethods = getSupportedDefaultPaymentMethodsForAccountType(type)
     const primaryDefaultPaymentMethod = availableDefaultPaymentMethods[0]
-    const currencyCapability = isCreditCard
-        ? 'ARS_USD'
-        : getCurrencyCapabilityValue(supportedCurrencies as string[] | undefined)
 
     useEffect(() => {
         if (open) {
@@ -178,8 +164,7 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
         }
     }, [currency, defaultPaymentMethods, type, supportedCurrencies, setValue])
 
-    const handleCurrencyCapabilityChange = (value: CurrencyCapabilityOption) => {
-        const nextSupportedCurrencies = getSupportedCurrenciesFromCapability(value)
+    const handleSupportedCurrenciesChange = (nextSupportedCurrencies: ('ARS' | 'USD')[]) => {
         setValue('supportedCurrencies', nextSupportedCurrencies, { shouldValidate: true, shouldDirty: true })
         setValue('currency', nextSupportedCurrencies[0], { shouldValidate: true, shouldDirty: true })
         setValue('initialBalance', initialBalances?.[nextSupportedCurrencies[0]] ?? 0, {
@@ -241,35 +226,23 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                         {errors.type && <p className="text-xs text-destructive">{errors.type.message}</p>}
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Monedas disponibles</Label>
-                        <Select
-                            value={currencyCapability}
-                            onValueChange={(v) => handleCurrencyCapabilityChange(v as CurrencyCapabilityOption)}
-                            disabled={isCreditCard}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Seleccioná monedas" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ARS">ARS</SelectItem>
-                                <SelectItem value="USD">USD</SelectItem>
-                                <SelectItem value="ARS_USD">ARS y USD</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                            {isCreditCard
+                    <CurrencyMultiSelector
+                        value={(supportedCurrencies ?? ['ARS']) as ('ARS' | 'USD')[]}
+                        options={['ARS', 'USD'] as const}
+                        onValueChange={handleSupportedCurrenciesChange}
+                        label="Monedas disponibles"
+                        disabled={isCreditCard}
+                        error={errors.supportedCurrencies?.message}
+                        helperText={
+                            isCreditCard
                                 ? 'Las tarjetas de crédito operan en ARS y USD.'
                                 : `Esta cuenta acepta movimientos en ${getAccountCurrencyLabel({
                                     type: type ?? 'bank',
                                     currency: currency ?? 'ARS',
                                     supportedCurrencies: supportedCurrencies as ('ARS' | 'USD')[] | undefined,
-                                })}.`}
-                        </p>
-                        {errors.supportedCurrencies && (
-                            <p className="text-xs text-destructive">{errors.supportedCurrencies.message}</p>
-                        )}
-                    </div>
+                                })}.`
+                        }
+                    />
 
                     <div className="space-y-2">
                         <Label htmlFor="institution">Entidad (opcional)</Label>
@@ -304,43 +277,38 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                         <Label>Saldos iniciales</Label>
                         {isDualCurrency ? (
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-2">
-                                    <Label htmlFor="initialBalanceARS" className="text-xs text-muted-foreground">ARS</Label>
-                                    <Input
-                                        id="initialBalanceARS"
-                                        type="number"
-                                        inputMode="decimal"
-                                        placeholder="0"
-                                        {...register('initialBalances.ARS', { valueAsNumber: true })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="initialBalanceUSD" className="text-xs text-muted-foreground">USD</Label>
-                                    <Input
-                                        id="initialBalanceUSD"
-                                        type="number"
-                                        inputMode="decimal"
-                                        placeholder="0"
-                                        {...register('initialBalances.USD', { valueAsNumber: true })}
-                                    />
-                                </div>
+                                <FormattedAmountInput
+                                    id="initialBalanceARS"
+                                    label="ARS"
+                                    value={initialBalances?.ARS}
+                                    currency="ARS"
+                                    allowNegative
+                                    error={errors.initialBalances?.ARS?.message}
+                                    onValueChangeAction={(value) =>
+                                        setValue('initialBalances.ARS', value, { shouldValidate: true, shouldDirty: true })
+                                    }
+                                />
+                                <FormattedAmountInput
+                                    id="initialBalanceUSD"
+                                    label="USD"
+                                    value={initialBalances?.USD}
+                                    currency="USD"
+                                    allowNegative
+                                    error={errors.initialBalances?.USD?.message}
+                                    onValueChangeAction={(value) =>
+                                        setValue('initialBalances.USD', value, { shouldValidate: true, shouldDirty: true })
+                                    }
+                                />
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                <Label
-                                    htmlFor="initialBalance"
-                                    className="text-xs text-muted-foreground"
-                                >
-                                    {supportedCurrencies?.[0] ?? 'ARS'}
-                                </Label>
-                                <Input
+                                <FormattedAmountInput
                                     id="initialBalance"
-                                    type="number"
-                                    inputMode="decimal"
-                                    placeholder="0"
+                                    label={supportedCurrencies?.[0] ?? 'ARS'}
                                     value={initialBalances?.[supportedCurrencies?.[0] ?? 'ARS'] ?? 0}
-                                    onChange={(event) => {
-                                        const value = event.target.value === '' ? 0 : Number(event.target.value)
+                                    currency={supportedCurrencies?.[0] ?? 'ARS'}
+                                    allowNegative
+                                    onValueChangeAction={(value) => {
                                         const currency = supportedCurrencies?.[0] ?? 'ARS'
                                         setValue(
                                             'initialBalances',
@@ -423,8 +391,21 @@ export function AccountDialog({ open, onOpenChange, account, onSubmit }: Account
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="creditLimit">Límite de crédito (opcional)</Label>
-                                <Input id="creditLimit" type="number" inputMode="decimal" placeholder="Ej: 500000"
-                                       {...register('creditCardConfig.creditLimit', { valueAsNumber: true })} />
+                                <FormattedAmountInput
+                                    id="creditLimit"
+                                    label="Límite de crédito"
+                                    labelClassName="sr-only"
+                                    value={creditLimit}
+                                    currency="ARS"
+                                    placeholder="Ej: 500.000"
+                                    error={errors.creditCardConfig?.creditLimit?.message}
+                                    onValueChangeAction={(value) =>
+                                        setValue('creditCardConfig.creditLimit', value, {
+                                            shouldValidate: true,
+                                            shouldDirty: true,
+                                        })
+                                    }
+                                />
                             </div>
                         </div>
                     )}

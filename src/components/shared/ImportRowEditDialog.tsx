@@ -20,6 +20,10 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Spinner } from '@/components/shared/Spinner'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { MonthPickerField } from '@/components/shared/MonthPickerField'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import type { IImportRow, IAccount, ICategory, ImportParsedData } from '@/types'
 import {
     getCompatibleDestinationAccounts,
@@ -35,10 +39,7 @@ import {
     typeSupportsCategory,
 } from '@/lib/utils/import-transactions'
 
-const CURRENCY_OPTIONS = [
-    { value: 'ARS', label: 'ARS' },
-    { value: 'USD', label: 'USD' },
-]
+const CURRENCY_OPTIONS = ['ARS', 'USD'] as const
 
 interface ImportRowEditDialogProps {
     row: IImportRow | null
@@ -120,11 +121,12 @@ export function ImportRowEditDialog({
         Boolean(data.destinationAccountName ?? effectiveData.destinationAccountName) &&
         !(data.destinationAccountId ?? effectiveData.destinationAccountId)
 
-    const dateString = data.date
-        ? (data.date instanceof Date ? data.date : new Date(data.date)).toLocaleDateString('es-AR')
-        : effectiveData.date
-            ? new Date(effectiveData.date).toLocaleDateString('es-AR')
-            : ''
+    const selectedDateValue = data.date ?? effectiveData.date
+    const selectedDate = selectedDateValue
+        ? selectedDateValue instanceof Date
+            ? selectedDateValue
+            : new Date(selectedDateValue)
+        : undefined
 
     const showInstallmentFields = activeType === 'credit_card_expense'
     const showFirstClosingMonth = shouldShowFirstClosingMonth({
@@ -241,10 +243,11 @@ export function ImportRowEditDialog({
 
                     {!ignored && (
                         <>
-                            <div className="space-y-2">
-                                <Label>Fecha</Label>
-                                <Input value={dateString} disabled className="opacity-60" />
-                            </div>
+                            <DatePickerField
+                                value={selectedDate}
+                                disabled
+                                onChange={() => undefined}
+                            />
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-2">
@@ -263,29 +266,13 @@ export function ImportRowEditDialog({
                                     </Select>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label>Moneda</Label>
-                                    <Select
-                                        value={data.currency || '__none__'}
-                                        onValueChange={(value) =>
-                                            setData((current) => ({
-                                                ...current,
-                                                currency: value === '__none__' ? undefined : value,
-                                            }))
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Seleccioná" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {CURRENCY_OPTIONS.map((option) => (
-                                                <SelectItem key={option.value} value={option.value}>
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                <CurrencySelector
+                                    value={(data.currency ?? 'ARS') as 'ARS' | 'USD'}
+                                    options={CURRENCY_OPTIONS}
+                                    onValueChange={(currency) =>
+                                        setData((current) => ({ ...current, currency }))
+                                    }
+                                />
                             </div>
 
                             <div className="space-y-2">
@@ -298,23 +285,18 @@ export function ImportRowEditDialog({
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Monto</Label>
-                                <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={data.amount ?? ''}
-                                    onChange={(event) =>
-                                        setData((current) => ({
-                                            ...current,
-                                            amount:
-                                                event.target.value === ''
-                                                    ? undefined
-                                                    : Number(event.target.value),
-                                        }))
-                                    }
-                                />
-                            </div>
+                            <FormattedAmountInput
+                                id="import-row-amount"
+                                label="Monto"
+                                value={data.amount}
+                                currency={data.currency ?? 'ARS'}
+                                onValueChangeAction={(amount) =>
+                                    setData((current) => ({
+                                        ...current,
+                                        amount: amount || undefined,
+                                    }))
+                                }
+                            />
 
                             {typeRequiresSourceAccount(activeType) && (
                                 <div className="space-y-2">
@@ -469,19 +451,13 @@ export function ImportRowEditDialog({
                                     </div>
 
                                     {showFirstClosingMonth && (
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Mes de primera cuota</Label>
-                                            <Input
-                                                type="month"
-                                                value={data.firstClosingMonth ?? ''}
-                                                onChange={(event) =>
-                                                    setData((current) => ({
-                                                        ...current,
-                                                        firstClosingMonth: event.target.value || undefined,
-                                                    }))
-                                                }
-                                            />
-                                        </div>
+                                        <MonthPickerField
+                                            label="Mes de primera cuota"
+                                            value={data.firstClosingMonth}
+                                            onValueChange={(firstClosingMonth) =>
+                                                setData((current) => ({ ...current, firstClosingMonth }))
+                                            }
+                                        />
                                     )}
                                 </div>
                             )}

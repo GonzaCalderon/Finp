@@ -108,9 +108,10 @@ export async function createTransactionForUser(
         }
     }
 
+    let normalizedExchange: ReturnType<typeof normalizeManualExchange> | undefined
     if (data.type === 'exchange') {
         try {
-            normalizeManualExchange({
+            normalizedExchange = normalizeManualExchange({
                 sourceCurrency: data.currency,
                 sourceAmount: data.amount,
                 destinationCurrency: data.destinationCurrency!,
@@ -131,6 +132,7 @@ export async function createTransactionForUser(
         description: data.description,
         amount: data.amount,
         currency: data.currency,
+        destinationCurrency: data.destinationCurrency,
         sourceAccount,
         destinationAccount,
     })
@@ -177,7 +179,7 @@ export async function createTransactionForUser(
         destinationAccountId: data.destinationAccountId,
         destinationAmount: data.type === 'exchange' ? data.destinationAmount : undefined,
         destinationCurrency: data.type === 'exchange' ? data.destinationCurrency : undefined,
-        exchangeRate: data.type === 'exchange' ? data.exchangeRate : undefined,
+        exchangeRate: normalizedExchange?.exchangeRate,
         paymentGroupId: data.paymentGroupId,
         notes: data.notes,
         merchant: resolvedMerchant,

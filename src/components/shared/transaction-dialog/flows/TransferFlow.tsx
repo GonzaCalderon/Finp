@@ -139,6 +139,7 @@ export function TransferFlow({
                             label="Monto a transferir"
                             value={amount}
                             currency={transferBalanceCurrency ?? currency}
+                            showCurrencyFlag
                             error={undefined}
                             wrapperClassName="space-y-1.5"
                             inputClassName="h-10 rounded-[1rem] text-[1.1rem] font-semibold tracking-tight"

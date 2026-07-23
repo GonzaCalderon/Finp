@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CalendarIcon, ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,11 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 import { Spinner } from '@/components/shared/Spinner'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
+import { MonthPickerField } from '@/components/shared/MonthPickerField'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import {
   installmentSchema,
   type InstallmentFormInput,
@@ -290,52 +291,23 @@ export function InstallmentDialog({
 
             {/* Moneda + Primera cuota */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Moneda</Label>
-                <Select
-                  value={currency}
-                  onValueChange={(value) =>
-                    setValue('currency', value as InstallmentFormInput['currency'], {
-                      shouldValidate: true,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccioná" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ARS">ARS</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.currency ? (
-                  <p className="text-sm text-destructive">{errors.currency.message}</p>
-                ) : null}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Primera cuota</Label>
-                <Select
-                  value={firstClosingMonth}
-                  onValueChange={(value) =>
-                    setValue('firstClosingMonth', value, { shouldValidate: true })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccioná mes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {monthOptions.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.firstClosingMonth ? (
-                  <p className="text-sm text-destructive">{errors.firstClosingMonth.message}</p>
-                ) : null}
-              </div>
+              <CurrencySelector
+                value={currency}
+                options={['ARS', 'USD'] as const}
+                onValueChange={(value) =>
+                  setValue('currency', value, { shouldValidate: true, shouldDirty: true })
+                }
+                error={errors.currency?.message}
+              />
+              <MonthPickerField
+                label="Primera cuota"
+                value={firstClosingMonth}
+                options={monthOptions}
+                onValueChange={(value) =>
+                  setValue('firstClosingMonth', value, { shouldValidate: true, shouldDirty: true })
+                }
+                error={errors.firstClosingMonth?.message}
+              />
             </div>
 
             {/* Cuotas + Tarjeta */}
@@ -489,29 +461,12 @@ export function InstallmentDialog({
                   className="space-y-4 rounded-xl border p-3"
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  <div className="space-y-2">
-                    <Label>Fecha de compra</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start">
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {purchaseDate instanceof Date
-                            ? purchaseDate.toLocaleDateString('es-AR')
-                            : 'Seleccioná fecha'}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={purchaseDate}
-                          onSelect={handlePurchaseDateSelect}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    {errors.purchaseDate ? (
-                      <p className="text-sm text-destructive">{errors.purchaseDate.message}</p>
-                    ) : null}
-                  </div>
+                  <DatePickerField
+                    label="Fecha de compra"
+                    value={purchaseDate}
+                    onChange={handlePurchaseDateSelect}
+                    error={errors.purchaseDate?.message}
+                  />
 
                   <div className="space-y-2">
                     <Label htmlFor="merchant">Comercio (opcional)</Label>

@@ -98,12 +98,40 @@ export function buildTransactionPeriodSummary({
             return totals
         }, emptyCurrencyTotals())
 
+    const loanNet = transactions
+        .filter((transaction) => transaction.type === 'transfer')
+        .reduce((totals, transaction) => {
+            const sourceType =
+                transaction.sourceAccountId &&
+                typeof transaction.sourceAccountId === 'object' &&
+                'type' in transaction.sourceAccountId
+                    ? transaction.sourceAccountId.type
+                    : undefined
+            const destinationType =
+                transaction.destinationAccountId &&
+                typeof transaction.destinationAccountId === 'object' &&
+                'type' in transaction.destinationAccountId
+                    ? transaction.destinationAccountId.type
+                    : undefined
+
+            if (sourceType === 'debt') {
+                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+            }
+            if (destinationType === 'debt') {
+                addCurrencyAmount(totals, transaction.currency, -transaction.amount)
+            }
+            return totals
+        }, emptyCurrencyTotals())
+
     const expense = addCurrencyTotals(regularExpense, creditCardPayments)
 
     return {
         income,
         expense,
         creditCardExpense,
-        balance: addCurrencyTotals(subtractCurrencyTotals(income, expense), exchangeNet),
+        balance: addCurrencyTotals(
+            addCurrencyTotals(subtractCurrencyTotals(income, expense), exchangeNet),
+            loanNet
+        ),
     }
 }

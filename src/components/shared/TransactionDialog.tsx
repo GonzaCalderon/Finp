@@ -1,5 +1,4 @@
 'use client'
-/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -11,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -40,13 +40,37 @@ import {
     getSupportedCurrencies,
     supportsCurrency,
 } from '@/lib/utils/accounts'
-import { getArsPerUsdRate } from '@/lib/utils/exchange'
+import {
+    getDestinationAmountFromRate,
+    getExchangeOperationLabel,
+    getSourceAmountFromRate,
+    invertManualExchange,
+} from '@/lib/utils/exchange'
+import {
+    getQuoteRateForDirection,
+    type DolarApiQuoteHouse,
+    type ExchangeRateQuote,
+    type ExchangeRatesResponse,
+} from '@/lib/utils/exchange-rates'
+import { getBalanceBeforeReplacingTransaction } from '@/lib/utils/transaction-account-impact'
+import {
+    orderCategoryIds,
+    type CategoryHistoryRanking,
+} from '@/lib/utils/category-ranking'
+import type {
+    DescriptionIntelligenceSignals,
+    DescriptionTextSuggestion,
+    SimilarTransactionSuggestion,
+} from '@/lib/utils/transaction-description-intelligence'
+import { apiJson } from '@/lib/client/auth-client'
 import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
 import {
+    getDescriptionAlias,
     getRecentCategoryIds,
     getStoredAccountId,
     getStoredExpensePaymentMethod,
     getStoredTransactionType,
+    persistDescriptionAlias,
     persistTransactionDialogPrefs,
     type DialogAccountContext,
     type PaymentMethod,
@@ -61,6 +85,7 @@ interface TransactionDialogProps {
     onSubmit: (data: TransactionFormData) => Promise<void>
     onBatchSubmit?: (items: TransactionFormData[]) => Promise<void>
     onInstallmentSubmit?: (data: InstallmentFormData) => Promise<void>
+    onCreateRule?: (data: Partial<ITransactionRule>) => Promise<ITransactionRule>
     rules?: ITransactionRule[]
     defaultAccountId?: string
     monthStartDay?: number
@@ -75,6 +100,7 @@ type TransactionStep = {
 type CurrencyOption = TransactionFormInput['currency']
 type CardPaymentMode = 'full' | 'partial'
 type CardPaymentSelection = 'ars' | 'usd' | 'ars_usd'
+type ExchangeRateMode = 'automatic' | 'manual'
 type CardPaymentDraft = {
     currency: CurrencyOption
     amount: number
@@ -269,6 +295,7 @@ export function TransactionDialog({
     onSubmit,
     onBatchSubmit,
     onInstallmentSubmit,
+    onCreateRule,
     rules = [],
     defaultAccountId,
     monthStartDay = 1,
@@ -305,7 +332,10 @@ export function TransactionDialog({
     const [categoryRuleLocked, setCategoryRuleLocked] = useState(false)
     const [appliedRuleName, setAppliedRuleName] = useState<string | null>(null)
     const [categoryQuery, setCategoryQuery] = useState('')
-    const [showAllCategories, setShowAllCategories] = useState(false)
+    const [categoryHistoryRanking, setCategoryHistoryRanking] = useState<CategoryHistoryRanking[]>([])
+    const [descriptionSignals, setDescriptionSignals] = useState<DescriptionIntelligenceSignals>({})
+    const [isCreatingSuggestedRule, setIsCreatingSuggestedRule] = useState(false)
+    const [createdRuleProposalValue, setCreatedRuleProposalValue] = useState<string | null>(null)
     const [adjustmentSign, setAdjustmentSign] = useState<'+' | '-'>('+')
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('debit')
     const [installmentCount, setInstallmentCount] = useState(1)
@@ -326,7 +356,12 @@ export function TransactionDialog({
     const [exchangeDestinationAmount, setExchangeDestinationAmount] = useState(0)
     const [exchangeDestinationCurrency, setExchangeDestinationCurrency] = useState<TransactionFormInput['currency']>('USD')
     const [exchangeRate, setExchangeRate] = useState(0)
-    const [exchangeRecalcMode, setExchangeRecalcMode] = useState<'destinationAmount' | 'exchangeRate'>('destinationAmount')
+    const [exchangeRecalcMode, setExchangeRecalcMode] = useState<'destinationAmount' | 'sourceAmount'>('destinationAmount')
+    const [exchangeRateMode, setExchangeRateMode] = useState<ExchangeRateMode>('automatic')
+    const [exchangeRateQuotes, setExchangeRateQuotes] = useState<ExchangeRateQuote[]>([])
+    const [selectedExchangeRateHouse, setSelectedExchangeRateHouse] = useState<DolarApiQuoteHouse>('blue')
+    const [isExchangeRateLoading, setIsExchangeRateLoading] = useState(false)
+    const [exchangeRateLoadError, setExchangeRateLoadError] = useState<string | null>(null)
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [navigationDirection, setNavigationDirection] = useState(1)
     const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false)
@@ -404,6 +439,23 @@ export function TransactionDialog({
         return accounts.filter((account) => account.type !== 'debt')
     }, [accounts, type])
 
+    const selectableSourceAccounts = useMemo(
+        () =>
+            type === 'exchange'
+                ? suggestedAccounts.filter((account) => supportsCurrency(account, currency))
+                : suggestedAccounts,
+        [currency, suggestedAccounts, type]
+    )
+    const selectableDestinationAccounts = useMemo(
+        () =>
+            type === 'exchange'
+                ? destinationAccounts.filter((account) =>
+                    supportsCurrency(account, exchangeDestinationCurrency)
+                )
+                : destinationAccounts,
+        [destinationAccounts, exchangeDestinationCurrency, type]
+    )
+
     const selectedSourceAccount = useMemo(
         () => accounts.find((account) => account._id.toString() === sourceAccountId),
         [accounts, sourceAccountId]
@@ -469,13 +521,13 @@ export function TransactionDialog({
 
     const canSwapExchangeDirection = useMemo(() => {
         if (type !== 'exchange' || !selectedSourceAccount || !selectedDestinationAccount) return false
-        return exchangeSupportedDirections.some(
-            (direction) => direction.source === exchangeDestinationCurrency && direction.destination === currency
+        return (
+            supportsCurrency(selectedSourceAccount, currency) &&
+            supportsCurrency(selectedDestinationAccount, exchangeDestinationCurrency)
         )
     }, [
         currency,
         exchangeDestinationCurrency,
-        exchangeSupportedDirections,
         selectedDestinationAccount,
         selectedSourceAccount,
         type,
@@ -583,51 +635,69 @@ export function TransactionDialog({
 
     const categoryStorageType = type === 'income' ? 'income' : showCategory ? 'expense' : undefined
     const recentCategoryIds = useMemo(
-        () => (categoryStorageType ? getRecentCategoryIds(categoryStorageType) : []),
-        [categoryStorageType]
-    )
-    const recentCategories = useMemo(
-        () =>
-            recentCategoryIds
-                .map((storedId) => filteredCategories.find((category) => category._id.toString() === storedId))
-                .filter((category): category is ICategory => Boolean(category)),
-        [filteredCategories, recentCategoryIds]
+        () => (open && categoryStorageType ? getRecentCategoryIds(categoryStorageType) : []),
+        [categoryStorageType, open]
     )
 
     const normalizedCategoryQuery = categoryQuery.trim().toLowerCase()
-    const matchingCategories = useMemo(
+    const rankedCategoryIds = useMemo(
         () =>
-            filteredCategories.filter((category) =>
-                category.name.toLowerCase().includes(normalizedCategoryQuery)
-            ),
-        [filteredCategories, normalizedCategoryQuery]
+            orderCategoryIds({
+                categoryIds: filteredCategories.map((category) => category._id.toString()),
+                historyRanking: categoryHistoryRanking,
+                recentCategoryIds,
+                selectedCategoryId: categoryId || undefined,
+            }),
+        [categoryHistoryRanking, categoryId, filteredCategories, recentCategoryIds]
     )
-
-    const suggestedCategories = useMemo(() => {
-        if (normalizedCategoryQuery) return matchingCategories
-
-        const selected = categoryId
-            ? filteredCategories.find((category) => category._id.toString() === categoryId)
+    const rankedCategories = useMemo(
+        () =>
+            rankedCategoryIds
+                .map((rankedId) =>
+                    filteredCategories.find((category) => category._id.toString() === rankedId)
+                )
+                .filter((category): category is ICategory => Boolean(category)),
+        [filteredCategories, rankedCategoryIds]
+    )
+    const visibleCategories = useMemo(
+        () =>
+            normalizedCategoryQuery
+                ? rankedCategories.filter((category) =>
+                    category.name.toLowerCase().includes(normalizedCategoryQuery)
+                )
+                : rankedCategories,
+        [normalizedCategoryQuery, rankedCategories]
+    )
+    const storedDescriptionAlias = description ? getDescriptionAlias(description) : undefined
+    const effectiveTextSuggestion: DescriptionTextSuggestion | undefined =
+        storedDescriptionAlias
+            ? {
+                kind: 'correction',
+                value: storedDescriptionAlias.description,
+                merchant: storedDescriptionAlias.merchant,
+                confidence: 1,
+                reason: 'Alias que corregiste anteriormente.',
+            }
+            : descriptionSignals.textSuggestion
+    const selectedCategoryRanking = categoryId
+        ? categoryHistoryRanking.find((item) => item.categoryId === categoryId)
+        : undefined
+    const suggestedRuleProposal =
+        descriptionSignals.ruleProposal &&
+        descriptionSignals.ruleProposal.value !== createdRuleProposalValue &&
+        !rules.some((rule) => {
+            const ruleCategoryId = resolveId(rule.categoryId)
+            return (
+                rule.isActive &&
+                rule.field === 'description' &&
+                rule.appliesTo !== 'any' &&
+                rule.appliesTo === categoryStorageType &&
+                rule.value.trim().toLowerCase() === descriptionSignals.ruleProposal?.value.trim().toLowerCase() &&
+                ruleCategoryId === descriptionSignals.ruleProposal?.categoryId
+            )
+        })
+            ? descriptionSignals.ruleProposal
             : undefined
-        const ordered = [...recentCategories]
-
-        if (selected && !ordered.some((category) => category._id.toString() === selected._id.toString())) {
-            ordered.unshift(selected)
-        }
-
-        const remaining = filteredCategories.filter(
-            (category) => !ordered.some((item) => item._id.toString() === category._id.toString())
-        )
-
-        return [...ordered, ...remaining.slice(0, 8)]
-    }, [categoryId, filteredCategories, matchingCategories, normalizedCategoryQuery, recentCategories])
-
-    const extraCategories = useMemo(() => {
-        if (normalizedCategoryQuery) return []
-        return filteredCategories.filter(
-            (category) => !suggestedCategories.some((item) => item._id.toString() === category._id.toString())
-        )
-    }, [filteredCategories, normalizedCategoryQuery, suggestedCategories])
 
     const installmentPlanSummary = useMemo(
         () => getInstallmentSummaryLabel(installmentCount, firstClosingMonth),
@@ -742,7 +812,9 @@ export function TransactionDialog({
         setCategoryRuleLocked(false)
         setAppliedRuleName(null)
         setCategoryQuery('')
-        setShowAllCategories(false)
+        setDescriptionSignals({})
+        setIsCreatingSuggestedRule(false)
+        setCreatedRuleProposalValue(null)
         setFirstMonthError(null)
         setInstallmentQuoteAmount(0)
         setAdditionalCardPaymentEnabled(false)
@@ -754,6 +826,11 @@ export function TransactionDialog({
         setExchangeDestinationCurrency('USD')
         setExchangeRate(0)
         setExchangeRecalcMode('destinationAmount')
+        setExchangeRateMode(transaction ? 'manual' : 'automatic')
+        setExchangeRateQuotes([])
+        setSelectedExchangeRateHouse('blue')
+        setIsExchangeRateLoading(false)
+        setExchangeRateLoadError(null)
         setNavigationDirection(1)
         setCurrentStepIndex(0)
         setStepErrorsVisible({})
@@ -845,6 +922,89 @@ export function TransactionDialog({
         resolveStoredAccount,
         transaction,
     ])
+
+    const exchangeOperationLabel = getExchangeOperationLabel(currency, exchangeDestinationCurrency)
+    const exchangeSourceBalance = isExchange && selectedSourceAccount
+        ? getBalanceBeforeReplacingTransaction({
+            currentBalance: getAccountBalancesByCurrency(selectedSourceAccount)[currency],
+            previousTransaction: transaction,
+            accountId: sourceAccountId,
+            currency,
+        })
+        : null
+    const exchangeDestinationBalance = isExchange && selectedDestinationAccount
+        ? getBalanceBeforeReplacingTransaction({
+            currentBalance: getAccountBalancesByCurrency(selectedDestinationAccount)[exchangeDestinationCurrency],
+            previousTransaction: transaction,
+            accountId: destinationAccountId,
+            currency: exchangeDestinationCurrency,
+        })
+        : null
+    const exchangeSourceResultingBalance =
+        exchangeSourceBalance === null ? null : exchangeSourceBalance - amount
+    const exchangeDestinationResultingBalance =
+        exchangeDestinationBalance === null
+            ? null
+            : exchangeDestinationBalance + exchangeDestinationAmount
+    const exchangeBalanceError =
+        isExchange &&
+        selectedSourceAccount?.allowNegativeBalance === false &&
+        exchangeSourceResultingBalance !== null &&
+        exchangeSourceResultingBalance < -0.0001
+            ? `Saldo insuficiente en ${selectedSourceAccount.name}.`
+            : null
+
+    useEffect(() => {
+        if (!open || !categoryStorageType) {
+            setCategoryHistoryRanking([])
+            setDescriptionSignals({})
+            return
+        }
+
+        const controller = new AbortController()
+        const params = new URLSearchParams({ type: categoryStorageType })
+        const normalizedDescription = description.trim()
+        const normalizedMerchant = merchant.trim()
+        if (normalizedDescription) params.set('description', normalizedDescription)
+        if (normalizedMerchant) params.set('merchant', normalizedMerchant)
+        if (categoryId) params.set('categoryId', categoryId)
+        if (amount > 0) params.set('amount', String(amount))
+        params.set('currency', currency)
+        if (date) params.set('date', date.toISOString())
+        const transactionId = resolveId(transaction?._id)
+        if (transactionId) params.set('transactionId', transactionId)
+
+        const timeoutId = window.setTimeout(() => {
+            void apiJson<{
+                ranking: CategoryHistoryRanking[]
+                signals?: DescriptionIntelligenceSignals
+            }>(
+                `/api/categories/ranking?${params.toString()}`,
+                { cache: 'no-store', signal: controller.signal }
+            )
+                .then((data) => {
+                    setCategoryHistoryRanking(data.ranking ?? [])
+                    setDescriptionSignals(data.signals ?? {})
+                })
+                .catch((error: unknown) => {
+                    if (
+                        typeof error === 'object' &&
+                        error !== null &&
+                        'name' in error &&
+                        error.name === 'AbortError'
+                    ) {
+                        return
+                    }
+                    setCategoryHistoryRanking([])
+                    setDescriptionSignals({})
+                })
+        }, 220)
+
+        return () => {
+            window.clearTimeout(timeoutId)
+            controller.abort()
+        }
+    }, [amount, categoryId, categoryStorageType, currency, date, description, merchant, open, transaction])
 
     useEffect(() => {
         if (currentStepIndex <= steps.length - 1) return
@@ -948,8 +1108,12 @@ export function TransactionDialog({
 
         if (showSource) {
             const sourceContext = getSourceAccountContext(type, paymentMethod)
-            const preferredSource = resolveStoredAccount(sourceContext, suggestedAccounts) ?? suggestedAccounts[0]
-            const isCurrentValid = suggestedAccounts.some((account) => account._id.toString() === sourceAccountId)
+            const preferredSource =
+                resolveStoredAccount(sourceContext, selectableSourceAccounts)
+                ?? selectableSourceAccounts[0]
+            const isCurrentValid = selectableSourceAccounts.some(
+                (account) => account._id.toString() === sourceAccountId
+            )
 
             if (!isCurrentValid) {
                 setValue('sourceAccountId', preferredSource?._id.toString() ?? undefined, { shouldValidate: true })
@@ -958,8 +1122,12 @@ export function TransactionDialog({
 
         if (showDestination) {
             const destinationContext = getDestinationAccountContext(type)
-            const preferredDestination = resolveStoredAccount(destinationContext, destinationAccounts) ?? destinationAccounts[0]
-            const isCurrentValid = destinationAccounts.some((account) => account._id.toString() === destinationAccountId)
+            const preferredDestination =
+                resolveStoredAccount(destinationContext, selectableDestinationAccounts)
+                ?? selectableDestinationAccounts[0]
+            const isCurrentValid = selectableDestinationAccounts.some(
+                (account) => account._id.toString() === destinationAccountId
+            )
 
             if (!isCurrentValid) {
                 setValue('destinationAccountId', preferredDestination?._id.toString() ?? undefined, { shouldValidate: true })
@@ -967,7 +1135,6 @@ export function TransactionDialog({
         }
     }, [
         destinationAccountId,
-        destinationAccounts,
         hasReachedDetailsStep,
         isEditing,
         isExpense,
@@ -978,7 +1145,8 @@ export function TransactionDialog({
         showDestination,
         showSource,
         sourceAccountId,
-        suggestedAccounts,
+        selectableDestinationAccounts,
+        selectableSourceAccounts,
         type,
     ])
 
@@ -995,14 +1163,18 @@ export function TransactionDialog({
         setValue('destinationAmount', exchangeDestinationAmount || undefined)
         setValue('exchangeRate', exchangeRate || undefined)
 
-        if (!description.trim()) {
-            setValue('description', 'Cambio manual')
+        if (
+            !description.trim() ||
+            ['Cambio manual', 'Compra de dólares', 'Venta de dólares', 'Cambio de moneda'].includes(description)
+        ) {
+            setValue('description', exchangeOperationLabel)
         }
     }, [
         description,
         exchangeDestinationAmount,
         exchangeDestinationCurrency,
         exchangeRate,
+        exchangeOperationLabel,
         isExchange,
         setValue,
     ])
@@ -1045,10 +1217,15 @@ export function TransactionDialog({
     ])
 
     useEffect(() => {
-        if (!isExchange || exchangeDestinationCurrency === currency || amount <= 0) return
+        if (!isExchange || exchangeDestinationCurrency === currency || exchangeRate <= 0) return
 
-        if (exchangeRecalcMode === 'destinationAmount' && exchangeRate > 0) {
-            const nextDestinationAmount = currency === 'ARS' ? amount / exchangeRate : amount * exchangeRate
+        if (exchangeRecalcMode === 'destinationAmount' && amount > 0) {
+            const nextDestinationAmount = getDestinationAmountFromRate({
+                sourceCurrency: currency,
+                sourceAmount: amount,
+                destinationCurrency: exchangeDestinationCurrency,
+                exchangeRate,
+            })
             if (Math.abs(nextDestinationAmount - exchangeDestinationAmount) > 0.0001) {
                 setExchangeDestinationAmount(nextDestinationAmount)
                 setValue('destinationAmount', nextDestinationAmount, { shouldValidate: true, shouldDirty: true })
@@ -1056,17 +1233,16 @@ export function TransactionDialog({
             return
         }
 
-        if (exchangeRecalcMode === 'exchangeRate' && exchangeDestinationAmount > 0) {
-            const nextRate = getArsPerUsdRate({
+        if (exchangeRecalcMode === 'sourceAmount' && exchangeDestinationAmount > 0) {
+            const nextSourceAmount = getSourceAmountFromRate({
                 sourceCurrency: currency,
-                sourceAmount: amount,
-                destinationCurrency: exchangeDestinationCurrency,
                 destinationAmount: exchangeDestinationAmount,
+                destinationCurrency: exchangeDestinationCurrency,
+                exchangeRate,
             })
 
-            if (Math.abs(nextRate - exchangeRate) > 0.0001) {
-                setExchangeRate(nextRate)
-                setValue('exchangeRate', nextRate, { shouldValidate: true, shouldDirty: true })
+            if (Math.abs(nextSourceAmount - amount) > 0.0001) {
+                setValue('amount', nextSourceAmount, { shouldValidate: true, shouldDirty: true })
             }
         }
     }, [
@@ -1297,6 +1473,9 @@ export function TransactionDialog({
 
     const handleAmountChange = useCallback((nextAmount: number) => {
         const normalizedAmount = type === 'adjustment' ? Math.abs(nextAmount) : nextAmount
+        if (type === 'exchange') {
+            setExchangeRecalcMode('destinationAmount')
+        }
         setValue('amount', normalizedAmount, { shouldValidate: true, shouldDirty: true })
     }, [setValue, type])
 
@@ -1316,35 +1495,159 @@ export function TransactionDialog({
         setValue('destinationAccountId', value || undefined, { shouldValidate: true, shouldDirty: true })
     }, [setValue])
 
+    const handleAcceptDescriptionSuggestion = useCallback((suggestion: DescriptionTextSuggestion) => {
+        const previousDescription = description
+        persistDescriptionAlias(
+            previousDescription,
+            suggestion.value,
+            suggestion.merchant
+        )
+        setValue('description', suggestion.value, {
+            shouldValidate: true,
+            shouldDirty: true,
+        })
+        if (suggestion.merchant && !merchant.trim()) {
+            setValue('merchant', suggestion.merchant, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+    }, [description, merchant, setValue])
+
+    const handleApplySimilarTransaction = useCallback((suggestion: SimilarTransactionSuggestion) => {
+        persistDescriptionAlias(description, suggestion.description, suggestion.merchant)
+        setValue('description', suggestion.description, {
+            shouldValidate: true,
+            shouldDirty: true,
+        })
+        if (suggestion.merchant) {
+            setValue('merchant', suggestion.merchant, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+
+        const suggestedCategoryIsAvailable =
+            suggestion.categoryId &&
+            filteredCategories.some((category) => category._id.toString() === suggestion.categoryId)
+        if (suggestedCategoryIsAvailable && suggestion.categoryId) {
+            setValue('categoryId', suggestion.categoryId, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+            setCategoryManuallySet(true)
+            setAutoSelectedCategoryId(null)
+            setAppliedRuleName(null)
+        }
+
+        const suggestedSourceAccount = suggestion.sourceAccountId
+            ? accounts.find((account) => account._id.toString() === suggestion.sourceAccountId)
+            : undefined
+        const suggestedDestinationAccount = suggestion.destinationAccountId
+            ? accounts.find((account) => account._id.toString() === suggestion.destinationAccountId)
+            : undefined
+
+        if (suggestedSourceAccount) {
+            setValue('sourceAccountId', suggestedSourceAccount._id.toString(), {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+            if (isExpense) {
+                setPaymentMethod(
+                    suggestedSourceAccount.type === 'credit_card'
+                        ? 'credit_card'
+                        : suggestedSourceAccount.type === 'cash'
+                            ? 'cash'
+                            : 'debit'
+                )
+            }
+        }
+        if (suggestedDestinationAccount) {
+            setValue('destinationAccountId', suggestedDestinationAccount._id.toString(), {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+
+        const currencyAccount = suggestedSourceAccount ?? suggestedDestinationAccount
+        if (!currencyAccount || supportsCurrency(currencyAccount, suggestion.currency)) {
+            setValue('currency', suggestion.currency, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+    }, [accounts, description, filteredCategories, isExpense, setValue])
+
+    const handleCreateSuggestedRule = useCallback(async () => {
+        if (!onCreateRule || !suggestedRuleProposal || !selectedCategory || !categoryStorageType) return
+
+        setIsCreatingSuggestedRule(true)
+        try {
+            const createdRule = await onCreateRule({
+                name: `${suggestedRuleProposal.value} → ${selectedCategory.name}`.slice(0, 100),
+                isActive: true,
+                priority: 10,
+                appliesTo: categoryStorageType,
+                field: 'description',
+                condition: 'contains',
+                value: suggestedRuleProposal.value,
+                categoryId: selectedCategory._id,
+                setType: categoryStorageType,
+                normalizeMerchant:
+                    descriptionSignals.textSuggestion?.merchant ||
+                    merchant.trim() ||
+                    undefined,
+            })
+            setAppliedRuleName(createdRule.name)
+            setCreatedRuleProposalValue(suggestedRuleProposal.value)
+        } catch {
+            // El hook muestra el error y mantenemos la sugerencia disponible para reintentar.
+        } finally {
+            setIsCreatingSuggestedRule(false)
+        }
+    }, [
+        categoryStorageType,
+        descriptionSignals.textSuggestion?.merchant,
+        merchant,
+        onCreateRule,
+        selectedCategory,
+        suggestedRuleProposal,
+    ])
+
     const handleFirstClosingMonthChange = useCallback((value: string) => {
         setFirstClosingMonth(value)
         setFirstMonthError(null)
     }, [])
 
     const handleDestinationAmountChange = useCallback((nextAmount: number) => {
-        setExchangeRecalcMode('exchangeRate')
+        setExchangeRecalcMode('sourceAmount')
         setExchangeDestinationAmount(nextAmount)
         setValue('destinationAmount', nextAmount, { shouldValidate: true, shouldDirty: true })
 
-        if (amount > 0 && nextAmount > 0 && exchangeDestinationCurrency !== currency) {
-            const nextRate = getArsPerUsdRate({
+        if (nextAmount > 0 && exchangeRate > 0 && exchangeDestinationCurrency !== currency) {
+            const nextSourceAmount = getSourceAmountFromRate({
                 sourceCurrency: currency,
-                sourceAmount: amount,
-                destinationCurrency: exchangeDestinationCurrency,
                 destinationAmount: nextAmount,
+                destinationCurrency: exchangeDestinationCurrency,
+                exchangeRate,
             })
-            setExchangeRate(nextRate)
-            setValue('exchangeRate', nextRate, { shouldValidate: true, shouldDirty: true })
+            setValue('amount', nextSourceAmount, { shouldValidate: true, shouldDirty: true })
         }
-    }, [amount, currency, exchangeDestinationCurrency, setValue])
+    }, [currency, exchangeDestinationCurrency, exchangeRate, setValue])
 
     const handleExchangeRateChange = useCallback((nextRate: number) => {
         setExchangeRecalcMode('destinationAmount')
+        setExchangeRateMode('manual')
         setExchangeRate(nextRate)
         setValue('exchangeRate', nextRate || undefined, { shouldValidate: true, shouldDirty: true })
 
         if (amount > 0 && nextRate > 0 && exchangeDestinationCurrency !== currency) {
-            const destAmount = currency === 'ARS' ? amount / nextRate : amount * nextRate
+            const destAmount = getDestinationAmountFromRate({
+                sourceCurrency: currency,
+                sourceAmount: amount,
+                destinationCurrency: exchangeDestinationCurrency,
+                exchangeRate: nextRate,
+            })
             setExchangeDestinationAmount(destAmount)
             setValue('destinationAmount', destAmount, { shouldValidate: true, shouldDirty: true })
         }
@@ -1353,28 +1656,140 @@ export function TransactionDialog({
     const handleSwapExchangeDirection = useCallback(() => {
         if (!canSwapExchangeDirection) return
 
-        const nextSourceCurrency = exchangeDestinationCurrency
-        const nextSourceAmount = exchangeDestinationAmount
-        const nextDestinationCurrency = currency
-        const nextDestinationAmount = amount
+        const inverted = invertManualExchange({
+            sourceAccountId,
+            destinationAccountId,
+            sourceCurrency: currency,
+            sourceAmount: amount,
+            destinationCurrency: exchangeDestinationCurrency,
+            destinationAmount: exchangeDestinationAmount,
+            exchangeRate,
+        })
 
         setExchangeRecalcMode('destinationAmount')
-        setValue('currency', nextSourceCurrency, { shouldValidate: true, shouldDirty: true })
-        setValue('amount', nextSourceAmount, { shouldValidate: true, shouldDirty: true })
-        setExchangeDestinationCurrency(nextDestinationCurrency)
-        setValue('destinationCurrency', nextDestinationCurrency, { shouldValidate: true, shouldDirty: true })
-        setExchangeDestinationAmount(nextDestinationAmount)
-        setValue('destinationAmount', nextDestinationAmount || undefined, { shouldValidate: true, shouldDirty: true })
-        setValue('exchangeRate', exchangeRate || undefined, { shouldValidate: true, shouldDirty: true })
+        setValue('sourceAccountId', inverted.sourceAccountId, { shouldValidate: true, shouldDirty: true })
+        setValue('destinationAccountId', inverted.destinationAccountId, { shouldValidate: true, shouldDirty: true })
+        setValue('currency', inverted.sourceCurrency, { shouldValidate: true, shouldDirty: true })
+        setValue('amount', inverted.sourceAmount, { shouldValidate: true, shouldDirty: true })
+        setExchangeDestinationCurrency(inverted.destinationCurrency)
+        setValue('destinationCurrency', inverted.destinationCurrency, { shouldValidate: true, shouldDirty: true })
+        setExchangeDestinationAmount(inverted.destinationAmount)
+        setValue('destinationAmount', inverted.destinationAmount || undefined, { shouldValidate: true, shouldDirty: true })
+        setValue('exchangeRate', inverted.exchangeRate || undefined, { shouldValidate: true, shouldDirty: true })
     }, [
         amount,
         canSwapExchangeDirection,
         currency,
+        destinationAccountId,
         exchangeDestinationAmount,
         exchangeDestinationCurrency,
         exchangeRate,
         setValue,
+        sourceAccountId,
     ])
+
+    const selectedExchangeRateQuote = useMemo(
+        () => exchangeRateQuotes.find((quote) => quote.house === selectedExchangeRateHouse) ?? null,
+        [exchangeRateQuotes, selectedExchangeRateHouse]
+    )
+
+    const loadExchangeRates = useCallback(async (signal?: AbortSignal) => {
+        setIsExchangeRateLoading(true)
+        setExchangeRateLoadError(null)
+
+        try {
+            const response = await apiJson<ExchangeRatesResponse>(
+                '/api/exchange-rates',
+                { cache: 'no-store', signal }
+            )
+
+            if (signal?.aborted) return
+
+            setExchangeRateQuotes(response.quotes)
+            setSelectedExchangeRateHouse((currentHouse) =>
+                response.quotes.some((quote) => quote.house === currentHouse)
+                    ? currentHouse
+                    : response.quotes[0]?.house ?? 'blue'
+            )
+        } catch {
+            if (signal?.aborted) return
+            setExchangeRateLoadError(
+                'No pudimos actualizar la referencia. Podes cargar la cotizacion manualmente.'
+            )
+        } finally {
+            if (!signal?.aborted) {
+                setIsExchangeRateLoading(false)
+            }
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!open || !isExchange) return
+
+        const controller = new AbortController()
+        void loadExchangeRates(controller.signal)
+        return () => controller.abort()
+    }, [isExchange, loadExchangeRates, open])
+
+    useEffect(() => {
+        if (
+            !isExchange ||
+            exchangeRateMode !== 'automatic' ||
+            !selectedExchangeRateQuote
+        ) {
+            return
+        }
+
+        const nextRate = getQuoteRateForDirection(
+            selectedExchangeRateQuote,
+            currency,
+            exchangeDestinationCurrency
+        )
+        if (nextRate <= 0) return
+
+        setExchangeRate(nextRate)
+        setValue('exchangeRate', nextRate, { shouldValidate: true, shouldDirty: true })
+
+        if (exchangeRecalcMode === 'sourceAmount' && exchangeDestinationAmount > 0) {
+            const nextSourceAmount = getSourceAmountFromRate({
+                sourceCurrency: currency,
+                destinationAmount: exchangeDestinationAmount,
+                destinationCurrency: exchangeDestinationCurrency,
+                exchangeRate: nextRate,
+            })
+            setValue('amount', nextSourceAmount, { shouldValidate: true, shouldDirty: true })
+            return
+        }
+
+        if (amount > 0) {
+            const nextDestinationAmount = getDestinationAmountFromRate({
+                sourceCurrency: currency,
+                sourceAmount: amount,
+                destinationCurrency: exchangeDestinationCurrency,
+                exchangeRate: nextRate,
+            })
+            setExchangeDestinationAmount(nextDestinationAmount)
+            setValue('destinationAmount', nextDestinationAmount, {
+                shouldValidate: true,
+                shouldDirty: true,
+            })
+        }
+    }, [
+        amount,
+        currency,
+        exchangeDestinationAmount,
+        exchangeDestinationCurrency,
+        exchangeRateMode,
+        exchangeRecalcMode,
+        isExchange,
+        selectedExchangeRateQuote,
+        setValue,
+    ])
+
+    const handleExchangeRateHouseChange = useCallback((house: DolarApiQuoteHouse) => {
+        setSelectedExchangeRateHouse(house)
+        setExchangeRateMode('automatic')
+    }, [])
 
     const handleCardPaymentModeChange = useCallback((nextMode: CardPaymentMode) => {
         if (nextMode === cardPaymentMode) return
@@ -1527,7 +1942,7 @@ export function TransactionDialog({
             if (type === 'exchange') {
                 const isValid = await trigger(['amount', 'currency', 'date', 'sourceAccountId', 'destinationAccountId', 'destinationAmount', 'destinationCurrency', 'exchangeRate'])
                 if (!isValid) return false
-                return !exchangeConfigurationError
+                return !exchangeConfigurationError && !exchangeBalanceError
             }
             if (type === 'credit_card_payment') return trigger(['amount', 'currency', 'date', 'sourceAccountId', 'destinationAccountId'])
             if (type === 'adjustment') return trigger(['amount', 'currency', 'date', 'sourceAccountId'])
@@ -1540,6 +1955,7 @@ export function TransactionDialog({
         description,
         descriptionIsOptional,
         exchangeConfigurationError,
+        exchangeBalanceError,
         focusDescriptionField,
         firstClosingMonth,
         hasCrossCurrencyTransferConflict,
@@ -1686,7 +2102,12 @@ export function TransactionDialog({
             isDatePopoverOpen={isDatePopoverOpen}
             descriptionError={errors.description?.message}
             amountError={errors.amount?.message}
+            textSuggestion={effectiveTextSuggestion}
+            similarTransaction={descriptionSignals.similarTransaction}
+            duplicate={descriptionSignals.duplicate}
             onDescriptionChange={handleDescriptionChange}
+            onAcceptDescriptionSuggestion={handleAcceptDescriptionSuggestion}
+            onApplySimilarTransaction={handleApplySimilarTransaction}
             onAmountChange={handleAmountChange}
             onCurrencyChange={handleCurrencyChange}
             onDateChange={handleDateChange}
@@ -1742,8 +2163,8 @@ export function TransactionDialog({
             showDestination={showDestination}
             sourceAccountId={sourceAccountId}
             destinationAccountId={destinationAccountId}
-            suggestedAccounts={suggestedAccounts}
-            destinationAccounts={destinationAccounts}
+            suggestedAccounts={selectableSourceAccounts}
+            destinationAccounts={selectableDestinationAccounts}
             sourceAccountIdError={errors.sourceAccountId?.message}
             destinationAccountIdError={errors.destinationAccountId?.message}
             hasCrossCurrencyTransferConflict={hasCrossCurrencyTransferConflict}
@@ -1751,9 +2172,17 @@ export function TransactionDialog({
             descriptionError={stepErrorsVisible.details || submitCount > 0 ? errors.description?.message : undefined}
             appliedRuleName={appliedRuleName}
             hasCategoryRules={rules.length > 0}
+            textSuggestion={effectiveTextSuggestion}
+            similarTransaction={descriptionSignals.similarTransaction}
+            duplicate={descriptionSignals.duplicate}
             exchangeDestinationAmount={exchangeDestinationAmount}
             exchangeDestinationCurrency={exchangeDestinationCurrency}
             exchangeRate={exchangeRate}
+            exchangeRateMode={exchangeRateMode}
+            exchangeRateQuotes={exchangeRateQuotes}
+            selectedExchangeRateHouse={selectedExchangeRateHouse}
+            isExchangeRateLoading={isExchangeRateLoading}
+            exchangeRateLoadError={exchangeRateLoadError}
             currency={currency}
             destinationAmountError={errors.destinationAmount?.message}
             exchangeRateError={errors.exchangeRate?.message}
@@ -1772,6 +2201,12 @@ export function TransactionDialog({
             amountError={stepErrorsVisible.details || submitCount > 0 ? errors.amount?.message : undefined}
             dateError={stepErrorsVisible.details || submitCount > 0 ? errors.date?.message : undefined}
             exchangeConfigurationError={exchangeConfigurationError}
+            exchangeBalanceError={exchangeBalanceError}
+            exchangeOperationLabel={exchangeOperationLabel}
+            exchangeSourceBalance={exchangeSourceBalance}
+            exchangeDestinationBalance={exchangeDestinationBalance}
+            exchangeSourceResultingBalance={exchangeSourceResultingBalance}
+            exchangeDestinationResultingBalance={exchangeDestinationResultingBalance}
             canSwapExchangeDirection={canSwapExchangeDirection}
             transferSourceLabel={selectedSourceAccount?.name}
             transferDestinationLabel={selectedDestinationAccount?.name}
@@ -1790,6 +2225,8 @@ export function TransactionDialog({
             onDateChange={handleDateChange}
             onDatePopoverOpenChange={setIsDatePopoverOpen}
             onDescriptionChange={handleDescriptionChange}
+            onAcceptDescriptionSuggestion={handleAcceptDescriptionSuggestion}
+            onApplySimilarTransaction={handleApplySimilarTransaction}
             onCardPaymentModeChange={handleCardPaymentModeChange}
             onCardPaymentSelectionChange={handleCardPaymentSelectionChange}
             onPartialCardPaymentAmountChange={handlePartialCardPaymentAmountChange}
@@ -1798,6 +2235,10 @@ export function TransactionDialog({
             onSwitchToExchange={() => handleTypeSelection('exchange')}
             onDestinationAmountChange={handleDestinationAmountChange}
             onExchangeRateChange={handleExchangeRateChange}
+            onExchangeRateHouseChange={handleExchangeRateHouseChange}
+            onRefreshExchangeRates={() => {
+                void loadExchangeRates()
+            }}
             onSwapExchangeDirection={handleSwapExchangeDirection}
             onAdjustmentSignChange={setAdjustmentSign}
         />
@@ -1805,21 +2246,20 @@ export function TransactionDialog({
 
     const renderClassificationStep = () => (
         <TransactionClassificationStep
-            type={type}
             showCategory={showCategory}
             categoryId={categoryId}
             appliedRuleName={appliedRuleName}
             categoryQuery={categoryQuery}
-            showAllCategories={showAllCategories}
             normalizedCategoryQuery={normalizedCategoryQuery}
-            filteredCategories={filteredCategories}
-            recentCategories={recentCategories}
-            suggestedCategories={suggestedCategories}
-            extraCategories={extraCategories}
+            availableCategories={filteredCategories}
+            visibleCategories={visibleCategories}
             selectedCategory={selectedCategory}
+            categoryReason={selectedCategoryRanking?.reason}
+            ruleProposal={suggestedRuleProposal}
+            isCreatingRule={isCreatingSuggestedRule}
             onCategorySelect={handleSelectCategory}
             onCategoryQueryChange={setCategoryQuery}
-            onToggleShowAllCategories={() => setShowAllCategories((previous) => !previous)}
+            onCreateSuggestedRule={onCreateRule ? () => { void handleCreateSuggestedRule() } : undefined}
         />
     )
 
@@ -1905,6 +2345,11 @@ export function TransactionDialog({
                                     {currentStepIndex + 1} / {steps.length}
                                 </span>
                             </div>
+                            <DialogDescription className="sr-only">
+                                {transaction
+                                    ? 'Modificá los datos de la transacción y revisá el resumen antes de guardar.'
+                                    : 'Completá los pasos para registrar una nueva transacción en Finp.'}
+                            </DialogDescription>
                             <div className="flex flex-wrap items-center gap-2 text-[11px]">
                                 <span
                                     className="inline-flex items-center rounded-full border px-2.5 py-1 font-medium"

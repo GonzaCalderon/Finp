@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -8,7 +8,6 @@ import {
     ArrowLeft,
     ArrowLeftRight,
     Banknote,
-    CalendarDays,
     CheckCircle2,
     ChevronDown,
     ChevronUp,
@@ -23,14 +22,12 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { MonthPickerField } from '@/components/shared/MonthPickerField'
 import { Spinner } from '@/components/shared/Spinner'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { useImportBatchDetail } from '@/hooks/useImportBatch'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
@@ -152,10 +149,7 @@ const COLUMNS_BY_TYPE: Record<string, ColDef[]> = {
     ],
 }
 
-const CURRENCY_OPTIONS = [
-    { value: 'ARS', label: 'ARS' },
-    { value: 'USD', label: 'USD' },
-]
+const CURRENCY_CODES = ['ARS', 'USD'] as const
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
@@ -333,40 +327,19 @@ function DatePickerInput({
     disabled?: boolean
     hasError?: boolean
 }) {
-    const [open, setOpen] = useState(false)
     const parsed = parseDateValue(value)
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={disabled}
-                    className={cn(
-                        'h-7 w-full justify-start px-2 text-left text-xs font-normal',
-                        !parsed && 'text-muted-foreground',
-                        hasError && 'border-destructive'
-                    )}
-                >
-                    <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-                    {parsed ? formatDateValue(parsed) : 'Seleccionar fecha'}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                    mode="single"
-                    selected={parsed}
-                    onSelect={(date) => {
-                        onChange(date ?? undefined)
-                        if (date) setOpen(false)
-                    }}
-                    captionLayout="dropdown"
-                    startMonth={new Date(2020, 0)}
-                    endMonth={new Date(2035, 11)}
-                />
-            </PopoverContent>
-        </Popover>
+        <DatePickerField
+            label=""
+            value={parsed}
+            onChange={onChange}
+            disabled={disabled}
+            density="compact"
+            error={hasError ? 'Fecha inválida' : undefined}
+            showErrors={false}
+            className="w-full"
+        />
     )
 }
 
@@ -381,91 +354,30 @@ function MonthPickerInput({
     disabled?: boolean
     hasError?: boolean
 }) {
-    const [open, setOpen] = useState(false)
     const parsed = parseMonthValue(value)
     const currentYear = new Date().getFullYear()
-    const [selectedYear, setSelectedYear] = useState(parsed?.year ?? currentYear)
-    const displayedYear = open ? selectedYear : parsed?.year ?? currentYear
 
     const yearOptions = Array.from({ length: 9 }, (_, index) => currentYear - 2 + index)
-    const monthOptions = Array.from({ length: 12 }, (_, index) => {
-        const month = index + 1
-        return {
-            value: month,
-            label: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(new Date(2026, index, 1)),
-        }
-    })
+    const monthOptions = yearOptions.flatMap((year) =>
+        Array.from({ length: 12 }, (_, index) => ({
+            value: `${year}-${String(index + 1).padStart(2, '0')}`,
+            label: new Intl.DateTimeFormat('es-AR', { month: 'short', year: 'numeric' }).format(
+                new Date(year, index, 1)
+            ),
+        }))
+    )
 
     return (
-        <Popover
-            open={open}
-            onOpenChange={(nextOpen) => {
-                setOpen(nextOpen)
-                if (nextOpen) {
-                    setSelectedYear(parsed?.year ?? currentYear)
-                }
-            }}
-        >
-            <PopoverTrigger asChild>
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={disabled}
-                    className={cn(
-                        'h-7 w-full justify-start px-2 text-left text-xs font-normal',
-                        !parsed && 'text-muted-foreground',
-                        hasError && 'border-destructive'
-                    )}
-                >
-                    <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-                    {parsed ? formatMonthValue(value) : 'Seleccionar mes'}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-3" align="start">
-                <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">Primer pago</span>
-                    <NativeSelect
-                        value={String(displayedYear)}
-                        onChange={(nextYear) => setSelectedYear(Number(nextYear ?? currentYear))}
-                        options={yearOptions.map((year) => ({ value: String(year), label: String(year) }))}
-                        className="w-24"
-                    />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                    {monthOptions.map((month) => {
-                        const isSelected = parsed?.year === displayedYear && parsed.month === month.value
-
-                        return (
-                            <Button
-                                key={month.value}
-                                type="button"
-                                variant={isSelected ? 'default' : 'outline'}
-                                className="h-8 text-xs"
-                                onClick={() => {
-                                    onChange(`${displayedYear}-${String(month.value).padStart(2, '0')}`)
-                                    setOpen(false)
-                                }}
-                            >
-                                {month.label}
-                            </Button>
-                        )
-                    })}
-                </div>
-                <div className="mt-3 flex justify-end">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                            onChange(undefined)
-                            setOpen(false)
-                        }}
-                    >
-                        Limpiar
-                    </Button>
-                </div>
-            </PopoverContent>
-        </Popover>
+        <MonthPickerField
+            label=""
+            value={parsed ? `${parsed.year}-${String(parsed.month).padStart(2, '0')}` : undefined}
+            onValueChange={onChange}
+            options={monthOptions}
+            disabled={disabled}
+            density="compact"
+            error={hasError ? 'Mes inválido' : undefined}
+            showErrors={false}
+        />
     )
 }
 
@@ -534,6 +446,7 @@ function FieldCell({
     hasError?: (field: string) => boolean
 }) {
     const normalizedType = normalizeImportTransactionType(rowType)
+    const inputId = useId()
     const inputClass = cn(
         'w-full h-7 text-xs rounded border px-1.5 bg-background',
         'focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring border-border',
@@ -564,14 +477,14 @@ function FieldCell({
 
         case 'amount':
             return (
-                <Input
-                    type="number"
-                    step="0.01"
-                    className={cn(inputClass, 'text-right')}
-                    value={effectiveData.amount ?? ''}
-                    onChange={(e) =>
-                        onChange({ amount: e.target.value === '' ? undefined : Number(e.target.value) })
-                    }
+                <FormattedAmountInput
+                    id={`${inputId}-amount`}
+                    label=""
+                    value={effectiveData.amount}
+                    currency={effectiveData.currency ?? 'ARS'}
+                    density="compact"
+                    wrapperClassName="w-full"
+                    onValueChangeAction={(amount) => onChange({ amount })}
                     disabled={disabled}
                     placeholder="0"
                 />
@@ -579,16 +492,14 @@ function FieldCell({
 
         case 'destinationAmount':
             return (
-                <Input
-                    type="number"
-                    step="0.01"
-                    className={cn(inputClass, 'text-right')}
-                    value={effectiveData.destinationAmount ?? ''}
-                    onChange={(e) =>
-                        onChange({
-                            destinationAmount: e.target.value === '' ? undefined : Number(e.target.value),
-                        })
-                    }
+                <FormattedAmountInput
+                    id={`${inputId}-destination-amount`}
+                    label=""
+                    value={effectiveData.destinationAmount}
+                    currency={effectiveData.destinationCurrency ?? effectiveData.currency ?? 'ARS'}
+                    density="compact"
+                    wrapperClassName="w-full"
+                    onValueChangeAction={(destinationAmount) => onChange({ destinationAmount })}
                     disabled={disabled}
                     placeholder="0"
                 />
@@ -596,25 +507,27 @@ function FieldCell({
 
         case 'currency':
             return (
-                <NativeSelect
-                    value={effectiveData.currency}
-                    onChange={(v) => onChange({ currency: v })}
-                    options={CURRENCY_OPTIONS}
-                    placeholder="—"
+                <CurrencySelector
+                    label=""
+                    value={(effectiveData.currency ?? 'ARS') as (typeof CURRENCY_CODES)[number]}
+                    onValueChange={(currency) => onChange({ currency })}
+                    options={CURRENCY_CODES}
+                    density="compact"
                     disabled={disabled}
                 />
             )
 
         case 'destinationCurrency': {
-            const filteredOptions = CURRENCY_OPTIONS.filter((option) => option.value !== effectiveData.currency)
+            const filteredOptions = CURRENCY_CODES.filter((currency) => currency !== effectiveData.currency)
             return (
-                <NativeSelect
-                    value={effectiveData.destinationCurrency}
-                    onChange={(v) => onChange({ destinationCurrency: v })}
-                    options={filteredOptions.length > 0 ? filteredOptions : CURRENCY_OPTIONS}
-                    placeholder="—"
+                <CurrencySelector
+                    label=""
+                    value={(effectiveData.destinationCurrency ?? filteredOptions[0] ?? 'USD') as (typeof CURRENCY_CODES)[number]}
+                    onValueChange={(destinationCurrency) => onChange({ destinationCurrency })}
+                    options={filteredOptions.length > 0 ? filteredOptions : CURRENCY_CODES}
+                    density="compact"
                     disabled={disabled}
-                    hasError={hasError?.('destinationCurrency')}
+                    error={hasError?.('destinationCurrency') ? 'Moneda inválida' : undefined}
                 />
             )
         }
@@ -708,15 +621,14 @@ function FieldCell({
 
         case 'exchangeRate':
             return (
-                <Input
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    className={cn(inputClass, 'text-right')}
-                    value={effectiveData.exchangeRate ?? ''}
-                    onChange={(e) =>
-                        onChange({ exchangeRate: e.target.value === '' ? undefined : Number(e.target.value) })
-                    }
+                <FormattedAmountInput
+                    id={`${inputId}-exchange-rate`}
+                    label=""
+                    value={effectiveData.exchangeRate}
+                    currency="ARS"
+                    density="compact"
+                    wrapperClassName="w-full"
+                    onValueChangeAction={(exchangeRate) => onChange({ exchangeRate })}
                     disabled={disabled}
                     placeholder="0"
                 />

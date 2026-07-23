@@ -1,22 +1,19 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { CalendarIcon, Wand2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
-import { Input } from '@/components/ui/input'
+import { motion } from 'framer-motion'
+import { Wand2 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
-import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { CurrencyPillSelector } from '@/components/shared/CurrencyPillSelector'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
+import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { ITransaction, ITransactionRule } from '@/types'
+import type {
+    DescriptionTextSuggestion,
+    DuplicateTransactionWarning,
+    SimilarTransactionSuggestion,
+} from '@/lib/utils/transaction-description-intelligence'
 import { StepSection } from './StepSection'
+import { SmartDescriptionInput } from './SmartDescriptionInput'
 import { SURFACE, getTypeSurface } from './shared-ui'
 
 interface TransactionMainStepProps {
@@ -34,7 +31,12 @@ interface TransactionMainStepProps {
     isDatePopoverOpen: boolean
     descriptionError: string | undefined
     amountError: string | undefined
+    textSuggestion?: DescriptionTextSuggestion
+    similarTransaction?: SimilarTransactionSuggestion
+    duplicate?: DuplicateTransactionWarning
     onDescriptionChange: (value: string) => void
+    onAcceptDescriptionSuggestion: (suggestion: DescriptionTextSuggestion) => void
+    onApplySimilarTransaction: (suggestion: SimilarTransactionSuggestion) => void
     onAmountChange: (nextAmount: number) => void
     onCurrencyChange: (value: TransactionFormInput['currency']) => void
     onDateChange: (date: Date | undefined) => void
@@ -56,7 +58,12 @@ export function TransactionMainStep({
     isDatePopoverOpen,
     descriptionError,
     amountError,
+    textSuggestion,
+    similarTransaction,
+    duplicate,
     onDescriptionChange,
+    onAcceptDescriptionSuggestion,
+    onApplySimilarTransaction,
     onAmountChange,
     onCurrencyChange,
     onDateChange,
@@ -64,6 +71,7 @@ export function TransactionMainStep({
 }: TransactionMainStepProps) {
     const typeSurface = getTypeSurface(type, type === 'expense')
     const typeLabel = type === 'expense' ? 'Gasto' : type === 'income' ? 'Ingreso' : null
+    const currencyOptions = allowedCurrencies.length > 0 ? allowedCurrencies : [currency]
 
     return (
         <StepSection>
@@ -104,17 +112,20 @@ export function TransactionMainStep({
                                 )}
                             </div>
 
-                            <Input
+                            <SmartDescriptionInput
                                 id="description"
                                 value={description}
-                                onChange={(event) => onDescriptionChange(event.target.value)}
+                                onChange={onDescriptionChange}
                                 placeholder={type === 'income' ? 'Ej: Sueldo marzo' : 'Ej: Compra en kiosco'}
-                                aria-invalid={Boolean(descriptionError)}
+                                error={descriptionError}
+                                textSuggestion={textSuggestion}
+                                similarTransaction={similarTransaction}
+                                duplicate={duplicate}
+                                onAcceptSuggestion={onAcceptDescriptionSuggestion}
+                                onApplySimilarTransaction={onApplySimilarTransaction}
                             />
 
-                            {descriptionError ? (
-                                <p className="text-sm text-destructive">{descriptionError}</p>
-                            ) : appliedRuleName && !transaction ? (
+                            {!descriptionError && appliedRuleName && !transaction ? (
                                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <Wand2 className="h-3 w-3" />
                                     Regla aplicada: {appliedRuleName}
@@ -130,6 +141,7 @@ export function TransactionMainStep({
                                 label={isExchange ? 'Monto origen' : 'Monto'}
                                 value={amount}
                                 currency={currency}
+                                showCurrencyFlag
                                 error={undefined}
                                 autoFocus
                                 wrapperClassName="space-y-1.5"
@@ -140,22 +152,12 @@ export function TransactionMainStep({
 
                             <div className="space-y-1.5 md:self-start">
                                 <Label>{isExchange ? 'Moneda origen' : 'Moneda'}</Label>
-                                <Select
+                                <CurrencyPillSelector
                                     value={currency}
-                                    onValueChange={(value) => onCurrencyChange(value as TransactionFormInput['currency'])}
-                                    disabled={allowedCurrencies.length === 1}
-                                >
-                                    <SelectTrigger className="h-10 rounded-[1rem]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {allowedCurrencies.map((allowedCurrency) => (
-                                            <SelectItem key={allowedCurrency} value={allowedCurrency}>
-                                                {allowedCurrency}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    options={currencyOptions}
+                                    readOnly={currencyOptions.length <= 1}
+                                    onValueChange={onCurrencyChange}
+                                />
                                 {allowedCurrencies.length === 1 && (
                                     <p className="text-xs text-muted-foreground">Se fija automaticamente segun la cuenta elegida.</p>
                                 )}
@@ -164,30 +166,12 @@ export function TransactionMainStep({
 
                         {amountError ? <p className="text-sm text-destructive">{amountError}</p> : null}
 
-                        <div className="space-y-2">
-                            <Label>Fecha</Label>
-                            <Popover open={isDatePopoverOpen} onOpenChange={onDatePopoverOpenChange}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="h-10 w-full justify-start rounded-[1rem] text-left font-medium">
-                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                                        {date instanceof Date ? date.toLocaleDateString('es-AR') : 'Selecciona fecha'}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent forceMount className="w-auto p-0">
-                                    <AnimatePresence initial={false}>
-                                        {isDatePopoverOpen && (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                                                animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DURATION.normal, ease: easeSmooth } }}
-                                                exit={{ opacity: 0, y: 6, scale: 0.98, transition: { duration: DURATION.fast, ease: easeSoft } }}
-                                            >
-                                                <Calendar mode="single" selected={date} onSelect={onDateChange} />
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
+                        <DatePickerField
+                            value={date}
+                            isOpen={isDatePopoverOpen}
+                            onOpenChange={onDatePopoverOpenChange}
+                            onChange={onDateChange}
+                        />
                     </div>
                 </motion.div>
             </motion.div>

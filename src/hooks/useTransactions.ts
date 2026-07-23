@@ -24,6 +24,7 @@ export interface TransactionSummary {
     expense: { ars: number; usd: number }
     creditCardExpense: { ars: number; usd: number }
     balance: { ars: number; usd: number }
+    availableBalance: { ars: number; usd: number }
 }
 
 const DEFAULT_SUMMARY: TransactionSummary = {
@@ -31,6 +32,7 @@ const DEFAULT_SUMMARY: TransactionSummary = {
     expense: { ars: 0, usd: 0 },
     creditCardExpense: { ars: 0, usd: 0 },
     balance: { ars: 0, usd: 0 },
+    availableBalance: { ars: 0, usd: 0 },
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {

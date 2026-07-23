@@ -20,10 +20,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarIcon } from 'lucide-react'
 import { commitmentSchema, type CommitmentFormData } from '@/lib/validations'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { Spinner } from '@/components/shared/Spinner'
 import type { IScheduledCommitment, ICategory } from '@/types'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
@@ -66,6 +66,7 @@ export function CommitmentDialog({
 
     const expenseCategories = categories.filter((c) => c.type === 'expense')
     const recurrence = useWatch({ control, name: 'recurrence' })
+    const amount = useWatch({ control, name: 'amount' })
     const currency = useWatch({ control, name: 'currency' })
     const categoryId = useWatch({ control, name: 'categoryId' })
     const applyMode = useWatch({ control, name: 'applyMode' })
@@ -120,22 +121,24 @@ export function CommitmentDialog({
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="amount">Monto</Label>
-                            <Input id="amount" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00"
-                                   {...register('amount', { valueAsNumber: true })} />
-                            {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Moneda</Label>
-                            <Select value={currency} onValueChange={(v) => setValue('currency', v as CommitmentFormData['currency'])}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ARS">ARS</SelectItem>
-                                    <SelectItem value="USD">USD</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <FormattedAmountInput
+                            id="amount"
+                            label="Monto"
+                            value={amount}
+                            currency={currency}
+                            autoFocus
+                            error={errors.amount?.message}
+                            onValueChangeAction={(value) =>
+                                setValue('amount', value, { shouldValidate: true, shouldDirty: true })
+                            }
+                        />
+                        <CurrencySelector
+                            value={currency}
+                            options={['ARS', 'USD'] as const}
+                            onValueChange={(value) =>
+                                setValue('currency', value, { shouldValidate: true, shouldDirty: true })
+                            }
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -191,54 +194,23 @@ export function CommitmentDialog({
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Fecha de inicio <span className="text-destructive">*</span></Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {startDate ? startDate.toLocaleDateString('es-AR') : 'Seleccioná fecha'}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={startDate}
-                                        onSelect={(d) => d && setValue('startDate', d, { shouldValidate: true })}
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            {errors.startDate && <p className="text-xs text-destructive">{errors.startDate.message}</p>}
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Fecha de fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {endDate ? endDate.toLocaleDateString('es-AR') : 'Sin fecha de fin'}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={endDate}
-                                        onSelect={(d) => setValue('endDate', d ?? undefined)}
-                                        disabled={(date) => startDate ? date < startDate : false}
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            {endDate && (
-                                <button
-                                    type="button"
-                                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                                    onClick={() => setValue('endDate', undefined)}
-                                >
-                                    Quitar fecha de fin
-                                </button>
-                            )}
-                        </div>
+                        <DatePickerField
+                            label="Fecha de inicio *"
+                            value={startDate}
+                            error={errors.startDate?.message}
+                            onChange={(date) => {
+                                if (date) setValue('startDate', date, { shouldValidate: true, shouldDirty: true })
+                            }}
+                        />
+                        <DatePickerField
+                            label="Fecha de fin (opcional)"
+                            value={endDate}
+                            minDate={startDate}
+                            clearable
+                            onChange={(date) =>
+                                setValue('endDate', date, { shouldValidate: true, shouldDirty: true })
+                            }
+                        />
                     </div>
 
                     </div>

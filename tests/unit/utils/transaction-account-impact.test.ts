@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    getBalanceBeforeReplacingTransaction,
     getTransactionAccountImpact,
     getTransactionAccountImpacts,
 } from '@/lib/utils/transaction-account-impact'
@@ -131,5 +132,40 @@ describe('transaction account impact', () => {
             delta: -1000,
             direction: 'decrease',
         })
+    })
+
+    it('descuenta el credito anterior al validar una compra de dolares invertida', () => {
+        const available = getBalanceBeforeReplacingTransaction({
+            currentBalance: 10,
+            accountId: 'usd-savings',
+            currency: 'USD',
+            previousTransaction: {
+                type: 'exchange',
+                amount: 12000,
+                currency: 'ARS',
+                sourceAccountId: 'bank',
+                destinationAccountId: 'usd-savings',
+                destinationAmount: 10,
+                destinationCurrency: 'USD',
+            },
+        })
+
+        expect(available).toBe(0)
+    })
+
+    it('devuelve el debito anterior al saldo al editar sobre la misma cuenta', () => {
+        const available = getBalanceBeforeReplacingTransaction({
+            currentBalance: 3000,
+            accountId: 'bank',
+            currency: 'ARS',
+            previousTransaction: {
+                type: 'expense',
+                amount: 2000,
+                currency: 'ARS',
+                sourceAccountId: 'bank',
+            },
+        })
+
+        expect(available).toBe(5000)
     })
 })

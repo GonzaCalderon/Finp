@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
+    getDescriptionAlias,
     getRecentCategoryIds,
     getStoredAccountId,
     getStoredExpensePaymentMethod,
     getStoredTransactionType,
+    persistDescriptionAlias,
     persistTransactionDialogPrefs,
 } from '@/components/shared/transaction-dialog-prefs'
 
@@ -50,5 +52,21 @@ describe('transaction-dialog-prefs', () => {
         expect(getStoredTransactionType()).toBe('transfer')
         expect(getStoredAccountId('transfer:source')).toBe('bank-1')
         expect(getStoredAccountId('transfer:destination')).toBe('wallet-1')
+    })
+
+    it('recuerda una correccion aceptada como alias local', () => {
+        persistDescriptionAlias('Supermeracdo', 'Supermercado', 'Mercado Central')
+
+        expect(getDescriptionAlias('supermerácdo')).toEqual({
+            description: 'Supermercado',
+            merchant: 'Mercado Central',
+        })
+    })
+
+    it('ignora alias vacios o que no cambian el texto', () => {
+        persistDescriptionAlias('', 'Supermercado')
+        persistDescriptionAlias('Supermercado', 'supermercado')
+
+        expect(getDescriptionAlias('Supermercado')).toBeUndefined()
     })
 })

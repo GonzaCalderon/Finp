@@ -5,6 +5,7 @@ import { Check } from 'lucide-react'
 import { SpaceAmountInline, SpaceInitialsAvatar, SpaceTonePill } from '@/components/spaces/SpaceUi'
 import { SpaceDialogChoice, SpaceDialogField, SpaceDialogPanel, SpaceDialogSectionEyebrow } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { Input } from '@/components/ui/input'
+import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { SPACE_ROLE_LABELS, extractId } from '@/lib/utils/spaces'
 import { applySmartFixed, applySmartPercentage, round2 } from '@/lib/utils/space-split'
 import { cn } from '@/lib/utils'
@@ -535,10 +536,11 @@ export function SpaceSplitConfigurator({
                                             : ''
 
                                     return (
-                                        <SpaceDialogField
+                                        <FormattedAmountInput
                                             key={participantId}
+                                            id={`split-amount-${participantId}`}
                                             label={`${participant.displayName} · ${currency}`}
-                                            hint={
+                                            helperText={
                                                 lastResidual
                                                     ? 'Resto · Completa el total'
                                                     : isSingleParticipant
@@ -549,20 +551,14 @@ export function SpaceSplitConfigurator({
                                                                 ? 'Calculado'
                                                                 : 'Auto'
                                             }
-                                        >
-                                            <Input
-                                                value={displayValue}
-                                                onChange={(event) =>
-                                                    handleSmartFixedChange(
-                                                        participantId,
-                                                        event.target.value
-                                                    )
-                                                }
-                                                disabled={lastResidual || isSingleParticipant}
-                                                inputMode="decimal"
-                                                placeholder="22500"
-                                            />
-                                        </SpaceDialogField>
+                                            value={displayValue ? Number(displayValue) : undefined}
+                                            currency={currency}
+                                            disabled={lastResidual || isSingleParticipant}
+                                            placeholder="22.500"
+                                            onValueChangeAction={(value) =>
+                                                handleSmartFixedChange(participantId, String(value))
+                                            }
+                                        />
                                     )
                                 })}
                             </div>

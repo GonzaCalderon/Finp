@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { CalendarRange, Save, UserPlus, X } from 'lucide-react'
+import { CalendarRange, Save, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -20,6 +20,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
+import { CurrencyMultiSelector } from '@/components/shared/CurrencyMultiSelector'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
 import { COMMON_CURRENCIES } from '@/lib/constants'
 import { spaceSchema, type SpaceFormData } from '@/lib/validations'
 import {
@@ -35,7 +37,6 @@ import {
     SpaceDialogField,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { SpaceCategoryManager } from '@/components/spaces/dialogs/SpaceCategoryManager'
-import { cn } from '@/lib/utils'
 import type { ISpaceParticipant } from '@/types'
 
 const TYPE_OPTIONS = Object.entries(SPACE_TYPE_LABELS) as Array<[SpaceFormData['type'], string]>
@@ -114,24 +115,6 @@ export function EditSpaceSettingsDialog({
             return next
         })
         setError(null)
-    }
-
-    const toggleCurrency = (currency: string) => {
-        setForm((previous) => {
-            const exists = previous.currencies.includes(currency)
-            const currencies = exists
-                ? previous.currencies.filter((item) => item !== currency)
-                : [...previous.currencies, currency]
-            const safeCurrencies = currencies.length > 0 ? currencies : [currency]
-
-            return {
-                ...previous,
-                currencies: safeCurrencies,
-                reportingCurrency: safeCurrencies.includes(previous.reportingCurrency)
-                    ? previous.reportingCurrency
-                    : safeCurrencies[0],
-            }
-        })
     }
 
     const addCustomCurrency = () => {
@@ -358,27 +341,20 @@ export function EditSpaceSettingsDialog({
                             </SettingSection>
 
                             <SettingSection title="Monedas">
-                                <div className="flex flex-wrap gap-2">
-                                    {availableCurrencies.map((currency) => {
-                                        const active = form.currencies.includes(currency)
-                                        return (
-                                            <button
-                                                key={currency}
-                                                type="button"
-                                                onClick={() => toggleCurrency(currency)}
-                                                className={cn(
-                                                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-                                                    active
-                                                        ? 'border-primary/20 bg-primary/10 text-primary'
-                                                        : 'border-border bg-background/80 text-muted-foreground hover:text-foreground'
-                                                )}
-                                            >
-                                                {currency}
-                                                {active && form.currencies.length > 1 ? <X className="h-3 w-3" /> : null}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
+                                <CurrencyMultiSelector
+                                    value={form.currencies}
+                                    options={availableCurrencies}
+                                    onValueChange={(currencies) =>
+                                        setForm((previous) => ({
+                                            ...previous,
+                                            currencies,
+                                            reportingCurrency: currencies.includes(previous.reportingCurrency)
+                                                ? previous.reportingCurrency
+                                                : currencies[0],
+                                        }))
+                                    }
+                                    label="Monedas del espacio"
+                                />
                                 <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.5fr)]">
                                     <div className="flex gap-2">
                                         <Input
@@ -398,23 +374,12 @@ export function EditSpaceSettingsDialog({
                                             Agregar
                                         </Button>
                                     </div>
-                                    <SpaceDialogField label="Moneda de reporte">
-                                        <Select
-                                            value={form.reportingCurrency}
-                                            onValueChange={(value) => setField('reportingCurrency', value)}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {form.currencies.map((currency) => (
-                                                    <SelectItem key={currency} value={currency}>
-                                                        {currency}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </SpaceDialogField>
+                                    <CurrencySelector
+                                        value={form.reportingCurrency}
+                                        options={form.currencies}
+                                        onValueChange={(currency) => setField('reportingCurrency', currency)}
+                                        label="Moneda de reporte"
+                                    />
                                 </div>
                             </SettingSection>
 

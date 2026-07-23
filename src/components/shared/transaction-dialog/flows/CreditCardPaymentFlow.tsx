@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check } from 'lucide-react'
+import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
+import { CurrencyPillSelector } from '@/components/shared/CurrencyPillSelector'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { DURATION, easeSmooth, easeSoft, staggerItem } from '@/lib/utils/animations'
 import type { TransactionFormInput } from '@/lib/validations'
@@ -133,6 +135,7 @@ export function CreditCardPaymentFlow({
                 value: fmtCurrency(arsSummaryItem.pending, 'ARS'),
                 note: arsSummaryItem.paid > 0 ? `Ya pagado ${fmtCurrency(arsSummaryItem.paid, 'ARS')}` : 'Paga el pendiente en pesos.',
                 wide: false,
+                currencies: ['ARS'] as TransactionFormInput['currency'][],
             }
             : null,
         allowCardPaymentFullMode && usdSummaryItem && allowedCurrencies.includes('USD') && usdSummaryItem.pending > 0
@@ -142,6 +145,7 @@ export function CreditCardPaymentFlow({
                 value: fmtCurrency(usdSummaryItem.pending, 'USD'),
                 note: usdSummaryItem.paid > 0 ? `Ya pagado ${fmtCurrency(usdSummaryItem.paid, 'USD')}` : 'Paga el pendiente en dolares.',
                 wide: false,
+                currencies: ['USD'] as TransactionFormInput['currency'][],
             }
             : null,
         allowCardPaymentFullMode && canUseDualCardPayment && arsSummaryItem && usdSummaryItem && arsSummaryItem.pending > 0 && usdSummaryItem.pending > 0
@@ -151,9 +155,17 @@ export function CreditCardPaymentFlow({
                 value: `${fmtCurrency(arsSummaryItem.pending, 'ARS')} + ${fmtCurrency(usdSummaryItem.pending, 'USD')}`,
                 note: 'Registra ambas monedas en una sola confirmacion.',
                 wide: true,
+                currencies: ['ARS', 'USD'] as TransactionFormInput['currency'][],
             }
             : null,
-    ].filter((option): option is { id: CardPaymentSelection; title: string; value: string; note: string; wide: boolean } => Boolean(option))
+    ].filter((option): option is {
+        id: CardPaymentSelection
+        title: string
+        value: string
+        note: string
+        wide: boolean
+        currencies: TransactionFormInput['currency'][]
+    } => Boolean(option))
 
     return (
         <motion.div
@@ -252,7 +264,18 @@ export function CreditCardPaymentFlow({
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="min-w-0">
-                                                        <p className="text-sm font-semibold">{option.title}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="flex items-center">
+                                                                {option.currencies.map((optionCurrency, index) => (
+                                                                    <CurrencyFlagIcon
+                                                                        key={optionCurrency}
+                                                                        currency={optionCurrency}
+                                                                        className={index === 0 ? 'h-5 w-5' : '-ml-1.5 h-5 w-5 ring-2 ring-background'}
+                                                                    />
+                                                                ))}
+                                                            </span>
+                                                            <p className="text-sm font-semibold">{option.title}</p>
+                                                        </div>
                                                         <p className="mt-1 text-sm font-semibold tabular-nums">{option.value}</p>
                                                     </div>
                                                     {selected && (
@@ -295,7 +318,10 @@ export function CreditCardPaymentFlow({
                                             style={SURFACE.inner}
                                         >
                                             <div className="flex items-start justify-between gap-2">
-                                                <p className="pt-0.5 text-[0.95rem] font-semibold leading-none sm:text-sm">{option.currency}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <CurrencyFlagIcon currency={option.currency} className="h-5 w-5" />
+                                                    <p className="pt-0.5 text-[0.95rem] font-semibold leading-none sm:text-sm">{option.currency}</p>
+                                                </div>
                                                 <p className="min-w-0 text-right text-[10px] leading-tight text-muted-foreground sm:text-[11px]">
                                                     <span className="sm:hidden">{fmtCurrency(option.pending, option.currency)}</span>
                                                     <span className="hidden sm:inline">Pendiente {fmtCurrency(option.pending, option.currency)}</span>
@@ -307,10 +333,11 @@ export function CreditCardPaymentFlow({
                                                 label={`Monto parcial ${option.currency}`}
                                                 value={option.value}
                                                 currency={option.currency}
+                                                showCurrencyFlag
                                                 placeholder="0"
                                                 labelClassName="sr-only"
                                                 wrapperClassName="min-w-0 space-y-0"
-                                                inputClassName="h-9 rounded-[0.85rem] pl-8 text-[1rem] font-semibold tracking-tight sm:h-10 sm:rounded-[0.95rem] sm:pl-9 sm:text-[1.05rem]"
+                                                inputClassName="h-9 rounded-[0.85rem] text-[1rem] font-semibold tracking-tight sm:h-10 sm:rounded-[0.95rem] sm:text-[1.05rem]"
                                                 prefixClassName="left-2.5 text-[11px] sm:left-3 sm:text-[13px]"
                                                 onValueChangeAction={(nextAmount) => onPartialCardPaymentAmountChange(option.currency, nextAmount)}
                                             />
@@ -320,25 +347,11 @@ export function CreditCardPaymentFlow({
                             ) : (
                                 <>
                                     {allowedCurrencies.length > 1 && (
-                                        <div className="flex flex-wrap gap-2">
-                                            {allowedCurrencies.map((c) => {
-                                                const selected = currency === c
-                                                return (
-                                                    <button
-                                                        key={c}
-                                                        type="button"
-                                                        className="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
-                                                        style={{
-                                                            borderColor: selected ? SURFACE.selected.borderColor : SURFACE.inner.borderColor,
-                                                            background: selected ? SURFACE.selected.background : 'transparent',
-                                                        }}
-                                                        onClick={() => onCurrencyChange(c)}
-                                                    >
-                                                        {c}
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
+                                        <CurrencyPillSelector
+                                            value={currency}
+                                            options={allowedCurrencies}
+                                            onValueChange={onCurrencyChange}
+                                        />
                                     )}
 
                                     <FormattedAmountInput
@@ -346,6 +359,7 @@ export function CreditCardPaymentFlow({
                                         label="Monto parcial"
                                         value={amount}
                                         currency={currency}
+                                        showCurrencyFlag
                                         error={showErrors ? amountError : undefined}
                                         wrapperClassName="space-y-1.5"
                                         inputClassName="h-10 rounded-[1rem] text-[1.2rem] font-semibold tracking-tight md:text-[1.1rem]"

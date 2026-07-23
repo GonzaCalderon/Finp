@@ -1,7 +1,11 @@
 import type { Currency } from '@/lib/constants'
 import { normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
 
-type RefLike = string | { _id?: { toString(): string } } | null | undefined
+type RefLike =
+    | string
+    | { toString(): string; _id?: { toString(): string } }
+    | null
+    | undefined
 
 type TransactionImpactLike = {
     type?: string | null
@@ -25,7 +29,7 @@ export type TransactionAccountImpact = {
 function getRefId(value: RefLike): string {
     if (!value) return ''
     if (typeof value === 'string') return value
-    return value._id?.toString() ?? ''
+    return value._id?.toString() ?? value.toString()
 }
 
 function getDirection(delta: number): TransactionAccountImpactDirection {
@@ -118,4 +122,24 @@ export function getTransactionAccountImpact(
     }
 
     return impacts[0] ?? null
+}
+
+export function getBalanceBeforeReplacingTransaction({
+    currentBalance,
+    previousTransaction,
+    accountId,
+    currency,
+}: {
+    currentBalance: number
+    previousTransaction?: TransactionImpactLike | null
+    accountId: string
+    currency: Currency
+}) {
+    if (!previousTransaction) return currentBalance
+
+    const previousImpact = getTransactionAccountImpacts(previousTransaction).find(
+        (item) => item.accountId === accountId && item.currency === currency
+    )
+
+    return currentBalance - (previousImpact?.delta ?? 0)
 }

@@ -12,15 +12,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
+import { CurrencySelector } from '@/components/shared/CurrencySelector'
 import { COMMON_CURRENCIES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { CreateDebtPayload } from '@/hooks/useDebts'
@@ -144,19 +138,11 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, lockCounterp
                             error={errors.amount}
                             onValueChangeAction={setAmountValue}
                         />
-                        <div className="space-y-1.5">
-                            <Label>Moneda</Label>
-                            <Select value={currency} onValueChange={setCurrency}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {COMMON_CURRENCIES.map((c) => (
-                                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <CurrencySelector
+                            value={currency}
+                            options={COMMON_CURRENCIES}
+                            onValueChange={setCurrency}
+                        />
                     </div>
 
                     <DatePickerField
