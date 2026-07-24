@@ -87,6 +87,7 @@ describe('TransactionRuleDialog simulation', () => {
             />
         )
 
+        await user.click(screen.getByRole('tab', { name: /3\. probar/i }))
         const simulateButton = await screen.findByRole('button', {
             name: /probar regla/i,
         })
@@ -97,5 +98,52 @@ describe('TransactionRuleDialog simulation', () => {
         expect(onSubmit).not.toHaveBeenCalled()
         expect(await screen.findByText(/la regla coincide y se aplicaría/i)).toBeInTheDocument()
         expect(screen.getByText(/se superpone con “otra regla”/i)).toBeInTheDocument()
+    })
+
+    it('prefills a suggestion and guides the user through the three decisions', async () => {
+        const user = userEvent.setup()
+
+        render(
+            <TransactionRuleDialog
+                open
+                onOpenChange={() => undefined}
+                rule={null}
+                initialValues={{
+                    name: 'Farmacity → Salud',
+                    appliesTo: 'expense',
+                    field: 'merchant',
+                    condition: 'equals',
+                    value: 'Farmacity',
+                    categoryId: '64b000000000000000000001',
+                }}
+                categories={[
+                    {
+                        _id: new Types.ObjectId('64b000000000000000000001'),
+                        userId: new Types.ObjectId(),
+                        name: 'Salud',
+                        type: 'expense',
+                        color: '#0ea5e9',
+                        icon: 'heart',
+                        isDefault: false,
+                        isArchived: false,
+                        sortOrder: 0,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    },
+                ]}
+                onSubmit={vi.fn()}
+                onSimulate={vi.fn()}
+            />
+        )
+
+        expect(screen.getByDisplayValue('Farmacity → Salud')).toBeInTheDocument()
+        expect(screen.getByText(/sugerida por finp/i)).toBeInTheDocument()
+
+        await user.click(screen.getByRole('tab', { name: /2\. acciones/i }))
+        expect(await screen.findByText(/qué completa finp/i)).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Salud' })).toBeInTheDocument()
+
+        await user.click(screen.getByRole('button', { name: /probar y activar/i }))
+        expect(await screen.findByText(/movimiento de ejemplo/i)).toBeInTheDocument()
     })
 })

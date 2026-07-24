@@ -1,19 +1,34 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
+    Activity,
+    ArrowRight,
+    CheckCircle2,
+    FileInput,
+    Layers3,
+    Lightbulb,
     Plus,
+    ReceiptText,
+    Sparkles,
     Wand2,
-    Pencil,
-    Trash2,
-    Copy,
-    ChevronUp,
-    ChevronDown,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card'
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from '@/components/ui/tabs'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -25,252 +40,73 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { TransactionRuleDialog } from '@/components/shared/TransactionRuleDialog'
+import {
+    TransactionRuleDialog,
+    type RuleFormValues,
+} from '@/components/shared/TransactionRuleDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { RuleCard } from '@/components/rules/RuleCard'
+import { RuleSuggestionCard } from '@/components/rules/RuleSuggestionCard'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { useCategories } from '@/hooks/useCategories'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
-import type { ITransactionRule, ICategory } from '@/types'
+import { fadeIn, staggerContainer } from '@/lib/utils/animations'
+import type { TransactionRuleSuggestion } from '@/lib/utils/rule-suggestions'
+import type { ITransactionRule } from '@/types'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+type RuleFilter = 'active' | 'all' | 'paused'
 
-type RuleFormValues = {
-    name: string
-    isActive: boolean
-    priority: number
-    appliesTo: 'expense' | 'income' | 'any'
-    field: 'description' | 'merchant'
-    condition: 'contains' | 'equals' | 'starts_with'
-    value: string
-    categoryId?: string
-    setType?: '' | 'expense' | 'income'
-    normalizeMerchant?: string
+function getReferenceId(value: unknown) {
+    if (!value) return undefined
+    if (typeof value === 'string') return value
+    if (typeof value === 'object' && '_id' in value) {
+        return (value as { _id?: { toString(): string } })._id?.toString()
+    }
+    return String(value)
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const APPLIES_TO_LABELS: Record<string, string> = {
-    expense: 'gastos',
-    income: 'ingresos',
-    any: 'cualquier tipo',
-}
-
-const FIELD_LABELS: Record<string, string> = {
-    description: 'descripción',
-    merchant: 'comercio',
-}
-
-const CONDITION_LABELS: Record<string, string> = {
-    contains: 'contiene',
-    equals: 'es igual a',
-    starts_with: 'empieza con',
-}
-
-// ─── Rule Card ────────────────────────────────────────────────────────────────
-
-function RuleCard({
-    rule,
-    categories,
-    onEdit,
-    onDelete,
-    onToggle,
-    onDuplicate,
+function SummaryMetric({
+    label,
+    value,
+    hint,
+    icon: Icon,
 }: {
-    rule: ITransactionRule
-    categories: ICategory[]
-    onEdit: (rule: ITransactionRule) => void
-    onDelete: (rule: ITransactionRule) => void
-    onToggle: (id: string, isActive: boolean) => void
-    onDuplicate: (rule: ITransactionRule) => void
+    label: string
+    value: string
+    hint: string
+    icon: React.ElementType
 }) {
-    const categoryObj = categories.find(
-        (c) =>
-            c._id.toString() ===
-            ((rule.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
-                rule.categoryId?.toString())
-    )
-
-    const appliesToLabel = APPLIES_TO_LABELS[rule.appliesTo] ?? rule.appliesTo
-    const fieldLabel = FIELD_LABELS[rule.field] ?? rule.field
-    const conditionLabel = CONDITION_LABELS[rule.condition] ?? rule.condition
-    const matchCount = rule.matchCount ?? 0
-    const lastMatchedLabel = rule.lastMatchedAt
-        ? new Intl.DateTimeFormat('es-AR', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-        }).format(new Date(rule.lastMatchedAt))
-        : null
-
     return (
-        <motion.div
-            variants={staggerItem}
-            className="rounded-2xl border p-4 transition-opacity"
-            style={{
-                borderColor: rule.isActive ? 'var(--border)' : 'var(--border)',
-                opacity: rule.isActive ? 1 : 0.55,
-                background: 'var(--card)',
-            }}
-        >
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className="text-sm font-medium truncate">{rule.name}</span>
-                        {!rule.isActive && (
-                            <span
-                                className="text-xs rounded-full px-2 py-0.5"
-                                style={{
-                                    background: 'var(--muted)',
-                                    color: 'var(--muted-foreground)',
-                                }}
-                            >
-                                Inactiva
-                            </span>
-                        )}
-                        {rule.priority > 0 && (
-                            <span
-                                className="text-xs rounded-full px-2 py-0.5"
-                                style={{
-                                    background: 'rgba(56,189,248,0.10)',
-                                    color: 'var(--sky)',
-                                }}
-                            >
-                                P{rule.priority}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Natural language */}
-                    <p className="text-sm text-muted-foreground leading-snug">
-                        <span
-                            className="rounded px-1.5 py-0.5 text-xs mr-1"
-                            style={{
-                                background: rule.appliesTo === 'any'
-                                    ? 'rgba(148,163,184,0.12)'
-                                    : rule.appliesTo === 'expense'
-                                    ? 'rgba(239,68,68,0.10)'
-                                    : 'rgba(16,185,129,0.10)',
-                                color: rule.appliesTo === 'any'
-                                    ? 'var(--muted-foreground)'
-                                    : rule.appliesTo === 'expense'
-                                    ? '#DC2626'
-                                    : '#059669',
-                            }}
-                        >
-                            {appliesToLabel.charAt(0).toUpperCase() + appliesToLabel.slice(1)}
-                        </span>
-                        Si {fieldLabel}{' '}
-                        <span className="text-foreground font-medium">{conditionLabel}</span>{' '}
-                        &ldquo;{rule.value}&rdquo;
-                    </p>
-
-                    {/* Actions */}
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {categoryObj && (
-                            <span
-                                className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 font-medium"
-                                style={{
-                                    background: categoryObj.color
-                                        ? `${categoryObj.color}22`
-                                        : 'rgba(56,189,248,0.12)',
-                                    color: categoryObj.color || 'var(--sky)',
-                                }}
-                            >
-                                <span
-                                    className="w-1.5 h-1.5 rounded-full"
-                                    style={{ background: categoryObj.color || 'var(--sky)' }}
-                                />
-                                {categoryObj.name}
-                            </span>
-                        )}
-                        {rule.setType && (
-                            <span
-                                className="inline-flex text-xs rounded-full px-2.5 py-1"
-                                style={{
-                                    background:
-                                        rule.setType === 'expense'
-                                            ? 'rgba(239,68,68,0.10)'
-                                            : 'rgba(16,185,129,0.10)',
-                                    color: rule.setType === 'expense' ? '#DC2626' : '#059669',
-                                }}
-                            >
-                                Tipo: {rule.setType === 'expense' ? 'Gasto' : 'Ingreso'}
-                            </span>
-                        )}
-                        {rule.normalizeMerchant && (
-                            <span
-                                className="inline-flex text-xs rounded-full px-2.5 py-1"
-                                style={{
-                                    background: 'var(--muted)',
-                                    color: 'var(--muted-foreground)',
-                                }}
-                            >
-                                Comercio: {rule.normalizeMerchant}
-                            </span>
-                        )}
-                        {!categoryObj && !rule.setType && !rule.normalizeMerchant && (
-                            <span
-                                className="text-xs"
-                                style={{ color: 'var(--muted-foreground)' }}
-                            >
-                                Sin acciones configuradas
-                            </span>
-                        )}
-                    </div>
-
-                    <p className="mt-2 text-xs text-muted-foreground">
-                        {matchCount === 0
-                            ? 'Todavía no registró coincidencias'
-                            : `${matchCount} coincidencia${matchCount === 1 ? '' : 's'}${
-                                lastMatchedLabel ? ` · Última: ${lastMatchedLabel}` : ''
-                            }`}
-                    </p>
+        <Card size="sm" className="gap-0 py-0">
+            <CardContent className="flex items-start justify-between gap-3 px-4 py-4">
+                <div>
+                    <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                    <p className="mt-1.5 text-2xl font-semibold tracking-tight">{value}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
                 </div>
-
-                {/* Actions menu */}
-                <div className="flex items-center gap-1 shrink-0">
-                    <Switch
-                        checked={rule.isActive}
-                        onCheckedChange={(checked) => onToggle(rule._id.toString(), checked)}
-                        aria-label={rule.isActive ? 'Desactivar regla' : 'Activar regla'}
-                        className="mr-1"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => onDuplicate(rule)}
-                        className="rounded-lg p-2 transition-colors hover:bg-muted"
-                        title="Duplicar regla"
-                        style={{ color: 'var(--muted-foreground)' }}
-                    >
-                        <Copy size={14} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onEdit(rule)}
-                        className="rounded-lg p-2 transition-colors hover:bg-muted"
-                        title="Editar regla"
-                        style={{ color: 'var(--muted-foreground)' }}
-                    >
-                        <Pencil size={14} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onDelete(rule)}
-                        className="rounded-lg p-2 transition-colors hover:bg-muted"
-                        title="Eliminar regla"
-                        style={{ color: 'var(--muted-foreground)' }}
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--sky)_10%,transparent)] text-[var(--sky-dark)]">
+                    <Icon className="h-4 w-4" />
                 </div>
-            </div>
-        </motion.div>
+            </CardContent>
+        </Card>
     )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+function RulesLoadingState() {
+    return (
+        <div className="mx-auto max-w-6xl space-y-6 px-4 py-5 md:px-6 md:py-7">
+            <Skeleton className="h-56 rounded-[28px]" />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[1, 2, 3, 4].map((item) => (
+                    <Skeleton key={item} className="h-28 rounded-xl" />
+                ))}
+            </div>
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-72 rounded-2xl" />
+        </div>
+    )
+}
 
 function RulesPageInner() {
     const router = useRouter()
@@ -280,46 +116,110 @@ function RulesPageInner() {
     const {
         rules,
         loading,
+        suggestions,
+        suggestionsLoading,
         createRule,
         updateRule,
         toggleRule,
         deleteRule,
+        dismissSuggestion,
+        fetchSuggestions,
         simulateRule,
-    } =
-        useTransactionRules()
+    } = useTransactionRules()
     const { categories } = useCategories()
-    const { error: toastError } = useToast()
+    const { success, error: toastError } = useToast()
 
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingRule, setEditingRule] = useState<ITransactionRule | null>(null)
+    const [initialValues, setInitialValues] =
+        useState<Partial<RuleFormValues> | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<ITransactionRule | null>(null)
-    const [showInactive, setShowInactive] = useState(false)
+    const [filter, setFilter] = useState<RuleFilter>('active')
 
-    const activeRules = rules.filter((r) => r.isActive)
-    const inactiveRules = rules.filter((r) => !r.isActive)
+    const activeRules = useMemo(
+        () => rules.filter((rule) => rule.isActive),
+        [rules]
+    )
+    const pausedRules = useMemo(
+        () => rules.filter((rule) => !rule.isActive),
+        [rules]
+    )
+    const visibleRules =
+        filter === 'active'
+            ? activeRules
+            : filter === 'paused'
+                ? pausedRules
+                : rules
+    const totalMatches = rules.reduce(
+        (total, rule) => total + (rule.matchCount ?? 0),
+        0
+    )
+    const monthStart = new Date()
+    monthStart.setDate(1)
+    monthStart.setHours(0, 0, 0, 0)
+    const usedThisMonth = rules.filter(
+        (rule) =>
+            rule.lastMatchedAt &&
+            new Date(rule.lastMatchedAt).getTime() >= monthStart.getTime()
+    ).length
 
     useEffect(() => {
         if (searchParams.get('create') !== '1') return
         setEditingRule(null)
+        setInitialValues(null)
         setDialogOpen(true)
         router.replace('/rules', { scroll: false })
     }, [router, searchParams])
 
     const handleOpenCreate = () => {
         setEditingRule(null)
+        setInitialValues(null)
         setDialogOpen(true)
     }
 
     const handleEdit = (rule: ITransactionRule) => {
         setEditingRule(rule)
+        setInitialValues(null)
         setDialogOpen(true)
+    }
+
+    const handleReviewSuggestion = (suggestion: TransactionRuleSuggestion) => {
+        const category = categories.find(
+            (item) => item._id.toString() === suggestion.categoryId
+        )
+        setEditingRule(null)
+        setInitialValues({
+            name: `${suggestion.value} → ${category?.name ?? 'categoría habitual'}`.slice(0, 100),
+            isActive: true,
+            priority: 20,
+            appliesTo: suggestion.appliesTo,
+            field: suggestion.field,
+            condition: suggestion.condition,
+            value: suggestion.value,
+            categoryId: suggestion.categoryId,
+            setType: '',
+            normalizeMerchant: suggestion.normalizeMerchant ?? '',
+        })
+        setDialogOpen(true)
+    }
+
+    const handleDismissSuggestion = async (
+        suggestion: TransactionRuleSuggestion
+    ) => {
+        try {
+            await dismissSuggestion(suggestion.key)
+            success('Sugerencia descartada')
+        } catch (error) {
+            toastError(
+                error instanceof Error
+                    ? error.message
+                    : 'No se pudo descartar la sugerencia'
+            )
+        }
     }
 
     const handleDuplicate = async (rule: ITransactionRule) => {
         try {
-            const categoryId =
-                (rule.categoryId as { _id?: { toString(): string } })?._id?.toString() ??
-                rule.categoryId?.toString()
             await createRule({
                 name: `${rule.name} (copia)`,
                 isActive: false,
@@ -328,12 +228,14 @@ function RulesPageInner() {
                 field: rule.field,
                 condition: rule.condition,
                 value: rule.value,
-                categoryId: categoryId as unknown as import('mongoose').Types.ObjectId,
+                categoryId: getReferenceId(rule.categoryId) as unknown as ITransactionRule['categoryId'],
                 setType: rule.setType,
                 normalizeMerchant: rule.normalizeMerchant,
             })
-        } catch (err) {
-            toastError(err instanceof Error ? err.message : 'Error al duplicar regla')
+        } catch (error) {
+            toastError(
+                error instanceof Error ? error.message : 'Error al duplicar regla'
+            )
         }
     }
 
@@ -347,13 +249,21 @@ function RulesPageInner() {
             }
 
             if (editingRule) {
-                await updateRule(editingRule._id.toString(), payload as Partial<ITransactionRule>)
+                await updateRule(
+                    editingRule._id.toString(),
+                    payload as Partial<ITransactionRule>
+                )
             } else {
                 await createRule(payload as Partial<ITransactionRule>)
             }
+
             setDialogOpen(false)
-        } catch (err) {
-            toastError(err instanceof Error ? err.message : 'Error al guardar regla')
+            setInitialValues(null)
+            await fetchSuggestions()
+        } catch (error) {
+            toastError(
+                error instanceof Error ? error.message : 'Error al guardar regla'
+            )
         }
     }
 
@@ -361,139 +271,334 @@ function RulesPageInner() {
         if (!deleteTarget) return
         try {
             await deleteRule(deleteTarget._id.toString())
-        } catch (err) {
-            toastError(err instanceof Error ? err.message : 'Error al eliminar regla')
+        } catch (error) {
+            toastError(
+                error instanceof Error ? error.message : 'Error al eliminar regla'
+            )
         } finally {
             setDeleteTarget(null)
         }
     }
 
-    return (
-        <div className="flex-1 p-4 md:p-6 pb-24 md:pb-6 max-w-2xl mx-auto w-full">
-            <motion.div {...fadeIn} className="space-y-6">
+    if (loading) return <RulesLoadingState />
 
-                {/* Header */}
-                <div className="flex items-center justify-between">
+    return (
+        <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-5 pb-24 md:px-6 md:py-7 md:pb-8">
+            <motion.section
+                {...fadeIn}
+                className="relative overflow-hidden rounded-[28px] border border-foreground/[0.08] p-5 md:p-7"
+                style={{
+                    background:
+                        'radial-gradient(circle at top left, color-mix(in srgb, var(--sky) 18%, transparent) 0%, transparent 38%), linear-gradient(180deg, color-mix(in srgb, var(--card) 97%, transparent) 0%, color-mix(in srgb, var(--card) 91%, transparent) 100%)',
+                    boxShadow: 'var(--card-shadow)',
+                }}
+            >
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--sky)]/40 to-transparent" />
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                                Automatizaciones
+                            </p>
+                            <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-[2.15rem]">
+                                Reglas automáticas
+                            </h1>
+                            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-[0.95rem]">
+                                Finp reconoce patrones y completa tus movimientos de forma
+                                consistente. Vos decidís qué automatizar y podés probar cada
+                                regla antes de activarla.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            <Badge variant="outline" className="gap-1.5 rounded-full bg-background/55">
+                                <ReceiptText className="h-3.5 w-3.5" />
+                                Nuevos movimientos
+                            </Badge>
+                            <Badge variant="outline" className="gap-1.5 rounded-full bg-background/55">
+                                <FileInput className="h-3.5 w-3.5" />
+                                Importaciones y cuotas
+                            </Badge>
+                            <Badge variant="outline" className="gap-1.5 rounded-full bg-background/55">
+                                <Layers3 className="h-3.5 w-3.5" />
+                                Compromisos y Espacios
+                            </Badge>
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-foreground/[0.07] bg-background/55 p-4 backdrop-blur-sm">
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--sky)_14%,transparent)] text-[var(--sky-dark)]">
+                                <Wand2 className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium">Creá una automatización</p>
+                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                    Definí cuándo actúa, qué completa y probala con un ejemplo real.
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            className="mt-4 w-full gap-2"
+                            onClick={handleOpenCreate}
+                        >
+                            <Plus className="h-4 w-4" />
+                            Nueva regla
+                        </Button>
+                    </div>
+                </div>
+            </motion.section>
+
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <SummaryMetric
+                    label="Reglas activas"
+                    value={String(activeRules.length)}
+                    hint={`${pausedRules.length} pausada${pausedRules.length === 1 ? '' : 's'}`}
+                    icon={CheckCircle2}
+                />
+                <SummaryMetric
+                    label="Automatizaciones"
+                    value={String(totalMatches)}
+                    hint="coincidencias acumuladas"
+                    icon={Activity}
+                />
+                <SummaryMetric
+                    label="Usadas este mes"
+                    value={String(usedThisMonth)}
+                    hint="reglas con actividad reciente"
+                    icon={Sparkles}
+                />
+                <SummaryMetric
+                    label="Sugerencias"
+                    value={suggestionsLoading ? '…' : String(suggestions.length)}
+                    hint="patrones listos para revisar"
+                    icon={Lightbulb}
+                />
+            </section>
+
+            <section className="space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-semibold flex items-center gap-2">
-                            <Wand2 size={20} style={{ color: 'var(--sky)' }} />
-                            Reglas automáticas
-                        </h1>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                            Se aplican al crear transacciones para completar categoría, comercio o tipo.
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Sugerencias de Finp
+                        </p>
+                        <h2 className="mt-1 text-xl font-semibold tracking-tight">
+                            Patrones que podrías automatizar
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Se generan sólo cuando tu historial muestra una categoría consistente.
                         </p>
                     </div>
-                    <Button onClick={handleOpenCreate} size="sm" className="gap-1.5">
-                        <Plus size={15} />
-                        <span className="hidden sm:inline">Nueva regla</span>
-                        <span className="sm:hidden">Nueva</span>
+                    {suggestions.length > 0 ? (
+                        <Badge variant="secondary" className="w-fit rounded-full">
+                            {suggestions.length} pendiente{suggestions.length === 1 ? '' : 's'}
+                        </Badge>
+                    ) : null}
+                </div>
+
+                {suggestionsLoading ? (
+                    <div className="grid gap-3 lg:grid-cols-2">
+                        <Skeleton className="h-60 rounded-xl" />
+                        <Skeleton className="h-60 rounded-xl" />
+                    </div>
+                ) : suggestions.length > 0 ? (
+                    <div className="grid gap-3 lg:grid-cols-2">
+                        {suggestions.map((suggestion) => (
+                            <RuleSuggestionCard
+                                key={suggestion.key}
+                                suggestion={suggestion}
+                                category={categories.find(
+                                    (category) =>
+                                        category._id.toString() === suggestion.categoryId
+                                )}
+                                onReview={handleReviewSuggestion}
+                                onDismiss={handleDismissSuggestion}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <Card className="border-dashed">
+                        <CardContent className="flex flex-col items-start gap-3 py-2 sm:flex-row sm:items-center">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                                <Lightbulb className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium">Sin sugerencias nuevas</p>
+                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                    Finp seguirá observando patrones. Necesita al menos tres
+                                    movimientos consistentes antes de proponerte una regla.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1.5"
+                                onClick={handleOpenCreate}
+                            >
+                                Crear manualmente
+                                <ArrowRight className="h-3.5 w-3.5" />
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+            </section>
+
+            <section className="space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Configuración
+                        </p>
+                        <h2 className="mt-1 text-xl font-semibold tracking-tight">Tus reglas</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            La primera regla que coincide según prioridad es la que se aplica.
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-fit gap-1.5"
+                        onClick={handleOpenCreate}
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        Nueva regla
                     </Button>
                 </div>
 
-                {/* List */}
-                {loading ? (
-                    <div className="space-y-3">
-                        {[1, 2, 3].map((i) => (
-                            <Skeleton key={i} className="h-24 rounded-2xl" />
-                        ))}
-                    </div>
-                ) : rules.length === 0 ? (
-                    <EmptyState
-                        icon={Wand2}
-                        title="Sin reglas configuradas"
-                        description="Creá reglas para que Finp complete categorías y comercios automáticamente al registrar transacciones."
-                        actionLabel="Crear primera regla"
-                        onAction={handleOpenCreate}
-                    />
-                ) : (
-                    <div className="space-y-6">
-                        {/* Active rules */}
-                        {activeRules.length > 0 && (
-                            <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-3">
-                                {activeRules.map((rule) => (
-                                    <RuleCard
-                                        key={rule._id.toString()}
-                                        rule={rule}
-                                        categories={categories}
-                                        onEdit={handleEdit}
-                                        onDelete={setDeleteTarget}
-                                        onToggle={toggleRule}
-                                        onDuplicate={handleDuplicate}
-                                    />
-                                ))}
-                            </motion.div>
-                        )}
+                <Tabs
+                    value={filter}
+                    onValueChange={(value) => setFilter(value as RuleFilter)}
+                    className="gap-4"
+                >
+                    <TabsList className="w-full sm:w-fit">
+                        <TabsTrigger value="active">
+                            Activas
+                            <span className="text-[10px] text-muted-foreground">
+                                {activeRules.length}
+                            </span>
+                        </TabsTrigger>
+                        <TabsTrigger value="all">
+                            Todas
+                            <span className="text-[10px] text-muted-foreground">
+                                {rules.length}
+                            </span>
+                        </TabsTrigger>
+                        <TabsTrigger value="paused">
+                            Pausadas
+                            <span className="text-[10px] text-muted-foreground">
+                                {pausedRules.length}
+                            </span>
+                        </TabsTrigger>
+                    </TabsList>
 
-                        {/* Inactive rules (collapsible) */}
-                        {inactiveRules.length > 0 && (
-                            <div className="space-y-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowInactive((prev) => !prev)}
-                                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    {(['active', 'all', 'paused'] as const).map((tab) => (
+                        <TabsContent key={tab} value={tab}>
+                            {visibleRules.length > 0 ? (
+                                <motion.div
+                                    variants={staggerContainer}
+                                    initial="initial"
+                                    animate="animate"
+                                    className="space-y-3"
                                 >
-                                    {showInactive ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                    {inactiveRules.length} regla{inactiveRules.length !== 1 ? 's' : ''} inactiva{inactiveRules.length !== 1 ? 's' : ''}
-                                </button>
+                                    {visibleRules.map((rule) => (
+                                        <RuleCard
+                                            key={rule._id.toString()}
+                                            rule={rule}
+                                            categories={categories}
+                                            onEdit={handleEdit}
+                                            onDelete={setDeleteTarget}
+                                            onToggle={toggleRule}
+                                            onDuplicate={handleDuplicate}
+                                        />
+                                    ))}
+                                </motion.div>
+                            ) : (
+                                <EmptyState
+                                    icon={Wand2}
+                                    title={
+                                        filter === 'paused'
+                                            ? 'No hay reglas pausadas'
+                                            : filter === 'active'
+                                                ? 'No hay reglas activas'
+                                                : 'Todavía no creaste reglas'
+                                    }
+                                    description={
+                                        filter === 'active'
+                                            ? 'Activá una regla existente o creá una nueva automatización.'
+                                            : 'Las reglas completan categoría, comercio o tipo cuando un movimiento coincide.'
+                                    }
+                                    actionLabel="Crear regla"
+                                    onAction={handleOpenCreate}
+                                />
+                            )}
+                        </TabsContent>
+                    ))}
+                </Tabs>
+            </section>
 
-                                <AnimatePresence>
-                                    {showInactive && (
-                                        <motion.div
-                                            initial={{ opacity: 0, height: 0 }}
-                                            animate={{ opacity: 1, height: 'auto' }}
-                                            exit={{ opacity: 0, height: 0 }}
-                                            transition={{ duration: 0.2 }}
-                                            className="space-y-3 overflow-hidden"
-                                        >
-                                            {inactiveRules.map((rule) => (
-                                                <RuleCard
-                                                    key={rule._id.toString()}
-                                                    rule={rule}
-                                                    categories={categories}
-                                                    onEdit={handleEdit}
-                                                    onDelete={setDeleteTarget}
-                                                    onToggle={toggleRule}
-                                                    onDuplicate={handleDuplicate}
-                                                />
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+            <Card className="bg-[color-mix(in_srgb,var(--sky)_5%,var(--card))]">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-[var(--sky-dark)]" />
+                        Cómo decide Finp
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-4 pb-1 md:grid-cols-3">
+                    {[
+                        ['1', 'Normaliza', 'Ignora tildes, signos, espacios y referencias bancarias variables.'],
+                        ['2', 'Compara', 'Evalúa las reglas activas desde la prioridad más alta.'],
+                        ['3', 'Explica', 'Guarda qué regla coincidió y qué acciones aplicó.'],
+                    ].map(([step, title, description]) => (
+                        <div key={step} className="flex gap-3">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-xs font-semibold text-[var(--sky-dark)]">
+                                {step}
+                            </span>
+                            <div>
+                                <p className="text-sm font-medium">{title}</p>
+                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                    {description}
+                                </p>
                             </div>
-                        )}
+                        </div>
+                    ))}
+                </CardContent>
+            </Card>
 
-                        {/* Info */}
-                        <p className="text-xs text-muted-foreground text-center">
-                            Las reglas se evalúan por prioridad · la primera que coincide gana
-                        </p>
-                    </div>
-                )}
-            </motion.div>
-
-            {/* Dialog */}
             <TransactionRuleDialog
                 open={dialogOpen}
-                onOpenChange={setDialogOpen}
+                onOpenChange={(open) => {
+                    setDialogOpen(open)
+                    if (!open) setInitialValues(null)
+                }}
                 rule={editingRule}
+                initialValues={initialValues}
                 categories={categories}
                 onSubmit={handleSubmit}
                 onSimulate={simulateRule}
             />
 
-            {/* Delete confirm */}
-            <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+            <AlertDialog
+                open={Boolean(deleteTarget)}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteTarget(null)
+                }}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Eliminar regla?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Se eliminará &ldquo;{deleteTarget?.name}&rdquo;. Esta acción no se puede deshacer.
+                            Se eliminará “{deleteTarget?.name}”. Las transacciones existentes
+                            conservarán la trazabilidad de las aplicaciones anteriores.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteConfirm}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            className="bg-destructive text-primary-foreground hover:bg-destructive/90"
                         >
                             Eliminar
                         </AlertDialogAction>
@@ -506,7 +611,7 @@ function RulesPageInner() {
 
 export default function RulesPage() {
     return (
-        <Suspense fallback={null}>
+        <Suspense fallback={<RulesLoadingState />}>
             <RulesPageInner />
         </Suspense>
     )

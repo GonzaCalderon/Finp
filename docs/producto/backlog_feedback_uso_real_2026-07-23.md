@@ -76,7 +76,9 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Motor unificado de reglas
 
-- Estado: base confiable, simulacion y conflictos implementados el 2026-07-24; correcciones explicitas pendientes.
+- Estado: base confiable, simulacion, conflictos y experiencia de gestion implementados el 2026-07-24; correcciones explicitas pendientes.
+- Experiencia: la pagina de Reglas expone cobertura, actividad, reglas activas o pausadas y sugerencias persistentes basadas en patrones consistentes. Crear y editar usa un flujo guiado de coincidencia, acciones y prueba.
+- Llegada al movimiento: las transacciones automatizadas muestran la regla que completo sus datos.
 - Resultado: nueva transaccion, importacion, cuotas, compromisos e impactos personales de Espacios atraviesan el mismo servicio. Los movimientos financieros especializados conservan su tipo para evitar reclasificaciones silenciosas.
 - Acciones: `setType` ya reclasifica gastos e ingresos simples y mueve la cuenta al lado correcto; categoria y comercio se completan cuando el usuario no definio un valor explicito.
 - Normalizacion: coincidencias sin diferencias por tildes, mayusculas, espacios, signos, prefijos bancarios comunes y referencias variables.
@@ -87,6 +89,7 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 - Cobertura: pruebas unitarias del motor, de la integracion del servicio y del resguardo de tipos especializados.
 - Pendiente transversal: reevaluacion explicita al editar una transaccion y registro de correcciones.
 - Criterio de cierre total: una misma regla produce el mismo resultado en todos los puntos de ingreso autorizados, explica su aplicacion y puede simularse sin modificar datos.
+- Criterio transversal adoptado: `docs/producto/criterio_entrega_motores_y_automatizaciones.md`.
 
 ### Compromisos personales variables
 
@@ -107,7 +110,8 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Sugerencia de reglas por gastos repetidos
 
-- Estado: implementado el 2026-07-23.
+- Estado: implementado de punta a punta el 2026-07-24.
+- Superficie: las propuestas viven en Reglas, explican frecuencia y confianza, se pueden revisar con el formulario precompletado o descartar de forma persistente.
 - Alcance: después de al menos tres movimientos consistentes, sugiere automatizar la categoría sin crear nada por su cuenta.
 - Criterio de cierre: la regla se crea únicamente con confirmación, explica por qué se propone y queda disponible para reintentar si falla.
 - Evolucion pendiente: distinguir regla, compromiso y suscripcion; incorporar feedback de propuestas ignoradas y estadisticas de efectividad.

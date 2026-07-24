@@ -346,6 +346,14 @@ Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creac
 - integración posterior con índices oficiales;
 - trazabilidad de cada cálculo.
 
+## 9.1 Criterio transversal de entrega
+
+La implementacion de Captura rapida y de cualquier mejora del motor debe usar el criterio de entrega completa: dominio, cobertura de entradas, descubrimiento, control, trazabilidad y verificacion de punta a punta.
+
+Documento operativo: `docs/producto/criterio_entrega_motores_y_automatizaciones.md`.
+
+Este criterio evita que una capacidad quede disponible solo en la logica interna sin una superficie comprensible y accionable para el usuario.
+
 ## 10. Riesgos y resguardos
 
 - No alterar silenciosamente el significado financiero de un movimiento.

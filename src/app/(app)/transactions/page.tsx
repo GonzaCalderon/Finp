@@ -12,6 +12,7 @@ import {
     Pencil,
     RefreshCw,
     SlidersHorizontal,
+    Sparkles,
     Trash2,
     Unlink,
     Upload,
@@ -1551,6 +1552,16 @@ function TransactionsPageInner() {
                                                                     )}
                                                                     {category.name}
                                 </span>
+                                                            )}
+
+                                                            {transaction.appliedRuleNameSnapshot && (
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 rounded-full border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300"
+                                                                    title={`Finp completó este movimiento con la regla “${transaction.appliedRuleNameSnapshot}”`}
+                                                                >
+                                                                    <Sparkles className="size-2.5" />
+                                                                    {transaction.appliedRuleNameSnapshot}
+                                                                </span>
                                                             )}
 
                                                             {transaction.spaceId && (
