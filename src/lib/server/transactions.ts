@@ -7,12 +7,24 @@ import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 import { evaluateRules } from '@/lib/utils/rules'
 import { ServiceError } from '@/lib/server/errors'
-import type { CreatedFrom, TransactionStatus } from '@/lib/constants'
+import type {
+    CreatedFrom,
+    ImportSourceType,
+    TransactionStatus,
+} from '@/lib/constants'
+import type { ITransaction } from '@/types'
 
 type CreateTransactionOptions = {
     createdFrom?: CreatedFrom
     status?: TransactionStatus
-    skipRules?: boolean
+    metadata?: {
+        installmentPlanId?: ITransaction['installmentPlanId']
+        importBatchId?: ITransaction['importBatchId']
+        importedAt?: Date
+        importSourceType?: ImportSourceType
+        spaceNameSnapshot?: string
+        operationalAmount?: number
+    }
 }
 
 export type CreateTransactionInput = TransactionFormData | Record<string, unknown>
@@ -33,9 +45,86 @@ export async function createTransactionForUser(
         )
     }
 
-    const data = {
+    const initialData = {
         ...parsed.data,
         type: normalizeLegacyTransactionType(parsed.data.type) ?? parsed.data.type,
+    }
+
+    let data = initialData
+    let appliedRuleId: string | undefined
+    let appliedRuleNameSnapshot: string | undefined
+    let appliedRuleMatchSnapshot: ReturnType<typeof evaluateRules>['match']
+    const appliedRuleActions: {
+        categoryId?: string
+        setType?: 'expense' | 'income'
+        normalizeMerchant?: string
+    } = {}
+
+    if (['expense', 'income', 'credit_card_expense'].includes(initialData.type)) {
+        const ruleType = initialData.type === 'credit_card_expense' ? 'expense' : initialData.type
+        const rules = await TransactionRule.find({
+            userId,
+            isActive: true,
+        }).sort({ priority: -1, createdAt: -1 })
+
+        const { matched, rule, match } = evaluateRules(rules, {
+            type: ruleType,
+            description: initialData.description,
+            merchant: initialData.merchant,
+        })
+
+        if (matched && rule) {
+            appliedRuleId = rule._id.toString()
+            appliedRuleNameSnapshot = rule.name
+            appliedRuleMatchSnapshot = match
+
+            const nextData = { ...initialData }
+
+            // Type rules may safely reclassify only plain income/expense movements.
+            // Specialized financial types keep their semantics and account model.
+            if (
+                (initialData.type === 'expense' || initialData.type === 'income') &&
+                rule.setType &&
+                rule.setType !== initialData.type
+            ) {
+                const accountId =
+                    initialData.type === 'expense'
+                        ? initialData.sourceAccountId
+                        : initialData.destinationAccountId
+
+                nextData.type = rule.setType
+                if (rule.setType === 'income') {
+                    nextData.sourceAccountId = undefined
+                    nextData.destinationAccountId = accountId
+                } else {
+                    nextData.sourceAccountId = accountId
+                    nextData.destinationAccountId = undefined
+                }
+                appliedRuleActions.setType = rule.setType
+            }
+
+            if (!nextData.categoryId && rule.categoryId) {
+                nextData.categoryId = rule.categoryId.toString()
+                appliedRuleActions.categoryId = rule.categoryId.toString()
+            }
+
+            if (!nextData.merchant && rule.normalizeMerchant) {
+                nextData.merchant = rule.normalizeMerchant
+                appliedRuleActions.normalizeMerchant = rule.normalizeMerchant
+            }
+
+            const resolved = transactionSchema.safeParse(nextData)
+            if (!resolved.success) {
+                throw new ServiceError(
+                    400,
+                    'INVALID_RULE_RESULT',
+                    `La regla "${rule.name}" produjo una transaccion invalida.`,
+                    resolved.error.flatten()
+                )
+            }
+
+            data = resolved.data
+        }
     }
 
     const accountIds = [data.sourceAccountId, data.destinationAccountId].filter(Boolean)
@@ -137,36 +226,6 @@ export async function createTransactionForUser(
         destinationAccount,
     })
 
-    let resolvedCategoryId = data.categoryId
-    let resolvedMerchant = data.merchant
-    let appliedRuleId: string | undefined
-    let appliedRuleNameSnapshot: string | undefined
-
-    if (!options.skipRules && (data.type === 'expense' || data.type === 'income' || data.type === 'credit_card_expense')) {
-        const ruleType = data.type === 'credit_card_expense' ? 'expense' : data.type
-        const rules = await TransactionRule.find({
-            userId,
-            isActive: true,
-        }).sort({ priority: -1 })
-
-        const { matched, rule } = evaluateRules(rules, {
-            type: ruleType,
-            description,
-            merchant: data.merchant,
-        })
-
-        if (matched && rule) {
-            appliedRuleId = rule._id.toString()
-            appliedRuleNameSnapshot = rule.name
-            if (!resolvedCategoryId && rule.categoryId) {
-                resolvedCategoryId = rule.categoryId.toString()
-            }
-            if (!resolvedMerchant && rule.normalizeMerchant) {
-                resolvedMerchant = rule.normalizeMerchant
-            }
-        }
-    }
-
     const transaction = await Transaction.create({
         userId,
         type: data.type,
@@ -174,7 +233,7 @@ export async function createTransactionForUser(
         currency: data.currency,
         date: data.date,
         description,
-        categoryId: resolvedCategoryId,
+        categoryId: data.categoryId,
         sourceAccountId: data.sourceAccountId,
         destinationAccountId: data.destinationAccountId,
         destinationAmount: data.type === 'exchange' ? data.destinationAmount : undefined,
@@ -182,19 +241,49 @@ export async function createTransactionForUser(
         exchangeRate: normalizedExchange?.exchangeRate,
         paymentGroupId: data.paymentGroupId,
         notes: data.notes,
-        merchant: resolvedMerchant,
+        merchant: data.merchant,
         status: options.status ?? 'confirmed',
         createdFrom: options.createdFrom ?? 'web',
         appliedRuleId,
         appliedRuleNameSnapshot,
+        appliedRuleMatchSnapshot,
+        appliedRuleActions:
+            Object.keys(appliedRuleActions).length > 0 ? appliedRuleActions : undefined,
         spaceId: data.spaceId,
         spaceEntryId: data.spaceEntryId,
+        ...options.metadata,
     })
 
-    return Transaction.findById(transaction._id)
+    if (appliedRuleId) {
+        try {
+            await TransactionRule.updateOne(
+                { _id: appliedRuleId, userId },
+                {
+                    $inc: { matchCount: 1 },
+                    $set: { lastMatchedAt: new Date() },
+                }
+            )
+        } catch (error) {
+            // The transaction already contains the durable rule snapshot. Aggregate
+            // counters are useful telemetry, but must never invalidate the movement.
+            console.error('No se pudieron actualizar las metricas de la regla:', error)
+        }
+    }
+
+    const populated = await Transaction.findById(transaction._id)
         .populate('categoryId', 'name color type')
         .populate('sourceAccountId', 'name type currency supportedCurrencies color')
         .populate('destinationAccountId', 'name type currency supportedCurrencies color')
+
+    if (!populated) {
+        throw new ServiceError(
+            500,
+            'TRANSACTION_READ_AFTER_CREATE_FAILED',
+            'La transaccion se creo, pero no se pudo recuperar.'
+        )
+    }
+
+    return populated
 }
 
 export function getTransactionListTypeFilter(type: string) {

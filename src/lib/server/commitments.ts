@@ -41,10 +41,6 @@ function isDateInRange(date: Date, start: Date, end: Date) {
 async function cleanupCreatedTransaction(args: {
     transactionId?: { toString(): string } | string
     userId: string
-    accountId: string
-    amount: number
-    currency: string
-    description: string
 }) {
     if (!args.transactionId) return
 
@@ -58,11 +54,6 @@ async function cleanupCreatedTransaction(args: {
     await Transaction.deleteOne({
         _id: args.transactionId,
         userId: args.userId,
-        type: 'expense',
-        amount: args.amount,
-        currency: args.currency,
-        description: args.description,
-        sourceAccountId: args.accountId,
     })
 }
 
@@ -143,7 +134,6 @@ export async function applyCommitmentForUser(
         {
             createdFrom: 'web',
             status: 'confirmed',
-            skipRules: true,
         }
     )
 
@@ -166,10 +156,6 @@ export async function applyCommitmentForUser(
         await cleanupCreatedTransaction({
             transactionId: transaction._id,
             userId,
-            accountId,
-            amount,
-            currency: commitment.currency,
-            description: commitment.description,
         })
 
         if (isDuplicateKeyError(error)) {

@@ -73,7 +73,7 @@ describe('applyCommitmentForUser', () => {
                 sourceAccountId: 'account-1',
                 notes: 'Pagado',
             }),
-            { createdFrom: 'web', status: 'confirmed', skipRules: true }
+            { createdFrom: 'web', status: 'confirmed' }
         )
         expect(mocks.CommitmentApplication.create).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -153,11 +153,6 @@ describe('applyCommitmentForUser', () => {
         expect(mocks.Transaction.deleteOne).toHaveBeenCalledWith({
             _id: 'transaction-1',
             userId: 'user-1',
-            type: 'expense',
-            amount: 1200,
-            currency: 'ARS',
-            description: 'Alquiler',
-            sourceAccountId: 'account-1',
         })
     })
 

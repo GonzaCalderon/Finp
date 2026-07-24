@@ -13,7 +13,7 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Proximo bloque recomendado
 
-1. Unificar el motor de reglas y corregir acciones incompletas.
+1. Completar simulacion y deteccion de conflictos en el motor unificado de reglas.
 2. Diseñar e implementar Captura rapida v1 sobre el motor confiable.
 3. Diseñar compromisos personales variables como base para compromisos de Espacios.
 4. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
@@ -76,10 +76,14 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Motor unificado de reglas
 
-- Estado: pendiente; relevamiento funcional completado el 2026-07-24.
-- Problemas detectados: `setType` se configura pero no se ejecuta; importacion, cuotas y algunos impactos de Espacios no atraviesan el mismo motor.
-- Alcance: centralizar evaluacion, normalizar textos, hacer las reglas explicables y preparar simulacion/conflictos antes de ampliar condiciones.
-- Criterio de cierre: una misma regla produce el mismo resultado en todos los puntos de ingreso autorizados y deja trazabilidad de su aplicacion.
+- Estado: base confiable implementada el 2026-07-24; simulacion, conflictos y correcciones explicitas pendientes.
+- Resultado: nueva transaccion, importacion, cuotas, compromisos e impactos personales de Espacios atraviesan el mismo servicio. Los movimientos financieros especializados conservan su tipo para evitar reclasificaciones silenciosas.
+- Acciones: `setType` ya reclasifica gastos e ingresos simples y mueve la cuenta al lado correcto; categoria y comercio se completan cuando el usuario no definio un valor explicito.
+- Normalizacion: coincidencias sin diferencias por tildes, mayusculas, espacios, signos, prefijos bancarios comunes y referencias variables.
+- Trazabilidad: cada transaccion conserva regla, criterio normalizado y acciones efectivamente aplicadas. Cada regla registra cantidad de coincidencias y ultima aplicacion.
+- Cobertura: pruebas unitarias del motor, de la integracion del servicio y del resguardo de tipos especializados.
+- Pendiente inmediato: vista previa antes de activar, deteccion de reglas solapadas, reevaluacion explicita al editar y registro de correcciones.
+- Criterio de cierre total: una misma regla produce el mismo resultado en todos los puntos de ingreso autorizados, explica su aplicacion y puede simularse sin modificar datos.
 
 ### Compromisos personales variables
 

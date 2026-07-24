@@ -95,6 +95,14 @@ function RuleCard({
     const appliesToLabel = APPLIES_TO_LABELS[rule.appliesTo] ?? rule.appliesTo
     const fieldLabel = FIELD_LABELS[rule.field] ?? rule.field
     const conditionLabel = CONDITION_LABELS[rule.condition] ?? rule.condition
+    const matchCount = rule.matchCount ?? 0
+    const lastMatchedLabel = rule.lastMatchedAt
+        ? new Intl.DateTimeFormat('es-AR', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        }).format(new Date(rule.lastMatchedAt))
+        : null
 
     return (
         <motion.div
@@ -211,6 +219,14 @@ function RuleCard({
                             </span>
                         )}
                     </div>
+
+                    <p className="mt-2 text-xs text-muted-foreground">
+                        {matchCount === 0
+                            ? 'Todavía no registró coincidencias'
+                            : `${matchCount} coincidencia${matchCount === 1 ? '' : 's'}${
+                                lastMatchedLabel ? ` · Última: ${lastMatchedLabel}` : ''
+                            }`}
+                    </p>
                 </div>
 
                 {/* Actions menu */}
@@ -356,7 +372,7 @@ function RulesPageInner() {
                             Reglas automáticas
                         </h1>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            Se aplican al crear transacciones para completar categoría y comercio.
+                            Se aplican al crear transacciones para completar categoría, comercio o tipo.
                         </p>
                     </div>
                     <Button onClick={handleOpenCreate} size="sm" className="gap-1.5">

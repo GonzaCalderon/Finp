@@ -1,6 +1,14 @@
 import mongoose, { Schema } from 'mongoose'
 import type { ITransaction } from '@/types'
-import { TRANSACTION_TYPES, CURRENCIES, TRANSACTION_STATUS, CREATED_FROM, IMPORT_SOURCE_TYPES } from '@/lib/constants'
+import {
+    TRANSACTION_TYPES,
+    CURRENCIES,
+    TRANSACTION_STATUS,
+    CREATED_FROM,
+    IMPORT_SOURCE_TYPES,
+    RULE_CONDITIONS,
+    RULE_FIELDS,
+} from '@/lib/constants'
 
 const TransactionSchema = new Schema<ITransaction>(
     {
@@ -25,6 +33,20 @@ const TransactionSchema = new Schema<ITransaction>(
         createdFrom: { type: String, enum: Object.values(CREATED_FROM), required: true, default: 'web' },
         appliedRuleId: { type: Schema.Types.ObjectId, ref: 'TransactionRule' },
         appliedRuleNameSnapshot: { type: String },
+        appliedRuleMatchSnapshot: {
+            _id: false,
+            field: { type: String, enum: Object.values(RULE_FIELDS) },
+            condition: { type: String, enum: Object.values(RULE_CONDITIONS) },
+            value: { type: String },
+            normalizedFieldValue: { type: String },
+            normalizedRuleValue: { type: String },
+        },
+        appliedRuleActions: {
+            _id: false,
+            categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
+            setType: { type: String, enum: ['expense', 'income'] },
+            normalizeMerchant: { type: String },
+        },
         importBatchId: { type: Schema.Types.ObjectId, ref: 'ImportBatch' },
         importedAt: { type: Date },
         importSourceType: { type: String, enum: Object.values(IMPORT_SOURCE_TYPES) },
@@ -53,6 +75,12 @@ const hasSpaceIdPath = Boolean(existingTransactionModel?.schema.path('spaceId'))
 const hasSpaceEntryIdPath = Boolean(existingTransactionModel?.schema.path('spaceEntryId'))
 const hasSpaceNameSnapshotPath = Boolean(existingTransactionModel?.schema.path('spaceNameSnapshot'))
 const hasOperationalAmountPath = Boolean(existingTransactionModel?.schema.path('operationalAmount'))
+const hasAppliedRuleMatchSnapshotPath = Boolean(
+    existingTransactionModel?.schema.path('appliedRuleMatchSnapshot.field')
+)
+const hasAppliedRuleActionsPath = Boolean(
+    existingTransactionModel?.schema.path('appliedRuleActions.setType')
+)
 const needsSchemaRefresh =
     !!existingTransactionModel &&
     (!currentTypeEnum ||
@@ -65,7 +93,9 @@ const needsSchemaRefresh =
         !hasSpaceIdPath ||
         !hasSpaceEntryIdPath ||
         !hasSpaceNameSnapshotPath ||
-        !hasOperationalAmountPath)
+        !hasOperationalAmountPath ||
+        !hasAppliedRuleMatchSnapshotPath ||
+        !hasAppliedRuleActionsPath)
 
 if (needsSchemaRefresh) {
     delete mongoose.models.Transaction

@@ -160,13 +160,19 @@ Antes de ampliar las automatizaciones, todas las transacciones deben pasar por u
 - impactos desde Espacios;
 - reevaluación explícita al editar.
 
-Pendientes fundacionales:
+Base implementada el 2026-07-24:
 
-- hacer efectiva la acción `setType`;
-- normalizar tildes, espacios, signos, prefijos y referencias variables;
+- servicio común para nueva transacción, importación, cuotas, compromisos e impactos personales desde Espacios;
+- acción `setType` efectiva para gastos e ingresos simples, con resguardo de tipos financieros especializados;
+- normalización de tildes, espacios, signos, prefijos y referencias variables;
+- trazabilidad del criterio y de las acciones aplicadas en cada transacción;
+- cantidad de coincidencias y última aplicación por regla.
+
+Pendientes del siguiente bloque:
+
 - soportar simulación antes de activar una regla;
 - detectar conflictos;
-- registrar uso, correcciones y última coincidencia;
+- registrar correcciones y reevaluación explícita al editar;
 - permitir condiciones múltiples de manera progresiva.
 
 ### Categorías
@@ -295,10 +301,10 @@ Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creac
 
 ### Fase A: base confiable
 
-- Unificar el motor de reglas.
-- Corregir acciones actualmente incompletas.
-- Normalizar descripción y comercio.
-- Añadir explicabilidad y deshacer.
+- Unificar el motor de reglas. Implementado el 2026-07-24.
+- Corregir acciones actualmente incompletas. `setType` implementado para movimientos simples.
+- Normalizar descripción y comercio. Normalización de coincidencias implementada.
+- Añadir explicabilidad y deshacer. Trazabilidad implementada; vista previa y deshacer pendientes.
 - Medir tiempo, abandono y correcciones.
 
 ### Fase B: captura rápida

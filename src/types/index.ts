@@ -109,6 +109,18 @@ export interface ITransaction {
     createdFrom: CreatedFrom
     appliedRuleId?: Types.ObjectId
     appliedRuleNameSnapshot?: string
+    appliedRuleMatchSnapshot?: {
+        field: RuleField
+        condition: RuleCondition
+        value: string
+        normalizedFieldValue: string
+        normalizedRuleValue: string
+    }
+    appliedRuleActions?: {
+        categoryId?: Types.ObjectId
+        setType?: 'expense' | 'income'
+        normalizeMerchant?: string
+    }
     importBatchId?: Types.ObjectId
     importedAt?: Date
     importSourceType?: ImportSourceType
@@ -199,6 +211,8 @@ export interface ITransactionRule {
     categoryId?: Types.ObjectId
     setType?: 'expense' | 'income'
     normalizeMerchant?: string
+    matchCount?: number
+    lastMatchedAt?: Date
     createdAt: Date
     updatedAt: Date
 }

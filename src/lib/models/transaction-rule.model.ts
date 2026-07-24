@@ -29,12 +29,26 @@ const TransactionRuleSchema = new Schema<ITransactionRule>(
         categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
         setType: { type: String, enum: ['expense', 'income'] },
         normalizeMerchant: { type: String, trim: true },
+        matchCount: { type: Number, default: 0, min: 0 },
+        lastMatchedAt: { type: Date },
     },
     { timestamps: true }
 )
 
 TransactionRuleSchema.index({ userId: 1, isActive: 1, priority: -1 })
 
+const existingTransactionRuleModel = mongoose.models.TransactionRule as
+    | mongoose.Model<ITransactionRule>
+    | undefined
+const needsSchemaRefresh =
+    !!existingTransactionRuleModel &&
+    (!existingTransactionRuleModel.schema.path('matchCount') ||
+        !existingTransactionRuleModel.schema.path('lastMatchedAt'))
+
+if (needsSchemaRefresh) {
+    delete mongoose.models.TransactionRule
+}
+
 export const TransactionRule =
-    mongoose.models.TransactionRule ||
+    (needsSchemaRefresh ? undefined : existingTransactionRuleModel) ||
     mongoose.model<ITransactionRule>('TransactionRule', TransactionRuleSchema)

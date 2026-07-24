@@ -19,6 +19,14 @@ Sin estas capacidades:
 - cada participante puede proyectar información distinta sobre una misma obligación compartida;
 - se desperdicia información contractual conocida de antemano.
 
+### Estado real auditado el 2026-07-24
+
+- `ScheduledCommitment` modela solamente compromisos personales con monto fijo.
+- Ya existe una entidad separada `CommitmentApplication`, única por usuario, compromiso y período, que enlaza el movimiento generado.
+- La aplicación manual valida el período financiero, evita duplicados y revierte el movimiento nuevo si falla el registro de la aplicación.
+- Desde el 2026-07-24 el movimiento generado atraviesa el motor unificado de reglas y conserva su trazabilidad.
+- Todavía no existen contexto `space`, políticas de monto, historial de importes, estados de aplicación ni snapshots de cálculo/reparto.
+
 ## 2. Principio funcional
 
 Un compromiso representa una obligación o movimiento esperado. Su aplicación genera el movimiento real en el contexto al que pertenece.
@@ -85,6 +93,8 @@ Separar:
 
 - Plantilla: define recurrencia, reglas de monto, reparto y fechas.
 - Aplicación: representa qué ocurrió en un período concreto.
+
+La separación de entidades y la unicidad por período ya existen como base técnica. Falta ampliar la aplicación para representar estados y conservar la foto financiera propuesta a continuación.
 
 Estados sugeridos para una aplicación:
 
