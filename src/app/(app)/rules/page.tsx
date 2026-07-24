@@ -277,7 +277,15 @@ function RulesPageInner() {
     const searchParams = useSearchParams()
     usePageTitle('Reglas automáticas')
 
-    const { rules, loading, createRule, updateRule, toggleRule, deleteRule } =
+    const {
+        rules,
+        loading,
+        createRule,
+        updateRule,
+        toggleRule,
+        deleteRule,
+        simulateRule,
+    } =
         useTransactionRules()
     const { categories } = useCategories()
     const { error: toastError } = useToast()
@@ -469,6 +477,7 @@ function RulesPageInner() {
                 rule={editingRule}
                 categories={categories}
                 onSubmit={handleSubmit}
+                onSimulate={simulateRule}
             />
 
             {/* Delete confirm */}

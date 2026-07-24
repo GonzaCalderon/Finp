@@ -166,12 +166,12 @@ Base implementada el 2026-07-24:
 - acción `setType` efectiva para gastos e ingresos simples, con resguardo de tipos financieros especializados;
 - normalización de tildes, espacios, signos, prefijos y referencias variables;
 - trazabilidad del criterio y de las acciones aplicadas en cada transacción;
-- cantidad de coincidencias y última aplicación por regla.
+- cantidad de coincidencias y última aplicación por regla;
+- simulación sin mutaciones con la misma resolución de acciones que el guardado real;
+- detección de solapamientos, redundancias, acciones contradictorias y prioridad ganadora.
 
 Pendientes del siguiente bloque:
 
-- soportar simulación antes de activar una regla;
-- detectar conflictos;
 - registrar correcciones y reevaluación explícita al editar;
 - permitir condiciones múltiples de manera progresiva.
 
@@ -304,7 +304,7 @@ Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creac
 - Unificar el motor de reglas. Implementado el 2026-07-24.
 - Corregir acciones actualmente incompletas. `setType` implementado para movimientos simples.
 - Normalizar descripción y comercio. Normalización de coincidencias implementada.
-- Añadir explicabilidad y deshacer. Trazabilidad implementada; vista previa y deshacer pendientes.
+- Añadir explicabilidad y deshacer. Trazabilidad y vista previa implementadas; deshacer pendiente.
 - Medir tiempo, abandono y correcciones.
 
 ### Fase B: captura rápida

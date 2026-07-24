@@ -1,10 +1,17 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import {
+    AlertTriangle,
+    CheckCircle2,
+    FlaskConical,
+    Info,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -26,6 +33,11 @@ import { Spinner } from '@/components/shared/Spinner'
 import type { ICategory, ITransactionRule } from '@/types'
 import { RULE_APPLIES_TO, RULE_CONDITIONS, RULE_FIELDS } from '@/lib/constants'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
+import type {
+    RuleSimulationResult,
+    RuleSimulationRuleInput,
+    RuleSimulationSample,
+} from '@/hooks/useTransactionRules'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -42,7 +54,7 @@ const ruleFormSchema = z.object({
     normalizeMerchant: z.string().max(200).optional(),
 })
 
-type RuleFormValues = z.infer<typeof ruleFormSchema>
+export type RuleFormValues = z.infer<typeof ruleFormSchema>
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
 
@@ -71,6 +83,11 @@ interface TransactionRuleDialogProps {
     rule: ITransactionRule | null
     categories: ICategory[]
     onSubmit: (data: RuleFormValues) => Promise<void>
+    onSimulate: (
+        data: RuleSimulationRuleInput,
+        sample: RuleSimulationSample,
+        editingRuleId?: string
+    ) => Promise<RuleSimulationResult>
 }
 
 export function TransactionRuleDialog({
@@ -79,13 +96,16 @@ export function TransactionRuleDialog({
     rule,
     categories,
     onSubmit,
+    onSimulate,
 }: TransactionRuleDialogProps) {
     const {
         register,
         handleSubmit,
         control,
+        getValues,
         setValue,
         reset,
+        trigger,
         formState: { errors, isSubmitting, submitCount },
     } = useForm<RuleFormValues>({
         resolver: zodResolver(ruleFormSchema),
@@ -104,6 +124,7 @@ export function TransactionRuleDialog({
     })
 
     const scrollRef = useRef<HTMLDivElement>(null)
+    const simulationRequestIdRef = useRef(0)
     useScrollToFirstError(submitCount, Object.keys(errors).length > 0, scrollRef)
 
     const watchedAppliesTo = useWatch({ control, name: 'appliesTo' })
@@ -112,19 +133,55 @@ export function TransactionRuleDialog({
     const watchedValue = useWatch({ control, name: 'value' })
     const watchedCategoryId = useWatch({ control, name: 'categoryId' })
     const watchedSetType = useWatch({ control, name: 'setType' })
+    const watchedNormalizeMerchant = useWatch({ control, name: 'normalizeMerchant' })
+    const watchedPriority = useWatch({ control, name: 'priority' })
     const isActive = useWatch({ control, name: 'isActive' })
+    const [sampleType, setSampleType] = useState<RuleSimulationSample['type']>('expense')
+    const [sampleDescription, setSampleDescription] = useState('')
+    const [sampleMerchant, setSampleMerchant] = useState('')
+    const [simulation, setSimulation] = useState<RuleSimulationResult | null>(null)
+    const [simulationError, setSimulationError] = useState<string | null>(null)
+    const [isSimulating, setIsSimulating] = useState(false)
 
-    // Filter categories based on appliesTo
+    const resultingCategoryType =
+        watchedSetType ||
+        (watchedAppliesTo === 'any' ? undefined : watchedAppliesTo)
+
+    // Filter categories based on the type produced by the rule.
     const filteredCategories = categories.filter((c) => {
-        if (watchedAppliesTo === 'expense') return c.type === 'expense'
-        if (watchedAppliesTo === 'income') return c.type === 'income'
-        return true
+        return !resultingCategoryType || c.type === resultingCategoryType
     })
+
+    useEffect(() => {
+        if (!watchedCategoryId || !resultingCategoryType) return
+        const selectedCategory = categories.find(
+            (category) => category._id.toString() === watchedCategoryId
+        )
+        if (selectedCategory && selectedCategory.type !== resultingCategoryType) {
+            setValue('categoryId', undefined, {
+                shouldDirty: true,
+                shouldValidate: true,
+            })
+        }
+    }, [
+        categories,
+        resultingCategoryType,
+        setValue,
+        watchedCategoryId,
+    ])
 
     useEffect(() => {
         if (!open) return
 
+        simulationRequestIdRef.current += 1
+        setSimulation(null)
+        setSimulationError(null)
+        setIsSimulating(false)
+        setSampleDescription('')
+        setSampleMerchant('')
+
         if (rule) {
+            setSampleType(rule.appliesTo === 'income' ? 'income' : 'expense')
             reset({
                 name: rule.name,
                 isActive: rule.isActive,
@@ -141,6 +198,7 @@ export function TransactionRuleDialog({
                 normalizeMerchant: rule.normalizeMerchant ?? '',
             })
         } else {
+            setSampleType('expense')
             reset({
                 name: '',
                 isActive: true,
@@ -156,8 +214,83 @@ export function TransactionRuleDialog({
         }
     }, [open, rule, reset])
 
+    useEffect(() => {
+        simulationRequestIdRef.current += 1
+        setSimulation(null)
+        setSimulationError(null)
+        setIsSimulating(false)
+    }, [
+        watchedAppliesTo,
+        watchedField,
+        watchedCondition,
+        watchedValue,
+        watchedCategoryId,
+        watchedSetType,
+        watchedNormalizeMerchant,
+        watchedPriority,
+    ])
+
     const handleFormSubmit = async (data: RuleFormValues) => {
         await onSubmit(data)
+    }
+
+    const handleSimulate = async () => {
+        const valid = await trigger([
+            'priority',
+            'value',
+        ])
+        if (!valid) return
+
+        const values = getValues()
+        const description =
+            sampleDescription.trim() ||
+            (values.field === 'description' ? values.value.trim() : '')
+        const merchant =
+            sampleMerchant.trim() ||
+            (values.field === 'merchant' ? values.value.trim() : '')
+
+        if (!description && !merchant) {
+            setSimulationError('Ingresá una descripción o un comercio para probar.')
+            return
+        }
+
+        setIsSimulating(true)
+        setSimulationError(null)
+        const requestId = ++simulationRequestIdRef.current
+
+        try {
+            const result = await onSimulate(
+                {
+                    ...values,
+                    name: values.name.trim() || 'Regla sin guardar',
+                    setType: values.setType || undefined,
+                    categoryId: values.categoryId || undefined,
+                    normalizeMerchant: values.normalizeMerchant?.trim() || undefined,
+                },
+                {
+                    type: sampleType,
+                    description,
+                    merchant,
+                },
+                rule?._id.toString()
+            )
+            if (simulationRequestIdRef.current === requestId) {
+                setSimulation(result)
+            }
+        } catch (error) {
+            if (simulationRequestIdRef.current === requestId) {
+                setSimulation(null)
+                setSimulationError(
+                    error instanceof Error
+                        ? error.message
+                        : 'No se pudo simular la regla.'
+                )
+            }
+        } finally {
+            if (simulationRequestIdRef.current === requestId) {
+                setIsSimulating(false)
+            }
+        }
     }
 
     return (
@@ -285,6 +418,9 @@ export function TransactionRuleDialog({
                             {/* Category */}
                             <div className="space-y-2">
                                 <Label>Asignar categoría</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Se muestran categorías compatibles con el tipo resultante.
+                                </p>
                                 {filteredCategories.length > 0 ? (
                                     <div className="flex flex-wrap gap-2">
                                         {/* No category option */}
@@ -383,6 +519,125 @@ export function TransactionRuleDialog({
                             </div>
                         </div>
 
+                        <div className="space-y-4 rounded-xl border border-sky-500/25 bg-sky-500/5 p-4">
+                            <div className="flex items-start gap-3">
+                                <FlaskConical
+                                    size={18}
+                                    className="mt-0.5 shrink-0 text-sky-500"
+                                />
+                                <div>
+                                    <p className="text-sm font-medium">
+                                        Probar antes de guardar
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        No crea movimientos ni modifica reglas.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label>Tipo del ejemplo</Label>
+                                    <Select
+                                        value={sampleType}
+                                        onValueChange={(value) => {
+                                            simulationRequestIdRef.current += 1
+                                            setSampleType(value as RuleSimulationSample['type'])
+                                            setSimulation(null)
+                                            setIsSimulating(false)
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="expense">Gasto</SelectItem>
+                                            <SelectItem value="income">Ingreso</SelectItem>
+                                            <SelectItem value="credit_card_expense">
+                                                Gasto con tarjeta
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="rule-sample-description">
+                                        Descripción del ejemplo
+                                    </Label>
+                                    <Input
+                                        id="rule-sample-description"
+                                        value={sampleDescription}
+                                        placeholder={
+                                            watchedField === 'description'
+                                                ? watchedValue || 'Ej: Pago en Café'
+                                                : 'Opcional'
+                                        }
+                                        onChange={(event) => {
+                                            simulationRequestIdRef.current += 1
+                                            setSampleDescription(event.target.value)
+                                            setSimulation(null)
+                                            setIsSimulating(false)
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="rule-sample-merchant">
+                                    Comercio del ejemplo
+                                </Label>
+                                <Input
+                                    id="rule-sample-merchant"
+                                    value={sampleMerchant}
+                                    placeholder={
+                                        watchedField === 'merchant'
+                                            ? watchedValue || 'Ej: Farmacity'
+                                            : 'Opcional'
+                                    }
+                                    onChange={(event) => {
+                                        simulationRequestIdRef.current += 1
+                                        setSampleMerchant(event.target.value)
+                                        setSimulation(null)
+                                        setIsSimulating(false)
+                                    }}
+                                />
+                            </div>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full gap-2"
+                                disabled={isSimulating || !watchedValue}
+                                onClick={handleSimulate}
+                            >
+                                {isSimulating ? (
+                                    <>
+                                        <Spinner />
+                                        Simulando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <FlaskConical size={15} />
+                                        Probar regla
+                                    </>
+                                )}
+                            </Button>
+
+                            {simulationError && (
+                                <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                                    <AlertTriangle size={15} className="shrink-0" />
+                                    <span>{simulationError}</span>
+                                </div>
+                            )}
+
+                            {simulation && (
+                                <RuleSimulationSummary
+                                    simulation={simulation}
+                                    categories={categories}
+                                />
+                            )}
+                        </div>
+
                         {/* Prioridad + Estado activo */}
                         <div
                             className="space-y-4 rounded-xl border p-4"
@@ -455,6 +710,114 @@ export function TransactionRuleDialog({
                 </form>
             </DialogContent>
         </Dialog>
+    )
+}
+
+function getCategoryName(categories: ICategory[], categoryId?: string) {
+    if (!categoryId) return null
+    return categories.find((category) => category._id.toString() === categoryId)?.name
+        ?? 'Categoría configurada'
+}
+
+function RuleSimulationSummary({
+    simulation,
+    categories,
+}: {
+    simulation: RuleSimulationResult
+    categories: ICategory[]
+}) {
+    const winner = simulation.winner
+    const winnerActions = winner?.actions.appliedActions
+    const skippedActions = winner?.actions.skippedActions ?? []
+
+    return (
+        <div className="space-y-3" aria-live="polite">
+            <div
+                className={`flex gap-2 rounded-lg border p-3 text-xs ${
+                    winner?.isCandidate
+                        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
+                        : 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300'
+                }`}
+            >
+                {winner?.isCandidate ? (
+                    <CheckCircle2 size={16} className="shrink-0" />
+                ) : (
+                    <Info size={16} className="shrink-0" />
+                )}
+                <div className="space-y-1">
+                    <p className="font-medium">
+                        {!simulation.candidateMatches
+                            ? 'La regla no coincide con este ejemplo'
+                            : winner?.isCandidate
+                                ? 'La regla coincide y se aplicaría'
+                                : `Coincide, pero ganaría “${winner?.name}”`}
+                    </p>
+                    {simulation.matchedRules.length > 1 && (
+                        <p>
+                            {simulation.matchedRules.length} reglas coinciden; se usa la de
+                            mayor prioridad.
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            {winner && Object.keys(winnerActions ?? {}).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {winnerActions?.setType && (
+                        <Badge variant="secondary">
+                            Tipo: {winnerActions.setType === 'expense' ? 'Gasto' : 'Ingreso'}
+                        </Badge>
+                    )}
+                    {winnerActions?.categoryId && (
+                        <Badge variant="secondary">
+                            Categoría: {getCategoryName(categories, winnerActions.categoryId)}
+                        </Badge>
+                    )}
+                    {winnerActions?.normalizeMerchant && (
+                        <Badge variant="secondary">
+                            Comercio: {winnerActions.normalizeMerchant}
+                        </Badge>
+                    )}
+                </div>
+            )}
+
+            {skippedActions.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                    {skippedActions.some(({ reason }) => reason === 'specialized_type')
+                        ? 'El cambio de tipo no se aplicaría porque el ejemplo es un movimiento financiero especializado.'
+                        : 'Los valores ya definidos en el movimiento no serían reemplazados.'}
+                </p>
+            )}
+
+            {simulation.conflicts.length > 0 && (
+                <div className="space-y-2">
+                    <p className="text-xs font-medium">Conflictos detectados</p>
+                    {simulation.conflicts.map((conflict) => (
+                        <div
+                            key={`${conflict.ruleId}-${conflict.kind}`}
+                            className={`flex gap-2 rounded-lg border p-3 text-xs ${
+                                conflict.severity === 'warning'
+                                    ? 'border-amber-500/30 bg-amber-500/5'
+                                    : 'border-border bg-muted/40'
+                            }`}
+                        >
+                            {conflict.severity === 'warning' ? (
+                                <AlertTriangle
+                                    size={15}
+                                    className="shrink-0 text-amber-600"
+                                />
+                            ) : (
+                                <Info
+                                    size={15}
+                                    className="shrink-0 text-muted-foreground"
+                                />
+                            )}
+                            <span>{conflict.message}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
     )
 }
 

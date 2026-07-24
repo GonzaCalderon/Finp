@@ -9,6 +9,51 @@ import {
     RULE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
+import type {
+    RuleActionPreview,
+    RuleConflict,
+    RuleMatchSnapshot,
+} from '@/lib/utils/rules'
+
+export interface RuleSimulationSample {
+    type: 'expense' | 'income' | 'credit_card_expense'
+    description?: string
+    merchant?: string
+    categoryId?: string
+}
+
+export interface RuleSimulationRuleInput {
+    name: string
+    isActive: boolean
+    priority: number
+    appliesTo: 'expense' | 'income' | 'any'
+    field: 'description' | 'merchant'
+    condition: 'contains' | 'equals' | 'starts_with'
+    value: string
+    categoryId?: string
+    setType?: 'expense' | 'income'
+    normalizeMerchant?: string
+}
+
+export interface SimulatedRuleResult {
+    id: string
+    name: string
+    priority: number
+    isCandidate: boolean
+    match?: RuleMatchSnapshot
+    actions: RuleActionPreview
+}
+
+export interface RuleSimulationResult {
+    normalizedSample: {
+        description: string
+        merchant: string
+    }
+    candidateMatches: boolean
+    matchedRules: SimulatedRuleResult[]
+    winner: SimulatedRuleResult | null
+    conflicts: RuleConflict[]
+}
 
 export function useTransactionRules() {
     const [rules, setRules] = useState<ITransactionRule[]>([])
@@ -97,6 +142,23 @@ export function useTransactionRules() {
         [success]
     )
 
+    const simulateRule = useCallback(
+        async (
+            data: RuleSimulationRuleInput,
+            sample: RuleSimulationSample,
+            editingRuleId?: string
+        ) => apiJson<RuleSimulationResult>('/api/transaction-rules/simulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                rule: data,
+                sample,
+                editingRuleId,
+            }),
+        }),
+        []
+    )
+
     return {
         rules,
         loading,
@@ -105,5 +167,6 @@ export function useTransactionRules() {
         updateRule,
         toggleRule,
         deleteRule,
+        simulateRule,
     }
 }

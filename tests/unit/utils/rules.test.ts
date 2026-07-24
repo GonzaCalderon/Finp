@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateRules, normalizeRuleText } from '@/lib/utils/rules'
+import {
+    detectRuleConflicts,
+    evaluateRules,
+    normalizeRuleText,
+    previewRuleActions,
+} from '@/lib/utils/rules'
 import type { ITransactionRule } from '@/types'
 
 function makeRule(
@@ -79,5 +84,127 @@ describe('evaluateRules', () => {
         )
 
         expect(result).toEqual({ matched: false, rule: null })
+    })
+})
+
+describe('previewRuleActions', () => {
+    it('previews the same safe actions used by transaction creation', () => {
+        const preview = previewRuleActions(
+            makeRule({
+                setType: 'income',
+                categoryId: {
+                    toString: () => 'category-1',
+                } as ITransactionRule['categoryId'],
+                normalizeMerchant: 'Café Martínez',
+            }),
+            {
+                type: 'expense',
+                description: 'Café',
+            }
+        )
+
+        expect(preview).toEqual({
+            result: {
+                type: 'income',
+                categoryId: 'category-1',
+                merchant: 'Café Martínez',
+            },
+            appliedActions: {
+                setType: 'income',
+                categoryId: 'category-1',
+                normalizeMerchant: 'Café Martínez',
+            },
+            skippedActions: [],
+        })
+    })
+
+    it('protects specialized types and explicit user values', () => {
+        const preview = previewRuleActions(
+            makeRule({
+                setType: 'income',
+                categoryId: {
+                    toString: () => 'category-rule',
+                } as ITransactionRule['categoryId'],
+                normalizeMerchant: 'Comercio normalizado',
+            }),
+            {
+                type: 'credit_card_expense',
+                description: 'Café',
+                categoryId: 'category-user',
+                merchant: 'Comercio elegido',
+            }
+        )
+
+        expect(preview.appliedActions).toEqual({})
+        expect(preview.skippedActions).toEqual([
+            { action: 'setType', reason: 'specialized_type' },
+            { action: 'categoryId', reason: 'explicit_value' },
+            { action: 'normalizeMerchant', reason: 'explicit_value' },
+        ])
+    })
+})
+
+describe('detectRuleConflicts', () => {
+    it('detects overlapping rules with contradictory actions and explains priority', () => {
+        const candidate = makeRule({
+            _id: { toString: () => 'candidate' } as ITransactionRule['_id'],
+            name: 'Uber general',
+            value: 'uber',
+            priority: 10,
+            categoryId: {
+                toString: () => 'transport',
+            } as ITransactionRule['categoryId'],
+        })
+        const existing = makeRule({
+            _id: { toString: () => 'existing' } as ITransactionRule['_id'],
+            name: 'Uber Eats',
+            value: 'uber eats',
+            priority: 5,
+            categoryId: {
+                toString: () => 'food',
+            } as ITransactionRule['categoryId'],
+        })
+
+        expect(detectRuleConflicts(candidate, [existing])).toEqual([
+            expect.objectContaining({
+                ruleId: 'existing',
+                kind: 'contradictory_actions',
+                severity: 'warning',
+                priorityRelation: 'candidate_wins',
+                differingActions: ['categoryId'],
+            }),
+        ])
+    })
+
+    it('reports redundant rules as information instead of a blocking warning', () => {
+        const action = {
+            toString: () => 'transport',
+        } as ITransactionRule['categoryId']
+        const candidate = makeRule({
+            _id: { toString: () => 'candidate' } as ITransactionRule['_id'],
+            categoryId: action,
+        })
+        const existing = makeRule({
+            _id: { toString: () => 'existing' } as ITransactionRule['_id'],
+            categoryId: action,
+        })
+
+        expect(detectRuleConflicts(candidate, [existing])).toEqual([
+            expect.objectContaining({
+                kind: 'redundant',
+                severity: 'info',
+                differingActions: [],
+            }),
+        ])
+    })
+
+    it('does not flag unrelated text patterns', () => {
+        const candidate = makeRule({ value: 'uber' })
+        const existing = makeRule({
+            _id: { toString: () => 'existing' } as ITransactionRule['_id'],
+            value: 'farmacia',
+        })
+
+        expect(detectRuleConflicts(candidate, [existing])).toEqual([])
     })
 })

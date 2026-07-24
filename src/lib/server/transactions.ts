@@ -5,7 +5,7 @@ import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib
 import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
 import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
-import { evaluateRules } from '@/lib/utils/rules'
+import { evaluateRules, previewRuleActions } from '@/lib/utils/rules'
 import { ServiceError } from '@/lib/server/errors'
 import type {
     CreatedFrom,
@@ -79,38 +79,36 @@ export async function createTransactionForUser(
             appliedRuleMatchSnapshot = match
 
             const nextData = { ...initialData }
+            const preview = previewRuleActions(rule, {
+                type: initialData.type,
+                description: initialData.description,
+                merchant: initialData.merchant,
+                categoryId: initialData.categoryId,
+            })
+            Object.assign(appliedRuleActions, preview.appliedActions)
 
-            // Type rules may safely reclassify only plain income/expense movements.
-            // Specialized financial types keep their semantics and account model.
-            if (
-                (initialData.type === 'expense' || initialData.type === 'income') &&
-                rule.setType &&
-                rule.setType !== initialData.type
-            ) {
+            if (preview.appliedActions.setType) {
                 const accountId =
                     initialData.type === 'expense'
                         ? initialData.sourceAccountId
                         : initialData.destinationAccountId
 
-                nextData.type = rule.setType
-                if (rule.setType === 'income') {
+                nextData.type = preview.appliedActions.setType
+                if (preview.appliedActions.setType === 'income') {
                     nextData.sourceAccountId = undefined
                     nextData.destinationAccountId = accountId
                 } else {
                     nextData.sourceAccountId = accountId
                     nextData.destinationAccountId = undefined
                 }
-                appliedRuleActions.setType = rule.setType
             }
 
-            if (!nextData.categoryId && rule.categoryId) {
-                nextData.categoryId = rule.categoryId.toString()
-                appliedRuleActions.categoryId = rule.categoryId.toString()
+            if (preview.appliedActions.categoryId) {
+                nextData.categoryId = preview.appliedActions.categoryId
             }
 
-            if (!nextData.merchant && rule.normalizeMerchant) {
-                nextData.merchant = rule.normalizeMerchant
-                appliedRuleActions.normalizeMerchant = rule.normalizeMerchant
+            if (preview.appliedActions.normalizeMerchant) {
+                nextData.merchant = preview.appliedActions.normalizeMerchant
             }
 
             const resolved = transactionSchema.safeParse(nextData)

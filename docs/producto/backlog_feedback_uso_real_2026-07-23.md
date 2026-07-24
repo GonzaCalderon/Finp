@@ -13,10 +13,10 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Proximo bloque recomendado
 
-1. Completar simulacion y deteccion de conflictos en el motor unificado de reglas.
-2. Diseñar e implementar Captura rapida v1 sobre el motor confiable.
-3. Diseñar compromisos personales variables como base para compromisos de Espacios.
-4. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
+1. Diseñar e implementar Captura rapida v1 sobre el motor confiable.
+2. Diseñar compromisos personales variables como base para compromisos de Espacios.
+3. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
+4. Incorporar reevaluacion explicita y registro de correcciones como mejora transversal del motor.
 
 ### Pendientes UX de alta prioridad
 
@@ -76,13 +76,16 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Motor unificado de reglas
 
-- Estado: base confiable implementada el 2026-07-24; simulacion, conflictos y correcciones explicitas pendientes.
+- Estado: base confiable, simulacion y conflictos implementados el 2026-07-24; correcciones explicitas pendientes.
 - Resultado: nueva transaccion, importacion, cuotas, compromisos e impactos personales de Espacios atraviesan el mismo servicio. Los movimientos financieros especializados conservan su tipo para evitar reclasificaciones silenciosas.
 - Acciones: `setType` ya reclasifica gastos e ingresos simples y mueve la cuenta al lado correcto; categoria y comercio se completan cuando el usuario no definio un valor explicito.
 - Normalizacion: coincidencias sin diferencias por tildes, mayusculas, espacios, signos, prefijos bancarios comunes y referencias variables.
 - Trazabilidad: cada transaccion conserva regla, criterio normalizado y acciones efectivamente aplicadas. Cada regla registra cantidad de coincidencias y ultima aplicacion.
+- Simulacion: crear o editar una regla permite probar descripcion, comercio y tipo sin guardar movimientos ni modificar reglas. La vista previa usa la misma resolucion de acciones que la creacion real.
+- Conflictos: detecta reglas redundantes, acciones contradictorias y acciones ocultas por prioridad. Si coinciden varias reglas muestra cual gana.
+- Resguardos: la simulacion explica acciones omitidas en tipos financieros especializados y el selector solo ofrece categorias compatibles con el tipo resultante.
 - Cobertura: pruebas unitarias del motor, de la integracion del servicio y del resguardo de tipos especializados.
-- Pendiente inmediato: vista previa antes de activar, deteccion de reglas solapadas, reevaluacion explicita al editar y registro de correcciones.
+- Pendiente transversal: reevaluacion explicita al editar una transaccion y registro de correcciones.
 - Criterio de cierre total: una misma regla produce el mismo resultado en todos los puntos de ingreso autorizados, explica su aplicacion y puede simularse sin modificar datos.
 
 ### Compromisos personales variables
