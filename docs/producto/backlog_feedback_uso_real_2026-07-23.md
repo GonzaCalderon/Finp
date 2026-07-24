@@ -13,10 +13,12 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Proximo bloque recomendado
 
-1. Diseñar compromisos personales variables como base para compromisos de Espacios.
-2. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
-3. Incorporar reevaluacion explicita y registro de correcciones como mejora transversal del motor.
-4. Llevar la procedencia y correcciones aprendidas de Captura rapida al detalle de Transacciones.
+1. Implementar compromisos personales variables y aplicaciones con snapshots.
+2. Cruzar Compromisos con Captura rapida: aplicar pendientes, derivar nuevas plantillas con borrador y distinguir su procedencia.
+3. Incorporar onboarding contextual y el contrato inicial de Captura rapida como orientador de Finp.
+4. Detectar candidatos mensuales explicables sin crear compromisos automaticamente.
+5. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
+6. Incorporar reevaluacion explicita y registro de correcciones como mejora transversal del motor.
 
 ### Pendientes UX de alta prioridad
 
@@ -93,22 +95,29 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Compromisos personales variables
 
-- Estado: documentado para diseño.
+- Estado: diseño funcional ampliado con Captura rapida, orientación y recurrencia aprendida.
 - Problema actual: cada compromiso repite un monto fijo en Proyeccion y no conserva aumentos efectivos por fecha.
-- Alcance inicial: historial de montos, monto variable a confirmar, agenda de aumentos manuales y proyeccion correcta por periodo.
+- Alcance inicial: historial de montos, monto variable a confirmar, snapshots de aplicacion, agenda de aumentos manuales y proyeccion correcta por periodo.
+- Cruce con Captura rapida: aplicar un pendiente dentro del dialogo; para altas nuevas interpretar lo confiable y abrir Compromisos con un borrador.
+- Recurrencia: sugerir un compromiso despues de al menos tres periodos mensuales consistentes, explicar la evidencia y requerir confirmacion.
+- Trazabilidad: la transaccion aplicada debe mostrar compromiso y periodo; editar no cambia la plantilla y eliminar reabre la aplicacion.
 - Evolucion: porcentajes pautados e indices oficiales con fallback manual.
 - Documento: `docs/producto/compromisos_espacios_y_proyeccion.md`.
 
 ### Captura rapida de movimientos
 
-- Estado: v1.1 implementada y verificada el 2026-07-24 en desktop y mobile.
+- Estado: v1.3 implementada y verificada el 2026-07-24 en desktop y mobile.
 - Experiencia: primera accion del FAB, atajo `Q`, resumen vivo, fragmentos reconocidos y hasta cinco accesos frecuentes. En mobile el dialogo es compacto, no produce scroll horizontal y los campos manuales quedan colapsados hasta que el usuario necesita corregirlos.
-- Autocompletado visible: el sufijo sugerido aparece dentro del texto con menor opacidad y explica la palabra completa antes de aceptarla.
+- Autocompletado visible: el sufijo sugerido aparece dentro del texto con menor opacidad y explica la palabra completa antes de aceptarla. También completa nombres de cuentas activas cuando el fragmento escrito es un prefijo inequívoco; abreviaturas y similitudes siguen requiriendo una sugerencia explícita.
 - Teclado: Enter o Espacio aceptan el autocompletado inline; Tab conserva el mismo atajo en desktop. La ayuda se puede tocar en mobile. Un segundo Espacio consecutivo revierte la expansion, conserva el texto original con un espacio y descarta esa sugerencia. Enter registra cuando ya no quedan sugerencias.
 - Personalizacion: alias sincronizados por usuario para cuenta, categoria, comercio y descripcion; CRUD en Configuracion > Aprendizaje y atajos y migracion de alias locales.
+- Cierre de migracion: los alias locales se usan una sola vez, se limpian al sincronizarse y dejaron de alimentar Nueva transaccion. Eliminar un atajo sincronizado ya no permite que reaparezca desde el dispositivo original.
 - Aprendizaje personal: implementado el 2026-07-24. Aprende de movimientos simples confirmados y vigentes, nunca de montos, fechas, notas u operaciones financieras especiales. Tres casos consistentes habilitan una sugerencia; cinco casos con 90% de consistencia pueden completar cuenta, categoria o comercio de forma visible y reversible.
 - Explicabilidad: cada valor aprendido muestra `Personalizada`, la evidencia resumida y una accion para descartarlo. Alias, reglas, texto explicito y selecciones manuales conservan prioridad.
 - Control: el usuario puede pausar el aprendizaje, revisar patrones y metricas, olvidar, restaurar, corregir como alias, convertir un patron compatible en regla o reiniciar sin borrar movimientos.
+- Feedback: dos descartes recientes suspenden el autocompletado; una correccion o reversion pesa el doble. Nueva evidencia consistente posterior permite recuperarlo. Reiniciar conserva la preferencia activa o pausada.
+- Metricas: las personalizaciones automaticas registran impresion y aceptacion con deduplicacion por sesion, y las tasas visibles quedan acotadas a valores validos.
+- Consolidacion tecnica: cuentas simples, etiquetas y resolucion de IDs tienen fuentes compartidas; frecuentes y aprendizaje reutilizan una sola lectura de historial al abrir el dialogo.
 - Privacidad y trazabilidad: eventos idempotentes sin frase original, monto, fecha ni notas; retencion de 180 dias, aislamiento por usuario y procedencia `quick_capture`. La telemetria es best-effort y nunca bloquea una operacion financiera.
 - Seguridad financiera: vista previa y creacion comparten reglas y validaciones de propiedad, actividad, tipo de cuenta, categoria, moneda, fondos y saldo negativo. El servidor revalida inmediatamente antes de guardar.
 - Sincronizacion: tipo, categoria, comercio, cuenta, moneda, fecha y descripcion visibles reflejan el resultado normalizado de la vista previa, sin impedir que el servidor vuelva a aplicar y auditar la regla al guardar.
@@ -119,7 +128,11 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 - Incertidumbre: las palabras comunes permanecen como descripcion y la categoria puede quedar vacia; abreviaturas cortas sin significado se muestran como no resueltas y nunca se convierten silenciosamente en cuenta o categoria.
 - Verificacion: suite unitaria completa, E2E Chromium desktop/mobile, registro y deshacer en ARS/USD y smoke visual con la cuenta de prueba.
 - Meta inicial: registrar un gasto simple en menos de cinco segundos y con un maximo de dos decisiones.
+- Dirección aprobada: evolucionar gradualmente como orientador de Finp, resolviendo lo simple y derivando Compromisos, reglas, cuotas, Deudas, Espacios e Importacion con un borrador.
+- Onboarding pendiente: introduccion breve, ejemplos rotativos, ayuda `¿Que puedo escribir?` y descubrimiento contextual con frecuencia limitada.
+- Contrato: las sugerencias funcionales explican motivo y destino, requieren confirmacion y miden si la accion se completo.
 - Documento: `docs/producto/estrategia_ingreso_datos_y_automatizacion.md`.
+- Diseño de orientación: `docs/producto/captura_rapida_como_orientador.md`.
 
 ## P2 - Mejoras de producto
 

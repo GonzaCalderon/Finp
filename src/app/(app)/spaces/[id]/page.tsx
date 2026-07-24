@@ -69,8 +69,6 @@ import type {
 import type { SpaceFormData } from '@/lib/validations'
 
 type SpaceTab = 'summary' | 'entries' | 'balance' | 'settings'
-type PendingSheetTab = 'pending' | 'activity'
-
 const MOBILE_TABS: Array<{ value: SpaceTab; label: string }> = [
     { value: 'summary', label: 'Resumen' },
     { value: 'entries', label: 'Movimientos' },
@@ -234,7 +232,6 @@ function SpaceDetailPageInner() {
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
     const [pendingSheetOpen, setPendingSheetOpen] = useState(false)
-    const [pendingSheetTab, setPendingSheetTab] = useState<PendingSheetTab>('pending')
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
     const [focusedEntryId, setFocusedEntryId] = useState<string | null>(focusEntryId)
@@ -781,14 +778,13 @@ function SpaceDetailPageInner() {
             />
 
             <SpacesPendingSheet
-                key={pendingSheetTab}
                 open={pendingSheetOpen}
                 onOpenChange={setPendingSheetOpen}
                 actions={data.pendingActions}
                 loading={false}
                 spaceId={spaceId}
                 currentUserId={currentUserId}
-                initialTab={pendingSheetTab}
+                initialTab="pending"
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
                 onReviewConfirmation={handleReviewPending}

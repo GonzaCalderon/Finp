@@ -2,19 +2,9 @@ import { motion } from 'framer-motion'
 import { Check } from 'lucide-react'
 import type { TransactionFormInput } from '@/lib/validations'
 import { staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { TRANSACTION_FORM_TYPE_LABELS } from './constants'
 import { StepSection } from './StepSection'
 import { ChoiceCard, SURFACE, getTypeSurface } from './shared-ui'
-
-const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
-    income: 'Ingreso',
-    expense: 'Gasto',
-    credit_card_expense: 'Gasto con TC',
-    transfer: 'Transferencia',
-    exchange: 'Cambio',
-    credit_card_payment: 'Pago de tarjeta',
-    debt_payment: 'Pago de tarjeta',
-    adjustment: 'Ajuste',
-}
 
 const QUICK_TYPES: TransactionFormInput['type'][] = ['expense', 'income']
 const SECONDARY_TYPES: Array<{ value: TransactionFormInput['type']; label: string; description: string }> = [
@@ -58,7 +48,9 @@ export function TransactionTypeStep({
                             className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold"
                             style={{ color: headerSurface.color, borderColor: headerSurface.borderColor }}
                         >
-                            {primaryFlowType === 'expense' ? 'Gasto' : TRANSACTION_TYPE_LABELS[type]}
+                    {primaryFlowType === 'expense'
+                        ? 'Gasto'
+                        : TRANSACTION_FORM_TYPE_LABELS[type]}
                         </span>
                         {isExpense && (
                             <span className="inline-flex items-center rounded-full bg-background/80 px-3 py-1 text-xs text-muted-foreground">
@@ -92,7 +84,7 @@ export function TransactionTypeStep({
                         return (
                             <ChoiceCard
                                 key={option}
-                                title={TRANSACTION_TYPE_LABELS[option]}
+                            title={TRANSACTION_FORM_TYPE_LABELS[option]}
                                 description={
                                     option === 'expense'
                                         ? 'Compra, pago o salida habitual.'

@@ -79,6 +79,13 @@ describe('quick capture learning privacy and scoring', () => {
             confidence: scored.confidence,
             lead: 5,
             recentNegativeCount: 1,
+        }).autoApply).toBe(true)
+        expect(resolveQuickCapturePatternEligibility({
+            occurrences: 5,
+            consistency: scored.consistency,
+            confidence: scored.confidence,
+            lead: 5,
+            recentNegativeCount: 2,
         }).autoApply).toBe(false)
     })
 

@@ -1,4 +1,4 @@
-import type { AccountType, Currency } from '@/lib/constants'
+import { ACCOUNT_TYPES, type AccountType, type Currency } from '@/lib/constants'
 
 export type CurrencyBalances = Record<Currency, number>
 export type AccountDefaultPaymentMethod = 'cash' | 'debit' | 'credit_card'
@@ -10,6 +10,15 @@ export const EMPTY_CURRENCY_BALANCES: CurrencyBalances = {
 
 const VALID_CURRENCIES: Currency[] = ['ARS', 'USD']
 const VALID_DEFAULT_PAYMENT_METHODS: AccountDefaultPaymentMethod[] = ['cash', 'debit', 'credit_card']
+export const SIMPLE_TRANSACTION_ACCOUNT_TYPES: readonly AccountType[] = [
+    ACCOUNT_TYPES.BANK,
+    ACCOUNT_TYPES.CASH,
+    ACCOUNT_TYPES.WALLET,
+    ACCOUNT_TYPES.SAVINGS,
+] as const
+const SIMPLE_TRANSACTION_ACCOUNT_TYPE_SET = new Set(
+    SIMPLE_TRANSACTION_ACCOUNT_TYPES
+)
 
 type AccountCurrencyLike = {
     type?: AccountType | string
@@ -20,6 +29,12 @@ type AccountCurrencyLike = {
     balancesByCurrency?: Partial<Record<Currency, number>>
     defaultPaymentMethods?: readonly (AccountDefaultPaymentMethod | string)[]
     isActive?: boolean
+}
+
+export function isSimpleTransactionAccountType(
+    accountType?: AccountType | string | null
+): boolean {
+    return SIMPLE_TRANSACTION_ACCOUNT_TYPE_SET.has(accountType as AccountType)
 }
 
 export function buildCurrencyBalances(

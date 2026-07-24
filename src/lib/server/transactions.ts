@@ -2,7 +2,12 @@ import { Account, Category, Transaction, TransactionRule, User } from '@/lib/mod
 import { transactionSchema, type TransactionFormData } from '@/lib/validations'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
-import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCurrency } from '@/lib/utils/accounts'
+import {
+    getCommonSupportedCurrencies,
+    getInitialBalancesByCurrency,
+    isSimpleTransactionAccountType,
+    supportsCurrency,
+} from '@/lib/utils/accounts'
 import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 import { evaluateRules, previewRuleActions } from '@/lib/utils/rules'
@@ -68,8 +73,6 @@ type PreparedTransaction = {
 type PrepareTransactionOptions = {
     includePreviewSignals?: boolean
 }
-
-const SIMPLE_ACCOUNT_TYPES = new Set(['bank', 'cash', 'wallet', 'savings'])
 
 async function calculateImpact(params: {
     account: NonNullable<PreparedTransaction['sourceAccount']>
@@ -206,7 +209,10 @@ export async function prepareTransactionForUser(
     }
 
     const simpleAccount = data.type === 'expense' ? sourceAccount : data.type === 'income' ? destinationAccount : null
-    if (simpleAccount && !SIMPLE_ACCOUNT_TYPES.has(simpleAccount.type)) {
+    if (
+        simpleAccount &&
+        !isSimpleTransactionAccountType(simpleAccount.type)
+    ) {
         throw new ServiceError(
             400,
             'SPECIAL_ACCOUNT_REQUIRES_FULL_FLOW',

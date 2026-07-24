@@ -44,17 +44,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
+import { QUICK_CAPTURE_TARGET_LABELS } from '@/lib/constants/quick-capture'
+import { isSimpleTransactionAccountType } from '@/lib/utils/accounts'
+import { resolveEntityId } from '@/lib/utils/entity-id'
 import type {
     QuickCaptureAliasDto,
     QuickCaptureAliasTargetType,
 } from '@/types'
-
-const TYPE_LABELS: Record<QuickCaptureAliasTargetType, string> = {
-    account: 'Cuenta',
-    category: 'Categoría',
-    merchant: 'Comercio',
-    description: 'Descripción',
-}
 
 type AliasDraft = {
     term: string
@@ -68,12 +64,6 @@ const EMPTY_DRAFT: AliasDraft = {
     targetType: 'account',
     targetId: '',
     targetValue: '',
-}
-
-function resolveId(value: unknown) {
-    if (typeof value === 'string') return value
-    if (value && typeof value === 'object' && 'toString' in value) return value.toString()
-    return ''
 }
 
 export function QuickCaptureAliasesSection() {
@@ -110,21 +100,30 @@ export function QuickCaptureAliasesSection() {
         const normalized = query.trim().toLocaleLowerCase('es-AR')
         if (!normalized) return aliases
         return aliases.filter((alias) =>
-            [alias.term, alias.targetLabel, TYPE_LABELS[alias.targetType]]
+            [
+                alias.term,
+                alias.targetLabel,
+                QUICK_CAPTURE_TARGET_LABELS[alias.targetType],
+            ]
                 .some((value) => value.toLocaleLowerCase('es-AR').includes(normalized))
         )
     }, [aliases, query])
 
     const targetOptions =
         draft.targetType === 'account'
-            ? accounts.map((account) => ({
-                id: resolveId(account._id),
-                label: account.name,
-                disabled: account.isActive === false,
-            }))
+            ? accounts
+                .filter((account) =>
+                    account.isActive !== false &&
+                    isSimpleTransactionAccountType(account.type)
+                )
+                .map((account) => ({
+                    id: resolveEntityId(account._id),
+                    label: account.name,
+                    disabled: false,
+                }))
             : draft.targetType === 'category'
                 ? categories.map((category) => ({
-                    id: resolveId(category._id),
+                    id: resolveEntityId(category._id),
                     label: category.name,
                     disabled: category.isArchived,
                 }))
@@ -276,7 +275,9 @@ export function QuickCaptureAliasesSection() {
                                     <span className="truncate text-sm">{alias.targetLabel}</span>
                                 </div>
                                 <div className="mt-1.5 flex items-center gap-2">
-                                    <Badge variant="secondary">{TYPE_LABELS[alias.targetType]}</Badge>
+                            <Badge variant="secondary">
+                                {QUICK_CAPTURE_TARGET_LABELS[alias.targetType]}
+                            </Badge>
                                     {alias.isStale ? (
                                         <Badge variant="outline" className="border-amber-500/40 text-amber-700">
                                             <AlertTriangle />
@@ -346,7 +347,7 @@ export function QuickCaptureAliasesSection() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                            {Object.entries(QUICK_CAPTURE_TARGET_LABELS).map(([value, label]) => (
                                         <SelectItem key={value} value={value}>
                                             {label}
                                         </SelectItem>
@@ -356,7 +357,7 @@ export function QuickCaptureAliasesSection() {
                         </div>
                         {draft.targetType === 'account' || draft.targetType === 'category' ? (
                             <div className="space-y-1.5">
-                                <Label>{TYPE_LABELS[draft.targetType]}</Label>
+                        <Label>{QUICK_CAPTURE_TARGET_LABELS[draft.targetType]}</Label>
                                 <Select
                                     value={draft.targetId}
                                     onValueChange={(targetId) => setDraft((current) => ({
@@ -383,7 +384,7 @@ export function QuickCaptureAliasesSection() {
                         ) : (
                             <div className="space-y-1.5">
                                 <Label htmlFor="capture-alias-value">
-                                    {TYPE_LABELS[draft.targetType]}
+                                    {QUICK_CAPTURE_TARGET_LABELS[draft.targetType]}
                                 </Label>
                                 <Input
                                     id="capture-alias-value"

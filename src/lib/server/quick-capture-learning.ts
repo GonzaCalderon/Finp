@@ -7,9 +7,15 @@ import {
     QuickCaptureLearningEvent,
     QuickCaptureLearningProfile,
     QuickCapturePatternControl,
-    Transaction,
 } from '@/lib/models'
-import { supportsCurrency } from '@/lib/utils/accounts'
+import {
+    getQuickCaptureHistoryRows,
+    type QuickCaptureHistoryRow,
+} from '@/lib/server/quick-capture'
+import {
+    SIMPLE_TRANSACTION_ACCOUNT_TYPES,
+    supportsCurrency,
+} from '@/lib/utils/accounts'
 import {
     compareQuickCaptureLearnedPatterns,
     resolveQuickCapturePatternEligibility,
@@ -28,24 +34,9 @@ import type {
     QuickCapturePatternTriggerKind,
 } from '@/types'
 
-const SIMPLE_ACCOUNT_TYPES = new Set(['bank', 'cash', 'wallet', 'savings'])
 const HISTORY_LIMIT = 500
 const EVENT_RETENTION_MS = 180 * 24 * 60 * 60 * 1000
 const RECENT_NEGATIVE_MS = 30 * 24 * 60 * 60 * 1000
-
-type TransactionLearningRow = {
-    _id: { toString(): string }
-    type: 'expense' | 'income'
-    currency: Currency
-    description: string
-    merchant?: string
-    sourceAccountId?: { toString(): string }
-    destinationAccountId?: { toString(): string }
-    categoryId?: { toString(): string }
-    date: Date
-    createdAt?: Date
-    updatedAt?: Date
-}
 
 type LearningEventRow = {
     type: QuickCaptureLearningEventInput['type']
@@ -151,8 +142,11 @@ function buildMetrics(
         corrections,
         reversions,
         acceptanceRate:
-            suggestionsShown > 0 ? suggestionsAccepted / suggestionsShown : 0,
-        correctionRate: confirmed > 0 ? corrections / confirmed : 0,
+            suggestionsShown > 0
+                ? Math.min(1, suggestionsAccepted / suggestionsShown)
+                : 0,
+        correctionRate:
+            confirmed > 0 ? Math.min(1, corrections / confirmed) : 0,
         medianDurationMs,
         activePatterns,
     }
@@ -216,7 +210,7 @@ function addCandidate(
     })
 }
 
-function buildPatternGroups(rows: TransactionLearningRow[]) {
+function buildPatternGroups(rows: QuickCaptureHistoryRow[]) {
     const groups = new Map<string, PatternGroup>()
     rows.forEach((transaction) => {
         const descriptionTerm = normalizeQuickCaptureTerm(transaction.description)
@@ -318,6 +312,9 @@ export async function getQuickCaptureLearningContext(
         includeForgotten?: boolean
         includeWhenDisabled?: boolean
         limit?: number
+        historyRows?:
+            | QuickCaptureHistoryRow[]
+            | Promise<QuickCaptureHistoryRow[]>
     } = {}
 ): Promise<QuickCaptureLearningContext> {
     const profile = await getQuickCaptureLearningProfile(userId)
@@ -326,30 +323,28 @@ export async function getQuickCaptureLearningContext(
         Date.now() - EVENT_RETENTION_MS,
         resetAt?.getTime() ?? 0
     ))
-    const historyFilter: Record<string, unknown> = {
-        userId,
-        type: { $in: ['expense', 'income'] },
-        status: { $in: ['confirmed', null] },
-        createdFrom: { $in: ['web', 'quick_capture'] },
-        installmentPlanId: { $exists: false },
-        spaceId: { $exists: false },
-        importBatchId: { $exists: false },
-    }
-    if (resetAt) {
-        historyFilter.$or = [
-            { createdAt: { $gte: resetAt } },
-            { updatedAt: { $gte: resetAt } },
-        ]
-    }
+    const rowsPromise = Promise.resolve(
+        options.historyRows ?? getQuickCaptureHistoryRows(userId)
+    ).then((historyRows) =>
+        historyRows
+            .filter((row) =>
+                ['web', 'quick_capture'].includes(row.createdFrom ?? '') &&
+                !row.importBatchId &&
+                (
+                    !resetAt ||
+                    (row.createdAt?.getTime() ?? 0) >= resetAt.getTime() ||
+                    (row.updatedAt?.getTime() ?? 0) >= resetAt.getTime()
+                )
+            )
+            .sort((left, right) =>
+                (right.updatedAt?.getTime() ?? right.date.getTime()) -
+                (left.updatedAt?.getTime() ?? left.date.getTime())
+            )
+            .slice(0, HISTORY_LIMIT)
+    )
 
     const [rows, events, controls] = await Promise.all([
-        Transaction.find(historyFilter)
-            .select(
-                'type currency description merchant sourceAccountId destinationAccountId categoryId date createdAt updatedAt'
-            )
-            .sort({ updatedAt: -1, date: -1 })
-            .limit(HISTORY_LIMIT)
-            .lean<TransactionLearningRow[]>(),
+        rowsPromise,
         QuickCaptureLearningEvent.find({
             userId,
             createdAt: { $gte: eventStart },
@@ -383,7 +378,7 @@ export async function getQuickCaptureLearningContext(
             _id: { $in: Array.from(accountIds) },
             userId,
             isActive: { $ne: false },
-            type: { $in: Array.from(SIMPLE_ACCOUNT_TYPES) },
+            type: { $in: SIMPLE_TRANSACTION_ACCOUNT_TYPES },
         })
             .select('_id name color currency supportedCurrencies type isActive')
             .lean<Array<{
@@ -422,7 +417,7 @@ export async function getQuickCaptureLearningContext(
         dismissed: number
         reverted: number
         corrected: number
-        recentNegative: number
+        recentNegatives: Array<{ createdAt: Date; weight: number }>
     }>()
     events.forEach((event) => {
         if (!event.patternKey) return
@@ -431,22 +426,37 @@ export async function getQuickCaptureLearningContext(
             dismissed: 0,
             reverted: 0,
             corrected: 0,
-            recentNegative: 0,
+            recentNegatives: [],
         }
         const recent =
             Date.now() - event.createdAt.getTime() <= RECENT_NEGATIVE_MS
         if (event.type === 'suggestion_accepted') feedback.accepted += 1
         if (event.type === 'suggestion_dismissed') {
             feedback.dismissed += 1
-            if (recent) feedback.recentNegative += 1
+            if (recent) {
+                feedback.recentNegatives.push({
+                    createdAt: event.createdAt,
+                    weight: 1,
+                })
+            }
         }
         if (event.type === 'suggestion_reverted') {
             feedback.reverted += 1
-            if (recent) feedback.recentNegative += 1
+            if (recent) {
+                feedback.recentNegatives.push({
+                    createdAt: event.createdAt,
+                    weight: 2,
+                })
+            }
         }
         if (event.type === 'field_corrected') {
             feedback.corrected += 1
-            if (recent) feedback.recentNegative += 1
+            if (recent) {
+                feedback.recentNegatives.push({
+                    createdAt: event.createdAt,
+                    weight: 2,
+                })
+            }
         }
         feedbackMap.set(event.patternKey, feedback)
     })
@@ -489,7 +499,7 @@ export async function getQuickCaptureLearningContext(
                 dismissed: 0,
                 reverted: 0,
                 corrected: 0,
-                recentNegative: 0,
+                recentNegatives: [],
             }
             const daysSinceLastSeen = Math.max(
                 0,
@@ -513,7 +523,11 @@ export async function getQuickCaptureLearningContext(
                 consistency,
                 confidence,
                 lead,
-                recentNegativeCount: feedback.recentNegative,
+                recentNegativeCount: feedback.recentNegatives
+                    .filter(
+                        (event) => event.createdAt > candidate.lastSeenAt
+                    )
+                    .reduce((total, event) => total + event.weight, 0),
             })
             const status = controlMap.get(key) ?? 'active'
             if (
@@ -742,7 +756,11 @@ export async function updateQuickCapturePatternStatus(params: {
         },
         { upsert: true }
     )
-    return { ...pattern, status: params.status, autoApply: false }
+    return {
+        ...pattern,
+        status: params.status,
+        autoApply: params.status === 'active' ? pattern.autoApply : false,
+    }
 }
 
 export async function resetQuickCaptureLearning(userId: string) {
@@ -753,18 +771,12 @@ export async function resetQuickCaptureLearning(userId: string) {
         QuickCaptureLearningProfile.updateOne(
             { userId },
             {
-                $set: {
-                    enabled: true,
-                    resetAt,
-                },
+                $set: { resetAt },
                 $unset: { introSeenAt: 1 },
-                $setOnInsert: { userId },
+                $setOnInsert: { userId, enabled: true },
             },
             { upsert: true }
         ),
     ])
-    return {
-        enabled: true,
-        resetAt: resetAt.toISOString(),
-    } satisfies QuickCaptureLearningProfileDto
+    return getQuickCaptureLearningProfile(userId)
 }

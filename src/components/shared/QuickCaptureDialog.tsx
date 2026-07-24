@@ -26,7 +26,10 @@ import { toast } from 'sonner'
 
 import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { CurrencyPillSelector } from '@/components/shared/CurrencyPillSelector'
-import { getStoredDescriptionAliases } from '@/components/shared/transaction-dialog-prefs'
+import {
+    clearStoredDescriptionAliases,
+    getStoredDescriptionAliases,
+} from '@/components/shared/transaction-dialog-prefs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,8 +54,12 @@ import {
 } from '@/lib/client/data-sync'
 import type { Currency } from '@/lib/constants'
 import type { TransactionFormInput } from '@/lib/validations'
-import { supportsCurrency } from '@/lib/utils/accounts'
+import {
+    isSimpleTransactionAccountType,
+    supportsCurrency,
+} from '@/lib/utils/accounts'
 import { cn } from '@/lib/utils'
+import { resolveEntityId } from '@/lib/utils/entity-id'
 import {
     getQuickCaptureInlineCompletion,
     normalizeQuickCaptureTerm,
@@ -77,7 +84,6 @@ import type {
     TransactionPreviewResponse,
 } from '@/types'
 
-const SIMPLE_ACCOUNT_TYPES = new Set(['bank', 'cash', 'wallet', 'savings'])
 const MIGRATION_KEY = 'finp-quick-capture-alias-migration-v1'
 
 function createClientEventId() {
@@ -105,12 +111,6 @@ type DraftOverrides = Partial<
         'type' | 'currency' | 'date' | 'accountId' | 'categoryId' | 'merchant' | 'description'
     >
 >
-
-function resolveId(value: unknown) {
-    if (typeof value === 'string') return value
-    if (value && typeof value === 'object' && 'toString' in value) return value.toString()
-    return ''
-}
 
 function toDateInputValue(date: Date) {
     const year = date.getFullYear()
@@ -331,7 +331,8 @@ export function QuickCaptureDialog({
 
     const simpleAccounts = useMemo(
         () => accounts.filter((account) =>
-            account.isActive !== false && SIMPLE_ACCOUNT_TYPES.has(account.type)
+            account.isActive !== false &&
+            isSimpleTransactionAccountType(account.type)
         ),
         [accounts]
     )
@@ -372,7 +373,10 @@ export function QuickCaptureDialog({
     const activeSuggestions = interpretation.suggestions.filter(
         (suggestion) => !dismissedSuggestions.includes(suggestion.id)
     )
-    const activePersonalizations = interpretation.personalizations ?? []
+    const activePersonalizations = useMemo(
+        () => interpretation.personalizations ?? [],
+        [interpretation.personalizations]
+    )
     const inlineCompletion = getQuickCaptureInlineCompletion(
         text,
         activeSuggestions[0]
@@ -387,10 +391,12 @@ export function QuickCaptureDialog({
         [draft, preview]
     )
     const selectedAccount = accounts.find(
-        (account) => resolveId(account._id) === resolvedDraft.accountId
+        (account) =>
+            resolveEntityId(account._id) === resolvedDraft.accountId
     )
     const selectedCategory = categories.find(
-        (category) => resolveId(category._id) === resolvedDraft.categoryId
+        (category) =>
+            resolveEntityId(category._id) === resolvedDraft.categoryId
     )
     const filteredCategories = categories.filter(
         (category) => !category.isArchived && category.type === resolvedDraft.type
@@ -404,7 +410,7 @@ export function QuickCaptureDialog({
         issue.code === 'DESTINATION_ACCOUNT_CURRENCY_UNSUPPORTED'
     )
     const compatibleAccounts = simpleAccounts.filter((account) =>
-        resolveId(account._id) !== resolvedDraft.accountId &&
+        resolveEntityId(account._id) !== resolvedDraft.accountId &&
         supportsCurrency(account, resolvedDraft.currency)
     )
     const hasDuplicate = Boolean(preview?.duplicate)
@@ -494,7 +500,13 @@ export function QuickCaptureDialog({
             const response = await fetch('/api/quick-capture/context', { cache: 'no-store' })
             if (!response.ok) throw new Error('No se pudo cargar la captura rápida')
             const data = await response.json() as QuickCaptureContextResponse
-            const storedAliases = getStoredDescriptionAliases()
+            const migrationCompleted =
+                typeof window !== 'undefined' &&
+                localStorage.getItem(MIGRATION_KEY) === 'done'
+            const storedAliases = migrationCompleted
+                ? []
+                : getStoredDescriptionAliases()
+            if (migrationCompleted) clearStoredDescriptionAliases()
             const now = new Date().toISOString()
             const legacyAliases: QuickCaptureAliasDto[] = storedAliases.flatMap((alias) => {
                 const normalizedTerm = normalizeQuickCaptureTerm(alias.term)
@@ -537,7 +549,7 @@ export function QuickCaptureDialog({
             setLearning(data.learning)
             learningEnabledRef.current = data.learning?.profile.enabled !== false
 
-            if (typeof window !== 'undefined' && !localStorage.getItem(MIGRATION_KEY)) {
+            if (!migrationCompleted) {
                 const migrated = await Promise.allSettled(
                     storedAliases.flatMap((alias) => {
                         const requests = [
@@ -577,6 +589,7 @@ export function QuickCaptureDialog({
                 )
                 if (migrated.every((result) => result.status === 'fulfilled')) {
                     localStorage.setItem(MIGRATION_KEY, 'done')
+                    clearStoredDescriptionAliases()
                     const refreshed = await fetch('/api/quick-capture/context', {
                         cache: 'no-store',
                     })
@@ -658,7 +671,34 @@ export function QuickCaptureDialog({
                 position,
             })
         })
+        activePersonalizations.forEach((personalization, index) => {
+            const suggestionId =
+                `personalization:${personalization.patternKey}`
+            const fingerprint = [
+                learningSessionIdRef.current,
+                suggestionId,
+                normalizeQuickCaptureTerm(text),
+            ].join('|')
+            if (shownSuggestionKeysRef.current.has(fingerprint)) return
+            shownSuggestionKeysRef.current.add(fingerprint)
+            queueLearningEvent({
+                type: 'suggestion_shown',
+                method: 'automatic',
+                inputTerms: text.split(/\s+/),
+                transactionType: draft.type,
+                currency: draft.currency,
+                suggestionId,
+                patternKey: personalization.patternKey,
+                source: 'learned',
+                targetType: personalization.targetType,
+                targetId: personalization.targetId,
+                targetValue: personalization.targetValue,
+                confidence: personalization.confidence,
+                position: activeSuggestions.length + index,
+            })
+        })
     }, [
+        activePersonalizations,
         activeSuggestions,
         draft.currency,
         draft.type,
@@ -735,9 +775,47 @@ export function QuickCaptureDialog({
             confidence: suggestion.confidence,
         })
         if (!options.appendSpace) spaceCompletionRef.current = null
+        const completeText = () => {
+            setText((current) => {
+                const replacement = `${
+                    suggestion.targetValue ?? suggestion.targetLabel
+                }${options.appendSpace ? ' ' : ''}`
+                const nextText = replaceQuickCaptureRange(
+                    current,
+                    suggestion.start,
+                    suggestion.end,
+                    replacement
+                )
+                if (options.appendSpace) {
+                    spaceCompletionRef.current = {
+                        beforeText: current,
+                        afterText: nextText,
+                        suggestionId: suggestion.id,
+                        patternKey: suggestion.patternKey,
+                        source: suggestion.source,
+                        targetType: suggestion.targetType,
+                        targetId: suggestion.targetId,
+                        targetValue: suggestion.targetValue,
+                        confidence: suggestion.confidence,
+                    }
+                }
+                requestAnimationFrame(() => {
+                    inputRef.current?.focus()
+                    const caretPosition =
+                        suggestion.start + replacement.length
+                    inputRef.current?.setSelectionRange(
+                        caretPosition,
+                        caretPosition
+                    )
+                })
+                return nextText
+            })
+        }
         if (suggestion.targetType === 'account') {
             setOverrides((current) => ({ ...current, accountId: suggestion.targetId }))
-            if (!suggestion.preserveSourceText) {
+            if (options.appendSpace) {
+                completeText()
+            } else if (!suggestion.preserveSourceText) {
                 setText((current) =>
                     replaceQuickCaptureRange(current, suggestion.start, suggestion.end, '')
                         .replace(/\s{2,}/g, ' ')
@@ -763,36 +841,7 @@ export function QuickCaptureDialog({
                 )
             }
         } else if (suggestion.targetType === 'description') {
-            setText((current) => {
-                const replacement = `${suggestion.targetValue ?? suggestion.targetLabel}${
-                    options.appendSpace ? ' ' : ''
-                }`
-                const nextText = replaceQuickCaptureRange(
-                    current,
-                    suggestion.start,
-                    suggestion.end,
-                    replacement
-                )
-                if (options.appendSpace) {
-                    spaceCompletionRef.current = {
-                        beforeText: current,
-                        afterText: nextText,
-                        suggestionId: suggestion.id,
-                        patternKey: suggestion.patternKey,
-                        source: suggestion.source,
-                        targetType: suggestion.targetType,
-                        targetId: suggestion.targetId,
-                        targetValue: suggestion.targetValue,
-                        confidence: suggestion.confidence,
-                    }
-                }
-                requestAnimationFrame(() => {
-                    inputRef.current?.focus()
-                    const caretPosition = suggestion.start + replacement.length
-                    inputRef.current?.setSelectionRange(caretPosition, caretPosition)
-                })
-                return nextText
-            })
+            completeText()
         }
         setDismissedSuggestions((current) => [...current, suggestion.id])
     }
@@ -1033,7 +1082,7 @@ export function QuickCaptureDialog({
             if (!response.ok) {
                 throw new Error(result.error ?? 'No se pudo registrar el movimiento')
             }
-            const transactionId = resolveId(result.transaction?._id)
+            const transactionId = resolveEntityId(result.transaction?._id)
             learningCompletedRef.current = true
             activePersonalizations.forEach((personalization) => {
                 queueLearningEvent({
@@ -1121,6 +1170,14 @@ export function QuickCaptureDialog({
             dismissSuggestion(inlineCompletion.suggestion, 'escape')
             return
         }
+        if (event.key === 'Tab' && inlineCompletion && isCaretAtCompletion) {
+            event.preventDefault()
+            applySuggestion(inlineCompletion.suggestion, {
+                appendSpace: true,
+                method: 'tab',
+            })
+            return
+        }
         if (event.key === 'Tab' && activeSuggestions[0]) {
             event.preventDefault()
             applySuggestion(activeSuggestions[0], { method: 'tab' })
@@ -1128,6 +1185,13 @@ export function QuickCaptureDialog({
         }
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault()
+            if (inlineCompletion && isCaretAtCompletion) {
+                applySuggestion(inlineCompletion.suggestion, {
+                    appendSpace: true,
+                    method: 'enter',
+                })
+                return
+            }
             if (activeSuggestions[0]) {
                 applySuggestion(activeSuggestions[0], { method: 'enter' })
                 return
@@ -1553,8 +1617,8 @@ export function QuickCaptureDialog({
                                         <SelectContent position="popper">
                                             {simpleAccounts.map((account) => (
                                                 <SelectItem
-                                                    key={resolveId(account._id)}
-                                                    value={resolveId(account._id)}
+                                                        key={resolveEntityId(account._id)}
+                                                        value={resolveEntityId(account._id)}
                                                     disabled={!supportsCurrency(
                                                         account,
                                                         resolvedDraft.currency
@@ -1602,8 +1666,8 @@ export function QuickCaptureDialog({
                                             <SelectItem value="none">Sin categoría</SelectItem>
                                             {filteredCategories.map((category) => (
                                                 <SelectItem
-                                                    key={resolveId(category._id)}
-                                                    value={resolveId(category._id)}
+                                                        key={resolveEntityId(category._id)}
+                                                        value={resolveEntityId(category._id)}
                                                 >
                                                     <span
                                                         className="size-2 rounded-full"
@@ -1750,14 +1814,14 @@ export function QuickCaptureDialog({
                                     <div className="mt-2 flex flex-wrap gap-1.5">
                                         {compatibleAccounts.slice(0, 4).map((account) => (
                                             <Button
-                                                key={resolveId(account._id)}
+                                                key={resolveEntityId(account._id)}
                                                 type="button"
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() =>
                                                     setPersonalizedOverride(
                                                         'accountId',
-                                                        resolveId(account._id)
+                                                        resolveEntityId(account._id)
                                                     )
                                                 }
                                             >

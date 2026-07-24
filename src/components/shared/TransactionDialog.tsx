@@ -65,16 +65,15 @@ import type {
 import { apiJson } from '@/lib/client/auth-client'
 import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
 import {
-    getDescriptionAlias,
     getRecentCategoryIds,
     getStoredAccountId,
     getStoredExpensePaymentMethod,
     getStoredTransactionType,
-    persistDescriptionAlias,
     persistTransactionDialogPrefs,
     type DialogAccountContext,
     type PaymentMethod,
 } from '@/components/shared/transaction-dialog-prefs'
+import { TRANSACTION_FORM_TYPE_LABELS } from '@/components/shared/transaction-dialog/constants'
 
 interface TransactionDialogProps {
     open: boolean
@@ -107,17 +106,6 @@ type CardPaymentDraft = {
     amount: number
     additionalEnabled: boolean
     secondaryAmount: number
-}
-
-const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
-    income: 'Ingreso',
-    expense: 'Gasto',
-    credit_card_expense: 'Gasto con TC',
-    transfer: 'Transferencia',
-    exchange: 'Cambio',
-    credit_card_payment: 'Pago de tarjeta',
-    debt_payment: 'Pago de tarjeta',
-    adjustment: 'Ajuste',
 }
 
 const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string; icon: ReactNode }> = [
@@ -670,17 +658,8 @@ export function TransactionDialog({
                 : rankedCategories,
         [normalizedCategoryQuery, rankedCategories]
     )
-    const storedDescriptionAlias = description ? getDescriptionAlias(description) : undefined
     const effectiveTextSuggestion: DescriptionTextSuggestion | undefined =
-        storedDescriptionAlias
-            ? {
-                kind: 'correction',
-                value: storedDescriptionAlias.description,
-                merchant: storedDescriptionAlias.merchant,
-                confidence: 1,
-                reason: 'Alias que corregiste anteriormente.',
-            }
-            : descriptionSignals.textSuggestion
+        descriptionSignals.textSuggestion
     const selectedCategoryRanking = categoryId
         ? categoryHistoryRanking.find((item) => item.categoryId === categoryId)
         : undefined
@@ -922,7 +901,10 @@ export function TransactionDialog({
         }
 
         const storedType = getStoredTransactionType()
-        const initialType = storedType && TRANSACTION_TYPE_LABELS[storedType] ? storedType : 'expense'
+        const initialType =
+            storedType && TRANSACTION_FORM_TYPE_LABELS[storedType]
+                ? storedType
+                : 'expense'
         const initialPaymentMethod = initialType === 'expense' ? getStoredExpensePaymentMethod() ?? 'debit' : 'debit'
 
         const nextDefaults: Partial<TransactionFormData> = {
@@ -1534,12 +1516,6 @@ export function TransactionDialog({
     }, [setValue])
 
     const handleAcceptDescriptionSuggestion = useCallback((suggestion: DescriptionTextSuggestion) => {
-        const previousDescription = description
-        persistDescriptionAlias(
-            previousDescription,
-            suggestion.value,
-            suggestion.merchant
-        )
         setValue('description', suggestion.value, {
             shouldValidate: true,
             shouldDirty: true,
@@ -1550,10 +1526,9 @@ export function TransactionDialog({
                 shouldDirty: true,
             })
         }
-    }, [description, merchant, setValue])
+    }, [merchant, setValue])
 
     const handleApplySimilarTransaction = useCallback((suggestion: SimilarTransactionSuggestion) => {
-        persistDescriptionAlias(description, suggestion.description, suggestion.merchant)
         setValue('description', suggestion.description, {
             shouldValidate: true,
             shouldDirty: true,
@@ -1614,7 +1589,7 @@ export function TransactionDialog({
                 shouldDirty: true,
             })
         }
-    }, [accounts, description, filteredCategories, isExpense, setValue])
+    }, [accounts, filteredCategories, isExpense, setValue])
 
     const handleCreateSuggestedRule = useCallback(async () => {
         if (!onCreateRule || !suggestedRuleProposal || !selectedCategory || !categoryStorageType) return
@@ -2397,7 +2372,9 @@ export function TransactionDialog({
                                         color: headerSurface.color,
                                     }}
                                 >
-                                    {primaryFlowType === 'expense' ? 'Gasto' : TRANSACTION_TYPE_LABELS[type]}
+                                {primaryFlowType === 'expense'
+                                    ? 'Gasto'
+                                    : TRANSACTION_FORM_TYPE_LABELS[type]}
                                 </span>
                                 {showHeaderPaymentMethod && <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/45 px-2.5 py-1 text-muted-foreground">{paymentMethodLabel}</span>}
                                 {showHeaderInstallmentSummary && <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/45 px-2.5 py-1 text-muted-foreground">{installmentPlanSummary}</span>}

@@ -22,7 +22,6 @@ import {
     getTransactionAmountPrefix,
     getTransactionPrimaryMeta,
     getTopExpenseCategories,
-    TRANSACTION_TYPE_LABELS,
     getEffectiveTransactionLabel,
 } from '@/components/dashboard/dashboard-utils'
 import type {

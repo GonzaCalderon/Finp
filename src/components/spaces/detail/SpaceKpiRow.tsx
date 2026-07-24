@@ -78,7 +78,7 @@ export function SpaceKpiRow({
             </div>
 
             <div className="hidden gap-3 md:grid md:grid-cols-2 lg:grid-cols-4">
-                {items.map((item, index) => (
+                {items.map((item) => (
                     <SpaceMetricCard
                         key={item.label}
                         label={item.desktopLabel}

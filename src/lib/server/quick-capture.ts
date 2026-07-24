@@ -1,12 +1,14 @@
 import { Account, Category, QuickCaptureAlias, Transaction } from '@/lib/models'
 import { Types } from 'mongoose'
 import { normalizeQuickCaptureTerm } from '@/lib/utils/quick-capture'
+import { isSimpleTransactionAccountType } from '@/lib/utils/accounts'
 import { ServiceError } from '@/lib/server/errors'
 import type {
     QuickCaptureAliasDto,
     QuickCaptureAliasTargetType,
     QuickCaptureFrequent,
 } from '@/types'
+import type { Currency } from '@/lib/constants'
 
 type AliasDocumentLike = {
     _id: { toString(): string }
@@ -19,6 +21,23 @@ type AliasDocumentLike = {
     lastUsedAt?: Date
     createdAt: Date
     updatedAt: Date
+}
+
+export type QuickCaptureHistoryRow = {
+    _id: { toString(): string }
+    type: 'expense' | 'income'
+    amount: number
+    currency: Currency
+    description: string
+    merchant?: string
+    sourceAccountId?: { toString(): string }
+    destinationAccountId?: { toString(): string }
+    categoryId?: { toString(): string }
+    date: Date
+    createdAt?: Date
+    updatedAt?: Date
+    createdFrom?: string
+    importBatchId?: unknown
 }
 
 export async function serializeQuickCaptureAliases(
@@ -35,8 +54,14 @@ export async function serializeQuickCaptureAliases(
     const [accounts, categories] = await Promise.all([
         accountIds.length
             ? Account.find({ _id: { $in: accountIds }, userId })
-                .select('_id name color isActive')
-                .lean<Array<{ _id: { toString(): string }; name: string; color?: string; isActive?: boolean }>>()
+                .select('_id name color isActive type')
+                .lean<Array<{
+                    _id: { toString(): string }
+                    name: string
+                    color?: string
+                    isActive?: boolean
+                    type: string
+                }>>()
             : [],
         categoryIds.length
             ? Category.find({ _id: { $in: categoryIds }, userId })
@@ -61,7 +86,14 @@ export async function serializeQuickCaptureAliases(
             alias.targetValue ||
             'Destino no disponible'
         const isStale =
-            (alias.targetType === 'account' && (!account || account.isActive === false)) ||
+            (
+                alias.targetType === 'account' &&
+                (
+                    !account ||
+                    account.isActive === false ||
+                    !isSimpleTransactionAccountType(account.type)
+                )
+            ) ||
             (alias.targetType === 'category' && (!category || category.isArchived === true))
 
         return {
@@ -96,6 +128,13 @@ export async function validateQuickCaptureAliasTarget(params: {
         const account = await Account.findOne({ _id: targetId, userId, isActive: true })
         if (!account) {
             throw new ServiceError(404, 'ALIAS_ACCOUNT_NOT_FOUND', 'La cuenta no existe o esta inactiva.')
+        }
+        if (!isSimpleTransactionAccountType(account.type)) {
+            throw new ServiceError(
+                400,
+                'ALIAS_ACCOUNT_REQUIRES_FULL_FLOW',
+                'Esta cuenta requiere el formulario completo.'
+            )
         }
         return
     }
@@ -157,28 +196,38 @@ export async function upsertQuickCaptureAlias(params: {
     )
 }
 
-export async function getQuickCaptureFrequents(userId: string): Promise<QuickCaptureFrequent[]> {
-    const transactions = await Transaction.find({
+export async function getQuickCaptureHistoryRows(
+    userId: string
+): Promise<QuickCaptureHistoryRow[]> {
+    return Transaction.find({
         userId,
         type: { $in: ['expense', 'income'] },
         status: { $in: ['confirmed', null] },
         installmentPlanId: { $exists: false },
         spaceId: { $exists: false },
     })
-        .select('type amount currency description merchant sourceAccountId destinationAccountId categoryId date')
-        .sort({ date: -1, createdAt: -1 })
-        .limit(250)
-        .lean<Array<{
-            type: 'expense' | 'income'
-            amount: number
-            currency: 'ARS' | 'USD'
-            description: string
-            merchant?: string
-            sourceAccountId?: { toString(): string }
-            destinationAccountId?: { toString(): string }
-            categoryId?: { toString(): string }
-            date: Date
-        }>>()
+        .select(
+            'type amount currency description merchant sourceAccountId destinationAccountId categoryId date createdAt updatedAt createdFrom importBatchId'
+        )
+        .sort({ updatedAt: -1, date: -1 })
+        .limit(500)
+        .lean<QuickCaptureHistoryRow[]>()
+}
+
+export function buildQuickCaptureFrequents(
+    historyRows: QuickCaptureHistoryRow[]
+): QuickCaptureFrequent[] {
+    const transactions = [...historyRows]
+        .sort((left, right) => {
+            const dateDifference =
+                right.date.getTime() - left.date.getTime()
+            if (dateDifference !== 0) return dateDifference
+            return (
+                (right.createdAt?.getTime() ?? 0) -
+                (left.createdAt?.getTime() ?? 0)
+            )
+        })
+        .slice(0, 250)
 
     const groups = new Map<string, QuickCaptureFrequent & { recencyIndex: number }>()
     transactions.forEach((transaction, index) => {

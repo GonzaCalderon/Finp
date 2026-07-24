@@ -36,19 +36,32 @@ Finp ya cubre un flujo personal amplio:
 - ocultamiento global de montos;
 - preferencias persistidas por usuario.
 
-Captura rápida v1.2 ya forma parte del ingreso cotidiano:
+Captura rápida v1.3 ya forma parte del ingreso cotidiano:
 
 - se abre desde la primera acción del FAB o con `Q` en desktop;
 - interpreta gasto/ingreso, monto, ARS/USD, fecha, descripción, cuenta, categoría y comercio;
+- propone dentro del texto completar descripciones y prefijos de cuentas activas, con Enter, Tab, Espacio o toque;
 - muestra resumen vivo, regla aplicada e impacto de saldo antes de registrar;
 - reutiliza en el servidor las mismas reglas y validaciones financieras que Nueva transacción;
 - deriva movimientos complejos al formulario completo conservando el borrador;
 - administra alias explícitos y patrones aprendidos en Configuración > Aprendizaje y atajos;
+- completó la migración del vocabulario local: los alias sincronizados son la única fuente persistente y un borrado no reaparece desde otro almacenamiento;
 - aprende descripcion, cuenta, categoria y comercio desde movimientos simples confirmados, con umbrales conservadores y prioridad inferior a alias y reglas;
 - explica cada autocompletado personal, permite descartarlo y registra aceptación, corrección, reversión o abandono sin bloquear la operación financiera;
 - permite pausar, olvidar, restaurar, corregir, convertir un patrón en regla o reiniciar lo aprendido sin borrar transacciones;
+- conserva el estado pausado al reiniciar y recupera automatismos cuando aparece evidencia consistente posterior a los rechazos;
 - no conserva en la telemetría la frase original, monto, fecha ni notas, y elimina los eventos detallados después de 180 días;
 - detecta duplicados, advierte fechas especiales y permite deshacer durante ocho segundos.
+
+Dirección evolutiva acordada, todavía no implementada:
+
+- Captura rápida actuará gradualmente como orientador hacia funciones especializadas;
+- resolverá aplicaciones simples de compromisos existentes;
+- derivará altas de compromisos, cuotas, reglas, Deudas, Espacios e Importación con un borrador precargado;
+- incorporará onboarding breve y descubrimiento contextual mediante `¿Qué puedo escribir?`;
+- las sugerencias funcionales tendrán explicación, feedback y medición de finalización separadas del aprendizaje semántico actual.
+
+Documento de producto: `docs/producto/captura_rapida_como_orientador.md`.
 
 Tambien existe una capa madura para tarjetas y compromisos:
 
@@ -235,3 +248,6 @@ Estado general:
 - persiste compatibilidad legacy alrededor de `linkedTransactionId` y `status: linked`;
 - invitaciones por link siguen pendientes como flujo de producto;
 - la integracion profunda entre tarjetas y Deudas sigue diferida.
+- Captura rapida todavía no reconoce intenciones funcionales ni compromisos pendientes; actualmente sólo deriva movimientos complejos al formulario general.
+- las transacciones generadas por compromisos no exponen todavía una procedencia suficientemente diferenciada.
+- no existe detección de candidatos a compromiso desde recurrencia mensual.

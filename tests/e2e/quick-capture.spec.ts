@@ -97,7 +97,7 @@ test.describe('Captura rápida', () => {
         await expect(dialog).toContainText(/Enter.*Espacio.*completar/)
 
         await input.press('Enter')
-        await expect(input).toHaveValue('Verdulería')
+        await expect(input).toHaveValue('Verdulería ')
 
         await input.fill('Verdu')
         await input.press('Space')
@@ -123,6 +123,37 @@ test.describe('Captura rápida', () => {
             }))
         })
         await expect(input).toHaveValue('Verdulería ')
+
+        const accountsResponse = await page.request.get('/api/accounts')
+        expect(accountsResponse.ok()).toBe(true)
+        const accountsPayload = await accountsResponse.json()
+        const simpleAccounts = accountsPayload.accounts.filter(
+            (item: { type: string; isActive?: boolean }) =>
+                ['bank', 'cash', 'wallet', 'savings'].includes(item.type) &&
+                item.isActive !== false
+        )
+        const account = simpleAccounts.find(
+            (item: { name: string }) => {
+                const firstWord = item.name.trim().split(/\s+/)[0]
+                if (firstWord.length < 5) return false
+                const prefix = firstWord.slice(0, 4).toLocaleLowerCase('es-AR')
+                return simpleAccounts.filter(
+                    (candidate: { name: string }) =>
+                        candidate.name
+                            .toLocaleLowerCase('es-AR')
+                            .startsWith(prefix)
+                ).length === 1
+            }
+        )
+        expect(account).toBeTruthy()
+        const accountPrefix = account.name.trim().split(/\s+/)[0].slice(0, 4)
+
+        await input.fill(`Café 1500 ${accountPrefix}`)
+        await expect(
+            dialog.getByTestId('quick-capture-inline-completion')
+        ).toHaveText(account.name.slice(accountPrefix.length))
+        await input.press('Enter')
+        await expect(input).toHaveValue(`Café 1500 ${account.name} `)
 
         const categoriesResponse = await page.request.get(
             '/api/categories?includeHidden=true'
@@ -196,13 +227,16 @@ test.describe('Captura rápida', () => {
         )
         expect(category).toBeTruthy()
 
+        const contextResponse = await page.request.get('/api/quick-capture/context')
+        expect(contextResponse.ok()).toBe(true)
+        const contextPayload = await contextResponse.json()
+
         await page.route('**/api/quick-capture/context', async (route) => {
-            const response = await route.fetch()
-            const payload = await response.json()
             await route.fulfill({
-                response,
+                status: 200,
+                contentType: 'application/json',
                 json: {
-                    ...payload,
+                    ...contextPayload,
                     learning: {
                         profile: {
                             enabled: true,

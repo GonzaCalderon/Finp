@@ -51,27 +51,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
+import { QUICK_CAPTURE_TARGET_LABELS } from '@/lib/constants/quick-capture'
+import { isSimpleTransactionAccountType } from '@/lib/utils/accounts'
+import { resolveEntityId } from '@/lib/utils/entity-id'
 import type {
-    QuickCaptureAliasTargetType,
     QuickCaptureLearnedPatternDto,
     QuickCaptureLearningMetrics,
     QuickCaptureLearningProfileDto,
 } from '@/types'
-
-const TARGET_LABELS: Record<QuickCaptureAliasTargetType, string> = {
-    account: 'Cuenta',
-    category: 'Categoría',
-    merchant: 'Comercio',
-    description: 'Descripción',
-}
-
-function resolveId(value: unknown) {
-    if (typeof value === 'string') return value
-    if (value && typeof value === 'object' && 'toString' in value) {
-        return value.toString()
-    }
-    return ''
-}
 
 function formatPercent(value: number) {
     return new Intl.NumberFormat('es-AR', {
@@ -142,7 +129,7 @@ export function QuickCaptureLearningSection() {
             return [
                 pattern.triggerLabel,
                 pattern.targetLabel,
-                TARGET_LABELS[pattern.targetType],
+            QUICK_CAPTURE_TARGET_LABELS[pattern.targetType],
             ].some((value) =>
                 value.toLocaleLowerCase('es-AR').includes(normalized)
             )
@@ -199,12 +186,7 @@ export function QuickCaptureLearningSection() {
             setPatterns((current) =>
                 current.map((item) =>
                     item.key === pattern.key
-                        ? {
-                            ...item,
-                            status:
-                                action === 'forget' ? 'forgotten' : 'active',
-                            autoApply: false,
-                        }
+                        ? result.pattern
                         : item
                 )
             )
@@ -302,9 +284,12 @@ export function QuickCaptureLearningSection() {
 
     const correctionOptions = correcting?.targetType === 'account'
         ? accounts
-            .filter((account) => account.isActive !== false)
+            .filter((account) =>
+                account.isActive !== false &&
+                isSimpleTransactionAccountType(account.type)
+            )
             .map((account) => ({
-                id: resolveId(account._id),
+                id: resolveEntityId(account._id),
                 label: account.name,
             }))
         : correcting?.targetType === 'category'
@@ -314,7 +299,7 @@ export function QuickCaptureLearningSection() {
                     category.type === correcting.transactionType
                 )
                 .map((category) => ({
-                    id: resolveId(category._id),
+                    id: resolveEntityId(category._id),
                     label: category.name,
                 }))
             : []
@@ -470,7 +455,9 @@ export function QuickCaptureLearningSection() {
                                             {pattern.reason}
                                         </p>
                                         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                                            <span>{TARGET_LABELS[pattern.targetType]}</span>
+                                <span>
+                                    {QUICK_CAPTURE_TARGET_LABELS[pattern.targetType]}
+                                </span>
                                             <span>·</span>
                                             <span>{formatPercent(pattern.consistency)} consistente</span>
                                             <span>·</span>

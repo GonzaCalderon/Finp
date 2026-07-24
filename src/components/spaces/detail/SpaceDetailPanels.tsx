@@ -515,7 +515,7 @@ export function SpaceParticipantsPanel({
     onAdd: () => void
 }) {
     return (
-        <SpaceSurface accent="var(--chart-3)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Participantes"
                 title="Personas dentro del espacio"
@@ -939,7 +939,7 @@ export function SpaceClosurePanel({
     const isClosed = space.status === 'closed'
 
     return (
-        <SpaceSurface accent="var(--chart-2)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Cierre"
                 title="Estado operativo del espacio"

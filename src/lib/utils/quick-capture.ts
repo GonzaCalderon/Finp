@@ -12,9 +12,14 @@ import type {
     TransactionPreviewResponse,
 } from '@/types'
 import type { Currency } from '@/lib/constants'
-import { getSupportedCurrencies, supportsCurrency } from '@/lib/utils/accounts'
+import {
+    getSupportedCurrencies,
+    isSimpleTransactionAccountType,
+    supportsCurrency,
+} from '@/lib/utils/accounts'
 import { levenshteinDistance, normalizeDescriptionDisplay } from '@/lib/utils/transaction-description-intelligence'
 import { normalizeComparisonText } from '@/lib/utils/category-ranking'
+import { resolveEntityId } from '@/lib/utils/entity-id'
 import { evaluateRules } from '@/lib/utils/rules'
 
 type TokenState = QuickCaptureToken & { consumed: boolean }
@@ -44,7 +49,6 @@ const INCOME_DESCRIPTION_WORDS = new Set(['sueldo', 'salario', 'honorarios'])
 const EXPENSE_WORDS = new Set(['gasto', 'pague', 'pago', 'compre', 'compra'])
 const ARS_WORDS = new Set(['ars', 'peso', 'pesos'])
 const USD_WORDS = new Set(['usd', 'dolar', 'dolares', 'us$', 'u$s'])
-const SIMPLE_ACCOUNT_TYPES = new Set(['bank', 'cash', 'wallet', 'savings'])
 const SHORT_DESCRIPTION_WORDS = new Set([
     'a',
     'al',
@@ -111,7 +115,7 @@ export function getQuickCaptureInlineCompletion(
 ) {
     if (
         !suggestion ||
-        suggestion.targetType !== 'description' ||
+        !['description', 'account'].includes(suggestion.targetType) ||
         suggestion.end !== text.trimEnd().length ||
         text.slice(suggestion.end).trim()
     ) {
@@ -160,12 +164,6 @@ export function resolveQuickCapturePreviewDraft(
         categoryId: normalized.categoryId,
         merchant: normalized.merchant,
     }
-}
-
-function resolveId(value: unknown) {
-    if (typeof value === 'string') return value
-    if (value && typeof value === 'object' && 'toString' in value) return value.toString()
-    return ''
 }
 
 function tokenize(value: string): TokenState[] {
@@ -389,7 +387,10 @@ function parseExplicitDate(value: string, now: Date) {
 }
 
 function isActiveSimpleAccount(account: IAccount) {
-    return account.isActive !== false && SIMPLE_ACCOUNT_TYPES.has(account.type)
+    return (
+        account.isActive !== false &&
+        isSimpleTransactionAccountType(account.type)
+    )
 }
 
 function accountAcronym(name: string) {
@@ -488,21 +489,35 @@ function buildEntitySuggestion(params: {
         const acronym = accountAcronym(account.name)
         const distance = levenshteinDistance(normalized, target)
         const isAcronym = normalized.length >= 2 && normalized === acronym
+        const isPrefix =
+            normalized.length >= 3 &&
+            target.startsWith(normalized) &&
+            target.length - normalized.length >= 2
         const isClose = normalized.length >= 4 && distance <= (target.length >= 8 ? 2 : 1)
-        if (!isAcronym && !isClose) return
+        if (!isAcronym && !isPrefix && !isClose) return
         candidates.push({
-            id: `account:${resolveId(account._id)}:${token.start}`,
+            id: `account:${resolveEntityId(account._id)}:${token.start}`,
             sourceText: token.value,
             targetType: 'account',
-            targetId: resolveId(account._id),
+            targetId: resolveEntityId(account._id),
+            targetValue: account.name,
             targetLabel: account.name,
-            reason: isAcronym
-                ? `Coincide con las iniciales de ${account.name}.`
-                : `Se parece al nombre de la cuenta ${account.name}.`,
-            confidence: isAcronym ? 0.91 : Math.max(0.72, 1 - distance / target.length),
+            reason: isPrefix
+                ? `Podés completar la cuenta ${account.name}.`
+                : isAcronym
+                    ? `Coincide con las iniciales de ${account.name}.`
+                    : `Se parece al nombre de la cuenta ${account.name}.`,
+            confidence: isPrefix
+                ? Math.min(
+                    0.96,
+                    0.84 + normalized.length / target.length * 0.12
+                )
+                : isAcronym
+                    ? 0.91
+                    : Math.max(0.72, 1 - distance / target.length),
             start: token.start,
             end: token.end,
-            source: 'similarity',
+            source: isPrefix ? 'entity' : 'similarity',
         })
     })
 
@@ -511,10 +526,10 @@ function buildEntitySuggestion(params: {
         const distance = levenshteinDistance(normalized, target)
         if (normalized.length < 4 || distance > (target.length >= 9 ? 2 : 1)) return
         candidates.push({
-            id: `category:${resolveId(category._id)}:${token.start}`,
+            id: `category:${resolveEntityId(category._id)}:${token.start}`,
             sourceText: token.value,
             targetType: 'category',
-            targetId: resolveId(category._id),
+            targetId: resolveEntityId(category._id),
             targetLabel: category.name,
             reason: `Se parece a la categoría ${category.name}.`,
             confidence: Math.max(0.7, 1 - distance / target.length),
@@ -568,8 +583,8 @@ function buildEntitySuggestion(params: {
         alias: 6,
         rule: 5,
         learned: 4,
+        entity: 3.5,
         frequent: 3,
-        entity: 2,
         similarity: 1,
         date: 0,
     }
@@ -852,7 +867,7 @@ export function parseQuickCapture(
             .filter(isActiveSimpleAccount)
             .map((account) => ({
                 kind: 'account' as const,
-                id: resolveId(account._id),
+                id: resolveEntityId(account._id),
                 label: account.name,
                 color: account.color,
                 normalized: normalizeQuickCaptureTerm(account.name),
@@ -861,7 +876,7 @@ export function parseQuickCapture(
             .filter((category) => !category.isArchived && category.type === type)
             .map((category) => ({
                 kind: 'category' as const,
-                id: resolveId(category._id),
+                id: resolveEntityId(category._id),
                 label: category.name,
                 color: category.color,
                 normalized: normalizeQuickCaptureTerm(category.name),
@@ -911,7 +926,7 @@ export function parseQuickCapture(
                 token.normalizedValue === accountName.replace(/\s+/g, '')
         })
         if (matchingAccount && !accountId) {
-            accountId = resolveId(matchingAccount._id)
+            accountId = resolveEntityId(matchingAccount._id)
             markToken(token, 'account', matchingAccount.name, matchingAccount.color)
             return
         }
@@ -921,7 +936,7 @@ export function parseQuickCapture(
             return token.normalizedValue === normalizeQuickCaptureTerm(category.name)
         })
         if (matchingCategory && !categoryId) {
-            categoryId = resolveId(matchingCategory._id)
+            categoryId = resolveEntityId(matchingCategory._id)
             markToken(token, 'category', matchingCategory.name, matchingCategory.color)
         }
     })
@@ -1103,7 +1118,8 @@ export function parseQuickCapture(
 
     let selectedAccount = candidateAccountId
         ? options.accounts.find((account) =>
-            resolveId(account._id) === candidateAccountId && isActiveSimpleAccount(account)
+            resolveEntityId(account._id) === candidateAccountId &&
+            isActiveSimpleAccount(account)
         )
         : undefined
 
@@ -1122,7 +1138,9 @@ export function parseQuickCapture(
         if (supported.length === 1) currency = supported[0]
     }
 
-    accountId = accountId ?? (selectedAccount ? resolveId(selectedAccount._id) : undefined)
+    accountId =
+        accountId ??
+        (selectedAccount ? resolveEntityId(selectedAccount._id) : undefined)
 
     const unresolvedTokens = tokens
         .filter((token) =>
@@ -1161,8 +1179,8 @@ export function parseQuickCapture(
                     alias: 6,
                     rule: 5,
                     learned: 4,
+                    entity: 3.5,
                     frequent: 3,
-                    entity: 2,
                     similarity: 1,
                     date: 0,
                 }

@@ -138,7 +138,7 @@ export function resolveQuickCapturePatternEligibility(params: {
         params.consistency >= 0.9 &&
         params.confidence >= 0.8 &&
         params.lead >= 2 &&
-        params.recentNegativeCount === 0
+        params.recentNegativeCount < 2
 
     return { visible, autoApply }
 }

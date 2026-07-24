@@ -4,7 +4,8 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { QuickCaptureAlias } from '@/lib/models'
 import {
-    getQuickCaptureFrequents,
+    buildQuickCaptureFrequents,
+    getQuickCaptureHistoryRows,
     serializeQuickCaptureAliases,
 } from '@/lib/server/quick-capture'
 import { getQuickCaptureLearningContext } from '@/lib/server/quick-capture-learning'
@@ -18,12 +19,15 @@ export async function GET() {
         }
 
         await connectDB()
+        const historyRows = getQuickCaptureHistoryRows(session.user.id)
         const [aliasDocuments, frequents, learning] = await Promise.all([
             QuickCaptureAlias.find({ userId: session.user.id })
                 .sort({ lastUsedAt: -1, updatedAt: -1 })
                 .lean(),
-            getQuickCaptureFrequents(session.user.id),
-            getQuickCaptureLearningContext(session.user.id).catch((error) => {
+            historyRows.then(buildQuickCaptureFrequents),
+            getQuickCaptureLearningContext(session.user.id, {
+                historyRows,
+            }).catch((error) => {
                 console.error(
                     'No se pudo cargar el aprendizaje personalizado:',
                     error

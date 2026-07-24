@@ -25,6 +25,8 @@ Las automatizaciones no son solamente una mejora de comodidad. Son la base para 
 
 La estrategia debe integrarse con Espacios. Captura rápida, reglas, categorías y revisión diaria tienen que comprender si un movimiento es personal o compartido, sin mezclar el total del Espacio con la parte privada del usuario.
 
+Captura rápida evoluciona además como orientador de Finp: permite empezar desde lenguaje cotidiano, resuelve lo simple y deriva intenciones especializadas hacia el módulo correcto con un borrador precargado. Esta dirección se documenta en `docs/producto/captura_rapida_como_orientador.md`.
+
 ## 2. Objetivos
 
 - Registrar un gasto cotidiano en menos de cinco segundos.
@@ -34,6 +36,8 @@ La estrategia debe integrarse con Espacios. Captura rápida, reglas, categorías
 - Mantener una vía completa para movimientos financieros complejos.
 - Hacer que toda automatización sea explicable, corregible y reversible.
 - Entregar valor visible inmediatamente después de registrar.
+- Facilitar el descubrimiento contextual de Compromisos, Reglas, Deudas, Espacios, cuotas e Importación.
+- Evitar que el usuario necesite conocer de antemano la arquitectura o ubicación de cada función.
 
 ## 3. Principios de experiencia
 
@@ -57,6 +61,8 @@ Finp debe priorizar:
 ### Progresive disclosure
 
 El flujo rápido no reemplaza al formulario completo. El usuario debe poder ampliar el movimiento cuando necesite cuotas, cambio de moneda, transferencia, tarjeta, espacio, deuda o información adicional.
+
+La derivación debe conservar el trabajo ya realizado. Cuando Captura rápida detecta una intención especializada, explica qué función recomienda, ofrece alternativas y abre el destino con un borrador transportable. La configuración final permanece bajo responsabilidad del módulo especializado.
 
 ### Automatización por confianza
 
@@ -100,12 +106,21 @@ Características:
 - atajo `Q` en desktop: implementado;
 - interpretacion determinista y resumen vivo: implementado;
 - sugerencia de cuenta, categoria, comercio y descripcion: implementado;
+- autocompletado inline de descripciones y prefijos de cuentas activas: implementado;
 - alias sincronizados y administrables: implementado;
 - aprendizaje personal explicable desde movimientos confirmados: implementado;
 - validacion financiera compartida entre vista previa y creacion: implementado;
 - Enter para guardar cuando no hay bloqueos: implementado;
 - deshacer inmediato durante ocho segundos: implementado;
 - derivacion al flujo completo conservando el borrador: implementado.
+
+Dirección evolutiva aprobada:
+
+- actuar como orientador hacia otras funciones de Finp;
+- distinguir transacción simple, aplicación de compromiso y creación de un compromiso;
+- enseñar capacidades mediante onboarding breve y ayudas contextuales;
+- usar un contrato común para sugerencias funcionales;
+- medir si la derivación se completa, no solamente si el usuario toca el CTA.
 
 La autoridad final es `POST /api/transactions`: vuelve a evaluar reglas, cuenta,
 moneda, categoria, fondos y duplicados aunque la vista previa del navegador haya
@@ -123,8 +138,10 @@ moneda ni tipo financiero.
 - Umbrales: desde tres confirmaciones y 70% de consistencia se muestra; desde cinco, 90%, ventaja de dos casos y sin feedback negativo reciente puede autocompletar.
 - Precedencia: texto financiero y entidades explicitas, alias, reglas, patrones personales, frecuencia/recencia y similitud.
 - Feedback: aceptar mejora prioridad; descartar, revertir o corregir la reduce. Dos rechazos recientes suspenden el autocompletado.
+- Recuperacion: una reversion o correccion equivale a dos descartes, mientras evidencia consistente posterior vuelve a habilitar el automatismo.
 - Explicabilidad: el dialogo muestra el origen `Personalizada`, evidencia resumida y permite quitar el valor antes de registrar.
 - Control: Configuracion > Aprendizaje y atajos permite pausar, olvidar, restaurar, corregir, convertir en regla y reiniciar.
+- Migracion: los alias locales se sincronizan una vez, se eliminan del dispositivo y no vuelven a imponerse sobre altas, ediciones o borrados del vocabulario sincronizado.
 - Privacidad: los eventos no guardan frase original, monto, fecha ni notas, vencen a los 180 dias y nunca son requisito para crear una transaccion.
 
 ### 4.2 Accesos frecuentes
@@ -243,7 +260,9 @@ Los compromisos son otra fuente de datos predecibles. Deben integrarse con:
 - proyección;
 - objetivos de ahorro.
 
-La evolución funcional de compromisos compartidos, montos variables y ajustes argentinos está documentada en `docs/producto/compromisos_espacios_y_proyeccion.md`.
+Captura rápida debe poder aplicar un compromiso pendiente cuando la coincidencia sea clara. Cuando el texto parezca definir uno nuevo, debe invitar a abrir la página dedicada con descripción, monto, moneda, recurrencia, día, cuenta y categoría ya interpretados. Políticas variables, aumentos, índices, reparto y otros campos avanzados se confirman allí.
+
+El historial puede originar candidatos mensuales explicables, pero nunca crear un compromiso automáticamente. La evolución funcional de compromisos compartidos, montos variables y ajustes argentinos está documentada en `docs/producto/compromisos_espacios_y_proyeccion.md`; el contrato de orientación está en `docs/producto/captura_rapida_como_orientador.md`.
 
 ## 6. Gastos repetidos, grandes y atípicos
 
@@ -319,6 +338,9 @@ No se recomienda una racha rígida ni premiar la cantidad de gastos ingresados.
 - Adopción de accesos frecuentes.
 - Reglas creadas desde sugerencias.
 - Reglas desactivadas o corregidas después de aplicarse.
+- Derivaciones funcionales aceptadas y efectivamente completadas.
+- Campos precargados que el usuario conserva o corrige en el módulo de destino.
+- Módulos descubiertos por primera vez desde Captura rápida.
 
 Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creación de movimientos.
 
@@ -344,8 +366,9 @@ Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creac
 - Vocabulario argentino inicial: implementado para fechas relativas, dias de semana y abreviaturas; debe seguir ampliandose con evidencia real.
 - Autocompletado: reglas, atajos y movimientos frecuentes proponen completar prefijos con un sufijo tenue dentro del texto; Enter, Espacio o toque aceptan en mobile y Tab, Enter o Espacio en desktop. Doble Espacio consecutivo conserva el prefijo escrito y descarta la propuesta.
 - Coherencia de vista previa: los campos visibles consumen el resultado normalizado del servidor, incluidas categoria, tipo y comercio aplicados por reglas.
-- Aprendizaje y metricas: implementados con eventos best-effort, procedencia `quick_capture`, patrones reconstruibles y controles por usuario.
+- Aprendizaje y metricas: implementados con eventos best-effort, impresiones y aceptaciones comparables, procedencia `quick_capture`, patrones reconstruibles y controles por usuario.
 - Pendiente evolutivo: fijar frecuentes, ampliar vocabulario argentino con evidencia real y mostrar procedencia/correcciones en el detalle de Transacciones.
+- Dirección siguiente: incorporar onboarding contextual y orientación gradual hacia Compromisos y otros flujos especializados.
 
 ### Fase C: revisión diaria
 
@@ -377,6 +400,10 @@ Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creac
 - parte propia en proyección;
 - integración posterior con índices oficiales;
 - trazabilidad de cada cálculo.
+- aplicación de compromisos pendientes desde Captura rápida;
+- creación de borradores de compromiso desde lenguaje recurrente;
+- candidatos mensuales explicables basados en historial;
+- procedencia visible y vínculo reversible entre aplicación y transacción.
 
 ## 9.1 Criterio transversal de entrega
 

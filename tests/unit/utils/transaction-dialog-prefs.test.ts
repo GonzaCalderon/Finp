@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
-    getDescriptionAlias,
+    clearStoredDescriptionAliases,
     getRecentCategoryIds,
     getStoredAccountId,
     getStoredExpensePaymentMethod,
+    getStoredDescriptionAliases,
     getStoredTransactionType,
-    persistDescriptionAlias,
     persistTransactionDialogPrefs,
 } from '@/components/shared/transaction-dialog-prefs'
 
@@ -54,19 +54,27 @@ describe('transaction-dialog-prefs', () => {
         expect(getStoredAccountId('transfer:destination')).toBe('wallet-1')
     })
 
-    it('recuerda una correccion aceptada como alias local', () => {
-        persistDescriptionAlias('Supermeracdo', 'Supermercado', 'Mercado Central')
+    it('expone y limpia alias locales únicamente para su migración', () => {
+        window.localStorage.setItem(
+            'finp-transaction-dialog-prefs',
+            JSON.stringify({
+                descriptionAliases: {
+                    supermeracdo: {
+                        description: 'Supermercado',
+                        merchant: 'Mercado Central',
+                    },
+                },
+            })
+        )
 
-        expect(getDescriptionAlias('supermerácdo')).toEqual({
+        expect(getStoredDescriptionAliases()).toEqual([{
+            term: 'supermeracdo',
             description: 'Supermercado',
             merchant: 'Mercado Central',
-        })
-    })
+        }])
 
-    it('ignora alias vacios o que no cambian el texto', () => {
-        persistDescriptionAlias('', 'Supermercado')
-        persistDescriptionAlias('Supermercado', 'supermercado')
+        clearStoredDescriptionAliases()
 
-        expect(getDescriptionAlias('Supermercado')).toBeUndefined()
+        expect(getStoredDescriptionAliases()).toEqual([])
     })
 })

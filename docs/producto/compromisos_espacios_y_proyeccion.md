@@ -343,6 +343,42 @@ Conservar:
 
 Editar una plantilla no debe modificar aplicaciones pasadas.
 
+## 11.1 Integración con Captura rápida
+
+Captura rápida funciona como puerta de entrada y orientador, pero la página de Compromisos conserva la responsabilidad de configurar plantillas.
+
+Debe distinguir tres intenciones:
+
+- registrar una transacción independiente;
+- aplicar un compromiso pendiente;
+- preparar un compromiso nuevo.
+
+Una aplicación clara puede confirmarse desde Captura rápida reutilizando las mismas validaciones financieras y de período del servicio de Compromisos. Crear una plantilla nueva deriva a la página dedicada con un borrador precargado.
+
+Ejemplos:
+
+- `Pagué alquiler 675000 hoy mp`: propone aplicar el compromiso Alquiler del período actual.
+- `Alquiler 650000 el 5 de cada mes`: prepara un compromiso mensual y abre su configuración.
+- `Luz mensual monto variable`: prepara la recurrencia y la política de monto, pero requiere completar cuenta, vencimiento y demás datos obligatorios.
+- `Alquiler 650000 ajusta por ICL cada 3 meses`: puede reconocer un posible índice y frecuencia, pero no debe inventar base contractual, primera fecha, rezago ni redondeo.
+
+La transacción generada debe conservar vínculo y procedencia visibles. Editar el movimiento no altera la plantilla salvo confirmación explícita. Eliminarlo reabre la aplicación del período y no elimina el compromiso.
+
+### Sugerencias desde recurrencia
+
+El aprendizaje puede proponer un compromiso cuando existen al menos tres períodos mensuales consistentes bajo una descripción, comercio o nominaciones similares.
+
+El candidato debe:
+
+- explicar coincidencias, meses observados y variación de montos;
+- excluir cuotas, transferencias, deudas, movimientos de Espacios y aplicaciones ya vinculadas;
+- comprobar que no exista un compromiso equivalente;
+- proponer monto fijo cuando es estable o monto a confirmar cuando varía;
+- recordar descartes y no insistir sin nueva evidencia;
+- abrir Compromisos con un borrador, nunca crear la plantilla automáticamente.
+
+Los candidatos funcionales reutilizan eventos y feedback del aprendizaje personal, pero se modelan separados de las personalizaciones de cuenta, categoría o comercio.
+
 ## 12. Fases sugeridas
 
 ### Fase 1: compromisos personales variables
@@ -351,22 +387,39 @@ Editar una plantilla no debe modificar aplicaciones pasadas.
 - cambios efectivos desde una fecha;
 - monto variable a confirmar;
 - proyección usando el monto correcto por período.
+- snapshots y estados de aplicación;
+- procedencia visible en la transacción generada.
 
-### Fase 2: compromisos en Espacios
+### Fase 2: Captura rápida y orientación
+
+- compromisos pendientes en el contexto de Captura rápida;
+- aplicación segura desde el diálogo;
+- derivación de nuevas plantillas con borrador precargado;
+- onboarding contextual;
+- vínculo reversible entre transacción y aplicación.
+
+### Fase 3: recurrencia aprendida
+
+- candidatos mensuales desde historial vigente;
+- explicación de evidencia y política de monto propuesta;
+- feedback, descarte persistente y recuperación con nueva evidencia;
+- sugerencias coordinadas entre Captura rápida y Compromisos.
+
+### Fase 4: compromisos en Espacios
 
 - contexto `space`;
 - categoría y reparto;
 - aplicación idempotente a un movimiento;
 - impacto privado mediante el flujo existente.
 
-### Fase 3: ajustes pautados
+### Fase 5: ajustes pautados
 
 - agenda de montos;
 - porcentajes por fecha;
 - redondeo;
 - vista de próximos aumentos.
 
-### Fase 4: índices
+### Fase 6: índices
 
 - fuentes oficiales;
 - cálculo por índice;
@@ -374,7 +427,7 @@ Editar una plantilla no debe modificar aplicaciones pasadas.
 - fallback manual;
 - trazabilidad del dato.
 
-### Fase 5: proyección avanzada
+### Fase 7: proyección avanzada
 
 - certeza de cada monto;
 - parte propia y salida de cuenta;
@@ -392,6 +445,9 @@ Editar una plantilla no debe modificar aplicaciones pasadas.
 - Cambiar reparto histórico al editar la plantilla.
 - Aplicar automáticamente servicios cuyo monto requiere factura.
 - Acoplar el dominio a una norma o índice que puede cambiar.
+- Confundir una transacción similar con la aplicación pendiente de un compromiso.
+- Crear compromisos por inferencia sin confirmación.
+- Repetir sugerencias funcionales hasta volver invasiva la captura.
 
 ## 14. Decisiones abiertas
 

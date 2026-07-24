@@ -91,10 +91,26 @@ Si alguna respuesta falta, el bloque conserva un pendiente explícito de product
 - Consentimiento: aproximaciones y alias persistentes requieren aceptación explícita.
 - Aprendizaje: usa movimientos simples confirmados y vigentes, con umbrales documentados; nunca decide monto, fecha, moneda ni operaciones especiales.
 - Precedencia: texto y selecciones explícitas, alias y reglas siempre ganan frente a patrones personales.
+- Autocompletado: sólo un prefijo real puede mostrarse dentro del texto; abreviaturas, errores y similitudes permanecen como sugerencias que requieren aceptación.
 - Explicabilidad: cada personalización muestra procedencia y evidencia resumida; aceptar, descartar, revertir y corregir alimentan el ranking.
 - Control: campos interpretados editables, completar detalles y administración unificada de aprendizaje y atajos. El usuario puede pausar, olvidar, restaurar, corregir, convertir en regla o reiniciar.
+- Migraciones: una fuente local transitoria debe tener corte, limpieza e idempotencia; una vez sincronizada no puede revivir entidades eliminadas.
 - Privacidad: los eventos no conservan texto original, monto, fecha ni notas; tienen TTL y aislamiento por usuario.
 - Seguridad: preview sin escrituras y revalidación final de cuenta, moneda, fondos, categoría, reglas y duplicados.
 - Reversibilidad: deshacer real durante ocho segundos y error visible si la eliminación falla.
 - Cobertura: pruebas unitarias de ranking y privacidad, APIs autenticadas, E2E desktop/mobile y smoke real ARS/USD con deshacer.
-- Pendiente evolutivo: frecuentes fijables y procedencia visible en el detalle de Transacciones.
+- Pendiente evolutivo: frecuentes fijables, procedencia visible en el detalle de Transacciones y orientación gradual hacia funciones especializadas.
+
+## Aplicación a sugerencias funcionales
+
+- Intención: cada recomendación distingue qué puede resolverse en Captura rápida y qué pertenece a un módulo especializado.
+- Descubrimiento: onboarding breve, ejemplos contextuales y acceso recuperable desde `¿Qué puedo escribir?`.
+- Explicabilidad: la propuesta muestra qué entendió Finp, por qué recomienda una función y qué datos llevará.
+- Alternativas: siempre permite aceptar, continuar como transacción simple cuando sea válido o descartar.
+- Transporte: el destino recibe un borrador tipado y versionado; no obliga al usuario a repetir datos ya interpretados.
+- Autoridad: Compromisos, Deudas, Espacios, cuotas, Reglas e Importación conservan sus propias validaciones y confirmación final.
+- Procedencia: la entidad creada registra origen y la superficie inicial puede comprobar si la derivación se completó.
+- Feedback: mostrada, aceptada, descartada, pospuesta y completada son estados distintos; aceptar un CTA no equivale a completar la función.
+- Coordinación: una misma propuesta no aparece simultáneamente en varias superficies ni vuelve después de un descarte sin evidencia nueva.
+- Privacidad: reutiliza los límites de telemetría del aprendizaje y no incorpora texto financiero libre innecesario.
+- Verificación: cada nuevo destino necesita pruebas de interpretación, transporte del borrador, validación final, retorno ante error y experiencia desktop/mobile.

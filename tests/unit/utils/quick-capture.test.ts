@@ -266,6 +266,41 @@ describe('quick capture presentation helpers', () => {
         })
     })
 
+    it('ofrece autocompletado inline cuando el usuario empieza a escribir una cuenta', () => {
+        const result = parse('Café 1500 merc', [])
+        const suggestion = result.suggestions.find(
+            (item) => item.targetType === 'account'
+        )
+
+        expect(suggestion).toMatchObject({
+            targetType: 'account',
+            targetId: mercadoPago._id.toString(),
+            targetLabel: 'Mercado Pago',
+            source: 'entity',
+        })
+        expect(
+            getQuickCaptureInlineCompletion('Café 1500 merc', suggestion)
+        ).toMatchObject({
+            target: 'Mercado Pago',
+            suffix: 'ado Pago',
+        })
+    })
+
+    it('mantiene abreviaturas de cuenta no prefijo como sugerencias explícitas', () => {
+        const result = parse('Café 1500 mp', [])
+        const suggestion = result.suggestions.find(
+            (item) => item.targetType === 'account'
+        )
+
+        expect(suggestion).toMatchObject({
+            sourceText: 'mp',
+            targetLabel: 'Mercado Pago',
+        })
+        expect(
+            getQuickCaptureInlineCompletion('Café 1500 mp', suggestion)
+        ).toBeUndefined()
+    })
+
     it('no muestra ghost text cuando la sugerencia no completa el último fragmento', () => {
         const suggestion = {
             id: 'description:verduleria:0',

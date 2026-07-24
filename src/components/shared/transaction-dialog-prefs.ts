@@ -58,19 +58,9 @@ function normalizeCategoryIds(value: unknown): string[] {
         .slice(0, MAX_RECENT_CATEGORIES)
 }
 
-export interface DescriptionAlias {
+interface DescriptionAlias {
     description: string
     merchant?: string
-}
-
-function normalizeAliasKey(value: string) {
-    return value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
 }
 
 function normalizeDescriptionAliases(value: unknown): Record<string, DescriptionAlias> {
@@ -161,12 +151,6 @@ export function getRecentCategoryIds(type: RecentCategoryType) {
     return readStoredPrefs().recentCategories?.[type] ?? []
 }
 
-export function getDescriptionAlias(value: string): DescriptionAlias | undefined {
-    const key = normalizeAliasKey(value)
-    if (!key) return undefined
-    return readStoredPrefs().descriptionAliases?.[key]
-}
-
 export function getStoredDescriptionAliases() {
     return Object.entries(readStoredPrefs().descriptionAliases ?? {}).map(([term, alias]) => ({
         term,
@@ -174,28 +158,11 @@ export function getStoredDescriptionAliases() {
     }))
 }
 
-export function persistDescriptionAlias(
-    source: string,
-    description: string,
-    merchant?: string
-) {
-    const sourceKey = normalizeAliasKey(source)
-    const targetKey = normalizeAliasKey(description)
-    if (!sourceKey || !targetKey || sourceKey === targetKey) return
-
+export function clearStoredDescriptionAliases() {
     updateStoredPrefs((current) => {
-        const aliases = normalizeDescriptionAliases(current.descriptionAliases)
-        const nextAliases = Object.fromEntries([
-            ...Object.entries(aliases).filter(([key]) => key !== sourceKey),
-            [sourceKey, {
-                description: description.trim(),
-                merchant: merchant?.trim() || undefined,
-            }],
-        ].slice(-MAX_DESCRIPTION_ALIASES))
-
         return {
             ...current,
-            descriptionAliases: nextAliases,
+            descriptionAliases: {},
         }
     })
 }
