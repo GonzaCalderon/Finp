@@ -1,12 +1,14 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
     Activity,
     ArrowRight,
     CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
     FileInput,
     Layers3,
     Lightbulb,
@@ -135,6 +137,7 @@ function RulesPageInner() {
         useState<Partial<RuleFormValues> | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<ITransactionRule | null>(null)
     const [filter, setFilter] = useState<RuleFilter>('active')
+    const suggestionsRailRef = useRef<HTMLDivElement>(null)
 
     const activeRules = useMemo(
         () => rules.filter((rule) => rule.isActive),
@@ -216,6 +219,13 @@ function RulesPageInner() {
                     : 'No se pudo descartar la sugerencia'
             )
         }
+    }
+
+    const scrollSuggestions = (direction: -1 | 1) => {
+        suggestionsRailRef.current?.scrollBy({
+            left: direction * Math.min(suggestionsRailRef.current.clientWidth * 0.9, 480),
+            behavior: 'smooth',
+        })
     }
 
     const handleDuplicate = async (rule: ITransactionRule) => {
@@ -350,7 +360,7 @@ function RulesPageInner() {
                 </div>
             </motion.section>
 
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <SummaryMetric
                     label="Reglas activas"
                     value={String(activeRules.length)}
@@ -377,8 +387,8 @@ function RulesPageInner() {
                 />
             </section>
 
-            <section className="space-y-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <section className="space-y-3 overflow-hidden">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                             Sugerencias de Finp
@@ -391,9 +401,33 @@ function RulesPageInner() {
                         </p>
                     </div>
                     {suggestions.length > 0 ? (
-                        <Badge variant="secondary" className="w-fit rounded-full">
-                            {suggestions.length} pendiente{suggestions.length === 1 ? '' : 's'}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="rounded-full">
+                                {suggestions.length} pendiente{suggestions.length === 1 ? '' : 's'}
+                            </Badge>
+                            {suggestions.length > 2 && (
+                                <div className="hidden items-center gap-1 sm:flex">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon-sm"
+                                        onClick={() => scrollSuggestions(-1)}
+                                        aria-label="Ver sugerencias anteriores"
+                                    >
+                                        <ChevronLeft />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon-sm"
+                                        onClick={() => scrollSuggestions(1)}
+                                        aria-label="Ver más sugerencias"
+                                    >
+                                        <ChevronRight />
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     ) : null}
                 </div>
 
@@ -403,18 +437,28 @@ function RulesPageInner() {
                         <Skeleton className="h-60 rounded-xl" />
                     </div>
                 ) : suggestions.length > 0 ? (
-                    <div className="grid gap-3 lg:grid-cols-2">
+                    <div
+                        ref={suggestionsRailRef}
+                        className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
+                        role="region"
+                        tabIndex={0}
+                        aria-label="Sugerencias de automatización"
+                    >
                         {suggestions.map((suggestion) => (
-                            <RuleSuggestionCard
+                            <div
                                 key={suggestion.key}
-                                suggestion={suggestion}
-                                category={categories.find(
-                                    (category) =>
-                                        category._id.toString() === suggestion.categoryId
-                                )}
-                                onReview={handleReviewSuggestion}
-                                onDismiss={handleDismissSuggestion}
-                            />
+                                className="min-w-[calc(100%-1.5rem)] snap-start sm:min-w-[23rem] lg:min-w-[calc(50%-0.375rem)]"
+                            >
+                                <RuleSuggestionCard
+                                    suggestion={suggestion}
+                                    category={categories.find(
+                                        (category) =>
+                                            category._id.toString() === suggestion.categoryId
+                                    )}
+                                    onReview={handleReviewSuggestion}
+                                    onDismiss={handleDismissSuggestion}
+                                />
+                            </div>
                         ))}
                     </div>
                 ) : (

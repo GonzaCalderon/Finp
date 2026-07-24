@@ -11,7 +11,6 @@ import {
     ChevronRight,
     FlaskConical,
     Info,
-    Sparkles,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -40,7 +39,6 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Spinner } from '@/components/shared/Spinner'
 import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 import type {
@@ -215,8 +213,12 @@ export function TransactionRuleDialog({
     ])
 
     const goToActions = async () => {
-        const isValid = await trigger(['name', 'appliesTo', 'field', 'condition', 'value'])
-        if (isValid) setActiveStep('actions')
+        const values = getValues()
+        if (!values.name.trim() || !values.value.trim()) {
+            await trigger(['name', 'value'])
+            return
+        }
+        setActiveStep('actions')
     }
 
     const handleSimulate = async () => {
@@ -275,31 +277,70 @@ export function TransactionRuleDialog({
             ? `completar comercio como ${watchedNormalizeMerchant.trim()}`
             : null,
     ].filter(Boolean)
+    const stepIndex = (['match', 'actions', 'review'] as const).indexOf(activeStep)
+    const stepLabel =
+        activeStep === 'match'
+            ? 'Coincidencia'
+            : activeStep === 'actions'
+                ? 'Acciones'
+                : 'Prueba y activación'
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 variant="fullscreen-mobile"
-                className="max-w-3xl gap-0 overflow-hidden p-0 sm:max-h-[92dvh]"
+                showCloseButton={false}
+                className="gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[min(88dvh,760px)] sm:max-w-4xl"
             >
-                <DialogHeader className="border-b bg-gradient-to-br from-sky-500/10 via-background to-violet-500/5 px-5 py-5 sm:px-7">
-                    <div className="mb-1 flex items-center gap-2">
-                        <Badge variant="secondary" className="gap-1 rounded-full">
-                            <Sparkles className="size-3" />
-                            Automatización
-                        </Badge>
-                        {initialValues && !rule && (
-                            <Badge variant="outline" className="rounded-full">
-                                Sugerida por Finp
-                            </Badge>
-                        )}
+                <DialogHeader className="shrink-0 border-b bg-background/95 px-4 py-3 backdrop-blur md:px-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <DialogTitle className="text-[1.02rem] tracking-tight">
+                                    {rule ? 'Editar regla' : 'Nueva regla'}
+                                </DialogTitle>
+                                <Badge variant="secondary" className="rounded-full">
+                                    {stepIndex + 1} / 3
+                                </Badge>
+                                {initialValues && !rule && (
+                                    <Badge variant="outline" className="rounded-full">
+                                        Sugerida por Finp
+                                    </Badge>
+                                )}
+                            </div>
+                            <DialogDescription className="text-xs">
+                                {stepLabel}
+                                <span className="hidden sm:inline">
+                                    {' '}· Definí qué reconoce Finp y qué debe completar.
+                                </span>
+                            </DialogDescription>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="-mr-2 shrink-0 text-muted-foreground"
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Cerrar
+                        </Button>
                     </div>
-                    <DialogTitle className="text-xl">
-                        {rule ? 'Editar regla' : 'Nueva regla'}
-                    </DialogTitle>
-                    <DialogDescription>
-                        Definí una vez el criterio y Finp completará los próximos movimientos por vos.
-                    </DialogDescription>
+                    <div className="mt-2 flex gap-1" aria-hidden="true">
+                        {[0, 1, 2].map((index) => (
+                            <div
+                                key={index}
+                                className="h-1.5 flex-1 rounded-full transition-colors"
+                                style={{
+                                    background:
+                                        index === stepIndex
+                                            ? 'var(--sky)'
+                                            : index < stepIndex
+                                                ? 'color-mix(in srgb, var(--sky) 42%, var(--border))'
+                                                : 'color-mix(in srgb, var(--border) 88%, transparent)',
+                                }}
+                            />
+                        ))}
+                    </div>
                 </DialogHeader>
 
                 <form
@@ -319,40 +360,22 @@ export function TransactionRuleDialog({
                     )}
                     className="flex min-h-0 flex-1 flex-col"
                 >
-                    <Tabs
-                        value={activeStep}
-                        onValueChange={(value) => setActiveStep(value as RuleDialogStep)}
-                        className="min-h-0 flex-1 gap-0"
-                    >
-                        <div className="border-b px-5 py-3 sm:px-7">
-                            <TabsList className="grid h-auto w-full grid-cols-3 bg-muted/70 p-1">
-                                <TabsTrigger value="match" className="min-h-9 px-2">
-                                    <span className="hidden sm:inline">1. Coincidencia</span>
-                                    <span className="sm:hidden">1. Cuándo</span>
-                                </TabsTrigger>
-                                <TabsTrigger value="actions" className="min-h-9 px-2">
-                                    <span className="hidden sm:inline">2. Acciones</span>
-                                    <span className="sm:hidden">2. Hacer</span>
-                                </TabsTrigger>
-                                <TabsTrigger value="review" className="min-h-9 px-2">
-                                    3. Probar
-                                </TabsTrigger>
-                            </TabsList>
-                        </div>
-
+                    <div className="flex min-h-0 flex-1 flex-col">
                         <div
                             ref={scrollRef}
-                            className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7"
+                            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6"
                         >
-                            <MatchStep
-                                register={register}
-                                errors={errors}
-                                appliesTo={watchedAppliesTo}
-                                field={watchedField}
-                                condition={watchedCondition}
-                                value={watchedValue}
-                                setValue={setValue}
-                            />
+                            {activeStep === 'match' && (
+                                <MatchStep
+                                    register={register}
+                                    errors={errors}
+                                    appliesTo={watchedAppliesTo}
+                                    field={watchedField}
+                                    condition={watchedCondition}
+                                    value={watchedValue}
+                                    setValue={setValue}
+                                />
+                            )}
                             <ActionsStep
                                 active={activeStep === 'actions'}
                                 register={register}
@@ -398,7 +421,7 @@ export function TransactionRuleDialog({
                                 onSimulate={handleSimulate}
                             />
                         </div>
-                    </Tabs>
+                    </div>
 
                     <DialogFooterActions
                         activeStep={activeStep}
@@ -437,7 +460,7 @@ function MatchStep({
     setValue: ReturnType<typeof useForm<RuleFormValues>>['setValue']
 }) {
     return (
-        <TabsContent value="match" className="m-0 space-y-5">
+        <div className="space-y-5">
             <StepIntro
                 title="¿Qué movimientos reconoce?"
                 description="Usá un texto estable, como el nombre del comercio o una parte de la descripción."
@@ -463,7 +486,7 @@ function MatchStep({
                             })
                         }
                     >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             {Object.entries(APPLIES_TO_LABELS).map(([optionValue, label]) => (
                                 <SelectItem key={optionValue} value={optionValue}>{label}</SelectItem>
@@ -481,7 +504,7 @@ function MatchStep({
                             })
                         }
                     >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             {Object.entries(FIELD_LABELS).map(([optionValue, label]) => (
                                 <SelectItem key={optionValue} value={optionValue}>{label}</SelectItem>
@@ -499,7 +522,7 @@ function MatchStep({
                             })
                         }
                     >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             {Object.entries(CONDITION_LABELS).map(([optionValue, label]) => (
                                 <SelectItem key={optionValue} value={optionValue}>{label}</SelectItem>
@@ -518,7 +541,7 @@ function MatchStep({
                 </div>
             </div>
             <NaturalLanguagePreview field={field} condition={condition} value={value} />
-        </TabsContent>
+        </div>
     )
 }
 
@@ -539,10 +562,10 @@ function ActionsStep({
     actionSummary: (string | null)[]
     setValue: ReturnType<typeof useForm<RuleFormValues>>['setValue']
 }) {
-    if (!active) return <TabsContent value="actions" />
+    if (!active) return null
 
     return (
-        <TabsContent value="actions" className="m-0 space-y-5">
+        <div className="space-y-5">
             <StepIntro
                 title="¿Qué completa Finp?"
                 description="Elegí una o más acciones. Los datos ya definidos por el usuario se preservan."
@@ -650,7 +673,7 @@ function ActionsStep({
                         : 'Todavía no elegiste ninguna acción. La regla puede guardarse, pero no modificará movimientos.'}
                 </p>
             </div>
-        </TabsContent>
+        </div>
     )
 }
 
@@ -693,10 +716,10 @@ function ReviewStep({
     onSampleMerchantChange: (value: string) => void
     onSimulate: () => void
 }) {
-    if (!active) return <TabsContent value="review" />
+    if (!active) return null
 
     return (
-        <TabsContent value="review" className="m-0 space-y-5">
+        <div className="space-y-5">
             <StepIntro
                 title="Probala antes de activarla"
                 description="La simulación no crea movimientos ni modifica reglas."
@@ -718,7 +741,7 @@ function ReviewStep({
                                     onSampleTypeChange(nextValue as RuleSimulationSample['type'])
                                 }
                             >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="expense">Gasto</SelectItem>
                                     <SelectItem value="income">Ingreso</SelectItem>
@@ -812,7 +835,7 @@ function ReviewStep({
                     {priorityError && <FieldError message={priorityError} />}
                 </div>
             </div>
-        </TabsContent>
+        </div>
     )
 }
 
@@ -832,34 +855,37 @@ function DialogFooterActions({
     onNext: () => void
 }) {
     return (
-        <div className="flex flex-col-reverse gap-2 border-t bg-background px-5 py-4 safe-area-pb sm:flex-row sm:justify-between sm:px-7">
-            <Button type="button" variant="ghost" onClick={onCancel}>
-                Cancelar
-            </Button>
+        <div
+            className="shrink-0 border-t bg-background/95 px-4 pb-3.5 pt-2.5 backdrop-blur md:px-6 md:pb-4"
+            style={{
+                borderColor: 'var(--border)',
+                boxShadow: '0 -12px 28px rgba(0,0,0,0.10)',
+            }}
+        >
             <div className="flex gap-2">
-                {activeStep !== 'match' && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="flex-1 gap-1 sm:flex-none"
-                        onClick={onBack}
-                    >
-                        <ChevronLeft />Atrás
-                    </Button>
-                )}
+                <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 flex-1 rounded-[1rem] border-border/80 font-medium"
+                    onClick={activeStep === 'match' ? onCancel : onBack}
+                >
+                    {activeStep === 'match' ? 'Cancelar' : (
+                        <><ChevronLeft />Atrás</>
+                    )}
+                </Button>
                 {activeStep !== 'review' ? (
                     <Button
                         type="button"
-                        className="flex-1 gap-1 sm:flex-none"
+                        className="h-10 flex-[1.25] rounded-[1rem] font-semibold"
                         onClick={onNext}
                     >
-                        {activeStep === 'match' ? 'Elegir acciones' : 'Probar y activar'}
+                        {activeStep === 'match' ? 'Continuar' : 'Probar'}
                         <ChevronRight />
                     </Button>
                 ) : (
                     <Button
                         type="submit"
-                        className="flex-1 sm:min-w-40"
+                        className="h-10 flex-[1.25] rounded-[1rem] font-semibold"
                         disabled={isSubmitting}
                     >
                         {isSubmitting ? (

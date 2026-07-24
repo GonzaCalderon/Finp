@@ -98,10 +98,10 @@ export function RuleCard({
                     !rule.isActive && 'opacity-65'
                 )}
             >
-                <CardHeader className="border-b border-foreground/[0.06] py-4">
+                <CardHeader className="border-b border-foreground/[0.06] px-3 py-3 sm:px-4 sm:py-4">
                     <div className="flex min-w-0 items-start gap-3">
                         <div
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10"
                             style={{
                                 background:
                                     rule.appliesTo === 'income'
@@ -124,7 +124,7 @@ export function RuleCard({
                                 <CardTitle className="truncate">{rule.name}</CardTitle>
                                 <Badge
                                     variant={rule.isActive ? 'secondary' : 'outline'}
-                                    className="rounded-full"
+                                    className="hidden rounded-full sm:inline-flex"
                                 >
                                     {rule.isActive ? 'Activa' : 'Pausada'}
                                 </Badge>
@@ -148,8 +148,8 @@ export function RuleCard({
                     </CardAction>
                 </CardHeader>
 
-                <CardContent className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
-                    <div className="rounded-xl bg-muted/55 p-3.5">
+                <CardContent className="grid gap-2 px-3 py-3 sm:gap-3 sm:px-4 sm:py-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
+                    <div className="rounded-xl bg-muted/55 p-3 sm:p-3.5">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Cuando
                         </p>
@@ -171,7 +171,7 @@ export function RuleCard({
 
                     <ArrowRight className="mx-auto hidden h-4 w-4 text-muted-foreground/55 md:block" />
 
-                    <div className="rounded-xl bg-[color-mix(in_srgb,var(--sky)_7%,transparent)] p-3.5">
+                    <div className="rounded-xl bg-[color-mix(in_srgb,var(--sky)_7%,transparent)] p-3 sm:p-3.5">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Finp completa
                         </p>
@@ -211,13 +211,15 @@ export function RuleCard({
                     </div>
                 </CardContent>
 
-                <CardFooter className="flex flex-wrap justify-between gap-3 border-t border-foreground/[0.06] bg-muted/25 px-4 py-3">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CardFooter className="flex flex-nowrap justify-between gap-2 border-t border-foreground/[0.06] bg-muted/25 px-3 py-2.5 sm:px-4 sm:py-3">
+                    <div className="flex min-w-0 items-center text-xs text-muted-foreground">
                         <Tag className="h-3.5 w-3.5" />
-                        {matchCount === 0
-                            ? 'Sin coincidencias todavía'
-                            : `${matchCount} coincidencia${matchCount === 1 ? '' : 's'}`}
-                        {lastMatch ? <span>· Última {lastMatch}</span> : null}
+                        <span className="ml-1.5 truncate">
+                            {matchCount === 0
+                                ? 'Sin coincidencias'
+                                : `${matchCount} coincidencia${matchCount === 1 ? '' : 's'}`}
+                        </span>
+                        {lastMatch ? <span className="hidden sm:inline"> · Última {lastMatch}</span> : null}
                     </div>
                     <div className="flex items-center gap-1">
                         <Button

@@ -27,7 +27,7 @@ export function RuleSuggestionCard({
     const confidence = Math.round(suggestion.confidence * 100)
 
     return (
-        <Card className="min-w-0 gap-0 py-0">
+        <Card className="h-full min-w-0 gap-0 py-0">
             <CardHeader className="border-b border-foreground/[0.06] py-4">
                 <div className="flex items-start gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--sky)_12%,transparent)] text-[var(--sky-dark)]">

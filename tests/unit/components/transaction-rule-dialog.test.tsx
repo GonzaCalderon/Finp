@@ -87,7 +87,8 @@ describe('TransactionRuleDialog simulation', () => {
             />
         )
 
-        await user.click(screen.getByRole('tab', { name: /3\. probar/i }))
+        await user.click(screen.getByRole('button', { name: /continuar/i }))
+        await user.click(await screen.findByRole('button', { name: /^probar$/i }))
         const simulateButton = await screen.findByRole('button', {
             name: /probar regla/i,
         })
@@ -139,11 +140,11 @@ describe('TransactionRuleDialog simulation', () => {
         expect(screen.getByDisplayValue('Farmacity → Salud')).toBeInTheDocument()
         expect(screen.getByText(/sugerida por finp/i)).toBeInTheDocument()
 
-        await user.click(screen.getByRole('tab', { name: /2\. acciones/i }))
+        await user.click(screen.getByRole('button', { name: /continuar/i }))
         expect(await screen.findByText(/qué completa finp/i)).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Salud' })).toBeInTheDocument()
 
-        await user.click(screen.getByRole('button', { name: /probar y activar/i }))
+        await user.click(screen.getByRole('button', { name: /^probar$/i }))
         expect(await screen.findByText(/movimiento de ejemplo/i)).toBeInTheDocument()
     })
 })
