@@ -1,6 +1,6 @@
 # Estado actual de Finp
 
-Ultima actualizacion: 2026-05-16
+Ultima actualizacion: 2026-07-24
 
 ## 1. Vision general
 
@@ -35,6 +35,20 @@ Finp ya cubre un flujo personal amplio:
 - fecha de inicio operativo para no contaminar metricas con historial previo;
 - ocultamiento global de montos;
 - preferencias persistidas por usuario.
+
+Captura rápida v1.2 ya forma parte del ingreso cotidiano:
+
+- se abre desde la primera acción del FAB o con `Q` en desktop;
+- interpreta gasto/ingreso, monto, ARS/USD, fecha, descripción, cuenta, categoría y comercio;
+- muestra resumen vivo, regla aplicada e impacto de saldo antes de registrar;
+- reutiliza en el servidor las mismas reglas y validaciones financieras que Nueva transacción;
+- deriva movimientos complejos al formulario completo conservando el borrador;
+- administra alias explícitos y patrones aprendidos en Configuración > Aprendizaje y atajos;
+- aprende descripcion, cuenta, categoria y comercio desde movimientos simples confirmados, con umbrales conservadores y prioridad inferior a alias y reglas;
+- explica cada autocompletado personal, permite descartarlo y registra aceptación, corrección, reversión o abandono sin bloquear la operación financiera;
+- permite pausar, olvidar, restaurar, corregir, convertir un patrón en regla o reiniciar lo aprendido sin borrar transacciones;
+- no conserva en la telemetría la frase original, monto, fecha ni notas, y elimina los eventos detallados después de 180 días;
+- detecta duplicados, advierte fechas especiales y permite deshacer durante ocho segundos.
 
 Tambien existe una capa madura para tarjetas y compromisos:
 
@@ -191,6 +205,11 @@ La base de calidad ya existe y esta creciendo sobre Fase 6:
   - split y categorias de espacios;
   - `data-sync`;
   - validaciones clave;
+  - parser y vocabulario de Captura rápida;
+  - normalización privada, ranking, umbrales, feedback y precedencias del aprendizaje personal;
+  - APIs autenticadas, idempotencia y retención de eventos de aprendizaje;
+  - cuentas, monedas, fondos y categorías del servicio compartido;
+- E2E de Captura rápida en Chromium desktop y mobile;
 - CI con lint, build y unit tests.
 
 Mecanismos relevantes de robustez ya presentes:

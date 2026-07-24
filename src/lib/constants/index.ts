@@ -50,6 +50,7 @@ export const TRANSACTION_STATUS = {
 
 export const CREATED_FROM = {
     WEB: 'web',
+    QUICK_CAPTURE: 'quick_capture',
     TELEGRAM: 'telegram',
     SYSTEM: 'system',
 } as const

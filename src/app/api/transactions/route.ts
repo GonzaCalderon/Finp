@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
+import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Transaction, User, InstallmentPlan } from '@/lib/models'
@@ -10,10 +11,18 @@ import { calculateAccountBalancesByCurrency, sumAvailableAccountBalances } from 
 import { getInitialBalancesByCurrency } from '@/lib/utils/accounts'
 import { createTransactionForUser, getTransactionListTypeFilter } from '@/lib/server/transactions'
 import { isServiceError } from '@/lib/server/errors'
+import { recordQuickCaptureAliasUsage } from '@/lib/server/quick-capture'
+import { recordTransactionLearningEvent } from '@/lib/server/quick-capture-learning'
 import type { Currency } from '@/lib/constants'
 import type { IInstallmentPlan, ITransaction } from '@/types'
 
 const PAGE_LIMIT = 30
+
+const quickCaptureLearningSchema = z.object({
+    sessionId: z.string().trim().min(1).max(120),
+    durationMs: z.number().min(0).max(86_400_000).optional(),
+    aliasIds: z.array(z.string().trim().max(80)).max(20).optional(),
+}).optional()
 
 type CurrencySummary = {
     ars: number
@@ -221,7 +230,46 @@ export async function POST(request: Request) {
         const body = await request.json()
         await connectDB()
 
-        const populated = await createTransactionForUser(session.user.id, body)
+        const isQuickCapture =
+            Boolean(body) &&
+            typeof body === 'object' &&
+            body.quickCapture === true
+        const quickCaptureLearning = isQuickCapture
+            ? quickCaptureLearningSchema.safeParse(body.quickCaptureLearning)
+            : undefined
+        const populated = await createTransactionForUser(session.user.id, body, {
+            createdFrom: isQuickCapture ? 'quick_capture' : 'web',
+            includePreviewSignals: isQuickCapture,
+            allowPotentialDuplicate:
+                isQuickCapture && body.allowPotentialDuplicate === true,
+        })
+        if (isQuickCapture) {
+            const learningData = quickCaptureLearning?.success
+                ? quickCaptureLearning.data
+                : undefined
+            const telemetry = await Promise.allSettled([
+                recordTransactionLearningEvent({
+                    userId: session.user.id,
+                    type: 'capture_confirmed',
+                    transaction: populated,
+                    sessionId: learningData?.sessionId,
+                    durationMs: learningData?.durationMs,
+                    eventId: `capture_confirmed:${populated._id.toString()}`,
+                }),
+                recordQuickCaptureAliasUsage(
+                    session.user.id,
+                    learningData?.aliasIds ?? []
+                ),
+            ])
+            telemetry.forEach((result) => {
+                if (result.status === 'rejected') {
+                    console.error(
+                        'No se pudo guardar telemetría de captura rápida:',
+                        result.reason
+                    )
+                }
+            })
+        }
 
         return NextResponse.json({ transaction: populated }, { status: 201 })
     } catch (error) {

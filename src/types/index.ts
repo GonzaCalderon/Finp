@@ -16,6 +16,30 @@ import type {
     TransactionType,
 } from '@/lib/constants'
 
+export type {
+    QuickCaptureAliasDto,
+    QuickCaptureAliasTargetType,
+    QuickCaptureAppliedPersonalization,
+    QuickCaptureContextResponse,
+    QuickCaptureDraft,
+    QuickCaptureFrequent,
+    QuickCaptureInterpretation,
+    QuickCaptureLearnedPatternDto,
+    QuickCaptureLearningContext,
+    QuickCaptureLearningEventInput,
+    QuickCaptureLearningEventType,
+    QuickCaptureLearningMethod,
+    QuickCaptureLearningMetrics,
+    QuickCaptureLearningProfileDto,
+    QuickCapturePatternTriggerKind,
+    QuickCaptureSuggestion,
+    QuickCaptureSuggestionSource,
+    QuickCaptureToken,
+    TransactionAccountImpact,
+    TransactionPreviewIssue,
+    TransactionPreviewResponse,
+} from './quick-capture'
+
 export interface UserPreferences {
     defaultView: 'dashboard' | 'transactions' | 'accounts' | 'projection'
     monthStartDay: number // 1-28

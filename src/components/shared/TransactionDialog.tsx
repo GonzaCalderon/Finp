@@ -89,6 +89,7 @@ interface TransactionDialogProps {
     rules?: ITransactionRule[]
     defaultAccountId?: string
     monthStartDay?: number
+    initialData?: Partial<TransactionFormInput>
 }
 
 type TransactionStepId = 'type' | 'main' | 'details' | 'classification' | 'review'
@@ -299,6 +300,7 @@ export function TransactionDialog({
     rules = [],
     defaultAccountId,
     monthStartDay = 1,
+    initialData,
 }: TransactionDialogProps) {
     const {
         control,
@@ -884,6 +886,41 @@ export function TransactionDialog({
             return
         }
 
+        if (initialData) {
+            const initialType = initialData.type ?? 'expense'
+            reset({
+                type: initialType,
+                amount: initialData.amount ?? 0,
+                currency: initialData.currency ?? 'ARS',
+                date: initialData.date ?? new Date(),
+                description: initialData.description ?? '',
+                categoryId: initialData.categoryId,
+                sourceAccountId: initialData.sourceAccountId,
+                destinationAccountId: initialData.destinationAccountId,
+                destinationAmount: initialData.destinationAmount,
+                destinationCurrency: initialData.destinationCurrency,
+                exchangeRate: initialData.exchangeRate,
+                notes: initialData.notes ?? '',
+                merchant: initialData.merchant ?? '',
+            })
+            const initialSource = accounts.find(
+                (account) => account._id.toString() === initialData.sourceAccountId
+            )
+            setPaymentMethod(
+                initialSource?.type === 'cash'
+                    ? 'cash'
+                    : initialSource?.type === 'credit_card'
+                        ? 'credit_card'
+                        : 'debit'
+            )
+            setInstallmentCount(1)
+            setFirstClosingMonth('')
+            setShowMoreOptions(Boolean(initialData.notes || initialData.merchant))
+            setAdjustmentSign('+')
+            setCurrentStepIndex(1)
+            return
+        }
+
         const storedType = getStoredTransactionType()
         const initialType = storedType && TRANSACTION_TYPE_LABELS[storedType] ? storedType : 'expense'
         const initialPaymentMethod = initialType === 'expense' ? getStoredExpensePaymentMethod() ?? 'debit' : 'debit'
@@ -917,6 +954,7 @@ export function TransactionDialog({
         accounts,
         existingInstallmentCount,
         getPreselectedExpenseAccount,
+        initialData,
         open,
         reset,
         resolveStoredAccount,

@@ -55,7 +55,7 @@ import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { fadeIn, staggerContainer } from '@/lib/utils/animations'
 import type { TransactionRuleSuggestion } from '@/lib/utils/rule-suggestions'
-import type { ITransactionRule } from '@/types'
+import type { ITransactionRule, QuickCaptureLearnedPatternDto } from '@/types'
 
 type RuleFilter = 'active' | 'all' | 'paused'
 
@@ -173,6 +173,65 @@ function RulesPageInner() {
         setDialogOpen(true)
         router.replace('/rules', { scroll: false })
     }, [router, searchParams])
+
+    useEffect(() => {
+        const patternKey = searchParams.get('fromLearning')
+        if (!patternKey || !/^[a-f0-9]{64}$/.test(patternKey)) return
+        const controller = new AbortController()
+
+        void fetch(`/api/quick-capture/learning/patterns/${patternKey}`, {
+            cache: 'no-store',
+            signal: controller.signal,
+        })
+            .then(async (response) => {
+                const result = await response.json()
+                if (!response.ok) {
+                    throw new Error(
+                        result.error ?? 'No se pudo cargar el patrón aprendido'
+                    )
+                }
+                const pattern =
+                    result.pattern as QuickCaptureLearnedPatternDto
+                setEditingRule(null)
+                setInitialValues({
+                    name: `${pattern.triggerLabel} → ${pattern.targetLabel}`.slice(
+                        0,
+                        100
+                    ),
+                    isActive: true,
+                    priority: 20,
+                    appliesTo: pattern.transactionType,
+                    field:
+                        pattern.triggerKind === 'merchant'
+                            ? 'merchant'
+                            : 'description',
+                    condition: 'equals',
+                    value: pattern.triggerLabel,
+                    categoryId:
+                        pattern.targetType === 'category'
+                            ? pattern.targetId
+                            : undefined,
+                    setType: '',
+                    normalizeMerchant:
+                        pattern.targetType === 'merchant'
+                            ? pattern.targetValue ?? pattern.targetLabel
+                            : '',
+                })
+                setDialogOpen(true)
+                router.replace('/rules', { scroll: false })
+            })
+            .catch((error) => {
+                if (controller.signal.aborted) return
+                toastError(
+                    error instanceof Error
+                        ? error.message
+                        : 'No se pudo cargar el patrón aprendido'
+                )
+                router.replace('/rules', { scroll: false })
+            })
+
+        return () => controller.abort()
+    }, [router, searchParams, toastError])
 
     const handleOpenCreate = () => {
         setEditingRule(null)

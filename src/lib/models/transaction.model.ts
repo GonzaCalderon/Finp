@@ -66,9 +66,11 @@ TransactionSchema.index({ userId: 1, categoryId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, paymentGroupId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, spaceId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, spaceEntryId: 1 })
+TransactionSchema.index({ userId: 1, createdFrom: 1, updatedAt: -1 })
 
 const existingTransactionModel = mongoose.models.Transaction as mongoose.Model<ITransaction> | undefined
 const currentTypeEnum = existingTransactionModel?.schema.path('type')?.options?.enum as string[] | undefined
+const currentCreatedFromEnum = existingTransactionModel?.schema.path('createdFrom')?.options?.enum as string[] | undefined
 const hasDestinationAmountPath = Boolean(existingTransactionModel?.schema.path('destinationAmount'))
 const hasPaymentGroupIdPath = Boolean(existingTransactionModel?.schema.path('paymentGroupId'))
 const hasSpaceIdPath = Boolean(existingTransactionModel?.schema.path('spaceId'))
@@ -84,6 +86,7 @@ const hasAppliedRuleActionsPath = Boolean(
 const needsSchemaRefresh =
     !!existingTransactionModel &&
     (!currentTypeEnum ||
+        !currentCreatedFromEnum?.includes(CREATED_FROM.QUICK_CAPTURE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.CREDIT_CARD_EXPENSE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.EXCHANGE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.PERSONAL_DEBT_PAYMENT) ||

@@ -167,6 +167,13 @@ export function getDescriptionAlias(value: string): DescriptionAlias | undefined
     return readStoredPrefs().descriptionAliases?.[key]
 }
 
+export function getStoredDescriptionAliases() {
+    return Object.entries(readStoredPrefs().descriptionAliases ?? {}).map(([term, alias]) => ({
+        term,
+        ...alias,
+    }))
+}
+
 export function persistDescriptionAlias(
     source: string,
     description: string,

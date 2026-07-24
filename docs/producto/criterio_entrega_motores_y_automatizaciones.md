@@ -83,3 +83,18 @@ Si alguna respuesta falta, el bloque conserva un pendiente explícito de product
 - Trazabilidad: cada movimiento automatizado muestra la regla aplicada.
 - Pendiente evolutivo: reevaluación explícita, deshacer y aprendizaje desde correcciones.
 
+## Aplicación a Captura rápida
+
+- Dominio: parser determinista y servicio financiero compartido con Nueva transacción.
+- Descubrimiento: primera acción del FAB y atajo `Q` en desktop.
+- Comprensión: resumen vivo, fragmentos reconocidos, regla aplicada e impacto de saldo.
+- Consentimiento: aproximaciones y alias persistentes requieren aceptación explícita.
+- Aprendizaje: usa movimientos simples confirmados y vigentes, con umbrales documentados; nunca decide monto, fecha, moneda ni operaciones especiales.
+- Precedencia: texto y selecciones explícitas, alias y reglas siempre ganan frente a patrones personales.
+- Explicabilidad: cada personalización muestra procedencia y evidencia resumida; aceptar, descartar, revertir y corregir alimentan el ranking.
+- Control: campos interpretados editables, completar detalles y administración unificada de aprendizaje y atajos. El usuario puede pausar, olvidar, restaurar, corregir, convertir en regla o reiniciar.
+- Privacidad: los eventos no conservan texto original, monto, fecha ni notas; tienen TTL y aislamiento por usuario.
+- Seguridad: preview sin escrituras y revalidación final de cuenta, moneda, fondos, categoría, reglas y duplicados.
+- Reversibilidad: deshacer real durante ocho segundos y error visible si la eliminación falla.
+- Cobertura: pruebas unitarias de ranking y privacidad, APIs autenticadas, E2E desktop/mobile y smoke real ARS/USD con deshacer.
+- Pendiente evolutivo: frecuentes fijables y procedencia visible en el detalle de Transacciones.

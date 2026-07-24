@@ -10,6 +10,7 @@ import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCur
 import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 import { getBalanceBeforeReplacingTransaction } from '@/lib/utils/transaction-account-impact'
+import { recordTransactionLearningEvent } from '@/lib/server/quick-capture-learning'
 
 export async function GET(
     request: Request,
@@ -291,6 +292,20 @@ export async function PATCH(
             }
         }
 
+        try {
+            await recordTransactionLearningEvent({
+                userId: session.user.id,
+                type: 'transaction_edited',
+                transaction,
+                eventId: `transaction_edited:${transaction._id.toString()}:${transaction.updatedAt?.getTime() ?? Date.now()}`,
+            })
+        } catch (learningError) {
+            console.error(
+                'No se pudo registrar el aprendizaje de la edición:',
+                learningError
+            )
+        }
+
         return NextResponse.json({ transaction })
     } catch (error) {
         console.error('Error al actualizar transacción:', error)
@@ -313,10 +328,20 @@ export async function DELETE(
 
         await connectDB()
 
-        const existing = await Transaction.findOne(
-            { _id: id, userId: session.user.id },
-            { type: 1 }
-        ).lean<{ type: string } | null>()
+        const existing = await Transaction.findOne({
+            _id: id,
+            userId: session.user.id,
+        }).lean<{
+            _id: unknown
+            type: string
+            currency?: string
+            description?: string
+            merchant?: string
+            sourceAccountId?: unknown
+            destinationAccountId?: unknown
+            categoryId?: unknown
+            updatedAt?: Date
+        } | null>()
 
         if (!existing) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
@@ -339,6 +364,23 @@ export async function DELETE(
 
         if (!transaction) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
+        }
+
+        try {
+            const isUndo =
+                new URL(request.url).searchParams.get('reason') ===
+                'quick_capture_undo'
+            await recordTransactionLearningEvent({
+                userId: session.user.id,
+                type: isUndo ? 'transaction_undone' : 'transaction_deleted',
+                transaction,
+                eventId: `${isUndo ? 'transaction_undone' : 'transaction_deleted'}:${transaction._id.toString()}`,
+            })
+        } catch (learningError) {
+            console.error(
+                'No se pudo registrar el aprendizaje del borrado:',
+                learningError
+            )
         }
 
         return NextResponse.json({ message: 'Transacción eliminada correctamente' })

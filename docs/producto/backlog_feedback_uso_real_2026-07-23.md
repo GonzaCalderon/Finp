@@ -13,10 +13,10 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Proximo bloque recomendado
 
-1. Diseñar e implementar Captura rapida v1 sobre el motor confiable.
-2. Diseñar compromisos personales variables como base para compromisos de Espacios.
-3. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
-4. Incorporar reevaluacion explicita y registro de correcciones como mejora transversal del motor.
+1. Diseñar compromisos personales variables como base para compromisos de Espacios.
+2. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
+3. Incorporar reevaluacion explicita y registro de correcciones como mejora transversal del motor.
+4. Llevar la procedencia y correcciones aprendidas de Captura rapida al detalle de Transacciones.
 
 ### Pendientes UX de alta prioridad
 
@@ -101,8 +101,23 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 
 ### Captura rapida de movimientos
 
-- Estado: documentado para discovery.
-- Alcance propuesto: entrada compacta por lenguaje natural, valores sugeridos, accesos frecuentes, Enter para guardar y deshacer inmediato.
+- Estado: v1.1 implementada y verificada el 2026-07-24 en desktop y mobile.
+- Experiencia: primera accion del FAB, atajo `Q`, resumen vivo, fragmentos reconocidos y hasta cinco accesos frecuentes. En mobile el dialogo es compacto, no produce scroll horizontal y los campos manuales quedan colapsados hasta que el usuario necesita corregirlos.
+- Autocompletado visible: el sufijo sugerido aparece dentro del texto con menor opacidad y explica la palabra completa antes de aceptarla.
+- Teclado: Enter o Espacio aceptan el autocompletado inline; Tab conserva el mismo atajo en desktop. La ayuda se puede tocar en mobile. Un segundo Espacio consecutivo revierte la expansion, conserva el texto original con un espacio y descarta esa sugerencia. Enter registra cuando ya no quedan sugerencias.
+- Personalizacion: alias sincronizados por usuario para cuenta, categoria, comercio y descripcion; CRUD en Configuracion > Aprendizaje y atajos y migracion de alias locales.
+- Aprendizaje personal: implementado el 2026-07-24. Aprende de movimientos simples confirmados y vigentes, nunca de montos, fechas, notas u operaciones financieras especiales. Tres casos consistentes habilitan una sugerencia; cinco casos con 90% de consistencia pueden completar cuenta, categoria o comercio de forma visible y reversible.
+- Explicabilidad: cada valor aprendido muestra `Personalizada`, la evidencia resumida y una accion para descartarlo. Alias, reglas, texto explicito y selecciones manuales conservan prioridad.
+- Control: el usuario puede pausar el aprendizaje, revisar patrones y metricas, olvidar, restaurar, corregir como alias, convertir un patron compatible en regla o reiniciar sin borrar movimientos.
+- Privacidad y trazabilidad: eventos idempotentes sin frase original, monto, fecha ni notas; retencion de 180 dias, aislamiento por usuario y procedencia `quick_capture`. La telemetria es best-effort y nunca bloquea una operacion financiera.
+- Seguridad financiera: vista previa y creacion comparten reglas y validaciones de propiedad, actividad, tipo de cuenta, categoria, moneda, fondos y saldo negativo. El servidor revalida inmediatamente antes de guardar.
+- Sincronizacion: tipo, categoria, comercio, cuenta, moneda, fecha y descripcion visibles reflejan el resultado normalizado de la vista previa, sin impedir que el servidor vuelva a aplicar y auditar la regla al guardar.
+- Resguardos: ARS/USD con banderas y codigo, impacto de saldo, conflictos de moneda, duplicados confirmables, fechas futuras o anteriores al inicio operativo, doble envio bloqueado y derivacion al formulario completo.
+- Reversibilidad: toast de ocho segundos con Deshacer real; si falla, la transaccion permanece visible y se informa el error.
+- Parser: determinista, sin IA generativa; cubre orden flexible, alias, nombres exactos, reglas, historial, autocompletado por prefijo y similitud prudente. `syer` y `ayyer` corrigen fecha de forma visible; `cafw` y `xafé` se sugieren; `cage` no se reemplaza solo.
+- Fechas argentinas: reconoce `antes de ayer`, dias de semana completos o abreviados, ultimo/proximo dia, `que viene`, `pasado`, `hace N`, `N atras` y `dentro de N` para dias, semanas y dias de semana.
+- Incertidumbre: las palabras comunes permanecen como descripcion y la categoria puede quedar vacia; abreviaturas cortas sin significado se muestran como no resueltas y nunca se convierten silenciosamente en cuenta o categoria.
+- Verificacion: suite unitaria completa, E2E Chromium desktop/mobile, registro y deshacer en ARS/USD y smoke visual con la cuenta de prueba.
 - Meta inicial: registrar un gasto simple en menos de cinco segundos y con un maximo de dos decisiones.
 - Documento: `docs/producto/estrategia_ingreso_datos_y_automatizacion.md`.
 
@@ -119,7 +134,7 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 ### Asistencia inteligente de descripción
 
 - Estado: implementado el 2026-07-23.
-- Corrección: propone "¿Quisiste decir?" para errores breves y recuerda localmente las correcciones aceptadas como alias.
+- Corrección: propone "¿Quisiste decir?" para errores breves. Captura rápida migra los alias locales y permite administrarlos sincronizados por usuario.
 - Autocompletado: recupera descripciones y comercios frecuentes del historial propio.
 - Movimiento similar: permite copiar categoría, cuenta, moneda, comercio y medio de pago sin reemplazar monto ni fecha.
 - Prevención: alerta posibles duplicados por descripción, monto, moneda y cercanía temporal.

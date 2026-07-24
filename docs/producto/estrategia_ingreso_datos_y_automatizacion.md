@@ -80,6 +80,8 @@ Finp no debería premiar la cantidad de movimientos cargados. La recompensa debe
 
 Una entrada compacta para gastos e ingresos simples, disponible desde mobile y desktop.
 
+Estado: v1 implementada y verificada el 2026-07-24.
+
 Ejemplos:
 
 - `4500 café`
@@ -92,15 +94,38 @@ Finp mostraría una interpretación editable antes de guardar:
 
 > $4.500 ARS · Café · Hoy · Mercado Pago · Restaurantes
 
-Características esperadas:
+Características:
 
-- acceso persistente en mobile;
-- atajo `Q` en desktop;
-- interpretación determinista de texto;
-- sugerencia de cuenta, categoría y comercio;
-- Enter para guardar;
-- deshacer inmediato;
-- derivación al flujo completo si el movimiento es complejo.
+- acceso persistente en mobile y primera accion del FAB: implementado;
+- atajo `Q` en desktop: implementado;
+- interpretacion determinista y resumen vivo: implementado;
+- sugerencia de cuenta, categoria, comercio y descripcion: implementado;
+- alias sincronizados y administrables: implementado;
+- aprendizaje personal explicable desde movimientos confirmados: implementado;
+- validacion financiera compartida entre vista previa y creacion: implementado;
+- Enter para guardar cuando no hay bloqueos: implementado;
+- deshacer inmediato durante ocho segundos: implementado;
+- derivacion al flujo completo conservando el borrador: implementado.
+
+La autoridad final es `POST /api/transactions`: vuelve a evaluar reglas, cuenta,
+moneda, categoria, fondos y duplicados aunque la vista previa del navegador haya
+sido valida. `POST /api/transactions/preview` no escribe datos y anticipa el
+resultado normalizado, la regla aplicada, el impacto de saldo y las advertencias.
+
+#### Aprendizaje personal explicable
+
+El parser financiero sigue siendo determinista. El modelo personal solo ordena o
+completa descripcion, cuenta, categoria y comercio; no decide monto, fecha,
+moneda ni tipo financiero.
+
+- Fuentes: hasta 500 gastos e ingresos simples vigentes posteriores al ultimo reinicio.
+- Evidencia: descripcion normalizada, terminos significativos y comercio, aislados por tipo y moneda.
+- Umbrales: desde tres confirmaciones y 70% de consistencia se muestra; desde cinco, 90%, ventaja de dos casos y sin feedback negativo reciente puede autocompletar.
+- Precedencia: texto financiero y entidades explicitas, alias, reglas, patrones personales, frecuencia/recencia y similitud.
+- Feedback: aceptar mejora prioridad; descartar, revertir o corregir la reduce. Dos rechazos recientes suspenden el autocompletado.
+- Explicabilidad: el dialogo muestra el origen `Personalizada`, evidencia resumida y permite quitar el valor antes de registrar.
+- Control: Configuracion > Aprendizaje y atajos permite pausar, olvidar, restaurar, corregir, convertir en regla y reiniciar.
+- Privacidad: los eventos no guardan frase original, monto, fecha ni notas, vencen a los 180 dias y nunca son requisito para crear una transaccion.
 
 ### 4.2 Accesos frecuentes
 
@@ -304,16 +329,23 @@ Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creac
 - Unificar el motor de reglas. Implementado el 2026-07-24.
 - Corregir acciones actualmente incompletas. `setType` implementado para movimientos simples.
 - Normalizar descripción y comercio. Normalización de coincidencias implementada.
-- Añadir explicabilidad y deshacer. Trazabilidad y vista previa implementadas; deshacer pendiente.
+- Añadir explicabilidad y deshacer. Trazabilidad y vista previa implementadas; Captura rápida ya ofrece deshacer, mientras la reversión guiada de otras automatizaciones sigue pendiente.
 - Medir tiempo, abandono y correcciones.
 
 ### Fase B: captura rápida
 
-- Entrada compacta.
-- Atajo desktop y acceso persistente mobile.
-- Interpretación de texto.
-- Valores predeterminados y sugerencias.
-- Accesos frecuentes.
+- Entrada compacta: implementada.
+- Atajo desktop y acceso persistente mobile: implementados.
+- Interpretacion de texto y resumen vivo: implementados.
+- Valores predeterminados, alias personales y sugerencias: implementados.
+- Accesos frecuentes automaticos: implementados.
+- Validacion financiera, ARS/USD, duplicados y deshacer: implementados.
+- Responsive express: implementado con resumen inmediato, detalles manuales colapsados, frecuentes contenidos y sin scroll horizontal global.
+- Vocabulario argentino inicial: implementado para fechas relativas, dias de semana y abreviaturas; debe seguir ampliandose con evidencia real.
+- Autocompletado: reglas, atajos y movimientos frecuentes proponen completar prefijos con un sufijo tenue dentro del texto; Enter, Espacio o toque aceptan en mobile y Tab, Enter o Espacio en desktop. Doble Espacio consecutivo conserva el prefijo escrito y descarta la propuesta.
+- Coherencia de vista previa: los campos visibles consumen el resultado normalizado del servidor, incluidas categoria, tipo y comercio aplicados por reglas.
+- Aprendizaje y metricas: implementados con eventos best-effort, procedencia `quick_capture`, patrones reconstruibles y controles por usuario.
+- Pendiente evolutivo: fijar frecuentes, ampliar vocabulario argentino con evidencia real y mostrar procedencia/correcciones en el detalle de Transacciones.
 
 ### Fase C: revisión diaria
 
@@ -366,13 +398,18 @@ Este criterio evita que una capacidad quede disponible solo en la logica interna
 
 ## 11. Decisiones abiertas
 
-- Qué campos mínimos exige una captura rápida.
-- Cuándo un movimiento incompleto puede afectar saldos.
 - Si la bandeja vive en Transacciones, Dashboard o como destino propio.
-- Qué automatizaciones pueden aplicarse sin confirmación.
-- Cómo representar visualmente confianza y origen de clasificación.
 - Si los accesos frecuentes se generan automáticamente o pueden fijarse.
 - Qué canales de captura asistida son viables en web/PWA antes de una app nativa.
+
+Decisiones cerradas por Captura rápida v1:
+
+- monto positivo, descripcion, fecha y cuenta son minimos; categoria es opcional;
+- un borrador nunca afecta saldos: solo una transaccion confirmada;
+- las aproximaciones requieren confirmacion; los alias persistentes requieren una accion explicita;
+- el aprendizaje personal esta activo por defecto, usa solo movimientos confirmados y puede pausarse, corregirse, olvidarse o reiniciarse;
+- solo evidencia personal de confianza alta puede autocompletar campos semanticos, siempre de forma visible y reversible;
+- confianza y origen se muestran mediante fragmentos, sugerencias, correcciones y regla aplicada.
 
 ## 12. Referencias de patrones
 
