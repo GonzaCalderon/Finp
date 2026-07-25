@@ -168,11 +168,21 @@ describe('resguardos de entorno', () => {
 
 describe('privacidad del transporte', () => {
     it('el id no contiene ningún dato del movimiento', () => {
-        const envelope = draft({ description: 'Alquiler secreto', amount: 999_999 })
+        const opaqueDraftId = '11111111-1111-4111-8111-111111111111'
+        const randomUuid = vi
+            .spyOn(globalThis.crypto, 'randomUUID')
+            .mockReturnValue(opaqueDraftId)
 
-        // Es lo único que va a viajar en la URL.
-        expect(envelope.draftId).not.toContain('Alquiler')
-        expect(envelope.draftId).not.toContain('999')
-        expect(vi.isMockFunction(putCaptureDraft)).toBe(false)
+        try {
+            const envelope = draft({ description: 'Alquiler secreto', amount: 999_999 })
+
+            // Es lo único que va a viajar en la URL y proviene de una fuente
+            // opaca, independiente de los datos financieros del movimiento.
+            expect(envelope.draftId).toBe(opaqueDraftId)
+            expect(randomUuid).toHaveBeenCalledOnce()
+            expect(vi.isMockFunction(putCaptureDraft)).toBe(false)
+        } finally {
+            randomUuid.mockRestore()
+        }
     })
 })
