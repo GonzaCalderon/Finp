@@ -104,6 +104,11 @@ Los estados futuros de estos documentos no constituyen backlog. Toda prioridad d
 
 [`decisiones/README.md`](decisiones/README.md) explica cuándo registrar una decisión y cómo usar referencias externas.
 
+Decisiones vigentes:
+
+- [`0001 — Compromisos manuales y recordatorios relativos`](decisiones/0001-compromisos-manuales-y-recordatorios-relativos.md).
+- [`0002 — Criterio híbrido para sugerencias de compromisos`](decisiones/0002-criterio-hibrido-sugerencias-de-compromisos.md).
+
 Una decisión se documenta cuando:
 
 - cambia una fuente de verdad;

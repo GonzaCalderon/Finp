@@ -53,7 +53,7 @@ export interface CaptureDraftEnvelope<TFields> {
     draftId: string
     intent: CaptureIntent
     origin: {
-        surface: 'quick_capture'
+        surface: 'quick_capture' | 'commitments'
         sessionId: string
         createdAt: string
     }

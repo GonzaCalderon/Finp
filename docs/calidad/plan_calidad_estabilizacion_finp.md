@@ -365,10 +365,10 @@ Una versión puede promoverse cuando:
 
 Verificado 2026-07-25:
 
-- 589 unit tests aprobados;
-- 65 archivos de unit tests;
+- 621 unit tests aprobados;
+- 74 archivos de unit tests;
 - 5 `todo`;
-- 36 escenarios E2E registrados;
+- 40 escenarios E2E registrados;
 - typecheck, lint y build limpios;
 - CI con lint, build y unit;
 - E2E desactivado;

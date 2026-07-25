@@ -13,6 +13,7 @@ import {
 } from '@/lib/models'
 import {
     COMMITMENT_APPLICATION_STATUSES,
+    COMMITMENT_LIFECYCLE_STATUSES,
     DEBT_STATUSES,
     IMPORT_BATCH_STATUS,
     NOTIFICATION_ACTION_STATUSES,
@@ -27,6 +28,14 @@ import {
     shiftFinancialPeriod,
 } from '@/lib/utils/period'
 import type { NavInsight, NavInsightsResponse } from '@/types/nav-insight'
+import {
+    resolveCommitmentLifecycleStatus,
+    resolveCommitmentReminder,
+} from '@/lib/server/commitment-lifecycle'
+import {
+    resolveCommitmentOccurrenceForPeriod,
+    resolveNextCommitmentOccurrence,
+} from '@/lib/utils/commitment-dates'
 
 type NavInsightSignals = {
     needsReviewCount?: number
@@ -43,6 +52,7 @@ type NavInsightSignals = {
     nextCommitment?: {
         description: string
         count?: number
+        reminderState?: 'due' | 'overdue'
     } | null
 }
 
@@ -170,11 +180,17 @@ export function buildNavInsightsFromSignals(signals: NavInsightSignals): NavInsi
     }
 
     if (signals.nextCommitment) {
+        const hasReminder = Boolean(signals.nextCommitment.reminderState)
         insights.push({
             id: 'next-commitment',
             type: 'commitment',
-            priority: 70,
-            title: 'Proximo compromiso',
+            priority: hasReminder ? 15 : 70,
+            title:
+                signals.nextCommitment.reminderState === 'overdue'
+                    ? 'Compromiso vencido'
+                    : hasReminder
+                      ? 'Recordatorio de compromiso'
+                      : 'Proximo compromiso',
             description: signals.nextCommitment.count && signals.nextCommitment.count > 1
                 ? `${signals.nextCommitment.description} y ${signals.nextCommitment.count - 1} mas.`
                 : signals.nextCommitment.description,
@@ -353,12 +369,13 @@ async function getDuplicateCandidatesCount(userId: Types.ObjectId) {
 
 export async function getNavInsightsForUser(userId: string): Promise<NavInsightsResponse> {
     const userObjectId = new Types.ObjectId(userId)
+    const now = new Date()
 
     const userDoc = await User.findById(userId, { 'preferences.monthStartDay': 1 })
     const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
 
     const { start, end, period } = periodBounds(
-        getCurrentFinancialPeriod(new Date(), monthStartDay),
+        getCurrentFinancialPeriod(now, monthStartDay),
         monthStartDay
     )
     const previous = periodBounds(shiftFinancialPeriod(period, -1), monthStartDay)
@@ -435,13 +452,82 @@ export async function getNavInsightsForUser(userId: string): Promise<NavInsights
         ],
     }
 
-    const [nextCommitment, pendingCommitmentsCount] = await Promise.all([
-        ScheduledCommitment.findOne(commitmentQuery)
-            .sort({ dayOfMonth: 1, createdAt: -1 })
-            .select({ description: 1 })
-            .lean<{ description: string } | null>(),
-        ScheduledCommitment.countDocuments(commitmentQuery),
-    ])
+    const pendingCommitments = await ScheduledCommitment.find(commitmentQuery)
+        .sort({ dayOfMonth: 1, createdAt: -1 })
+        .select({
+            description: 1,
+            dayOfMonth: 1,
+            recurrence: 1,
+            startDate: 1,
+            endDate: 1,
+            reminderLeadDays: 1,
+            isActive: 1,
+        })
+        .lean<
+            Array<{
+                description: string
+                dayOfMonth?: number
+                recurrence: string
+                startDate: Date
+                endDate?: Date
+                reminderLeadDays?: number
+                isActive: boolean
+            }>
+        >()
+
+    const pendingWithReminder = pendingCommitments.flatMap((commitment) => {
+            const dueDate =
+                resolveCommitmentOccurrenceForPeriod(
+                    commitment,
+                    period,
+                    monthStartDay
+                ) ?? resolveNextCommitmentOccurrence(commitment, now)
+            const lifecycleStatus = resolveCommitmentLifecycleStatus(commitment)
+            if (
+                !dueDate ||
+                lifecycleStatus === COMMITMENT_LIFECYCLE_STATUSES.EXPIRED ||
+                lifecycleStatus === COMMITMENT_LIFECYCLE_STATUSES.INACTIVE
+            ) {
+                return []
+            }
+
+            return [{
+                commitment,
+                dueDate,
+                lifecycleStatus,
+                ...resolveCommitmentReminder({
+                    dueDate,
+                    reminderLeadDays: commitment.reminderLeadDays,
+                    applied: false,
+                    lifecycleStatus,
+                    startDate: commitment.startDate,
+                    now,
+                }),
+            }]
+        })
+    const reminderCandidate = pendingWithReminder
+        .filter(
+            (item) =>
+                item.reminderState === 'due' || item.reminderState === 'overdue'
+        )
+        .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime())[0]
+    const nextCandidate = reminderCandidate ?? pendingWithReminder[0]
+    const nextCommitment = nextCandidate
+        ? {
+              description:
+                  nextCandidate.reminderState === 'overdue'
+                      ? `${nextCandidate.commitment.description} venció el ${nextCandidate.dueDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}.`
+                      : nextCandidate.reminderState === 'due'
+                        ? `${nextCandidate.commitment.description} vence el ${nextCandidate.dueDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}.`
+                        : nextCandidate.commitment.description,
+              count: pendingCommitments.length,
+              reminderState:
+                  nextCandidate.reminderState === 'due' ||
+                  nextCandidate.reminderState === 'overdue'
+                      ? nextCandidate.reminderState
+                      : undefined,
+          }
+        : null
 
     const insights = buildNavInsightsFromSignals({
         needsReviewCount,
@@ -455,12 +541,7 @@ export async function getNavInsightsForUser(userId: string): Promise<NavInsights
         topCurrentCategory,
         topPreviousCategory,
         creditCardTrend,
-        nextCommitment: nextCommitment
-            ? {
-                description: nextCommitment.description,
-                count: pendingCommitmentsCount,
-            }
-            : null,
+        nextCommitment,
     })
 
     return {

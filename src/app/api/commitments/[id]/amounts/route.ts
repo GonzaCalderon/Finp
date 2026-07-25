@@ -4,6 +4,15 @@ import { connectDB } from '@/lib/db'
 import { ScheduledCommitment } from '@/lib/models'
 import { commitmentAmountEntryApiSchema } from '@/lib/validations'
 
+function startOfToday(): Date {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+}
+
+function startOfDate(value: Date): Date {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate())
+}
+
 /**
  * Agrega un tramo a la agenda de montos del compromiso: el importe vigente a
  * partir de una fecha efectiva.
@@ -37,6 +46,15 @@ export async function POST(
         }
 
         const { effectiveFrom, amount, note } = parsed.data
+        if (startOfDate(effectiveFrom) < startOfToday()) {
+            return NextResponse.json(
+                {
+                    error: 'La historia de montos no puede reescribirse',
+                    code: 'IMMUTABLE_COMMITMENT_AMOUNT_HISTORY',
+                },
+                { status: 409 }
+            )
+        }
 
         await connectDB()
 
@@ -92,6 +110,15 @@ export async function DELETE(
             return NextResponse.json(
                 { error: 'Fecha efectiva inválida', code: 'INVALID_EFFECTIVE_FROM' },
                 { status: 400 }
+            )
+        }
+        if (startOfDate(effectiveFrom) <= startOfToday()) {
+            return NextResponse.json(
+                {
+                    error: 'Los montos vigentes o históricos no pueden eliminarse',
+                    code: 'IMMUTABLE_COMMITMENT_AMOUNT_HISTORY',
+                },
+                { status: 409 }
             )
         }
 

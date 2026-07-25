@@ -629,7 +629,6 @@ export function TransactionDialog({
         [categoryStorageType, open]
     )
 
-    const normalizedCategoryQuery = categoryQuery.trim().toLowerCase()
     const rankedCategoryIds = useMemo(
         () =>
             orderCategoryIds({
@@ -648,15 +647,6 @@ export function TransactionDialog({
                 )
                 .filter((category): category is ICategory => Boolean(category)),
         [filteredCategories, rankedCategoryIds]
-    )
-    const visibleCategories = useMemo(
-        () =>
-            normalizedCategoryQuery
-                ? rankedCategories.filter((category) =>
-                    category.name.toLowerCase().includes(normalizedCategoryQuery)
-                )
-                : rankedCategories,
-        [normalizedCategoryQuery, rankedCategories]
     )
     const effectiveTextSuggestion: DescriptionTextSuggestion | undefined =
         descriptionSignals.textSuggestion
@@ -2263,9 +2253,7 @@ export function TransactionDialog({
             categoryId={categoryId}
             appliedRuleName={appliedRuleName}
             categoryQuery={categoryQuery}
-            normalizedCategoryQuery={normalizedCategoryQuery}
-            availableCategories={filteredCategories}
-            visibleCategories={visibleCategories}
+            availableCategories={rankedCategories}
             selectedCategory={selectedCategory}
             categoryReason={selectedCategoryRanking?.reason}
             ruleProposal={suggestedRuleProposal}

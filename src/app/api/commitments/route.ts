@@ -6,8 +6,16 @@ import { getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { normalizeRuleText } from '@/lib/utils/rules'
 import { normalizeCommitmentAliases } from '@/lib/server/commitments'
 import { resolveCommitmentAmountForPeriod } from '@/lib/server/commitment-amounts'
+import {
+    resolveCommitmentLifecycleStatus,
+    resolveCommitmentReminder,
+} from '@/lib/server/commitment-lifecycle'
 import { COMMITMENT_APPLICATION_STATUSES } from '@/lib/constants'
 import { commitmentApiSchema } from '@/lib/validations'
+import {
+    resolveCommitmentOccurrenceForPeriod,
+    resolveNextCommitmentOccurrence,
+} from '@/lib/utils/commitment-dates'
 
 export async function GET() {
     try {
@@ -26,7 +34,6 @@ export async function GET() {
 
         const commitments = await ScheduledCommitment.find({
             userId: session.user.id,
-            isActive: true,
         })
             .populate('categoryId', 'name color')
             .populate('accountId', 'name type')
@@ -63,24 +70,66 @@ export async function GET() {
             amountsByCommitment.set(key, list)
         }
 
+        const now = new Date()
         const commitmentsWithStatus = commitments.map((c) => {
             const id = c._id.toString()
             const application = applicationByCommitment.get(id)
+            const periodOccurrence = resolveCommitmentOccurrenceForPeriod(
+                c,
+                currentPeriod,
+                monthStartDay
+            )
+            const nextDueDate = resolveNextCommitmentOccurrence(c, now)
+            const reminderDueDate = periodOccurrence ?? nextDueDate
+            const amountReferenceDate =
+                periodOccurrence ??
+                nextDueDate ??
+                new Date(c.startDate ?? now)
 
             // El monto vigente lo resuelve un único servicio, para que la UI, el
             // apply y la proyección no puedan discrepar.
             const resolved = resolveCommitmentAmountForPeriod(c, currentPeriod, {
                 monthStartDay,
+                dueDate: amountReferenceDate,
                 registeredApplication: application ?? null,
                 recentAmounts: amountsByCommitment.get(id) ?? [],
             })
+            const lifecycleStatus = resolveCommitmentLifecycleStatus(c)
+            const reminder = reminderDueDate
+                ? resolveCommitmentReminder({
+                      dueDate: reminderDueDate,
+                      reminderLeadDays: c.reminderLeadDays,
+                      applied: Boolean(application),
+                      lifecycleStatus,
+                      startDate: c.startDate,
+                      now,
+                  })
+                : {}
 
             return {
                 ...c.toObject(),
+                // La automatización no está disponible. Los valores legacy se
+                // presentan como manuales para que ningún compromiso quede
+                // bloqueado esperando un scheduler inexistente.
+                applyMode: 'manual',
                 appliedThisMonth: Boolean(application),
+                currentApplication: application
+                    ? {
+                          _id: application._id,
+                          appliedAt: application.appliedAt,
+                          snapshot: application.snapshot,
+                      }
+                    : undefined,
                 resolvedAmount: resolved.amount,
                 amountSource: resolved.source,
                 amountCertainty: resolved.certainty,
+                resolvedAmountEffectiveFrom: resolved.effectiveFrom,
+                resolvedDueDate: periodOccurrence ?? undefined,
+                nextDueDate: nextDueDate ?? undefined,
+                nextReminderDate: reminder.reminderDate,
+                occursThisPeriod: Boolean(periodOccurrence),
+                lifecycleStatus,
+                ...reminder,
             }
         })
 
@@ -126,9 +175,10 @@ export async function POST(request: Request) {
             accountId: data.accountId || undefined,
             recurrence: data.recurrence,
             dayOfMonth: data.dayOfMonth || undefined,
-            applyMode: data.applyMode ?? 'manual',
+            applyMode: 'manual',
             startDate: data.startDate,
             endDate: data.endDate ?? undefined,
+            reminderLeadDays: data.reminderLeadDays,
             isActive: true,
             amountPolicy,
             estimationMode: data.estimationMode ?? 'template',

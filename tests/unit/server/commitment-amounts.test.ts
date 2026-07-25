@@ -30,16 +30,18 @@ describe('resolveCommitmentDueDate', () => {
     it('descarta un día que no existe en el mes en vez de desbordar', () => {
         // Febrero no tiene 31: no debe devolver el 3 de marzo.
         const due = resolveCommitmentDueDate('2026-02', 31, 1)
-        expect(due).toEqual(new Date(2026, 1, 1))
+        expect(due).toEqual(new Date(2026, 1, 28))
     })
 })
 
 describe('resolveCommitmentAmountForPeriod', () => {
     it('monto fijo sin agenda usa la plantilla y queda como calculado', () => {
-        expect(resolveCommitmentAmountForPeriod(alquiler, '2026-07')).toEqual({
+        expect(resolveCommitmentAmountForPeriod(alquiler, '2026-07')).toMatchObject({
             amount: 650_000,
             source: 'template',
             certainty: 'calculated',
+            effectiveFrom: new Date(2026, 0, 1),
+            dueDate: new Date(2026, 6, 5),
         })
     })
 
@@ -48,10 +50,11 @@ describe('resolveCommitmentAmountForPeriod', () => {
             registeredApplication: { snapshot: { amount: 675_000, amountSource: 'manual' } },
         })
 
-        expect(resolution).toEqual({
+        expect(resolution).toMatchObject({
             amount: 675_000,
             source: 'manual',
             certainty: 'confirmed',
+            dueDate: new Date(2026, 6, 5),
         })
     })
 
@@ -116,7 +119,7 @@ describe('resolveCommitmentAmountForPeriod', () => {
                 { recentAmounts: [58_000, 51_000, 47_000] }
             )
 
-            expect(resolution).toEqual({
+            expect(resolution).toMatchObject({
                 amount: 58_000,
                 source: 'estimated',
                 certainty: 'estimated',
@@ -171,10 +174,11 @@ describe('resolveCommitmentAmountForPeriod', () => {
                 { recentAmounts: [90_000] }
             )
 
-            expect(resolution).toEqual({
+            expect(resolution).toMatchObject({
                 amount: 55_000,
                 source: 'schedule',
                 certainty: 'calculated',
+                effectiveFrom: new Date(2026, 0, 1),
             })
         })
     })

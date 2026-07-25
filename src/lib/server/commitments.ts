@@ -3,7 +3,10 @@ import { createTransactionForUser } from '@/lib/server/transactions'
 import { isDuplicateKeyError, ServiceError } from '@/lib/server/errors'
 import { parseFinancialPeriod } from '@/lib/utils/period'
 import { normalizeRuleText } from '@/lib/utils/rules'
-import { resolveCommitmentAmountForPeriod } from '@/lib/server/commitment-amounts'
+import {
+    resolveCommitmentAmountForPeriod,
+} from '@/lib/server/commitment-amounts'
+import { resolveCommitmentOccurrenceForPeriod } from '@/lib/utils/commitment-dates'
 import {
     COMMITMENT_APPLICATION_DERIVED_STATUSES,
     COMMITMENT_APPLICATION_ORIGINS,
@@ -159,6 +162,19 @@ export async function applyCommitmentForUser(
         throw new ServiceError(409, 'COMMITMENT_INACTIVE', 'El compromiso no esta activo.')
     }
 
+    const dueDate = resolveCommitmentOccurrenceForPeriod(
+        commitment,
+        period,
+        monthStartDay
+    )
+    if (!dueDate) {
+        throw new ServiceError(
+            409,
+            'COMMITMENT_NO_OCCURRENCE_IN_PERIOD',
+            'Este compromiso no tiene un vencimiento dentro del periodo informado.'
+        )
+    }
+
     const existing = await CommitmentApplication.findOne({
         userId,
         commitmentId,
@@ -182,7 +198,10 @@ export async function applyCommitmentForUser(
 
     // De dónde salió el importe: si coincide con el vigente es el calculado,
     // si el usuario lo cambió es manual. Queda guardado en la foto.
-    const resolved = resolveCommitmentAmountForPeriod(commitment, period, { monthStartDay })
+    const resolved = resolveCommitmentAmountForPeriod(commitment, period, {
+        monthStartDay,
+        dueDate,
+    })
     const amountSource: CommitmentAmountSource =
         amount === resolved.amount ? resolved.source : 'manual'
 
@@ -239,6 +258,7 @@ export async function applyCommitmentForUser(
                         categoryId: commitment.categoryId,
                         accountId,
                         amountSource,
+                        dueDate,
                         computedAt: new Date(),
                     },
                 },

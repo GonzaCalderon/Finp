@@ -3,6 +3,10 @@ import type {
     CommitmentAmountSource,
     CommitmentEstimationMode,
 } from '@/lib/constants'
+import {
+    resolveDayInMonth,
+    resolveCommitmentOccurrenceForPeriod,
+} from '@/lib/utils/commitment-dates'
 import { parseFinancialPeriod } from '@/lib/utils/period'
 
 /**
@@ -19,6 +23,10 @@ export interface CommitmentAmountResolution {
     amount: number
     source: CommitmentAmountSource
     certainty: CommitmentAmountCertainty
+    /** Fecha desde la que rige el tramo que resolvió el monto. */
+    effectiveFrom?: Date
+    /** Vencimiento usado para elegir el tramo. */
+    dueDate: Date
 }
 
 type AmountScheduleEntry = {
@@ -28,7 +36,10 @@ type AmountScheduleEntry = {
 
 export interface CommitmentAmountInput {
     amount: number
+    recurrence?: string
     startDate?: Date | string
+    endDate?: Date | string
+    dueDate?: Date | string
     dayOfMonth?: number
     amountPolicy?: CommitmentAmountPolicy
     amountSchedule?: AmountScheduleEntry[]
@@ -37,6 +48,8 @@ export interface CommitmentAmountInput {
 
 export interface ResolveCommitmentAmountOptions {
     monthStartDay?: number
+    /** Ocurrencia ya validada para el período. */
+    dueDate?: Date
     /** Aplicación ya registrada de ese período, si existe. */
     registeredApplication?: {
         snapshot?: { amount?: number; amountSource?: CommitmentAmountSource } | null
@@ -63,21 +76,23 @@ export function resolveCommitmentDueDate(
     dayOfMonth: number | undefined,
     monthStartDay = 1
 ): Date {
-    const { start, end } = parseFinancialPeriod(period, monthStartDay)
-    if (!dayOfMonth) return start
-
-    const candidates = [
-        new Date(start.getFullYear(), start.getMonth(), dayOfMonth),
-        new Date(start.getFullYear(), start.getMonth() + 1, dayOfMonth),
-    ]
-
-    for (const candidate of candidates) {
-        // Descarta desbordes de calendario (ej: 31 de febrero pasa a marzo).
-        if (candidate.getDate() !== dayOfMonth) continue
-        if (candidate >= start && candidate < end) return candidate
+    if (!dayOfMonth) {
+        return parseFinancialPeriod(period, monthStartDay).start
     }
 
-    return start
+    const occurrence = resolveCommitmentOccurrenceForPeriod(
+        {
+            recurrence: 'monthly',
+            startDate: new Date(1900, 0, 1),
+            dayOfMonth,
+        },
+        period,
+        monthStartDay
+    )
+    if (occurrence) return occurrence
+
+    const [year, month] = period.split('-').map(Number)
+    return resolveDayInMonth(year, month - 1, dayOfMonth)
 }
 
 /**
@@ -97,16 +112,18 @@ export function resolveCommitmentAmountForPeriod(
     period: string,
     options: ResolveCommitmentAmountOptions = {}
 ): CommitmentAmountResolution {
+    const dueDate =
+        options.dueDate ??
+        resolveCommitmentDueDate(period, commitment.dayOfMonth, options.monthStartDay)
     const snapshot = options.registeredApplication?.snapshot
     if (snapshot && typeof snapshot.amount === 'number' && Number.isFinite(snapshot.amount)) {
         return {
             amount: snapshot.amount,
             source: snapshot.amountSource ?? 'manual',
             certainty: 'confirmed',
+            dueDate,
         }
     }
-
-    const dueDate = resolveCommitmentDueDate(period, commitment.dayOfMonth, options.monthStartDay)
 
     const scheduled = (commitment.amountSchedule ?? [])
         .map((entry) => ({ effectiveFrom: toDate(entry.effectiveFrom), amount: entry.amount }))
@@ -121,25 +138,38 @@ export function resolveCommitmentAmountForPeriod(
 
     const vigente = scheduled.at(-1)
     if (vigente) {
-        return { amount: vigente.amount, source: 'schedule', certainty: 'calculated' }
+        return {
+            amount: vigente.amount,
+            source: 'schedule',
+            certainty: 'calculated',
+            effectiveFrom: vigente.effectiveFrom,
+            dueDate,
+        }
     }
 
     if (commitment.amountPolicy === 'variable') {
-        return resolveVariableAmount(commitment, options.recentAmounts ?? [])
+        return resolveVariableAmount(commitment, options.recentAmounts ?? [], dueDate)
     }
 
-    return { amount: commitment.amount, source: 'template', certainty: 'calculated' }
+    return {
+        amount: commitment.amount,
+        source: 'template',
+        certainty: 'calculated',
+        effectiveFrom: toDate(commitment.startDate) ?? undefined,
+        dueDate,
+    }
 }
 
 function resolveVariableAmount(
     commitment: CommitmentAmountInput,
-    recentAmounts: number[]
+    recentAmounts: number[],
+    dueDate: Date
 ): CommitmentAmountResolution {
     const usable = recentAmounts.filter((amount) => typeof amount === 'number' && Number.isFinite(amount))
     const mode = commitment.estimationMode ?? 'template'
 
     if (mode === 'last' && usable.length > 0) {
-        return { amount: usable[0], source: 'estimated', certainty: 'estimated' }
+        return { amount: usable[0], source: 'estimated', certainty: 'estimated', dueDate }
     }
 
     if (mode === 'average' && usable.length > 0) {
@@ -148,15 +178,16 @@ function resolveVariableAmount(
             amount: Math.round(total / usable.length),
             source: 'estimated',
             certainty: 'estimated',
+            dueDate,
         }
     }
 
     if (typeof commitment.amount === 'number' && commitment.amount > 0) {
-        return { amount: commitment.amount, source: 'estimated', certainty: 'estimated' }
+        return { amount: commitment.amount, source: 'estimated', certainty: 'estimated', dueDate }
     }
 
     // Variable sin ninguna referencia: el usuario tiene que ingresar el importe.
-    return { amount: 0, source: 'estimated', certainty: 'pending_amount' }
+    return { amount: 0, source: 'estimated', certainty: 'pending_amount', dueDate }
 }
 
 /** Un compromiso variable exige confirmar el importe antes de registrarlo. */

@@ -49,13 +49,18 @@ Implementado (Fases 1 y 2):
 - Eliminar la transacción deja la aplicación en `reverted`, reabre el período y conserva el compromiso.
 - Proyección extraída a `src/lib/server/projection.ts`: incluye `weekly` y `once`, honra `monthStartDay`, usa el monto correcto por período y filtra compras en un pago.
 - Cuenta habitual (`accountId`) y validación zod en el servidor de las rutas de compromisos.
+- UX mobile-first en tres pasos, agenda separada e historial colapsable.
+- Monto vigente, fecha efectiva y aplicación actual visibles en la lista.
+- Recordatorio relativo al vencimiento dentro de Finp.
+- Ciclo de vida derivado y conservación de finalizados/desactivados.
+- Candidatos mensuales calculados desde historial, explicables y descartables.
 
 Pendiente:
 
 - contexto `space`, reparto y pagador habitual;
 - ajustes porcentuales pautados e índices oficiales;
-- candidatos recurrentes desde historial;
 - ejecución automática (`auto_month_start`) y scheduler.
+- notificaciones push o fuera de la sesión web.
 
 ## 2. Principio funcional
 
@@ -357,6 +362,11 @@ Señales útiles:
 
 Las notificaciones deben llevar directamente a la acción necesaria.
 
+La primera versión implementada es in-app. El usuario elige el mismo día o una
+anticipación en días; Finp deriva la fecha desde el vencimiento y prioriza el
+insight cuando entra en ventana o queda vencido. No existe push, service worker
+ni ejecución en segundo plano.
+
 ## 11. Historial y auditoría
 
 Conservar:
@@ -396,7 +406,11 @@ La transacción generada debe conservar vínculo y procedencia visibles. Editar 
 
 ### Sugerencias desde recurrencia
 
-El aprendizaje puede proponer un compromiso cuando existen al menos tres períodos mensuales consistentes bajo una descripción, comercio o nominaciones similares.
+El aprendizaje puede proponer un compromiso cuando existe evidencia mensual
+suficiente bajo una descripción, comercio o nominaciones similares. El criterio
+es híbrido: tres meses para un monto estable con variación de hasta 10 %, cinco
+para un monto variable, cobertura temporal mínima de 75 %, una sola coincidencia
+por mes y confianza mínima de 0,82.
 
 El candidato debe:
 
@@ -406,8 +420,20 @@ El candidato debe:
 - proponer monto fijo cuando es estable o monto a confirmar cuando varía;
 - recordar descartes y no insistir sin nueva evidencia;
 - abrir Compromisos con un borrador, nunca crear la plantilla automáticamente.
+- bonificar categorías habitualmente recurrentes y penalizar las ocasionales;
+- permitir que seis o más repeticiones compensen la penalización de categoría.
 
 Los candidatos funcionales reutilizan eventos y feedback del aprendizaje personal, pero se modelan separados de las personalizaciones de cuenta, categoría o comercio.
+
+Estado implementado: `GET /api/commitments/suggestions` analiza hasta 18 meses
+de movimientos compatibles y aplica el criterio híbrido definido en el ADR
+0002. Excluye cuotas, Espacios, aplicaciones de compromiso y grupos de pago.
+La tarjeta explica evidencia, abre la misma alta guiada y usa
+`FunctionalSuggestionDismissal` para recordar `No es un compromiso`.
+
+Caso de control: `Pizza`, tres meses y 52 % de variación no debe mostrarse. No
+alcanza la evidencia de cinco meses requerida para un monto variable y su
+categoría ocasional reduce la confianza.
 
 ## 12. Dependencias de evolución
 

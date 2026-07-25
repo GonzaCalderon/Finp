@@ -341,9 +341,13 @@ test.describe('Captura rápida', () => {
             .getByRole('dialog')
             .filter({ hasText: 'Nuevo compromiso' })
         await expect(commitmentDialog).toBeVisible()
-        await expect(commitmentDialog).toContainText('Desde Captura rápida completamos')
+        await expect(commitmentDialog).toContainText('Finp completó')
         await expect(commitmentDialog.getByLabel('Descripción')).toHaveValue('Internet')
-        await expect(commitmentDialog.getByLabel('Día del mes')).toHaveValue('12')
+        await commitmentDialog.getByRole('button', { name: 'Continuar' }).click()
+        await expect(
+            commitmentDialog.getByRole('button', { name: 'Día 12' })
+        ).toBeVisible()
+        await expect(commitmentDialog).not.toContainText('Preparado para automatización')
     })
 
     test('ofrece aplicar un compromiso pendiente y permite registrar aparte', async ({

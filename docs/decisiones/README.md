@@ -74,4 +74,9 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 
 ## 7. Índice de decisiones
 
-Todavía no hay decisiones formalizadas en este formato. Las decisiones consolidadas existentes se migrarán desde los documentos históricos sólo cuando vuelvan a ser relevantes.
+- [`0001 — Compromisos manuales y recordatorios relativos`](0001-compromisos-manuales-y-recordatorios-relativos.md):
+  aplicación manual hasta scheduler, recordatorio relativo, flujo guiado y
+  ciclo de vida derivado.
+- [`0002 — Criterio híbrido para sugerencias de compromisos`](0002-criterio-hibrido-sugerencias-de-compromisos.md):
+  umbral de confianza, evidencia temporal, estabilidad, afinidad por categoría
+  y caso de control Pizza.

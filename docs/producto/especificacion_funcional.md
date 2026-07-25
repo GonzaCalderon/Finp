@@ -127,6 +127,11 @@ Ventana de análisis configurada por usuario. `monthStartDay` define el inicio y
 
 Plantilla recurrente o esperada. Una aplicación concreta genera o se vincula con una transacción y conserva snapshot.
 
+La plantilla conserva monto inicial, agenda de vigencias, recurrencia, período
+de actividad y recordatorio opcional. La interfaz muestra el monto resuelto para
+el período, desde cuándo rige y cuándo se aplicó. Un compromiso finalizado o
+desactivado conserva historia, pero no genera pendientes ni proyección.
+
 ### Espacio
 
 Contexto compartido persistente con participantes, movimientos, reparto, balances y pagos.
@@ -379,6 +384,19 @@ El historial puede sugerir:
 
 Crear una entidad o automatización siempre requiere confirmación.
 
+Un candidato de compromiso usa un criterio híbrido. Un monto estable, con
+variación de hasta 10 %, requiere al menos tres meses; un monto variable,
+al menos cinco. Además exige 75 % de cobertura temporal, como máximo una
+coincidencia mensual y confianza mínima de 0,82. La confianza combina
+recurrencia, estabilidad y afinidad de categoría.
+
+Servicios, Suscripciones, Educación, Hogar, Impuestos y Préstamos bonifican la
+señal. Restaurantes y delivery, Supermercado, Indumentaria, Viajes y Otros
+gastos la penalizan; seis o más repeticiones pueden compensar esa penalización.
+El candidato explica período, cobertura, estabilidad, día y categoría, descarta
+movimientos ya vinculados y recuerda rechazos. Abre el alta guiada con un
+borrador; nunca crea la plantilla automáticamente.
+
 ## 11. Espacios
 
 Un Espacio permite:
@@ -478,6 +496,11 @@ Debe distinguir:
 
 Los compromisos variables usan el monto efectivo del período. Ajustes porcentuales, índices oficiales, compromisos de Espacios y escenarios avanzados requieren etapas posteriores definidas en el roadmap.
 
+Las fechas de compromiso se derivan desde una única regla de dominio. Los días
+29–31 se ajustan al último día real del mes, la primera ocurrencia nunca precede
+la fecha de inicio y el recordatorio puede cruzar al mes anterior. Una ocurrencia
+anterior al inicio no es pendiente ni forma parte de la proyección.
+
 ## 15. Integraciones entre funciones
 
 ### Captura rápida → módulo especializado
@@ -495,6 +518,8 @@ Los balances pueden producir deudas derivadas idempotentes. Pagar la deuda no al
 ### Compromiso → Transacción
 
 Aplicar genera o vincula una transacción y conserva origen, período y snapshot.
+La aplicación es manual mientras no exista un scheduler con idempotencia,
+reintentos y observabilidad. La interfaz no ofrece modos automáticos inertes.
 
 ### Regla → Puntos de ingreso
 

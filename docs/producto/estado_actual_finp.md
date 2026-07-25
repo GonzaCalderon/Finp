@@ -42,13 +42,13 @@ Verificado localmente el 2026-07-25 sobre `dev`:
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
 - autenticación con NextAuth;
-- 97 rutas API;
+- 98 rutas API;
 - typecheck limpio;
 - ESLint limpio;
-- build de producción limpio, con 62 páginas generadas;
-- 589 unit tests aprobados en 65 archivos;
+- build de producción limpio, con 63 páginas generadas;
+- 621 unit tests aprobados en 74 archivos;
 - 5 tests declarados como `todo`;
-- 36 escenarios E2E registrados para desktop y mobile;
+- 40 escenarios E2E registrados para desktop y mobile;
 - E2E no ejecutados en esta revisión porque falta `.env.test.local`;
 - CI activo para lint, build y unit tests;
 - job E2E preparado, pero desactivado.
@@ -154,6 +154,23 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - monto fijo;
 - monto variable a confirmar;
 - agenda manual de montos con vigencia;
+- monto vigente y fecha efectiva coherentes en Compromisos y Dashboard;
+- alta y edición guiadas en tres pasos;
+- progreso mobile compacto y tres pasos visibles en desktop;
+- validación al escribir, retorno al primer paso inválido y errores de servidor
+  asociados al campo correspondiente;
+- selector de categorías compartido con Nueva transacción, con búsqueda, chips
+  y ranking por historial;
+- selector táctil 1–31 y vista previa exacta de vencimiento y recordatorio;
+- agenda de montos separada e historial rápido colapsable;
+- cambio de monto desde ahora, próximo vencimiento o fecha elegida;
+- historia monetaria vigente y pasada inmutable;
+- fecha de aplicación visible;
+- recordatorios in-app relativos al vencimiento;
+- estados `upcoming`, `active`, `ending_soon`, `expired` e `inactive`;
+- finalizados y desactivados conservados en una sección colapsada;
+- candidatos mensuales con criterio híbrido, confianza mínima, afinidad por
+  categoría y descarte persistente;
 - snapshot por aplicación;
 - estados derivados;
 - procedencia visible;
@@ -163,11 +180,11 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 
 ### No disponible todavía
 
-- candidatos recurrentes desde historial;
 - compromisos compartidos en Espacios;
 - ajustes porcentuales;
 - índices oficiales;
 - scheduler para `auto_month_start`;
+- notificaciones push o recordatorios fuera de la aplicación;
 - escenarios avanzados de proyección.
 
 ## 6. Espacios
@@ -298,7 +315,9 @@ Mobile web sigue siendo la superficie prioritaria.
 - `intent_completed` no se emite al crear un compromiso desde un borrador.
 - `getNavInsightsForUser` no tiene test de integración.
 - `auto_month_start` no tiene scheduler.
-- No hay detección de candidatos a compromiso.
+- La detección híbrida de candidatos a compromiso está implementada, incluye el
+  caso de control Pizza y sigue pendiente de validación E2E con datos reales
+  representativos.
 - La orientación aún no cubre reglas, cuotas, Deudas, Espacios e Importación.
 - La proyección no distingue completamente cuotas de consumos de un pago.
 - No hay realtime ni offline.
