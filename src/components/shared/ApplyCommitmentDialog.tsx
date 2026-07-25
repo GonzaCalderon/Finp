@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,12 @@ interface CommitmentToApply {
     amount: number
     currency: string
     dayOfMonth?: number
+    /** Monto vigente para el período, resuelto por el servidor. */
+    resolvedAmount?: number
+    amountPolicy?: 'fixed' | 'variable'
+    amountCertainty?: 'confirmed' | 'calculated' | 'estimated' | 'pending_amount'
+    /** Cuenta habitual del compromiso, si tiene una. */
+    defaultAccountId?: string
 }
 
 interface ApplyCommitmentDialogProps {
@@ -70,20 +76,43 @@ export function ApplyCommitmentDialog({
     const accountId = useWatch({ control, name: 'accountId' })
     const amount = useWatch({ control, name: 'amount' })
     const date = useWatch({ control, name: 'date' })
+    const [formError, setFormError] = useState<string | null>(null)
 
+    const isVariable = commitment?.amountPolicy === 'variable'
+
+    // El error se limpia al cerrar (handleOpenChange) y al reenviar, no acá:
+    // llamar a setState dentro del efecto dispara renders en cascada.
     useEffect(() => {
         if (open && commitment) {
             reset({
-                amount: commitment.amount,
-                accountId: '',
+                // Se prefiere el monto vigente del período sobre el de la plantilla.
+                amount: commitment.resolvedAmount ?? commitment.amount,
+                accountId: commitment.defaultAccountId ?? '',
                 notes: '',
                 date: new Date().toISOString().split('T')[0],
             })
         }
     }, [open, commitment, reset])
 
+    const handleOpenChange = (next: boolean) => {
+        if (!next) setFormError(null)
+        onOpenChange(next)
+    }
+
     const handleFormSubmit = async (data: Record<string, unknown>) => {
         if (!commitment) return
+
+        // El servidor revalida, pero conviene explicar el problema sin ida y vuelta.
+        if (!data.accountId) {
+            setFormError('Elegí la cuenta de la que sale el dinero.')
+            return
+        }
+        if (typeof data.amount !== 'number' || data.amount <= 0) {
+            setFormError('Ingresá un monto mayor a 0.')
+            return
+        }
+
+        setFormError(null)
         await onSubmit(commitment._id, {
             ...data,
             period,
@@ -100,7 +129,7 @@ export function ApplyCommitmentDialog({
     if (!commitment) return null
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent variant="fullscreen-mobile" className="max-w-sm p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-0">
                     <DialogTitle>Aplicar compromiso</DialogTitle>
@@ -113,7 +142,7 @@ export function ApplyCommitmentDialog({
                     <div className="overflow-y-auto px-5 py-4 space-y-4">
                     <FormattedAmountInput
                         id="amount"
-                        label="Monto"
+                        label={isVariable ? 'Monto real *' : 'Monto'}
                         value={amount}
                         currency={commitment.currency}
                         autoFocus
@@ -121,6 +150,14 @@ export function ApplyCommitmentDialog({
                             setValue('amount', value, { shouldDirty: true })
                         }
                     />
+
+                    {isVariable && (
+                        <p className="-mt-2 text-xs text-muted-foreground">
+                            {commitment.amountCertainty === 'pending_amount'
+                                ? 'Este compromiso tiene monto variable: ingresá el importe de este período.'
+                                : 'Este compromiso tiene monto variable. El importe propuesto es una estimación: confirmá el real antes de registrar.'}
+                        </p>
+                    )}
 
                     <div className="space-y-2">
                         <Label>Cuenta de débito</Label>
@@ -172,13 +209,19 @@ export function ApplyCommitmentDialog({
                             {...register('notes')}
                         />
                     </div>
+
+                    {formError && (
+                        <p role="alert" className="text-xs text-destructive">
+                            {formError}
+                        </p>
+                    )}
                     </div>
 
                     <div
                         className="sticky bottom-0 border-t bg-background px-5 py-4 safe-area-pb flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
                         style={{ borderColor: 'var(--border)' }}
                     >
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                             Cancelar
                         </Button>
 

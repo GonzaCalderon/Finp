@@ -763,6 +763,14 @@ function useTransactionLauncher() {
             setQuickCaptureOpen(false)
             setTxDialogOpen(true)
         },
+        handleAppliedCommitment: (description: string, period: string) => {
+            const label = new Date(
+                Number(period.split('-')[0]),
+                Number(period.split('-')[1]) - 1,
+                1
+            ).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+            success(`Aplicaste “${description}” de ${label}.`)
+        },
         accounts,
         categories,
         rules,
@@ -787,6 +795,7 @@ function DesktopFloatingTransactionButton() {
         initialTransactionData,
         openFullTransaction,
         completeQuickCaptureDetails,
+        handleAppliedCommitment,
         accounts,
         categories,
         rules,
@@ -962,6 +971,7 @@ function DesktopFloatingTransactionButton() {
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 onCompleteDetails={completeQuickCaptureDetails}
+                onAppliedCommitment={handleAppliedCommitment}
             />
         </>
     )
@@ -1358,6 +1368,7 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
         initialTransactionData,
         openFullTransaction,
         completeQuickCaptureDetails,
+        handleAppliedCommitment,
         accounts,
         categories,
         rules,
@@ -1535,6 +1546,7 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 onCompleteDetails={completeQuickCaptureDetails}
+                onAppliedCommitment={handleAppliedCommitment}
             />
         </>
     )

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -39,6 +39,9 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { getCurrentFinancialPeriod } from '@/lib/utils/period'
+import { takeCaptureDraft } from '@/lib/client/capture-draft'
+import type { CommitmentDraftEnvelope, CommitmentDraftFields } from '@/types/capture-intent'
 import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
 import { cn } from '@/lib/utils'
@@ -58,10 +61,9 @@ const APPLY_MODE_LABELS: Record<string, string> = {
     auto_month_start: 'Preparado para automatización',
 }
 
-const getCurrentPeriod = () => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
+// Fallback usado sólo mientras el servidor todavía no respondió con el período
+// financiero real. Con monthStartDay != 1 el mes calendario no es el período.
+const getFallbackPeriod = () => getCurrentFinancialPeriod(new Date())
 
 const fmtDate = (date: Date | string) =>
     new Date(date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -70,6 +72,16 @@ function getRefName(value: unknown): string | null {
     if (!value || typeof value === 'string' || typeof value !== 'object') return null
     const candidate = value as { name?: unknown }
     return typeof candidate.name === 'string' ? candidate.name : null
+}
+
+/** El campo puede llegar como ObjectId o ya populado; en ambos casos queremos el id. */
+function getRefId(value: unknown): string | undefined {
+    if (!value) return undefined
+    if (typeof value === 'string') return value
+    if (typeof value !== 'object') return undefined
+    const candidate = value as { _id?: unknown; toString?: () => string }
+    if (candidate._id) return String(candidate._id)
+    return candidate.toString ? candidate.toString() : undefined
 }
 
 function getRefColor(value: unknown): string | null {
@@ -322,7 +334,7 @@ function CommitmentSection({
 function CommitmentsPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const { commitments, loading, error, createCommitment, updateCommitment, deleteCommitment } = useCommitments()
+    const { commitments, currentPeriod, loading, error, fetchCommitments, createCommitment, updateCommitment, deleteCommitment } = useCommitments()
     const { categories } = useCategories()
     const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
@@ -333,11 +345,34 @@ function CommitmentsPageInner() {
     const [applyDialogOpen, setApplyDialogOpen] = useState(false)
     const [applyCommitment, setApplyCommitment] = useState<IScheduledCommitment | null>(null)
     const [appliedId, setAppliedId] = useState<string | null>(null)
+    const [initialDraft, setInitialDraft] = useState<CommitmentDraftEnvelope | null>(null)
+    const consumedDraftRef = useRef<string | null>(null)
+
+    // `selected` guarda una foto del momento del click: al refrescar la lista tras
+    // cambiar la agenda de montos hay que releer la versión viva del compromiso.
+    const selectedLive = selected
+        ? commitments.find((c) => c._id.toString() === selected._id.toString()) ?? selected
+        : null
 
     usePageTitle('Compromisos')
 
     useEffect(() => {
-        if (searchParams.get('create') !== '1') return
+        const draftId = searchParams.get('draft')
+        const wantsCreate = searchParams.get('create') === '1'
+        if (!draftId && !wantsCreate) return
+
+        // El borrador viaja por sessionStorage: en la URL sólo va su id, porque
+        // los campos llevan datos financieros personales.
+        //
+        // El ref hace la lectura idempotente: en dev StrictMode ejecuta el efecto
+        // dos veces y la segunda pasada, al no encontrar nada, pisaba el borrador.
+        if (draftId && consumedDraftRef.current !== draftId) {
+            consumedDraftRef.current = draftId
+            const envelope = takeCaptureDraft<CommitmentDraftFields>(draftId)
+            // Un sobre vencido o de otra versión abre el alta vacía.
+            if (envelope) setInitialDraft(envelope)
+        }
+
         setSelected(null)
         setDialogOpen(true)
         router.replace('/commitments', { scroll: false })
@@ -611,10 +646,18 @@ function CommitmentsPageInner() {
 
             <CommitmentDialog
                 open={dialogOpen}
-                onOpenChange={setDialogOpen}
-                commitment={selected}
+                onOpenChange={(open) => {
+                    setDialogOpen(open)
+                    // El borrador se usa una sola vez: reabrir el alta no debe
+                    // repetir datos que el usuario ya descartó.
+                    if (!open) setInitialDraft(null)
+                }}
+                commitment={selectedLive}
+                initialDraft={initialDraft}
                 categories={categories}
+                accounts={accounts}
                 onSubmit={handleSubmit}
+                onScheduleChange={() => void fetchCommitments({ silent: true })}
             />
 
             <ApplyCommitmentDialog
@@ -626,9 +669,13 @@ function CommitmentsPageInner() {
                     amount: applyCommitment.amount,
                     currency: applyCommitment.currency,
                     dayOfMonth: applyCommitment.dayOfMonth,
+                    resolvedAmount: applyCommitment.resolvedAmount,
+                    amountPolicy: applyCommitment.amountPolicy,
+                    amountCertainty: applyCommitment.amountCertainty,
+                    defaultAccountId: getRefId(applyCommitment.accountId),
                 } : null}
                 accounts={accounts}
-                period={getCurrentPeriod()}
+                period={currentPeriod ?? getFallbackPeriod()}
                 onSubmit={handleApplySubmit}
             />
 

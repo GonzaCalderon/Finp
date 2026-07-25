@@ -37,6 +37,10 @@ type CreateTransactionOptions = {
         importSourceType?: ImportSourceType
         spaceNameSnapshot?: string
         operationalAmount?: number
+        commitmentId?: ITransaction['commitmentId']
+        commitmentApplicationId?: ITransaction['commitmentApplicationId']
+        commitmentPeriod?: string
+        commitmentNameSnapshot?: string
     }
 }
 
@@ -513,6 +517,75 @@ export async function createTransactionForUser(
     }
 
     return populated
+}
+
+/** Tipos que el motor de reglas puede evaluar. */
+const RULE_ELIGIBLE_TYPES = new Set(['expense', 'income', 'credit_card_expense'])
+
+export type RuleTraceUpdate =
+    | {
+          matched: true
+          appliedRuleId: string
+          appliedRuleNameSnapshot: string
+          appliedRuleMatchSnapshot: ReturnType<typeof evaluateRules>['match']
+          appliedRuleActions: {
+              categoryId?: string
+              setType?: 'expense' | 'income'
+              normalizeMerchant?: string
+          }
+      }
+    | { matched: false }
+
+/**
+ * Recalcula la traza de regla de una transacción que se está editando.
+ *
+ * El PATCH no volvía a evaluar el motor ni limpiaba `appliedRule*`, así que
+ * después de cambiar la descripción el pill de procedencia seguía mostrando una
+ * regla que ya no coincidía.
+ *
+ * A diferencia del alta, acá **no** se aplican las acciones sobre los datos: el
+ * usuario está editando explícitamente y su valor gana. Sólo se refresca la
+ * traza, que responde "qué regla coincide con este movimiento".
+ */
+export async function resolveRuleTraceForEdit(
+    userId: string,
+    context: {
+        type: string
+        description: string
+        merchant?: string
+        categoryId?: string
+    }
+): Promise<RuleTraceUpdate> {
+    if (!RULE_ELIGIBLE_TYPES.has(context.type)) return { matched: false }
+
+    const rules = await TransactionRule.find({ userId, isActive: true }).sort({ priority: -1 })
+    if (rules.length === 0) return { matched: false }
+
+    const matchContext = {
+        // Un gasto con tarjeta coincide con las reglas de gasto, igual que en el alta.
+        type: context.type === 'credit_card_expense' ? 'expense' : context.type,
+        description: context.description,
+        merchant: context.merchant,
+    }
+
+    const evaluation = evaluateRules(rules, matchContext)
+    if (!evaluation.matched || !evaluation.rule) return { matched: false }
+
+    // Se pasa el categoryId del usuario para que la acción de categoría quede
+    // marcada como omitida por valor explícito y no figure como aplicada.
+    const { appliedActions } = previewRuleActions(evaluation.rule, {
+        ...matchContext,
+        type: context.type,
+        categoryId: context.categoryId,
+    })
+
+    return {
+        matched: true,
+        appliedRuleId: evaluation.rule._id.toString(),
+        appliedRuleNameSnapshot: evaluation.rule.name,
+        appliedRuleMatchSnapshot: evaluation.match,
+        appliedRuleActions: appliedActions,
+    }
 }
 
 export function getTransactionListTypeFilter(type: string) {

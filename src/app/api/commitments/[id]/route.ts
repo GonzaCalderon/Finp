@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { ScheduledCommitment } from '@/lib/models'
+import { normalizeRuleText } from '@/lib/utils/rules'
+import { normalizeCommitmentAliases } from '@/lib/server/commitments'
+import { commitmentPatchApiSchema } from '@/lib/validations'
 
 export async function PATCH(
     request: Request,
@@ -14,23 +17,49 @@ export async function PATCH(
         }
 
         const { id } = await params
-        const body = await request.json()
 
-        const {
-            description, amount, currency, categoryId, recurrence,
-            dayOfMonth, applyMode, startDate, endDate, isActive
-        } = body
-
-        const updateData: Record<string, unknown> = {
-            description, amount, currency, recurrence, applyMode,
+        const parsed = commitmentPatchApiSchema.safeParse(await request.json())
+        if (!parsed.success) {
+            return NextResponse.json(
+                {
+                    error: 'Datos del compromiso inválidos',
+                    code: 'INVALID_COMMITMENT_DATA',
+                    details: parsed.error.issues,
+                },
+                { status: 400 }
+            )
         }
 
-        if (categoryId !== undefined) updateData.categoryId = categoryId || null
-        if (dayOfMonth !== undefined) updateData.dayOfMonth = dayOfMonth
-        if (startDate !== undefined) updateData.startDate = new Date(startDate)
-        if (endDate !== undefined) updateData.endDate = new Date(endDate)
-        if (endDate === null) updateData.endDate = null
-        if (isActive !== undefined) updateData.isActive = isActive
+        const data = parsed.data
+
+        // Sólo se escriben los campos efectivamente enviados: antes cinco campos
+        // viajaban siempre y `endDate: null` dependía del orden de dos ifs.
+        const updateData: Record<string, unknown> = {}
+
+        if (data.description !== undefined) {
+            updateData.description = data.description
+            updateData.normalizedDescription = normalizeRuleText(data.description)
+        }
+        if (data.amount !== undefined) updateData.amount = data.amount
+        if (data.currency !== undefined) updateData.currency = data.currency
+        if (data.recurrence !== undefined) updateData.recurrence = data.recurrence
+        if (data.applyMode !== undefined) updateData.applyMode = data.applyMode
+        if (data.amountPolicy !== undefined) updateData.amountPolicy = data.amountPolicy
+        if (data.estimationMode !== undefined) updateData.estimationMode = data.estimationMode
+        if (data.aliases !== undefined) updateData.aliases = normalizeCommitmentAliases(data.aliases)
+        if (data.categoryId !== undefined) updateData.categoryId = data.categoryId || null
+        if (data.accountId !== undefined) updateData.accountId = data.accountId || null
+        if (data.dayOfMonth !== undefined) updateData.dayOfMonth = data.dayOfMonth ?? null
+        if (data.startDate !== undefined) updateData.startDate = data.startDate
+        if (data.endDate !== undefined) updateData.endDate = data.endDate ?? null
+        if (data.isActive !== undefined) updateData.isActive = data.isActive
+
+        if (Object.keys(updateData).length === 0) {
+            return NextResponse.json(
+                { error: 'No hay cambios para aplicar', code: 'EMPTY_COMMITMENT_PATCH' },
+                { status: 400 }
+            )
+        }
 
         await connectDB()
 

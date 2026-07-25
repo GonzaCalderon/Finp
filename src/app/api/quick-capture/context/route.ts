@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { QuickCaptureAlias } from '@/lib/models'
+import { FunctionalSuggestionDismissal, QuickCaptureAlias } from '@/lib/models'
 import {
     buildQuickCaptureFrequents,
     getQuickCaptureHistoryRows,
     serializeQuickCaptureAliases,
 } from '@/lib/server/quick-capture'
 import { getQuickCaptureLearningContext } from '@/lib/server/quick-capture-learning'
+import { getApplicableCommitmentsForUser } from '@/lib/server/commitment-context'
 import type { QuickCaptureContextResponse } from '@/types'
 
 export async function GET() {
@@ -20,7 +21,7 @@ export async function GET() {
 
         await connectDB()
         const historyRows = getQuickCaptureHistoryRows(session.user.id)
-        const [aliasDocuments, frequents, learning] = await Promise.all([
+        const [aliasDocuments, frequents, learning, commitmentContext, dismissals] = await Promise.all([
             QuickCaptureAlias.find({ userId: session.user.id })
                 .sort({ lastUsedAt: -1, updatedAt: -1 })
                 .lean(),
@@ -34,6 +35,16 @@ export async function GET() {
                 )
                 return undefined
             }),
+            // La orientación es una mejora, no un requisito: si falla, Captura
+            // rápida sigue registrando movimientos simples igual que antes.
+            getApplicableCommitmentsForUser(session.user.id).catch((error) => {
+                console.error('No se pudieron cargar los compromisos aplicables:', error)
+                return undefined
+            }),
+            FunctionalSuggestionDismissal.find({ userId: session.user.id })
+                .select({ subjectKey: 1 })
+                .lean<Array<{ subjectKey: string }>>()
+                .catch(() => []),
         ])
         const aliases = await serializeQuickCaptureAliases(
             session.user.id,
@@ -43,6 +54,9 @@ export async function GET() {
             aliases,
             frequents,
             learning,
+            commitments: commitmentContext?.commitments,
+            currentPeriod: commitmentContext?.currentPeriod,
+            dismissedSuggestions: dismissals.map((row) => row.subjectKey),
         }
 
         return NextResponse.json(response, {

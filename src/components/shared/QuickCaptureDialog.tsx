@@ -15,15 +15,27 @@ import {
     ChevronDown,
     CircleDollarSign,
     Clock3,
+    HelpCircle,
     Lightbulb,
     Loader2,
     Sparkles,
     Tag,
     WalletCards,
+    Wand2,
     X,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 
+import { apiJson } from '@/lib/client/auth-client'
+import { CaptureHelpPanel } from '@/components/shared/CaptureHelpPanel'
+import { CaptureOrientationCard } from '@/components/shared/CaptureOrientationCard'
+import { buildCaptureDraft, putCaptureDraft } from '@/lib/client/capture-draft'
+import { detectCaptureIntents } from '@/lib/utils/capture-intents'
+import type {
+    CommitmentDraftFields,
+    FunctionalSuggestionActionId,
+} from '@/types/capture-intent'
 import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { CurrencyPillSelector } from '@/components/shared/CurrencyPillSelector'
 import {
@@ -49,6 +61,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import {
+    COMMITMENT_INVALIDATION_TAGS,
     TRANSACTION_INVALIDATION_TAGS,
     invalidateData,
 } from '@/lib/client/data-sync'
@@ -73,6 +86,7 @@ import type {
     ICategory,
     ITransactionRule,
     QuickCaptureAliasDto,
+    QuickCaptureCommitmentDto,
     QuickCaptureContextResponse,
     QuickCaptureDraft,
     QuickCaptureFrequent,
@@ -103,6 +117,8 @@ type QuickCaptureDialogProps = {
     lastExpenseAccountId?: string
     lastIncomeAccountId?: string
     onCompleteDetails: (draft: Partial<TransactionFormInput>) => void
+    /** Se dispara cuando se aplicó un compromiso desde el diálogo. */
+    onAppliedCommitment?: (description: string, period: string) => void
 }
 
 type DraftOverrides = Partial<
@@ -291,11 +307,33 @@ export function QuickCaptureDialog({
     lastExpenseAccountId,
     lastIncomeAccountId,
     onCompleteDetails,
+    onAppliedCommitment,
 }: QuickCaptureDialogProps) {
+    const router = useRouter()
     const [text, setText] = useState('')
     const [aliases, setAliases] = useState<QuickCaptureAliasDto[]>([])
     const [frequents, setFrequents] = useState<QuickCaptureFrequent[]>([])
     const [learning, setLearning] = useState<QuickCaptureLearningContext>()
+    // Contexto de orientación: compromisos aplicables y descartes persistentes.
+    const [commitments, setCommitments] = useState<QuickCaptureCommitmentDto[]>([])
+    const [currentPeriod, setCurrentPeriod] = useState<string | undefined>()
+    const [dismissedSubjects, setDismissedSubjects] = useState<string[]>([])
+    const [orientationBusy, setOrientationBusy] = useState(false)
+    const [orientationError, setOrientationError] = useState<string | null>(null)
+    // Descartes que valen sólo para esta sesión ("Ahora no" / "Registrar aparte").
+    const [sessionDismissedSubjects, setSessionDismissedSubjects] = useState<string[]>([])
+    const [helpOpen, setHelpOpen] = useState(false)
+    const [captureIntroDismissed, setCaptureIntroDismissed] = useState(false)
+    const captureIntroSeenRef = useRef(false)
+    /**
+     * Intro de una sola vez, con campo propio: el banner de aprendizaje sólo
+     * aparece cuando ya hay patrones, así que un usuario nuevo nunca lo veía.
+     */
+    const showCaptureIntro =
+        !captureIntroDismissed &&
+        !helpOpen &&
+        Boolean(learning) &&
+        !learning?.profile.captureIntroSeenAt
     const [overrides, setOverrides] = useState<DraftOverrides>({})
     const [preview, setPreview] = useState<TransactionPreviewResponse>()
     const [previewing, setPreviewing] = useState(false)
@@ -390,6 +428,7 @@ export function QuickCaptureDialog({
         () => resolveQuickCapturePreviewDraft(draft, preview),
         [draft, preview]
     )
+
     const selectedAccount = accounts.find(
         (account) =>
             resolveEntityId(account._id) === resolvedDraft.accountId
@@ -402,6 +441,35 @@ export function QuickCaptureDialog({
         (category) => !category.isArchived && category.type === resolvedDraft.type
     )
     const clientIssues = localIssues(draft)
+    const clientIssuesCount = clientIssues.length
+
+    /**
+     * Orientación funcional. Se calcula sobre el borrador ya resuelto para que la
+     * propuesta hable de lo mismo que muestra el resumen, y se silencia mientras
+     * haya bloqueos locales: primero se arregla el movimiento, después se orienta.
+     */
+    const orientation = useMemo(() => {
+        if (!currentPeriod || clientIssuesCount > 0) return null
+
+        const [suggestion] = detectCaptureIntents({
+            text,
+            draft: resolvedDraft,
+            commitments,
+            currentPeriod,
+            dismissedSubjects: [...dismissedSubjects, ...sessionDismissedSubjects],
+        })
+
+        return suggestion ?? null
+    }, [
+        text,
+        resolvedDraft,
+        commitments,
+        currentPeriod,
+        dismissedSubjects,
+        sessionDismissedSubjects,
+        clientIssuesCount,
+    ])
+
     const issues = clientIssues.length > 0 ? clientIssues : preview?.issues ?? []
     const blockingIssues = issues.filter((issue) => issue.severity === 'error')
     const warnings = issues.filter((issue) => issue.severity === 'warning')
@@ -547,6 +615,9 @@ export function QuickCaptureDialog({
             ])
             setFrequents(data.frequents)
             setLearning(data.learning)
+            setCommitments(data.commitments ?? [])
+            setCurrentPeriod(data.currentPeriod)
+            setDismissedSubjects(data.dismissedSuggestions ?? [])
             learningEnabledRef.current = data.learning?.profile.enabled !== false
 
             if (!migrationCompleted) {
@@ -1060,6 +1131,154 @@ export function QuickCaptureDialog({
         onCompleteDetails(completeDraft)
     }
 
+    /**
+     * Abre y cierra la galería de ejemplos. Abrirla marca la intro como vista:
+     * el usuario ya conoció las capacidades y no hace falta volver a anunciarlas.
+     */
+    function toggleHelp() {
+        const next = !helpOpen
+        setHelpOpen(next)
+        if (next) markCaptureIntroSeen()
+    }
+
+    function markCaptureIntroSeen() {
+        if (captureIntroSeenRef.current) return
+        captureIntroSeenRef.current = true
+        setCaptureIntroDismissed(true)
+        // Best-effort: si falla, la intro vuelve a aparecer. No bloquea nada.
+        void fetch('/api/quick-capture/learning/profile', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ markCaptureIntroSeen: true }),
+        }).catch(() => {})
+    }
+
+    /**
+     * Resuelve una propuesta de orientación.
+     *
+     * `apply_commitment` se confirma acá porque reutiliza las mismas validaciones
+     * financieras y de período del servicio de Compromisos. `create_commitment`
+     * deriva: configurar una plantilla es responsabilidad de su página.
+     */
+    async function handleOrientationAction(actionId: FunctionalSuggestionActionId) {
+        const suggestion = orientation
+        if (!suggestion) return
+
+        setOrientationError(null)
+
+        if (actionId === 'dismiss' || actionId === 'record_simple') {
+            setSessionDismissedSubjects((current) => [...current, suggestion.subjectKey])
+            queueLearningEvent({
+                type: 'intent_dismissed',
+                method: actionId === 'record_simple' ? 'submit' : 'tap',
+                suggestionId: suggestion.intent,
+                inputTerms: text.split(/\s+/),
+                transactionType: draft.type,
+                currency: draft.currency,
+            })
+            return
+        }
+
+        if (actionId === 'never') {
+            setSessionDismissedSubjects((current) => [...current, suggestion.subjectKey])
+            setDismissedSubjects((current) => [...current, suggestion.subjectKey])
+            queueLearningEvent({
+                type: 'intent_dismissed',
+                method: 'never',
+                suggestionId: suggestion.intent,
+            })
+            // Best-effort: si falla, la propuesta vuelve en la próxima sesión.
+            void fetch('/api/quick-capture/suggestions/dismiss', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    intent: suggestion.intent,
+                    subjectKey: suggestion.subjectKey,
+                }),
+            }).catch(() => {})
+            return
+        }
+
+        queueLearningEvent({
+            type: 'intent_accepted',
+            method: suggestion.intent === 'apply_commitment' ? 'submit' : 'derive',
+            suggestionId: suggestion.intent,
+            inputTerms: text.split(/\s+/),
+            transactionType: draft.type,
+            currency: draft.currency,
+        })
+
+        if (suggestion.intent === 'create_commitment') {
+            // El sobre viaja por sessionStorage; en la URL sólo va su id.
+            const envelope = buildCaptureDraft<CommitmentDraftFields>({
+                intent: 'create_commitment',
+                sessionId: learningSessionIdRef.current,
+                fields: suggestion.draftFields ?? {},
+                provenance: suggestion.draftProvenance ?? {},
+                confidence: suggestion.confidence,
+            })
+            putCaptureDraft(envelope)
+
+            // Aceptar el CTA no es completar la función: `intent_completed` lo
+            // emite Compromisos cuando la plantilla realmente se crea.
+            learningCompletedRef.current = true
+            void flushLearningEvents(true)
+            onOpenChange(false)
+            router.push(`/commitments?draft=${envelope.draftId}`)
+            return
+        }
+
+        if (suggestion.intent === 'apply_commitment' && suggestion.commitment) {
+            const commitment = suggestion.commitment
+            const accountId = resolvedDraft.accountId ?? commitment.accountId
+
+            if (!accountId) {
+                setOrientationError('Elegí la cuenta de la que sale el dinero.')
+                return
+            }
+
+            const amount = resolvedDraft.amount ?? commitment.resolvedAmount
+            if (!amount || amount <= 0) {
+                setOrientationError('Ingresá el monto de este período.')
+                return
+            }
+
+            setOrientationBusy(true)
+            try {
+                await apiJson(`/api/commitments/${commitment.commitmentId}/apply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        period: commitment.period,
+                        amount,
+                        accountId,
+                        date: toDateInputValue(resolvedDraft.date),
+                        origin: 'quick_capture',
+                    }),
+                })
+
+                invalidateData(COMMITMENT_INVALIDATION_TAGS)
+                queueLearningEvent({
+                    type: 'intent_completed',
+                    method: 'submit',
+                    suggestionId: suggestion.intent,
+                    durationMs: Date.now() - learningOpenedAtRef.current,
+                })
+                learningCompletedRef.current = true
+                void flushLearningEvents(true)
+                onAppliedCommitment?.(commitment.description, commitment.period)
+                onOpenChange(false)
+            } catch (err) {
+                // El texto y la propuesta se conservan: la derivación falló, no la captura.
+                setOrientationError(
+                    err instanceof Error ? err.message : 'No se pudo aplicar el compromiso.'
+                )
+            } finally {
+                setOrientationBusy(false)
+            }
+        }
+    }
+
     async function submit() {
         if (!canSubmit) return
         setSubmitting(true)
@@ -1241,14 +1460,53 @@ export function QuickCaptureDialog({
                         <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                             <Sparkles className="size-4" aria-hidden="true" />
                         </span>
-                        <div>
+                        <div className="min-w-0 flex-1">
                             <DialogTitle>Captura rápida</DialogTitle>
                             <DialogDescription id="quick-capture-description">
                                 Escribí como te salga. Revisamos todo antes de guardar.
                             </DialogDescription>
                         </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            data-testid="capture-help-toggle"
+                            aria-expanded={helpOpen}
+                            className="shrink-0 text-xs text-muted-foreground"
+                            onClick={toggleHelp}
+                        >
+                            <HelpCircle className="size-3.5" />
+                            <span className="hidden sm:inline">¿Qué puedo escribir?</span>
+                        </Button>
                     </div>
                 </DialogHeader>
+
+                {showCaptureIntro ? (
+                    <div
+                        data-testid="capture-intro"
+                        className="flex shrink-0 items-start gap-2 border-b bg-violet-500/[0.055] px-4 py-2.5 sm:px-6"
+                    >
+                        <Wand2 className="mt-0.5 size-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold">Escribí como hablás</p>
+                            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                                Finp puede registrar un movimiento o guiarte hacia compromisos.
+                                Probá con <em>Café 1500 ayer mp</em> o{' '}
+                                <em>Alquiler 650000 el 5 de cada mes</em>.
+                            </p>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-6 shrink-0"
+                            aria-label="Entendido"
+                            onClick={markCaptureIntroSeen}
+                        >
+                            <X className="size-3" />
+                        </Button>
+                    </div>
+                ) : null}
 
                 {showLearningIntro ? (
                     <div className="flex shrink-0 items-start gap-2 border-b bg-primary/[0.045] px-4 py-2.5 sm:px-6">
@@ -1414,6 +1672,33 @@ export function QuickCaptureDialog({
                                         </div>
                                     ))}
                                 </div>
+                            ) : null}
+
+                            {helpOpen ? (
+                                <CaptureHelpPanel
+                                    onClose={() => setHelpOpen(false)}
+                                    onPickExample={(example) => {
+                                        setHelpOpen(false)
+                                        setText(example)
+                                        inputRef.current?.focus()
+                                    }}
+                                />
+                            ) : null}
+
+                            {orientation ? (
+                                <CaptureOrientationCard
+                                    suggestion={orientation}
+                                    busy={orientationBusy}
+                                    error={orientationError}
+                                    effectiveAmount={
+                                        resolvedDraft.amount ??
+                                        orientation.commitment?.resolvedAmount
+                                    }
+                                    accountName={selectedAccount?.name}
+                                    onAction={(actionId) => {
+                                        void handleOrientationAction(actionId)
+                                    }}
+                                />
                             ) : null}
 
                             {text.trim() ? (

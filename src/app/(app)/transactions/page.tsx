@@ -13,6 +13,7 @@ import {
     RefreshCw,
     SlidersHorizontal,
     Sparkles,
+    CalendarClock,
     Trash2,
     Unlink,
     Upload,
@@ -69,7 +70,7 @@ import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-star
 import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
 import { isSplitTransaction } from '@/lib/utils/operational-amount'
 import { apiJson } from '@/lib/client/auth-client'
-import { invalidateData, NOTIFICATION_INVALIDATION_TAGS, TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/data-sync'
+import { COMMITMENT_INVALIDATION_TAGS, invalidateData, NOTIFICATION_INVALIDATION_TAGS, TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/data-sync'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -119,6 +120,26 @@ const SORT_OPTIONS = [
 const DEFAULT_SORT = 'date_desc'
 
 const getCurrentMonth = (monthStartDay = 1) => getCurrentFinancialPeriod(new Date(), monthStartDay)
+
+/** El campo puede llegar como ObjectId o ya populado; en ambos casos queremos el id. */
+const getIdString = (value: unknown): string | undefined => {
+    if (!value) return undefined
+    if (typeof value === 'string') return value
+    if (typeof value !== 'object') return undefined
+    const candidate = value as { _id?: unknown; toString?: () => string }
+    if (candidate._id) return String(candidate._id)
+    return candidate.toString ? candidate.toString() : undefined
+}
+
+/** "2026-07" → "julio 2026", para mostrar la procedencia de un compromiso. */
+const formatCommitmentPeriod = (period: string) => {
+    const [year, month] = period.split('-').map(Number)
+    if (!year || !month) return period
+    return new Date(year, month - 1, 1).toLocaleDateString('es-AR', {
+        month: 'long',
+        year: 'numeric',
+    })
+}
 
 type BasicOption = {
     value: string
@@ -889,7 +910,7 @@ function TransactionsPageInner() {
     })
 
     const { createPlan } = useInstallments()
-    const { success, error: toastError } = useToast()
+    const { success, error: toastError, confirm } = useToast()
     const { hidden } = useHideAmounts()
 
     usePageTitle('Transacciones')
@@ -985,8 +1006,14 @@ function TransactionsPageInner() {
         if (!deleteId) return
 
         try {
-            await deleteTransaction(deleteId)
-            success('Transacción eliminada correctamente')
+            const reverted = await deleteTransaction(deleteId)
+            if (reverted?.commitment) {
+                success(
+                    `Transacción eliminada. El compromiso volvió a quedar pendiente en ${formatCommitmentPeriod(reverted.commitment.period)}.`
+                )
+            } else {
+                success('Transacción eliminada correctamente')
+            }
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al eliminar transacción')
         } finally {
@@ -1016,11 +1043,57 @@ function TransactionsPageInner() {
         }
     }
 
+    /**
+     * Editar un movimiento aplicado actualiza sólo la foto de ese período.
+     * Propagar el importe a los próximos períodos es una decisión aparte, y se
+     * hace agregando un tramo a la agenda — nunca reescribiendo la historia.
+     */
+    const offerCommitmentTemplateUpdate = (
+        transaction: ITransaction,
+        newAmount: number,
+        periodStart: Date
+    ) => {
+        const commitmentId = getIdString(transaction.commitmentId)
+        if (!commitmentId) return
+
+        confirm(
+            `Actualizamos sólo ${transaction.commitmentPeriod ? formatCommitmentPeriod(transaction.commitmentPeriod) : 'este período'}. ¿Querés que los próximos también usen este monto?`,
+            () => {
+                void (async () => {
+                    try {
+                        await apiJson(`/api/commitments/${commitmentId}/amounts`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                effectiveFrom: periodStart.toISOString(),
+                                amount: newAmount,
+                            }),
+                        })
+                        invalidateData(COMMITMENT_INVALIDATION_TAGS)
+                        success('Los próximos períodos usan el monto nuevo.')
+                    } catch (err) {
+                        toastError(
+                            err instanceof Error ? err.message : 'No se pudo actualizar el compromiso'
+                        )
+                    }
+                })()
+            }
+        )
+    }
+
     const handleTransactionSubmit = async (data: TransactionFormData) => {
         try {
             if (selectedTransaction) {
-                await updateTransaction(selectedTransaction._id.toString(), data)
+                const previousAmount = selectedTransaction.amount
+                const { transaction, commitmentTemplateUpdateAvailable } = await updateTransaction(
+                    selectedTransaction._id.toString(),
+                    data
+                )
                 success('Transacción actualizada correctamente')
+
+                if (commitmentTemplateUpdateAvailable && data.amount !== previousAmount) {
+                    offerCommitmentTemplateUpdate(transaction, data.amount, new Date(data.date))
+                }
             } else {
                 await createTransaction(data)
                 success('Transacción registrada correctamente')
@@ -1562,6 +1635,22 @@ function TransactionsPageInner() {
                                                                     <Sparkles className="size-2.5" />
                                                                     {transaction.appliedRuleNameSnapshot}
                                                                 </span>
+                                                            )}
+
+                                                            {transaction.commitmentNameSnapshot && (
+                                                                <Link
+                                                                    href="/commitments"
+                                                                    className="inline-flex items-center gap-1 rounded-full border border-violet-500/20 bg-violet-500/8 px-2 py-0.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-500/15 dark:text-violet-300"
+                                                                    title="Este movimiento se generó al aplicar un compromiso. Editarlo no cambia la plantilla."
+                                                                >
+                                                                    <CalendarClock className="size-2.5" />
+                                                                    Compromiso: {transaction.commitmentNameSnapshot}
+                                                                    {transaction.commitmentPeriod && (
+                                                                        <span className="opacity-70">
+                                                                            · {formatCommitmentPeriod(transaction.commitmentPeriod)}
+                                                                        </span>
+                                                                    )}
+                                                                </Link>
                                                             )}
 
                                                             {transaction.spaceId && (

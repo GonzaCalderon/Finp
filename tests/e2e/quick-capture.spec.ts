@@ -305,4 +305,132 @@ test.describe('Captura rápida', () => {
         }).click()
         await expect(dialog.getByText('Personalizada')).toHaveCount(0)
     })
+
+    test('deriva un compromiso nuevo con el borrador precargado', async ({ page }, testInfo) => {
+        if (testInfo.project.name === 'mobile-chromium') {
+            await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+            await page.getByRole('button', { name: 'Captura rápida' }).click()
+        } else {
+            await page.keyboard.press('q')
+        }
+
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Captura rápida' })
+        await dialog
+            .getByLabel('Describí el movimiento')
+            .fill('Internet 45000 el 12 de cada mes')
+
+        const orientation = dialog.getByTestId('capture-orientation')
+        await expect(orientation).toBeVisible()
+        await expect(orientation).toHaveAttribute('data-intent', 'create_commitment')
+        await expect(orientation).toContainText('compromiso mensual')
+        await expect(orientation).toContainText('día 12')
+
+        // Registrar el gasto simple debe seguir siendo una alternativa válida.
+        await expect(
+            orientation.getByRole('button', { name: 'Registrar sólo este gasto' })
+        ).toBeVisible()
+
+        await orientation.getByRole('button', { name: 'Configurar compromiso' }).click()
+
+        // Derivó a la página dedicada con el borrador aplicado, y los datos
+        // financieros no quedaron en la URL.
+        await page.waitForURL(/\/commitments/)
+        expect(new URL(page.url()).searchParams.get('draft')).toBeNull()
+
+        const commitmentDialog = page
+            .getByRole('dialog')
+            .filter({ hasText: 'Nuevo compromiso' })
+        await expect(commitmentDialog).toBeVisible()
+        await expect(commitmentDialog).toContainText('Desde Captura rápida completamos')
+        await expect(commitmentDialog.getByLabel('Descripción')).toHaveValue('Internet')
+        await expect(commitmentDialog.getByLabel('Día del mes')).toHaveValue('12')
+    })
+
+    test('ofrece aplicar un compromiso pendiente y permite registrar aparte', async ({
+        page,
+    }, testInfo) => {
+        // El compromiso pendiente se inyecta en el contexto: el test verifica la
+        // orientación, no la creación de datos.
+        await page.route('**/api/quick-capture/context', async (route) => {
+            const response = await route.fetch()
+            const payload = await response.json()
+            await route.fulfill({
+                response,
+                json: {
+                    ...payload,
+                    currentPeriod: '2026-07',
+                    commitments: [
+                        {
+                            commitmentId: 'e2e-commitment-alquiler',
+                            description: 'Alquiler',
+                            normalizedDescription: 'alquiler',
+                            aliases: [],
+                            period: '2026-07',
+                            currency: 'ARS',
+                            resolvedAmount: 650_000,
+                            amountPolicy: 'fixed',
+                            state: 'ready',
+                        },
+                    ],
+                    dismissedSuggestions: [],
+                },
+            })
+        })
+
+        if (testInfo.project.name === 'mobile-chromium') {
+            await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+            await page.getByRole('button', { name: 'Captura rápida' }).click()
+        } else {
+            await page.keyboard.press('q')
+        }
+
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Captura rápida' })
+        await dialog.getByLabel('Describí el movimiento').fill('Alquiler 675000')
+
+        const orientation = dialog.getByTestId('capture-orientation')
+        await expect(orientation).toBeVisible()
+        await expect(orientation).toHaveAttribute('data-intent', 'apply_commitment')
+        await expect(orientation).toContainText('Alquiler')
+        // Anuncia el importe que se va a aplicar, no el previsto por la plantilla.
+        await expect(orientation).toContainText('675.000')
+        await expect(orientation).toContainText('650.000')
+
+        // "Registrar aparte" silencia la propuesta sin perder el texto escrito.
+        await orientation.getByRole('button', { name: 'Registrar aparte' }).click()
+        await expect(orientation).toHaveCount(0)
+        await expect(dialog.getByLabel('Describí el movimiento')).toHaveValue('Alquiler 675000')
+    })
+
+    test('la ayuda "¿Qué puedo escribir?" se abre, escribe un ejemplo y no rompe el layout', async ({
+        page,
+    }, testInfo) => {
+        if (testInfo.project.name === 'mobile-chromium') {
+            await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+            await page.getByRole('button', { name: 'Captura rápida' }).click()
+        } else {
+            await page.keyboard.press('q')
+        }
+
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Captura rápida' })
+        await dialog.getByTestId('capture-help-toggle').click()
+
+        const help = dialog.getByTestId('capture-help-panel')
+        await expect(help).toBeVisible()
+        await expect(help).toContainText('Registrar un gasto o ingreso')
+        await expect(help).toContainText('Preparar un compromiso mensual')
+
+        const layout = await dialog.evaluate((element) => {
+            const rect = element.getBoundingClientRect()
+            return {
+                documentFits: document.documentElement.scrollWidth <= window.innerWidth,
+                dialogFits: rect.left >= 0 && rect.right <= window.innerWidth,
+            }
+        })
+        expect(layout).toEqual({ documentFits: true, dialogFits: true })
+
+        // Los ejemplos son accionables: tocarlos escribe la frase.
+        await help.getByRole('button', { name: 'Café 1500 ayer mp' }).click()
+        await expect(help).toHaveCount(0)
+        await expect(dialog.getByLabel('Describí el movimiento')).toHaveValue('Café 1500 ayer mp')
+    })
 })

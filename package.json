@@ -14,7 +14,9 @@
         "test:e2e": "playwright test",
         "test:e2e:ui": "playwright test --ui",
         "test:e2e:debug": "playwright test --debug",
-        "test:seed": "npx tsx tests/e2e/helpers/seed.ts"
+        "test:seed": "npx tsx tests/e2e/helpers/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "backfill:commitments": "npx tsx scripts/backfill-commitments.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",

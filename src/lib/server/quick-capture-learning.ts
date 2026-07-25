@@ -100,12 +100,14 @@ export async function getQuickCaptureLearningProfile(
             enabled?: boolean
             resetAt?: Date
             introSeenAt?: Date
+            captureIntroSeenAt?: Date
         } | null>()
 
     return {
         enabled: profile?.enabled !== false,
         resetAt: profile?.resetAt?.toISOString(),
         introSeenAt: profile?.introSeenAt?.toISOString(),
+        captureIntroSeenAt: profile?.captureIntroSeenAt?.toISOString(),
     }
 }
 
@@ -720,10 +722,12 @@ export async function updateQuickCaptureLearningProfile(params: {
     userId: string
     enabled?: boolean
     markIntroSeen?: boolean
+    markCaptureIntroSeen?: boolean
 }) {
     const set: Record<string, unknown> = {}
     if (typeof params.enabled === 'boolean') set.enabled = params.enabled
     if (params.markIntroSeen) set.introSeenAt = new Date()
+    if (params.markCaptureIntroSeen) set.captureIntroSeenAt = new Date()
     await QuickCaptureLearningProfile.updateOne(
         { userId: params.userId },
         {

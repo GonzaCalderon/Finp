@@ -96,7 +96,9 @@ export const CATEGORY_INVALIDATION_TAGS: DataTag[] = [
     'settings',
 ]
 
-export const RULE_INVALIDATION_TAGS: DataTag[] = ['rules']
+// Incluye 'transactions' porque cada movimiento muestra la regla que lo completó:
+// sin esto, renombrar o borrar una regla dejaba los pills de procedencia obsoletos.
+export const RULE_INVALIDATION_TAGS: DataTag[] = ['rules', 'transactions']
 
 export const PREFERENCE_INVALIDATION_TAGS: DataTag[] = [
     'preferences',

@@ -19,13 +19,28 @@ Sin estas capacidades:
 - cada participante puede proyectar información distinta sobre una misma obligación compartida;
 - se desperdicia información contractual conocida de antemano.
 
-### Estado real auditado el 2026-07-24
+### Estado real al 2026-07-25
 
-- `ScheduledCommitment` modela solamente compromisos personales con monto fijo.
-- Ya existe una entidad separada `CommitmentApplication`, única por usuario, compromiso y período, que enlaza el movimiento generado.
-- La aplicación manual valida el período financiero, evita duplicados y revierte el movimiento nuevo si falla el registro de la aplicación.
-- Desde el 2026-07-24 el movimiento generado atraviesa el motor unificado de reglas y conserva su trazabilidad.
-- Todavía no existen contexto `space`, políticas de monto, historial de importes, estados de aplicación ni snapshots de cálculo/reparto.
+Documentación técnica de la implementación: `docs/tecnico/compromisos_variables_y_orientacion.md`.
+
+Implementado (Fases 1 y 2):
+
+- `amountPolicy` (`fixed` | `variable`), `estimationMode` y agenda de montos efectivos por fecha (`amountSchedule`).
+- `resolveCommitmentAmountForPeriod` como única fuente de verdad del monto vigente, con nivel de certeza (`confirmed`, `calculated`, `estimated`, `pending_amount`), consumido por el apply, la proyección, el dashboard y Captura rápida.
+- Estados de aplicación: `registered`, `skipped`, `cancelled` y `reverted` se persisten; `scheduled`, `awaiting_amount` y `ready` se derivan al leer, sin filas fantasma.
+- Snapshot financiero por aplicación: monto, moneda, descripción, categoría, cuenta y origen del monto.
+- Procedencia bidireccional: la transacción guarda `commitmentId`, `commitmentApplicationId`, `commitmentPeriod` y `commitmentNameSnapshot`, y la lista la muestra.
+- Editar la transacción actualiza el snapshot pero **no** la plantilla; propagar a próximos períodos es una acción explícita que agrega un tramo a la agenda.
+- Eliminar la transacción deja la aplicación en `reverted`, reabre el período y conserva el compromiso.
+- Proyección extraída a `src/lib/server/projection.ts`: incluye `weekly` y `once`, honra `monthStartDay`, usa el monto correcto por período y filtra compras en un pago.
+- Cuenta habitual (`accountId`) y validación zod en el servidor de las rutas de compromisos.
+
+Pendiente:
+
+- contexto `space`, reparto y pagador habitual;
+- ajustes porcentuales pautados e índices oficiales;
+- candidatos recurrentes desde historial;
+- ejecución automática (`auto_month_start`) y scheduler.
 
 ## 2. Principio funcional
 
@@ -381,16 +396,16 @@ Los candidatos funcionales reutilizan eventos y feedback del aprendizaje persona
 
 ## 12. Fases sugeridas
 
-### Fase 1: compromisos personales variables
+### Fase 1: compromisos personales variables — implementada el 2026-07-25
 
 - historial de montos;
 - cambios efectivos desde una fecha;
 - monto variable a confirmar;
-- proyección usando el monto correcto por período.
+- proyección usando el monto correcto por período;
 - snapshots y estados de aplicación;
 - procedencia visible en la transacción generada.
 
-### Fase 2: Captura rápida y orientación
+### Fase 2: Captura rápida y orientación — implementada el 2026-07-25
 
 - compromisos pendientes en el contexto de Captura rápida;
 - aplicación segura desde el diálogo;

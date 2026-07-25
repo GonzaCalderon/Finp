@@ -28,6 +28,12 @@ export type QuickCaptureLearningEventType =
     | 'transaction_edited'
     | 'transaction_deleted'
     | 'transaction_undone'
+    // Sugerencias funcionales: mostrada, aceptada, descartada y completada son
+    // estados distintos. Tocar el CTA no equivale a completar la función.
+    | 'intent_detected'
+    | 'intent_accepted'
+    | 'intent_dismissed'
+    | 'intent_completed'
 
 export type QuickCaptureLearningMethod =
     | 'automatic'
@@ -44,6 +50,10 @@ export type QuickCaptureLearningMethod =
     | 'submit'
     | 'delete'
     | 'undo'
+    /** Derivación a un módulo especializado llevando el borrador. */
+    | 'derive'
+    /** Silenciado de forma persistente ("No volver a sugerir"). */
+    | 'never'
 
 export type QuickCapturePatternTriggerKind =
     | 'description'
@@ -180,7 +190,10 @@ export interface QuickCaptureLearnedPatternDto {
 export interface QuickCaptureLearningProfileDto {
     enabled: boolean
     resetAt?: string
+    /** Intro del aprendizaje personal. */
     introSeenAt?: string
+    /** Intro de Captura rápida como orientador, independiente de la anterior. */
+    captureIntroSeenAt?: string
 }
 
 export interface QuickCaptureLearningMetrics {
@@ -290,4 +303,27 @@ export interface QuickCaptureContextResponse {
     aliases: QuickCaptureAliasDto[]
     frequents: QuickCaptureFrequent[]
     learning?: QuickCaptureLearningContext
+    /**
+     * Compromisos con aplicación pendiente en el período actual. Ausentes si la
+     * consulta falla: la orientación es una mejora, no un requisito para capturar.
+     */
+    commitments?: QuickCaptureCommitmentDto[]
+    currentPeriod?: string
+    /** `subjectKey` de propuestas que el usuario silenció con "No volver a sugerir". */
+    dismissedSuggestions?: string[]
+}
+
+/** Compromiso aplicable, tal como lo consume el detector de intención. */
+export interface QuickCaptureCommitmentDto {
+    commitmentId: string
+    description: string
+    normalizedDescription?: string
+    aliases?: string[]
+    period: string
+    currency: Currency
+    resolvedAmount: number
+    amountPolicy: 'fixed' | 'variable'
+    accountId?: string
+    categoryId?: string
+    state: 'scheduled' | 'awaiting_amount' | 'ready' | 'registered' | 'skipped' | 'cancelled' | 'reverted'
 }

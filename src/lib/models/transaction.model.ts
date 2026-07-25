@@ -54,6 +54,13 @@ const TransactionSchema = new Schema<ITransaction>(
         spaceEntryId: { type: Schema.Types.ObjectId, ref: 'SpaceEntry' },
         spaceNameSnapshot: { type: String },
         operationalAmount: { type: Number },
+        // Procedencia de compromiso, denormalizada para no hacer un lookup
+        // inverso por fila al listar transacciones.
+        commitmentId: { type: Schema.Types.ObjectId, ref: 'ScheduledCommitment' },
+        commitmentApplicationId: { type: Schema.Types.ObjectId, ref: 'CommitmentApplication' },
+        commitmentPeriod: { type: String },
+        // Sobrevive al borrado del compromiso, igual que appliedRuleNameSnapshot.
+        commitmentNameSnapshot: { type: String },
     },
     { timestamps: true }
 )
@@ -67,6 +74,7 @@ TransactionSchema.index({ userId: 1, paymentGroupId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, spaceId: 1, date: -1 })
 TransactionSchema.index({ userId: 1, spaceEntryId: 1 })
 TransactionSchema.index({ userId: 1, createdFrom: 1, updatedAt: -1 })
+TransactionSchema.index({ userId: 1, commitmentApplicationId: 1 })
 
 const existingTransactionModel = mongoose.models.Transaction as mongoose.Model<ITransaction> | undefined
 const currentTypeEnum = existingTransactionModel?.schema.path('type')?.options?.enum as string[] | undefined
@@ -83,6 +91,12 @@ const hasAppliedRuleMatchSnapshotPath = Boolean(
 const hasAppliedRuleActionsPath = Boolean(
     existingTransactionModel?.schema.path('appliedRuleActions.setType')
 )
+const hasCommitmentApplicationIdPath = Boolean(
+    existingTransactionModel?.schema.path('commitmentApplicationId')
+)
+const hasCommitmentNameSnapshotPath = Boolean(
+    existingTransactionModel?.schema.path('commitmentNameSnapshot')
+)
 const needsSchemaRefresh =
     !!existingTransactionModel &&
     (!currentTypeEnum ||
@@ -98,7 +112,9 @@ const needsSchemaRefresh =
         !hasSpaceNameSnapshotPath ||
         !hasOperationalAmountPath ||
         !hasAppliedRuleMatchSnapshotPath ||
-        !hasAppliedRuleActionsPath)
+        !hasAppliedRuleActionsPath ||
+        !hasCommitmentApplicationIdPath ||
+        !hasCommitmentNameSnapshotPath)
 
 if (needsSchemaRefresh) {
     delete mongoose.models.Transaction

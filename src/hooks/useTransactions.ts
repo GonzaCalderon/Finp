@@ -144,18 +144,34 @@ export function useTransactions(filters: TransactionFilters = {}) {
     }
 
     const updateTransaction = async (id: string, body: TransactionFormData) => {
-        const data = await apiJson<{ transaction: ITransaction }>(`/api/transactions/${id}`, {
+        const data = await apiJson<{
+            transaction: ITransaction
+            // true cuando el movimiento venía de un compromiso: habilita ofrecer
+            // "Actualizar próximos períodos" como acción explícita y aparte.
+            commitmentTemplateUpdateAvailable?: boolean
+        }>(`/api/transactions/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         })
         invalidateData(TRANSACTION_INVALIDATION_TAGS)
-        return data.transaction
+        return {
+            transaction: data.transaction,
+            commitmentTemplateUpdateAvailable: data.commitmentTemplateUpdateAvailable ?? false,
+        }
     }
 
     const deleteTransaction = async (id: string) => {
-        await apiJson(`/api/transactions/${id}`, { method: 'DELETE' })
+        // La respuesta informa qué se revirtió (aplicación de compromiso, impacto
+        // de Espacios) para poder explicarle el efecto colateral al usuario.
+        const result = await apiJson<{
+            reverted?: {
+                commitment: { commitmentId: string; period: string } | null
+                personalImpact: boolean
+            }
+        }>(`/api/transactions/${id}`, { method: 'DELETE' })
         invalidateData(TRANSACTION_INVALIDATION_TAGS)
+        return result?.reverted ?? null
     }
 
     useEffect(() => {

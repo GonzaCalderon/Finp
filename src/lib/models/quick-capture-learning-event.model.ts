@@ -44,6 +44,10 @@ const EVENT_TYPES: QuickCaptureLearningEventType[] = [
     'transaction_edited',
     'transaction_deleted',
     'transaction_undone',
+    'intent_detected',
+    'intent_accepted',
+    'intent_dismissed',
+    'intent_completed',
 ]
 
 const METHODS: QuickCaptureLearningMethod[] = [
@@ -61,6 +65,8 @@ const METHODS: QuickCaptureLearningMethod[] = [
     'submit',
     'delete',
     'undo',
+    'derive',
+    'never',
 ]
 
 const QuickCaptureLearningEventSchema =

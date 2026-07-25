@@ -22,7 +22,8 @@ import {
     startsOnOrAfterOperationalStart,
 } from '@/lib/utils/operational-start'
 import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
-import { DEBT_STATUSES } from '@/lib/constants'
+import { COMMITMENT_APPLICATION_STATUSES, DEBT_STATUSES } from '@/lib/constants'
+import { countOccurrencesInPeriod } from '@/lib/server/projection'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
@@ -597,10 +598,22 @@ export async function GET(request: Request) {
 
         // Compromisos pendientes del mes
         const activeCommitments = await ScheduledCommitment.find({ userId, isActive: true })
-        const appliedThisMonth = await CommitmentApplication.find({ userId, period: month })
+        // Una aplicación revertida no cuenta: el período volvió a estar pendiente.
+        const appliedThisMonth = await CommitmentApplication.find({
+            userId,
+            period: month,
+            status: COMMITMENT_APPLICATION_STATUSES.REGISTERED,
+        })
         const appliedIds = new Set(appliedThisMonth.map((a) => a.commitmentId.toString()))
+        // Se respeta la vigencia: un compromiso que ya terminó no puede figurar
+        // como pendiente del período, porque induce a aplicarlo de nuevo.
         const pendingCommitments = (currentPeriodHasCoverage ? activeCommitments : [])
-            .filter((c) => c.recurrence === 'monthly' && !appliedIds.has(c._id.toString()))
+            .filter(
+                (c) =>
+                    c.recurrence === 'monthly' &&
+                    !appliedIds.has(c._id.toString()) &&
+                    countOccurrencesInPeriod(c, startOfMonth, endOfMonth) > 0
+            )
             .map((c) => ({
                 _id: c._id,
                 description: c.description,
@@ -611,7 +624,11 @@ export async function GET(request: Request) {
 
         // Total de compromisos mensuales fijos (aplicados o pendientes)
         const totalMonthlyCommitments = activeCommitments
-            .filter((c) => c.recurrence === 'monthly')
+            .filter(
+                (c) =>
+                    c.recurrence === 'monthly' &&
+                    countOccurrencesInPeriod(c, startOfMonth, endOfMonth) > 0
+            )
             .reduce((totals, c) => {
                 addCurrencyAmount(totals, c.currency, c.amount)
                 return totals

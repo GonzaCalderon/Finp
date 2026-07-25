@@ -8,9 +8,12 @@ import { updateQuickCaptureLearningProfile } from '@/lib/server/quick-capture-le
 const bodySchema = z.object({
     enabled: z.boolean().optional(),
     markIntroSeen: z.boolean().optional(),
+    markCaptureIntroSeen: z.boolean().optional(),
 }).refine(
     (value) =>
-        typeof value.enabled === 'boolean' || value.markIntroSeen === true,
+        typeof value.enabled === 'boolean' ||
+        value.markIntroSeen === true ||
+        value.markCaptureIntroSeen === true,
     { message: 'No hay cambios para guardar' }
 )
 

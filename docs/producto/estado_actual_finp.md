@@ -1,6 +1,6 @@
 # Estado actual de Finp
 
-Ultima actualizacion: 2026-07-24
+Ultima actualizacion: 2026-07-25
 
 ## 1. Vision general
 
@@ -53,13 +53,21 @@ Captura rápida v1.3 ya forma parte del ingreso cotidiano:
 - no conserva en la telemetría la frase original, monto, fecha ni notas, y elimina los eventos detallados después de 180 días;
 - detecta duplicados, advierte fechas especiales y permite deshacer durante ocho segundos.
 
-Dirección evolutiva acordada, todavía no implementada:
+Captura rápida como orientador, implementado el 2026-07-25 para Compromisos:
 
-- Captura rápida actuará gradualmente como orientador hacia funciones especializadas;
-- resolverá aplicaciones simples de compromisos existentes;
-- derivará altas de compromisos, cuotas, reglas, Deudas, Espacios e Importación con un borrador precargado;
-- incorporará onboarding breve y descubrimiento contextual mediante `¿Qué puedo escribir?`;
-- las sugerencias funcionales tendrán explicación, feedback y medición de finalización separadas del aprendizaje semántico actual.
+- distingue tres intenciones: transacción independiente, aplicación de un pendiente y preparación de un compromiso nuevo;
+- una intención explícita en el texto nunca se reemplaza por evidencia histórica;
+- aplica un pendiente dentro del diálogo reutilizando las validaciones del servicio de Compromisos;
+- deriva altas a `/commitments` con un borrador tipado y versionado que viaja por `sessionStorage`, con sólo su id en la URL;
+- cada campo precargado lleva su procedencia, así el destino distingue lo interpretado de un valor por defecto;
+- ofrece siempre registrar el movimiento simple como alternativa y recuerda los descartes;
+- incluye intro de una sola vez y galería de ejemplos recuperable desde `¿Qué puedo escribir?`;
+- mide mostrada, aceptada, descartada y completada como estados distintos.
+
+Todavía no implementado: derivación hacia reglas, cuotas, Deudas, Espacios e Importación, y detección de candidatos recurrentes.
+
+Documento de producto: `docs/producto/captura_rapida_como_orientador.md`.
+Documentación técnica: `docs/tecnico/compromisos_variables_y_orientacion.md`.
 
 Documento de producto: `docs/producto/captura_rapida_como_orientador.md`.
 
@@ -248,6 +256,8 @@ Estado general:
 - persiste compatibilidad legacy alrededor de `linkedTransactionId` y `status: linked`;
 - invitaciones por link siguen pendientes como flujo de producto;
 - la integracion profunda entre tarjetas y Deudas sigue diferida.
-- Captura rapida todavía no reconoce intenciones funcionales ni compromisos pendientes; actualmente sólo deriva movimientos complejos al formulario general.
-- las transacciones generadas por compromisos no exponen todavía una procedencia suficientemente diferenciada.
-- no existe detección de candidatos a compromiso desde recurrencia mensual.
+- no existe detección de candidatos a compromiso desde recurrencia mensual;
+- la orientación cubre sólo Compromisos: reglas, cuotas, Deudas, Espacios e Importación siguen sin derivación con borrador;
+- `auto_month_start` está modelado pero no hay scheduler que lo ejecute;
+- los compromisos de Espacios, los ajustes porcentuales y los índices oficiales siguen sin implementar;
+- eliminar una transacción todavía no limpia el `InstallmentPlan` asociado, aunque sí revierte compromisos, impactos de Espacios y notificaciones.

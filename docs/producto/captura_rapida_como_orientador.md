@@ -2,7 +2,9 @@
 
 Última actualización: 2026-07-24
 
-Estado: dirección de producto aprobada para adopción gradual. Captura rápida v1.3 ya resuelve gastos e ingresos simples; las capacidades de orientación descritas en este documento todavía no están implementadas salvo la derivación al formulario completo.
+Documentación técnica de la implementación: `docs/tecnico/compromisos_variables_y_orientacion.md`.
+
+Estado: Etapas 1 y 2 implementadas el 2026-07-25. Captura rápida ya distingue las tres intenciones de Compromisos, aplica pendientes dentro del diálogo, deriva altas con un borrador tipado y versionado, y expone onboarding contextual con `¿Qué puedo escribir?`. Las Etapas 3 y 4 (recurrencia aprendida y otros destinos) siguen pendientes.
 
 ## 1. Visión
 
@@ -228,21 +230,22 @@ La propuesta explica cantidad de coincidencias, período observado y variación 
 
 ## 9. Adopción gradual
 
-### Etapa 1: base común
+### Etapa 1: base común — implementada el 2026-07-25
 
-- definir tipos de intención y sugerencia funcional;
-- definir el borrador transportable;
-- conservar procedencia entre Captura rápida y el destino;
-- incorporar onboarding inicial y `¿Qué puedo escribir?`;
-- medir mostrada, aceptada, descartada y completada.
+- tipos de intención y sugerencia funcional en `src/types/capture-intent.ts`;
+- borrador transportable versionado (`CAPTURE_DRAFT_VERSION`), en `sessionStorage`, con sólo el id en la URL para no exponer datos financieros;
+- procedencia por campo (`provenance`), que permite al destino distinguir lo interpretado de un valor por defecto;
+- onboarding inicial con campo propio `captureIntroSeenAt` y galería recuperable desde `¿Qué puedo escribir?`;
+- eventos `intent_detected`, `intent_accepted`, `intent_dismissed` e `intent_completed`: aceptar el CTA y completar la función son estados distintos.
 
-### Etapa 2: Compromisos
+### Etapa 2: Compromisos — implementada el 2026-07-25
 
-- incluir compromisos pendientes en el contexto;
-- distinguir transacción independiente de aplicación;
-- aplicar compromisos simples desde Captura rápida;
-- derivar nuevos compromisos con borrador precargado;
-- mostrar procedencia en Transacciones.
+- compromisos pendientes en `GET /api/quick-capture/context`, con monto vigente y estado derivado;
+- las tres intenciones se distinguen; una intención explícita nunca se reemplaza por evidencia histórica;
+- aplicación desde el diálogo reutilizando las validaciones del servicio de Compromisos, con `origin: quick_capture`;
+- derivación de altas con borrador precargado hacia `/commitments?draft=<id>`;
+- procedencia visible en Transacciones (`Compromiso: <nombre> · <período>`);
+- descarte persistente mediante `FunctionalSuggestionDismissal`.
 
 ### Etapa 3: recurrencia aprendida
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import { fadeIn } from '@/lib/utils/animations'
+import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
@@ -44,12 +45,58 @@ interface InstallmentByAccount {
     total: CurrencyTotals
 }
 
+type AmountCertainty = 'confirmed' | 'calculated' | 'estimated' | 'pending_amount'
+
 interface CommitmentItem {
     _id: string
     description: string
     amount: number
     currency: string
     dayOfMonth?: number
+    recurrence?: string
+    occurrences?: number
+    certainty?: AmountCertainty
+    isRegistered?: boolean
+}
+
+/**
+ * Un monto proyectado no vale lo mismo si ya se registró que si es una
+ * estimación de un compromiso variable. La UI tiene que poder distinguirlo.
+ */
+const CERTAINTY_LABELS: Record<AmountCertainty, string | null> = {
+    confirmed: 'Registrado',
+    calculated: null,
+    estimated: 'Estimado',
+    pending_amount: 'A confirmar',
+}
+
+/** Detalle del compromiso: día, repeticiones del período y certeza del monto. */
+function CommitmentMeta({ commitment }: { commitment: CommitmentItem }) {
+    const certaintyLabel = commitment.certainty ? CERTAINTY_LABELS[commitment.certainty] : null
+    const showOccurrences = (commitment.occurrences ?? 1) > 1
+
+    return (
+        <>
+            {commitment.dayOfMonth && (
+                <span className="opacity-60 ml-1">· día {commitment.dayOfMonth}</span>
+            )}
+            {showOccurrences && (
+                <span className="opacity-60 ml-1">· ×{commitment.occurrences}</span>
+            )}
+            {certaintyLabel && (
+                <span
+                    className={cn(
+                        'ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                        commitment.certainty === 'confirmed'
+                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                    )}
+                >
+                    {certaintyLabel}
+                </span>
+            )}
+        </>
+    )
 }
 
 interface MonthProjection {
@@ -539,9 +586,7 @@ export default function ProjectionPage() {
                                                     >
                                                         <span>
                                                             {commitment.description}
-                                                            {commitment.dayOfMonth && (
-                                                                <span className="opacity-60 ml-1">· día {commitment.dayOfMonth}</span>
-                                                            )}
+                                                            <CommitmentMeta commitment={commitment} />
                                                         </span>
                                                         <span className="tabular-nums">
                                                             {fmt(commitment.amount, commitment.currency as 'ARS' | 'USD')}
@@ -653,9 +698,7 @@ export default function ProjectionPage() {
                                                 >
                                                     <span>
                                                         {commitment.description}
-                                                        {commitment.dayOfMonth && (
-                                                            <span className="opacity-60 ml-1">· día {commitment.dayOfMonth}</span>
-                                                        )}
+                                                        <CommitmentMeta commitment={commitment} />
                                                     </span>
                                                     <span className="tabular-nums">
                                                         {fmt(commitment.amount, commitment.currency as 'ARS' | 'USD')}

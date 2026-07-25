@@ -9,8 +9,10 @@ import {
     SpaceEntryPersonalImpact,
     Transaction,
     Category,
+    User,
 } from '@/lib/models'
 import {
+    COMMITMENT_APPLICATION_STATUSES,
     DEBT_STATUSES,
     IMPORT_BATCH_STATUS,
     NOTIFICATION_ACTION_STATUSES,
@@ -19,6 +21,11 @@ import {
     TRANSACTION_STATUS,
     TRANSACTION_TYPES,
 } from '@/lib/constants'
+import {
+    getCurrentFinancialPeriod,
+    parseFinancialPeriod,
+    shiftFinancialPeriod,
+} from '@/lib/utils/period'
 import type { NavInsight, NavInsightsResponse } from '@/types/nav-insight'
 
 type NavInsightSignals = {
@@ -233,15 +240,15 @@ export function buildNavInsightsFromSignals(signals: NavInsightSignals): NavInsi
     return insights.sort((a, b) => a.priority - b.priority)
 }
 
-function monthBounds(date = new Date()) {
-    const start = new Date(date.getFullYear(), date.getMonth(), 1)
-    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
-    const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+/**
+ * Rango del período financiero, semiabierto [start, end).
+ *
+ * Antes esto usaba meses calendario, lo que hacía que los insights y el resto de
+ * la app discreparan sobre cuál es el período actual cuando monthStartDay != 1.
+ */
+function periodBounds(period: string, monthStartDay: number) {
+    const { start, end } = parseFinancialPeriod(period, monthStartDay)
     return { start, end, period }
-}
-
-function previousMonthBounds(date = new Date()) {
-    return monthBounds(new Date(date.getFullYear(), date.getMonth() - 1, 1))
 }
 
 async function getTopExpenseCategory(userId: Types.ObjectId, start: Date, end: Date) {
@@ -249,7 +256,7 @@ async function getTopExpenseCategory(userId: Types.ObjectId, start: Date, end: D
         {
             $match: {
                 userId,
-                date: { $gte: start, $lte: end },
+                date: { $gte: start, $lt: end },
                 type: { $in: [TRANSACTION_TYPES.EXPENSE, TRANSACTION_TYPES.CREDIT_CARD_EXPENSE] },
                 categoryId: { $exists: true, $ne: null },
                 $or: [
@@ -282,7 +289,7 @@ async function getCreditCardTrend(userId: Types.ObjectId, start: Date, end: Date
             {
                 $match: {
                     userId,
-                    date: { $gte: start, $lte: end },
+                    date: { $gte: start, $lt: end },
                     type: TRANSACTION_TYPES.CREDIT_CARD_EXPENSE,
                 },
             },
@@ -292,7 +299,7 @@ async function getCreditCardTrend(userId: Types.ObjectId, start: Date, end: Date
             {
                 $match: {
                     userId,
-                    date: { $gte: previousStart, $lte: previousEnd },
+                    date: { $gte: previousStart, $lt: previousEnd },
                     type: TRANSACTION_TYPES.CREDIT_CARD_EXPENSE,
                 },
             },
@@ -346,14 +353,23 @@ async function getDuplicateCandidatesCount(userId: Types.ObjectId) {
 
 export async function getNavInsightsForUser(userId: string): Promise<NavInsightsResponse> {
     const userObjectId = new Types.ObjectId(userId)
-    const { start, end, period } = monthBounds()
-    const previous = previousMonthBounds()
+
+    const userDoc = await User.findById(userId, { 'preferences.monthStartDay': 1 })
+    const monthStartDay: number = userDoc?.preferences?.monthStartDay ?? 1
+
+    const { start, end, period } = periodBounds(
+        getCurrentFinancialPeriod(new Date(), monthStartDay),
+        monthStartDay
+    )
+    const previous = periodBounds(shiftFinancialPeriod(period, -1), monthStartDay)
 
     const notActive = { $nin: [NOTIFICATION_STATUSES.DISMISSED, NOTIFICATION_STATUSES.ARCHIVED] }
 
+    // Una aplicación revertida no excluye al compromiso: sigue pendiente.
     const appliedCommitmentIdsPromise = CommitmentApplication.distinct('commitmentId', {
         userId,
         period,
+        status: COMMITMENT_APPLICATION_STATUSES.REGISTERED,
     })
 
     const [
@@ -410,7 +426,9 @@ export async function getNavInsightsForUser(userId: string): Promise<NavInsights
         userId,
         isActive: true,
         _id: { $nin: appliedCommitmentIds },
-        startDate: { $lte: end },
+        // El rango es semiabierto: un compromiso que arranca justo en `end` ya
+        // pertenece al período siguiente.
+        startDate: { $lt: end },
         $or: [
             { endDate: { $exists: false } },
             { endDate: { $gte: start } },

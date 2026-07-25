@@ -11,14 +11,22 @@ Este backlog traduce los hallazgos de uso real a bloques implementables. La prio
 1. Validar con datos reales el nuevo saldo acumulado, pagos de deuda, cuotas e historico mensual.
 2. Verificar visualmente Dashboard y Transacciones en desktop/mobile, ARS/USD y saldos negativos.
 
+### Bloque cerrado el 2026-07-25
+
+1. Compromisos personales variables, agenda de montos por fecha y aplicaciones con snapshots y estados. Implementado.
+2. Cruce con Captura rapida: aplicar pendientes, derivar altas con borrador y procedencia visible. Implementado.
+3. Onboarding contextual y contrato de sugerencias funcionales. Implementado.
+4. Reevaluacion de la traza de reglas al editar una transaccion. Implementado.
+5. Cascada al eliminar una transaccion (compromiso, impacto de Espacios, notificaciones). Implementado; `InstallmentPlan` queda pendiente.
+6. Unificacion de `monthStartDay` en lista, dashboard, proyeccion y nav-insights. Implementado.
+
 ### Proximo bloque recomendado
 
-1. Implementar compromisos personales variables y aplicaciones con snapshots.
-2. Cruzar Compromisos con Captura rapida: aplicar pendientes, derivar nuevas plantillas con borrador y distinguir su procedencia.
-3. Incorporar onboarding contextual y el contrato inicial de Captura rapida como orientador de Finp.
-4. Detectar candidatos mensuales explicables sin crear compromisos automaticamente.
-5. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
-6. Incorporar reevaluacion explicita y registro de correcciones como mejora transversal del motor.
+1. Detectar candidatos mensuales explicables sin crear compromisos automaticamente.
+2. Limpiar el `InstallmentPlan` al eliminar la transaccion que lo originó.
+3. Diseñar la bandeja diaria de revision como complemento, no como requisito para guardar.
+4. Extender la orientacion a reglas, cuotas, Deudas, Espacios e Importacion, de punta a punta y una por vez.
+5. Ajustes porcentuales pautados e indices oficiales con fallback manual.
 
 ### Pendientes UX de alta prioridad
 
