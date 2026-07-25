@@ -38,4 +38,20 @@ describe('buildNavInsightsFromSignals', () => {
 
         expect(Object.keys(insight)).not.toEqual(expect.arrayContaining(['_id', 'userId', 'recipientUserId']))
     })
+
+    it('prioriza un recordatorio de compromiso vencido', () => {
+        const [insight] = buildNavInsightsFromSignals({
+            nextCommitment: {
+                description: 'Alquiler venció el 05/07.',
+                count: 1,
+                reminderState: 'overdue',
+            },
+        })
+
+        expect(insight).toMatchObject({
+            id: 'next-commitment',
+            title: 'Compromiso vencido',
+            priority: 15,
+        })
+    })
 })

@@ -55,6 +55,7 @@ Campos nuevos en `src/lib/models/scheduled-commitment.model.ts`:
 | `normalizedDescription` | `String` (indexado) | `normalizeRuleText(description)`, para el matching |
 | `aliases` | `[String]` | denominaciones alternativas, ya normalizadas |
 | `createdFrom` | `web` \| `quick_capture` | procedencia de la plantilla |
+| `reminderLeadDays` | `0..31` opcional | anticipación relativa; no programa jobs |
 
 `accountId` **ya existía en el modelo pero nunca se escribía**: ahora es la cuenta habitual y
 precarga la aplicación.
@@ -105,8 +106,12 @@ de entrada.
 
 | Servicio | Archivo | Responsabilidad |
 |---|---|---|
+| `resolveCommitmentOccurrencesInRange` y derivados | `src/lib/utils/commitment-dates.ts` | Única fuente de verdad para ocurrencias, próxima fecha, meses cortos y recordatorios. |
 | `resolveCommitmentAmountForPeriod` | `src/lib/server/commitment-amounts.ts` | Única fuente de verdad de "cuánto vale este compromiso en este período". Puro. |
 | `resolveApplicationStateForPeriod` | `src/lib/server/commitments.ts` | Estado derivado. Puro. |
+| `resolveCommitmentLifecycleStatus` | `src/lib/server/commitment-lifecycle.ts` | Próximo, activo, por finalizar, finalizado o inactivo. |
+| `resolveCommitmentReminder` | `src/lib/server/commitment-lifecycle.ts` | Fecha y estado del recordatorio in-app. |
+| `buildCommitmentSuggestions` | `src/lib/utils/commitment-suggestions.ts` | Candidatos mensuales explicables desde historial. |
 | `applyCommitmentForUser` | `src/lib/server/commitments.ts` | Aplicación con snapshot y procedencia. |
 | `revertApplicationForTransaction` | `src/lib/server/commitments.ts` | Reversión idempotente. |
 | `syncApplicationSnapshotFromTransaction` | `src/lib/server/commitments.ts` | Actualiza la foto sin tocar la plantilla. |
@@ -126,10 +131,13 @@ estimación (política variable)     → estimated / pending_amount
 monto de la plantilla              → calculated
 ```
 
-La fecha de referencia es el **vencimiento dentro del período**, no su inicio: un aumento
+La fecha de referencia es el **vencimiento dentro del período**, no su inicio: un cambio
 efectivo a mitad de mes debe regir si cae antes del vencimiento. Con `monthStartDay ≠ 1` el
-período abarca dos meses calendario, así que `resolveCommitmentDueDate` prueba ambos y descarta
-desbordes (31 de febrero).
+período abarca dos meses calendario, así que la utilidad central prueba ambos. Los días
+29 a 31 se ajustan al último día disponible del mes corto. Una ocurrencia anterior a
+`startDate` se excluye; `nextDueDate` busca la primera válida y
+`nextReminderDate` puede caer en el mes anterior. Sólo el primer recordatorio se
+limita a la fecha de inicio.
 
 ### Reutilización deliberada
 
@@ -200,9 +208,10 @@ haría falta emitirlo desde Compromisos cuando la plantilla se crea de verdad (v
 
 | Endpoint | Cambio |
 |---|---|
-| `GET /api/commitments` | Devuelve `currentPeriod`, `resolvedAmount`, `amountSource` y `amountCertainty`. El período lo resuelve el servidor. |
+| `GET /api/commitments` | Devuelve período, monto y fecha efectivos, `resolvedDueDate`, `nextDueDate`, `nextReminderDate`, `occursThisPeriod`, aplicación actual, ciclo de vida y recordatorio derivado. Los campos nuevos son opcionales para preservar compatibilidad. |
 | `POST` / `PATCH /api/commitments` | **zod en el servidor** (antes no había). Errores de datos dan 400 con detalle, no 500. El PATCH sólo escribe los campos enviados. |
-| `POST` / `DELETE /api/commitments/[id]/amounts` | Alta y baja de tramos de la agenda. Una fecha efectiva repetida corrige el tramo. |
+| `GET /api/commitments/suggestions` | Calcula candidatos mensuales sin escribir datos; respuesta privada y sin cache. |
+| `POST` / `DELETE /api/commitments/[id]/amounts` | Alta y baja de tramos futuros. Acepta aumentos y disminuciones; rechaza editar o eliminar historia vigente/pasada con `IMMUTABLE_COMMITMENT_AMOUNT_HISTORY`. |
 | `POST /api/commitments/[id]/apply` | Acepta `origin`; escribe snapshot y procedencia; reutiliza filas `reverted`. |
 | `GET /api/projection` | Delega en `getProjectionForUser`. Devuelve `certainty` y `occurrences`. |
 | `GET /api/quick-capture/context` | Suma `commitments`, `currentPeriod` y `dismissedSuggestions`, con `.catch` tolerante. |
@@ -235,6 +244,30 @@ explícito y no figure como aplicada.
 ---
 
 ## 6. UX
+
+- **Alta y edición en tres pasos**: `Compromiso`, `Frecuencia` y `Aplicación`,
+  con validación al escribir, retorno al primer paso inválido y errores de API
+  mapeados a campos. Mobile usa `Paso N de 3 · Nombre` y barra compacta.
+- **Categorías compartidas**: búsqueda, chips con color y ranking por historial
+  reutilizan `CategoryPickerField` y `/api/categories/ranking`.
+- **Día mensual**: datepicker compartido en popover, limitado a un calendario
+  estable de 31 días, con nombres accesibles y vista previa concreta.
+- **Layout del diálogo**: encabezado y footer no desplazan; sólo el contenido
+  central tiene scroll. Desktop usa hasta 56 rem y dos columnas en Frecuencia y
+  Aplicación; mobile conserva una columna, categorías colapsables y CTA visible.
+- **Aplicación manual**: `auto_month_start` se acepta como dato legacy, pero no
+  se expone ni se crea hasta que exista scheduler. Los registros legacy se
+  presentan como manuales.
+- **Agenda separada**: `Cambiar monto` abre una superficie propia con monto
+  vigente y tres vigencias: ahora, próximo vencimiento o fecha elegida. El
+  historial pasado es inmutable y sólo los tramos futuros se eliminan.
+- **Ciclo de vida**: próximos, vigentes, por finalizar, finalizados e inactivos
+  se derivan sin reescribir historia. Finalizados e inactivos quedan colapsados.
+- **Recordatorio in-app**: mismo día o anticipación relativa. `nav-insights`
+  prioriza el compromiso dentro de la ventana o después del vencimiento.
+- **Candidatos mensuales**: aplican el criterio híbrido del ADR 0002 y umbral
+  0,82; muestran meses, cobertura, variación, día y categoría. Aceptar precarga
+  el alta; `No es un compromiso` persiste el rechazo.
 
 - **Tarjeta de orientación** (`CaptureOrientationCard`): título, motivo, evidencia, y siempre
   cuatro acciones — la principal, `Registrar sólo este gasto` / `Registrar aparte`, `Ahora no` y
@@ -298,8 +331,8 @@ Vale dejarlas escritas porque van a volver:
 
 | | |
 |---|---|
-| Unit | 589 tests, 65 archivos. Nuevos: `period`, `commitment-amounts`, `commitment-matching`, `capture-intents`, `capture-draft`, `projection`, `transaction-teardown`, `rule-trace-on-edit`, `commitments-routes`. `commitments.test.ts` pasó de 6 a 23 casos. |
-| E2E | 36 tests registrados (3 nuevos × 2 proyectos): derivación con borrador, aplicación de pendiente, y ayuda. |
+| Unit | 621 tests aprobados y 5 `todo`, 74 archivos. Incluye fechas, agenda inmutable, sugerencias híbridas, APIs y componentes del flujo. |
+| E2E | 40 tests registrados para desktop y Pixel 7. Incluye alta con fechas entre meses, recuperación de errores, categorías y las tres vigencias de monto. |
 | Typecheck | `npx tsc --noEmit` limpio. Se agregó el script `npm run typecheck`, que no existía. |
 | Build | limpio. |
 

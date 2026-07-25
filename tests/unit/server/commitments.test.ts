@@ -47,6 +47,9 @@ const commitment = {
     amount: 1000,
     currency: 'ARS',
     categoryId: { toString: () => 'category-1' },
+    recurrence: 'monthly',
+    dayOfMonth: 20,
+    startDate: new Date(2026, 0, 1),
 }
 
 describe('applyCommitmentForUser', () => {

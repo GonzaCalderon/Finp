@@ -196,6 +196,45 @@ Los componentes de UI no deben calcular dominio financiero. Reciben datos ya res
 
 ## 9. Formularios financieros
 
+### Flujos guiados
+
+Cuando un formulario combina más de dos grupos conceptuales o no cabe con
+claridad en un viewport mobile, se divide en pasos breves:
+
+1. cada paso responde una decisión del usuario;
+2. la validación ocurre antes de avanzar;
+3. los pasos completados pueden revisarse sin perder el borrador;
+4. el último paso resume el efecto antes de confirmar;
+5. las operaciones secundarias con historia propia se abren en otra superficie.
+
+En Compromisos, alta y edición siguen `Compromiso → Frecuencia → Aplicación`.
+La agenda de montos no forma parte del formulario general: se administra desde
+`Cambiar monto` para no mezclar configuración, vigencia e historia.
+
+En mobile, el progreso se resume como `Paso N de 3 · Nombre` y una barra
+compacta; no se reservan tres columnas sin contenido para representar el
+stepper. En desktop se conservan los tres pasos visibles. El día mensual usa el
+mismo patrón de datepicker de Nueva transacción, adaptado a un calendario fijo
+de 31 días; no usa texto libre, un desplegable largo ni una cuadrícula siempre
+abierta. Debe mostrar una vista previa del vencimiento y el recordatorio
+derivados.
+
+En diálogos guiados, encabezado y acciones quedan fuera del área desplazable.
+Sólo el contenido del paso hace scroll. Desktop aprovecha el ancho disponible
+con columnas cuando reduce altura o mejora comparación; mobile mantiene una
+columna y ambos CTA visibles sobre la safe area.
+
+La clasificación reutiliza el selector compartido de Nueva transacción:
+búsqueda, chips con nombre y color, y orden por historial. Un módulo no crea un
+segundo patrón de categorías si el comportamiento ya existe.
+
+`Cambiar monto` usa `CircleDollarSign`; `CalendarClock` identifica la fecha de
+vigencia. La superficie presenta primero el monto vigente, después las opciones
+`Desde ahora`, `Desde el próximo vencimiento` y `Elegir fecha`, y finalmente una
+vista previa. Mobile usa una columna y CTA inferior fijo; desktop usa un diálogo
+mediano sin tarjetas anidadas innecesarias. El historial pasado es de sólo
+lectura y únicamente los tramos futuros se pueden eliminar.
+
 ### Orden
 
 1. intención o tipo;

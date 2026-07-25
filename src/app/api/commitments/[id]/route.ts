@@ -43,7 +43,9 @@ export async function PATCH(
         if (data.amount !== undefined) updateData.amount = data.amount
         if (data.currency !== undefined) updateData.currency = data.currency
         if (data.recurrence !== undefined) updateData.recurrence = data.recurrence
-        if (data.applyMode !== undefined) updateData.applyMode = data.applyMode
+        // No se habilita un modo automático hasta contar con scheduler,
+        // observabilidad y recuperación operativa.
+        if (data.applyMode !== undefined) updateData.applyMode = 'manual'
         if (data.amountPolicy !== undefined) updateData.amountPolicy = data.amountPolicy
         if (data.estimationMode !== undefined) updateData.estimationMode = data.estimationMode
         if (data.aliases !== undefined) updateData.aliases = normalizeCommitmentAliases(data.aliases)
@@ -52,6 +54,9 @@ export async function PATCH(
         if (data.dayOfMonth !== undefined) updateData.dayOfMonth = data.dayOfMonth ?? null
         if (data.startDate !== undefined) updateData.startDate = data.startDate
         if (data.endDate !== undefined) updateData.endDate = data.endDate ?? null
+        if (data.reminderLeadDays !== undefined) {
+            updateData.reminderLeadDays = data.reminderLeadDays ?? null
+        }
         if (data.isActive !== undefined) updateData.isActive = data.isActive
 
         if (Object.keys(updateData).length === 0) {

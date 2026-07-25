@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 const amountPolicy = z.enum(['fixed', 'variable'])
 const estimationMode = z.enum(['template', 'last', 'average'])
+const reminderLeadDays = z.number().int().min(0).max(31)
 
 /**
  * Formulario de Compromisos (cliente). Las fechas ya son `Date` porque las
@@ -9,23 +10,27 @@ const estimationMode = z.enum(['template', 'last', 'average'])
  */
 export const commitmentSchema = z
     .object({
-        description: z.string().min(1, 'La descripción es requerida'),
+        description: z.string().trim().min(1, 'La descripción es requerida'),
         amount: z.number().min(0, 'El monto no puede ser negativo'),
         currency: z.enum(['ARS', 'USD']),
         recurrence: z.enum(['monthly', 'weekly', 'once']),
-        dayOfMonth: z.number().min(1).max(31).optional(),
-        applyMode: z.enum(['manual', 'auto_month_start']).optional(),
+        dayOfMonth: z.number().int().min(1).max(31).optional(),
         categoryId: z.string().optional(),
         accountId: z.string().optional(),
         amountPolicy: amountPolicy.optional(),
         estimationMode: estimationMode.optional(),
         startDate: z.date(),
         endDate: z.date().optional(),
+        reminderLeadDays: reminderLeadDays.optional(),
     })
     .refine((data) => data.amountPolicy === 'variable' || data.amount > 0, {
         // Un compromiso variable puede empezar sin importe: se confirma al aplicarlo.
         message: 'El monto debe ser mayor a 0',
         path: ['amount'],
+    })
+    .refine((data) => data.recurrence !== 'monthly' || Boolean(data.dayOfMonth), {
+        message: 'Elegí el día de vencimiento',
+        path: ['dayOfMonth'],
     })
     .refine((data) => !data.endDate || !data.startDate || data.endDate >= data.startDate, {
         message: 'La fecha de fin no puede ser anterior al inicio',
@@ -46,6 +51,8 @@ export const commitmentApiSchema = z
         currency: z.enum(['ARS', 'USD']),
         recurrence: z.enum(['monthly', 'weekly', 'once']),
         dayOfMonth: z.number().int().min(1).max(31).optional(),
+        // Se acepta el valor legacy, pero toda alta nueva queda manual hasta que
+        // exista un scheduler confiable.
         applyMode: z.enum(['manual', 'auto_month_start']).optional(),
         categoryId: z.string().trim().min(1).optional(),
         accountId: z.string().trim().min(1).optional(),
@@ -55,10 +62,15 @@ export const commitmentApiSchema = z
         createdFrom: z.enum(['web', 'quick_capture']).optional(),
         startDate: z.coerce.date(),
         endDate: z.coerce.date().nullish(),
+        reminderLeadDays: reminderLeadDays.optional(),
     })
     .refine((data) => data.amountPolicy === 'variable' || data.amount > 0, {
         message: 'El monto debe ser mayor a 0',
         path: ['amount'],
+    })
+    .refine((data) => data.recurrence !== 'monthly' || Boolean(data.dayOfMonth), {
+        message: 'El día de vencimiento es requerido para compromisos mensuales',
+        path: ['dayOfMonth'],
     })
     .refine((data) => !data.endDate || data.endDate >= data.startDate, {
         message: 'La fecha de fin no puede ser anterior al inicio',
@@ -81,6 +93,7 @@ export const commitmentPatchApiSchema = z.object({
     isActive: z.boolean().optional(),
     startDate: z.coerce.date().optional(),
     endDate: z.coerce.date().nullish(),
+    reminderLeadDays: reminderLeadDays.nullish(),
 })
 
 /**

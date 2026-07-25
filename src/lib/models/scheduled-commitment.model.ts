@@ -37,6 +37,7 @@ const ScheduledCommitmentSchema = new Schema<IScheduledCommitment>(
         isActive: { type: Boolean, default: true },
         startDate: { type: Date, required: true },
         endDate: { type: Date, required: false },
+        reminderLeadDays: { type: Number, min: 0, max: 31, required: false },
         amountPolicy: {
             type: String,
             enum: Object.values(COMMITMENT_AMOUNT_POLICIES),
@@ -115,7 +116,8 @@ const commitmentNeedsRefresh =
         !existingCommitmentModel.schema.path('estimationMode') ||
         !existingCommitmentModel.schema.path('normalizedDescription') ||
         !existingCommitmentModel.schema.path('aliases') ||
-        !existingCommitmentModel.schema.path('createdFrom'))
+        !existingCommitmentModel.schema.path('createdFrom') ||
+        !existingCommitmentModel.schema.path('reminderLeadDays'))
 
 const existingApplicationModel = mongoose.models.CommitmentApplication as
     | mongoose.Model<ICommitmentApplication>

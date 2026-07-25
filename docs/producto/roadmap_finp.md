@@ -82,7 +82,7 @@ Principios:
 ### FINP-P0-003 — Entorno y suite E2E reproducibles
 
 - Estado: `pendiente`.
-- Alcance: crear guía y `.env.test.local` fuera de Git, sembrar base aislada y ejecutar los 36 escenarios.
+- Alcance: crear guía y `.env.test.local` fuera de Git, sembrar base aislada y ejecutar los 40 escenarios.
 - Criterio: E2E mobile y desktop reproducibles sin tocar desarrollo ni producción.
 
 ### FINP-P0-004 — Activar E2E crítico en CI
@@ -157,14 +157,18 @@ Principios:
 
 ### FINP-P2-001 — Candidatos mensuales explicables
 
-- Estado: `pendiente`.
+- Estado: `validación`.
 - Alcance: detectar recurrencia desde historial vigente.
 - Criterio:
   - evidencia por cantidad, período y variación;
+  - criterio híbrido: estabilidad, cobertura y afinidad por categoría;
+  - confianza mínima de 0,82;
   - monto fijo o variable sugerido;
   - sin creación automática;
   - descartes persistentes;
   - coordinación entre Captura rápida y Compromisos.
+- Evidencia: motor puro, endpoint autenticado sin cache, borrador guiado,
+  descarte persistente y pruebas unitarias/API. Falta smoke E2E con base aislada.
 
 ### FINP-P2-002 — Orientación a cuotas
 
@@ -281,6 +285,7 @@ Principios:
 - Estado: `en discovery`.
 - Alcance: ejecutar `auto_month_start`.
 - Requiere: idempotencia, zona horaria, retries, observabilidad y costo.
+- Restricción vigente: la UI no ofrece automatización y toda alta es manual.
 
 ### FINP-P4-003 — PWA básica
 
@@ -337,6 +342,14 @@ Principios:
 
 ### 2026-07-25
 
+- rediseño mobile-first de Compromisos en tres pasos;
+- stepper mobile compacto, categorías reutilizadas y validación accionable;
+- monto vigente unificado, fecha efectiva e historial accesible;
+- cambio de monto con tres vigencias e historia pasada inmutable;
+- recordatorios in-app y estados de fin de vigencia;
+- fechas mensuales y recordatorios derivados desde una única fuente;
+- candidatos mensuales con criterio híbrido y caso de control Pizza;
+- retiro de la automatización inerte de la interfaz;
 - compromisos personales variables;
 - agenda de montos y snapshots;
 - Captura rápida como orientador hacia Compromisos;

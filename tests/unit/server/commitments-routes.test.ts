@@ -78,6 +78,7 @@ describe('POST /api/commitments', () => {
             amountPolicy: 'fixed',
             createdFrom: 'web',
             normalizedDescription: 'alquiler',
+            applyMode: 'manual',
         })
         expect(payload.amountSchedule).toEqual([
             expect.objectContaining({ amount: 650_000, source: 'initial' }),
@@ -89,6 +90,31 @@ describe('POST /api/commitments', () => {
 
         expect(response.status).toBe(400)
         await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_COMMITMENT_DATA' })
+        expect(mocks.commitmentCreate).not.toHaveBeenCalled()
+    })
+
+    it('guarda un recordatorio válido sin habilitar la automatización legacy', async () => {
+        const response = await POST(
+            post({
+                ...validBody,
+                reminderLeadDays: 3,
+                applyMode: 'auto_month_start',
+            })
+        )
+
+        expect(response.status).toBe(201)
+        expect(mocks.commitmentCreate.mock.calls[0][0]).toMatchObject({
+            reminderLeadDays: 3,
+            applyMode: 'manual',
+        })
+    })
+
+    it('rechaza recordatorios fuera de rango', async () => {
+        const response = await POST(
+            post({ ...validBody, reminderLeadDays: 40 })
+        )
+
+        expect(response.status).toBe(400)
         expect(mocks.commitmentCreate).not.toHaveBeenCalled()
     })
 
@@ -159,6 +185,27 @@ describe('PATCH /api/commitments/[id]', () => {
         await PATCH(patch({ endDate: null }), { params })
 
         expect(mocks.commitmentFindOneAndUpdate.mock.calls[0][1].$set).toEqual({ endDate: null })
+    })
+
+    it('permite configurar y limpiar el recordatorio', async () => {
+        await PATCH(patch({ reminderLeadDays: 5 }), { params })
+        expect(mocks.commitmentFindOneAndUpdate.mock.calls[0][1].$set).toEqual({
+            reminderLeadDays: 5,
+        })
+
+        mocks.commitmentFindOneAndUpdate.mockClear()
+        await PATCH(patch({ reminderLeadDays: null }), { params })
+        expect(mocks.commitmentFindOneAndUpdate.mock.calls[0][1].$set).toEqual({
+            reminderLeadDays: null,
+        })
+    })
+
+    it('mantiene manual el modo legacy mientras no exista scheduler', async () => {
+        await PATCH(patch({ applyMode: 'auto_month_start' }), { params })
+
+        expect(mocks.commitmentFindOneAndUpdate.mock.calls[0][1].$set).toEqual({
+            applyMode: 'manual',
+        })
     })
 
     it('rechaza un patch vacío', async () => {

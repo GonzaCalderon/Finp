@@ -9,6 +9,10 @@ import {
     parseFinancialPeriod,
     shiftFinancialPeriod,
 } from '@/lib/utils/period'
+import {
+    resolveCommitmentOccurrenceForPeriod,
+    resolveCommitmentOccurrencesInRange,
+} from '@/lib/utils/commitment-dates'
 
 export type CurrencyTotals = { ars: number; usd: number }
 
@@ -73,35 +77,11 @@ export function countOccurrencesInPeriod(
     periodStart: Date,
     periodEnd: Date
 ): number {
-    const start = commitment.startDate ? new Date(commitment.startDate) : null
-    const end = commitment.endDate ? new Date(commitment.endDate) : null
-
-    if (start && start >= periodEnd) return 0
-    if (end && end < periodStart) return 0
-
-    if (commitment.recurrence === 'once') {
-        const when = commitment.dueDate ? new Date(commitment.dueDate) : start
-        if (!when) return 0
-        return when >= periodStart && when < periodEnd ? 1 : 0
-    }
-
-    if (commitment.recurrence === 'weekly') {
-        if (!start) return 0
-        // La cadencia se ancla en startDate: se cuentan los saltos de 7 días
-        // que caen dentro del período, sin inventar un promedio mensual.
-        const cursor = new Date(start)
-        while (cursor < periodStart) cursor.setDate(cursor.getDate() + 7)
-
-        let occurrences = 0
-        while (cursor < periodEnd) {
-            if (end && cursor > end) break
-            occurrences += 1
-            cursor.setDate(cursor.getDate() + 7)
-        }
-        return occurrences
-    }
-
-    return 1
+    return resolveCommitmentOccurrencesInRange(
+        commitment,
+        periodStart,
+        periodEnd
+    ).length
 }
 
 function buildMonths(mode: ProjectionMode, year: number, monthCount: number, currentPeriod: string): string[] {
@@ -183,9 +163,15 @@ export async function getProjectionForUser(
 
             const id = commitment._id.toString()
             const application = applicationByKey.get(`${id}|${month}`)
+            const occurrence = resolveCommitmentOccurrenceForPeriod(
+                commitment,
+                month,
+                monthStartDay
+            )
 
             const resolved = resolveCommitmentAmountForPeriod(commitment, month, {
                 monthStartDay,
+                dueDate: occurrence ?? undefined,
                 registeredApplication: application ?? null,
                 recentAmounts: amountsByCommitment.get(id) ?? [],
             })

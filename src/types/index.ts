@@ -8,6 +8,8 @@ import type {
     CommitmentApplicationOrigin,
     CommitmentApplicationStatus,
     CommitmentEstimationMode,
+    CommitmentLifecycleStatus,
+    CommitmentReminderState,
     CreatedFrom,
     Currency,
     ImportBatchStatus,
@@ -302,6 +304,8 @@ export interface IScheduledCommitment {
     updatedAt: Date
     startDate: Date
     endDate?: Date
+    /** Días antes del vencimiento en que Finp empieza a recordarlo. */
+    reminderLeadDays?: number
     amountPolicy: CommitmentAmountPolicy
     amountSchedule: ICommitmentAmountEntry[]
     estimationMode: CommitmentEstimationMode
@@ -315,6 +319,19 @@ export interface IScheduledCommitment {
     resolvedAmount?: number
     amountSource?: CommitmentAmountSource
     amountCertainty?: 'confirmed' | 'calculated' | 'estimated' | 'pending_amount'
+    resolvedAmountEffectiveFrom?: Date
+    resolvedDueDate?: Date
+    nextDueDate?: Date
+    nextReminderDate?: Date
+    occursThisPeriod?: boolean
+    lifecycleStatus?: CommitmentLifecycleStatus
+    reminderState?: CommitmentReminderState
+    reminderDate?: Date
+    currentApplication?: {
+        _id: Types.ObjectId
+        appliedAt: Date
+        snapshot?: ICommitmentApplicationSnapshot
+    }
 }
 
 /** Foto financiera de lo que se registró en un período concreto. */

@@ -24,6 +24,8 @@ import {
 import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
 import { COMMITMENT_APPLICATION_STATUSES, DEBT_STATUSES } from '@/lib/constants'
 import { countOccurrencesInPeriod } from '@/lib/server/projection'
+import { resolveCommitmentAmountForPeriod } from '@/lib/server/commitment-amounts'
+import { resolveCommitmentOccurrenceForPeriod } from '@/lib/utils/commitment-dates'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
@@ -605,6 +607,52 @@ export async function GET(request: Request) {
             status: COMMITMENT_APPLICATION_STATUSES.REGISTERED,
         })
         const appliedIds = new Set(appliedThisMonth.map((a) => a.commitmentId.toString()))
+        const appliedByCommitment = new Map(
+            appliedThisMonth.map((application) => [
+                application.commitmentId.toString(),
+                application,
+            ])
+        )
+        const commitmentAmountHistory = await CommitmentApplication.find({
+            userId,
+            status: COMMITMENT_APPLICATION_STATUSES.REGISTERED,
+        })
+            .sort({ period: -1 })
+            .select({ commitmentId: 1, 'snapshot.amount': 1 })
+            .lean<
+                Array<{
+                    commitmentId: { toString(): string }
+                    snapshot?: { amount?: number }
+                }>
+            >()
+        const recentAmountsByCommitment = new Map<string, number[]>()
+        for (const application of commitmentAmountHistory) {
+            const amount = application.snapshot?.amount
+            if (typeof amount !== 'number') continue
+            const key = application.commitmentId.toString()
+            const recent = recentAmountsByCommitment.get(key) ?? []
+            if (recent.length < 6) recent.push(amount)
+            recentAmountsByCommitment.set(key, recent)
+        }
+        const resolvedAmounts = new Map(
+            activeCommitments.map((commitment) => {
+                const key = commitment._id.toString()
+                return [
+                    key,
+                    resolveCommitmentAmountForPeriod(commitment, month, {
+                        monthStartDay,
+                        dueDate:
+                            resolveCommitmentOccurrenceForPeriod(
+                                commitment,
+                                month,
+                                monthStartDay
+                            ) ?? undefined,
+                        registeredApplication: appliedByCommitment.get(key) ?? null,
+                        recentAmounts: recentAmountsByCommitment.get(key) ?? [],
+                    }),
+                ] as const
+            })
+        )
         // Se respeta la vigencia: un compromiso que ya terminó no puede figurar
         // como pendiente del período, porque induce a aplicarlo de nuevo.
         const pendingCommitments = (currentPeriodHasCoverage ? activeCommitments : [])
@@ -617,7 +665,7 @@ export async function GET(request: Request) {
             .map((c) => ({
                 _id: c._id,
                 description: c.description,
-                amount: c.amount,
+                amount: resolvedAmounts.get(c._id.toString())?.amount ?? c.amount,
                 currency: c.currency,
                 dayOfMonth: c.dayOfMonth,
             }))
@@ -630,7 +678,11 @@ export async function GET(request: Request) {
                     countOccurrencesInPeriod(c, startOfMonth, endOfMonth) > 0
             )
             .reduce((totals, c) => {
-                addCurrencyAmount(totals, c.currency, c.amount)
+                addCurrencyAmount(
+                    totals,
+                    c.currency,
+                    resolvedAmounts.get(c._id.toString())?.amount ?? c.amount
+                )
                 return totals
             }, emptyCurrencyTotals())
 

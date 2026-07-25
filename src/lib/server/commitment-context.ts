@@ -5,6 +5,7 @@ import { resolveApplicationStateForPeriod } from '@/lib/server/commitments'
 import type { CommitmentCandidate } from '@/lib/server/commitment-matching'
 import { normalizeRuleText } from '@/lib/utils/rules'
 import { getCurrentFinancialPeriod } from '@/lib/utils/period'
+import { resolveCommitmentOccurrenceForPeriod } from '@/lib/utils/commitment-dates'
 
 /**
  * Compromisos con aplicación pendiente en el período actual, listos para que
@@ -64,7 +65,14 @@ export async function getApplicableCommitmentsForUser(
         }
     }
 
-    const candidates: CommitmentCandidate[] = commitments.map((commitment) => {
+    const candidates: CommitmentCandidate[] = commitments.flatMap((commitment) => {
+        const occurrence = resolveCommitmentOccurrenceForPeriod(
+            commitment,
+            currentPeriod,
+            monthStartDay
+        )
+        if (!occurrence) return []
+
         const id = commitment._id.toString()
         const application = currentByCommitment.get(id)
 
@@ -73,11 +81,12 @@ export async function getApplicableCommitmentsForUser(
 
         const resolved = resolveCommitmentAmountForPeriod(commitment, currentPeriod, {
             monthStartDay,
+            dueDate: occurrence,
             registeredApplication: registered,
             recentAmounts: historyByCommitment.get(id) ?? [],
         })
 
-        return {
+        return [{
             commitmentId: id,
             description: commitment.description,
             normalizedDescription:
@@ -95,7 +104,7 @@ export async function getApplicableCommitmentsForUser(
                 currentPeriod,
                 application ?? null
             ),
-        }
+        }]
     })
 
     return { commitments: candidates, currentPeriod }

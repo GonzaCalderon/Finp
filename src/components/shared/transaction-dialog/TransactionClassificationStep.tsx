@@ -1,23 +1,20 @@
 import { motion } from 'framer-motion'
-import { Search, Sparkles, Wand2 } from 'lucide-react'
+import { Sparkles, Wand2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { CategoryPickerField } from '@/components/shared/CategoryPickerField'
 import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import type { TransactionRuleProposal } from '@/lib/utils/transaction-description-intelligence'
 import type { ICategory } from '@/types'
 import { StepSection } from './StepSection'
-import { CategoryChip, SURFACE } from './shared-ui'
+import { SURFACE } from './shared-ui'
 
 interface TransactionClassificationStepProps {
     showCategory: boolean
     categoryId: string | undefined
     appliedRuleName: string | null
     categoryQuery: string
-    normalizedCategoryQuery: string
     availableCategories: ICategory[]
-    visibleCategories: ICategory[]
     selectedCategory: ICategory | undefined
     categoryReason?: string
     ruleProposal?: TransactionRuleProposal
@@ -32,9 +29,7 @@ export function TransactionClassificationStep({
     categoryId,
     appliedRuleName,
     categoryQuery,
-    normalizedCategoryQuery,
     availableCategories,
-    visibleCategories,
     selectedCategory,
     categoryReason,
     ruleProposal,
@@ -43,6 +38,8 @@ export function TransactionClassificationStep({
     onCategoryQueryChange,
     onCreateSuggestedRule,
 }: TransactionClassificationStepProps) {
+    const normalizedCategoryQuery = categoryQuery.trim().toLocaleLowerCase('es')
+
     return (
         <StepSection>
             <motion.div
@@ -53,23 +50,16 @@ export function TransactionClassificationStep({
             >
                 {showCategory && (
                     <motion.div variants={staggerItem} className="space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <Label>Categorias</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Ordenadas segun tu uso reciente y movimientos similares.
-                                </p>
-                            </div>
-                            {selectedCategory && (
-                                <span
-                                    className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                                    style={{ background: selectedCategory.color || 'rgba(74,158,204,0.10)', color: '#fff' }}
-                                >
-                                    {selectedCategory.name}
-                                </span>
-                            )}
-                        </div>
-
+                        <CategoryPickerField
+                            categories={availableCategories}
+                            selectedCategoryId={categoryId}
+                            query={categoryQuery}
+                            description="Ordenadas según tu uso reciente y movimientos similares."
+                            emptyMessage="No hay categorías para este tipo."
+                            onQueryChange={onCategoryQueryChange}
+                            onSelect={onCategorySelect}
+                            context={
+                                <>
                         {appliedRuleName && selectedCategory && normalizedCategoryQuery.length === 0 && (
                             <motion.div variants={staggerItem} className="rounded-[1.6rem] border px-4 py-3 text-sm" style={SURFACE.panel}>
                                 <p className="font-medium">Sugerida por regla: {appliedRuleName}</p>
@@ -119,46 +109,9 @@ export function TransactionClassificationStep({
                                     </Button>
                                 </motion.div>
                             )}
-
-                        {availableCategories.length > 0 && (
-                            <motion.div variants={staggerItem} className="relative">
-                                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    value={categoryQuery}
-                                    onChange={(event) => onCategoryQueryChange(event.target.value)}
-                                    placeholder="Buscar categoria"
-                                    className="pl-9"
-                                />
-                            </motion.div>
-                        )}
-
-                        <motion.div variants={staggerItem}>
-                            {visibleCategories.length > 0 ? (
-                                <div
-                                    className="flex flex-wrap gap-2"
-                                    aria-label={
-                                        normalizedCategoryQuery
-                                            ? 'Resultados de categorias'
-                                            : 'Categorias ordenadas por relevancia'
-                                    }
-                                >
-                                    {visibleCategories.map((category) => (
-                                        <CategoryChip
-                                            key={category._id.toString()}
-                                            category={category}
-                                            selected={categoryId === category._id.toString()}
-                                            onClick={() => onCategorySelect(category._id.toString())}
-                                        />
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    {normalizedCategoryQuery.length > 0
-                                        ? `No encontramos categorias para "${categoryQuery}".`
-                                        : 'No hay categorias para este tipo.'}
-                                </p>
-                            )}
-                        </motion.div>
+                                </>
+                            }
+                        />
                     </motion.div>
                 )}
             </motion.div>

@@ -4,24 +4,23 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
+    Archive,
+    Bell,
     Calendar,
     CheckCircle,
+    ChevronDown,
     Clock3,
-    EyeOff,
-    Pencil,
     Plus,
-    Repeat,
-    Sparkles,
     Wallet,
 } from 'lucide-react'
 import { useCommitments } from '@/hooks/useCommitments'
+import { useCommitmentSuggestions } from '@/hooks/useCommitmentSuggestions'
 import { useCategories } from '@/hooks/useCategories'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useToast } from '@/hooks/useToast'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { apiJson } from '@/lib/client/auth-client'
+import { ApiError, apiJson } from '@/lib/client/auth-client'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     AlertDialog,
@@ -37,57 +36,35 @@ import { CommitmentDialog } from '@/components/shared/CommitmentDialog'
 import { ApplyCommitmentDialog } from '@/components/shared/ApplyCommitmentDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { MobileCardCarousel } from '@/components/shared/MobileCardCarousel'
-import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
-import { fadeIn, staggerContainer, staggerItem } from '@/lib/utils/animations'
+import { CommitmentAmountDialog } from '@/components/commitments/CommitmentAmountDialog'
+import { CommitmentSection } from '@/components/commitments/CommitmentSection'
+import { CommitmentSuggestionCard } from '@/components/commitments/CommitmentSuggestionCard'
+import { fadeIn, staggerContainer } from '@/lib/utils/animations'
 import { getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { takeCaptureDraft } from '@/lib/client/capture-draft'
-import type { CommitmentDraftEnvelope, CommitmentDraftFields } from '@/types/capture-intent'
+import {
+    CAPTURE_DRAFT_TTL_MS,
+    CAPTURE_DRAFT_VERSION,
+    type CommitmentDraftEnvelope,
+    type CommitmentDraftFields,
+} from '@/types/capture-intent'
 import type { CommitmentFormData } from '@/lib/validations'
 import type { IScheduledCommitment } from '@/types'
-import { cn } from '@/lib/utils'
+import type { CommitmentSuggestion } from '@/lib/utils/commitment-suggestions'
 import {
     COMMITMENT_INVALIDATION_TAGS,
     invalidateData,
 } from '@/lib/client/data-sync'
 
-const RECURRENCE_LABELS: Record<string, string> = {
-    monthly: 'Mensual',
-    weekly: 'Semanal',
-    once: 'Una vez',
-}
-
-const APPLY_MODE_LABELS: Record<string, string> = {
-    manual: 'Manual',
-    auto_month_start: 'Preparado para automatización',
-}
-
-// Fallback usado sólo mientras el servidor todavía no respondió con el período
-// financiero real. Con monthStartDay != 1 el mes calendario no es el período.
 const getFallbackPeriod = () => getCurrentFinancialPeriod(new Date())
 
-const fmtDate = (date: Date | string) =>
-    new Date(date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-
-function getRefName(value: unknown): string | null {
-    if (!value || typeof value === 'string' || typeof value !== 'object') return null
-    const candidate = value as { name?: unknown }
-    return typeof candidate.name === 'string' ? candidate.name : null
-}
-
-/** El campo puede llegar como ObjectId o ya populado; en ambos casos queremos el id. */
-function getRefId(value: unknown): string | undefined {
+function getReferenceId(value: unknown): string | undefined {
     if (!value) return undefined
     if (typeof value === 'string') return value
     if (typeof value !== 'object') return undefined
     const candidate = value as { _id?: unknown; toString?: () => string }
     if (candidate._id) return String(candidate._id)
-    return candidate.toString ? candidate.toString() : undefined
-}
-
-function getRefColor(value: unknown): string | null {
-    if (!value || typeof value === 'string' || typeof value !== 'object') return null
-    const candidate = value as { color?: unknown }
-    return typeof candidate.color === 'string' ? candidate.color : null
+    return candidate.toString?.()
 }
 
 function SummaryCard({
@@ -100,241 +77,92 @@ function SummaryCard({
     hint: string
 }) {
     return (
-        <div
-            className="min-w-[190px] shrink-0 snap-start rounded-xl p-3 md:min-w-0 md:rounded-2xl md:p-4"
-            style={{
-                background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
-                boxShadow: 'var(--card-shadow)',
-            }}
-        >
+        <div className="min-w-[210px] shrink-0 snap-start rounded-2xl border bg-card p-4 shadow-sm md:min-w-0">
             <p className="text-xs font-medium text-muted-foreground">{title}</p>
-            <p className="mt-1.5 text-lg font-semibold tracking-tight md:mt-2 md:text-2xl">{value}</p>
-            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground md:mt-1 md:text-xs">{hint}</p>
+            <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">{hint}</p>
         </div>
     )
 }
 
 function CommitmentsLoadingState() {
     return (
-        <div className="px-4 py-4 md:px-6 md:py-6 max-w-5xl mx-auto space-y-5 md:space-y-6">
+        <div className="mx-auto max-w-5xl space-y-5 px-4 py-4 md:px-6 md:py-6">
             <div className="flex items-center justify-between gap-4">
                 <Skeleton className="h-8 w-40" />
-                <Skeleton className="h-9 w-36" />
+                <Skeleton className="h-10 w-40" />
             </div>
-
-            <div className="grid gap-2.5 md:grid-cols-3 md:gap-3">
+            <div className="grid gap-3 md:grid-cols-3">
                 {[...Array(3)].map((_, index) => (
-                    <Skeleton key={index} className="h-24 rounded-xl md:rounded-2xl" />
+                    <Skeleton key={index} className="h-28 rounded-2xl" />
                 ))}
             </div>
-
-            {[...Array(2)].map((_, sectionIndex) => (
-                <div key={sectionIndex} className="space-y-3">
-                    <Skeleton className="h-8 w-52" />
-                    <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-                        {[...Array(2)].map((__, rowIndex) => (
-                            <Skeleton key={rowIndex} className={cn('h-24 w-full rounded-none', rowIndex > 0 && 'border-t')} />
-                        ))}
-                    </div>
-                </div>
+            {[...Array(2)].map((_, index) => (
+                <Skeleton key={index} className="h-40 rounded-2xl" />
             ))}
         </div>
     )
 }
 
-function CommitmentRow({
-    commitment,
-    onApply,
-    onEdit,
-    onDelete,
-}: {
-    commitment: IScheduledCommitment
-    onApply: (commitment: IScheduledCommitment) => void
-    onEdit: (commitment: IScheduledCommitment) => void
-    onDelete: (id: string) => void
-}) {
-    const isApplied = commitment.appliedThisMonth
-    const categoryName = getRefName(commitment.categoryId)
-    const categoryColor = getRefColor(commitment.categoryId)
-    return (
-        <motion.div variants={staggerItem}>
-            <div className="px-2.5 py-2.5 md:px-5 md:py-4">
-                <div className="flex items-start gap-2 md:gap-3">
-                    <div
-                        className="mt-0.5 flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-xl md:h-10 md:w-10"
-                        style={{
-                            background: isApplied ? 'rgba(16,185,129,0.10)' : 'rgba(2,132,199,0.10)',
-                            color: isApplied ? '#10B981' : 'var(--sky)',
-                        }}
-                    >
-                        {isApplied ? <CheckCircle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                    <p className="truncate text-[12.5px] font-medium md:text-[15px]">{commitment.description}</p>
-                                    <Badge variant="outline" className="h-4 rounded-md px-1.5 text-[9px] md:h-5 md:text-[10px]">
-                                        {commitment.currency}
-                                    </Badge>
-                                </div>
-
-                                <div className="mt-1 flex flex-wrap items-center gap-1">
-                                    <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[8.5px] md:px-2 md:py-0.5 md:text-[10px]">
-                                        {RECURRENCE_LABELS[commitment.recurrence]}
-                                    </Badge>
-                                    <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[8.5px] md:px-2 md:py-0.5 md:text-[10px]">
-                                        {APPLY_MODE_LABELS[commitment.applyMode]}
-                                    </Badge>
-                                    {isApplied && (
-                                        <Badge className="rounded-md px-1.5 py-0 text-[8.5px] md:px-2 md:py-0.5 md:text-[10px]">
-                                            Aplicado este mes
-                                        </Badge>
-                                    )}
-                                </div>
-
-                                <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground md:gap-x-2 md:text-xs">
-                                    {commitment.dayOfMonth && <span>Día {commitment.dayOfMonth}</span>}
-                                    {commitment.startDate && <span>Desde {fmtDate(commitment.startDate)}</span>}
-                                    {commitment.endDate && <span>Hasta {fmtDate(commitment.endDate)}</span>}
-                                    {categoryName && (
-                                        <span className="flex items-center gap-1">
-                                            {categoryColor && (
-                                                <span
-                                                    className="h-2 w-2 rounded-full"
-                                                    style={{ backgroundColor: categoryColor }}
-                                                />
-                                            )}
-                                            {categoryName}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-between gap-2 md:justify-end md:gap-3 md:border-l md:border-foreground/[0.06] md:pl-4">
-                                <div className="text-left md:text-right">
-                                    <p className="hidden text-[11px] uppercase tracking-[0.08em] text-muted-foreground md:block">
-                                        Monto
-                                    </p>
-                                    <p className="text-[13px] font-semibold tabular-nums md:text-lg">
-                                        <ResponsiveAmount amount={commitment.amount} currency={commitment.currency} />
-                                    </p>
-                                </div>
-
-                                <div className="flex items-center gap-1">
-                                    {!isApplied && (
-                                        <Button
-                                            size="sm"
-                                            className="h-6.5 rounded-lg px-2 text-[10px] md:h-7 md:px-3 md:text-xs"
-                                            onClick={() => onApply(commitment)}
-                                        >
-                                            Aplicar
-                                        </Button>
-                                    )}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        className="h-7 w-7 md:h-8 md:w-8"
-                                        aria-label="Editar compromiso"
-                                        onClick={() => onEdit(commitment)}
-                                    >
-                                        <Pencil />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        className="h-7 w-7 md:h-8 md:w-8"
-                                        aria-label="Desactivar compromiso"
-                                        onClick={() => onDelete(commitment._id.toString())}
-                                    >
-                                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </motion.div>
-    )
-}
-
-function CommitmentSection({
-    title,
-    description,
-    icon: Icon,
-    accent,
-    commitments,
-    onApply,
-    onEdit,
-    onDelete,
-}: {
-    title: string
-    description: string
-    icon: React.ElementType
-    accent: string
-    commitments: IScheduledCommitment[]
-    onApply: (commitment: IScheduledCommitment) => void
-    onEdit: (commitment: IScheduledCommitment) => void
-    onDelete: (id: string) => void
-}) {
-    if (commitments.length === 0) return null
-
-    return (
-        <motion.section variants={staggerItem} className="space-y-2 md:space-y-3">
-            <div className="flex items-center gap-3">
-                <div
-                    className="flex h-7.5 w-7.5 items-center justify-center rounded-xl md:h-10 md:w-10 md:rounded-2xl"
-                    style={{ background: `${accent}15`, color: accent }}
-                >
-                    <Icon className="h-4 w-4 md:h-4.5 md:w-4.5" />
-                </div>
-                <div>
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-[13px] font-semibold md:text-base">{title}</h2>
-                        <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[8.5px] md:text-[10px]">
-                            {commitments.length}
-                        </Badge>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground md:text-xs">{description}</p>
-                </div>
-            </div>
-
-            <motion.div
-                className="overflow-hidden rounded-2xl"
-                style={{
-                    background: 'color-mix(in srgb, var(--card) 92%, transparent)',
-                    border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
-                    boxShadow: 'var(--card-shadow)',
-                }}
-                variants={staggerContainer}
-                initial="initial"
-                animate="animate"
-            >
-                {commitments.map((commitment, index) => (
-                    <div
-                        key={commitment._id.toString()}
-                        style={index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
-                    >
-                        <CommitmentRow
-                            commitment={commitment}
-                            onApply={onApply}
-                            onEdit={onEdit}
-                            onDelete={onDelete}
-                        />
-                    </div>
-                ))}
-            </motion.div>
-        </motion.section>
-    )
+function buildSuggestionDraft(
+    suggestion: CommitmentSuggestion
+): CommitmentDraftEnvelope {
+    const now = Date.now()
+    return {
+        version: CAPTURE_DRAFT_VERSION,
+        draftId: `commitment-suggestion-${now}`,
+        intent: 'create_commitment',
+        origin: {
+            surface: 'commitments',
+            sessionId: `commitments-${now}`,
+            createdAt: new Date(now).toISOString(),
+        },
+        expiresAt: new Date(now + CAPTURE_DRAFT_TTL_MS).toISOString(),
+        fields: {
+            description: suggestion.description,
+            amount: suggestion.amount,
+            currency: suggestion.currency,
+            recurrence: 'monthly',
+            dayOfMonth: suggestion.dayOfMonth,
+            categoryId: suggestion.categoryId,
+            accountId: suggestion.accountId,
+            amountPolicy: suggestion.amountPolicy,
+            startDate: new Date().toISOString(),
+        },
+        provenance: {
+            description: 'learned',
+            amount: 'learned',
+            currency: 'learned',
+            recurrence: 'learned',
+            dayOfMonth: 'learned',
+            categoryId: suggestion.categoryId ? 'learned' : 'default',
+            accountId: suggestion.accountId ? 'learned' : 'default',
+            amountPolicy: 'learned',
+            startDate: 'default',
+        },
+        confidence: suggestion.confidence,
+    }
 }
 
 function CommitmentsPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const { commitments, currentPeriod, loading, error, fetchCommitments, createCommitment, updateCommitment, deleteCommitment } = useCommitments()
+    const {
+        commitments,
+        currentPeriod,
+        loading,
+        error,
+        fetchCommitments,
+        createCommitment,
+        updateCommitment,
+        deleteCommitment,
+    } = useCommitments()
+    const {
+        suggestions,
+        loading: suggestionsLoading,
+        refresh: refreshSuggestions,
+        dismiss: dismissSuggestion,
+    } = useCommitmentSuggestions()
     const { categories } = useCategories()
     const { accounts } = useAccounts()
     const { success, error: toastError } = useToast()
@@ -343,15 +171,27 @@ function CommitmentsPageInner() {
     const [selected, setSelected] = useState<IScheduledCommitment | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
     const [applyDialogOpen, setApplyDialogOpen] = useState(false)
-    const [applyCommitment, setApplyCommitment] = useState<IScheduledCommitment | null>(null)
-    const [appliedId, setAppliedId] = useState<string | null>(null)
-    const [initialDraft, setInitialDraft] = useState<CommitmentDraftEnvelope | null>(null)
+    const [applyCommitment, setApplyCommitment] =
+        useState<IScheduledCommitment | null>(null)
+    const [amountDialogOpen, setAmountDialogOpen] = useState(false)
+    const [amountCommitment, setAmountCommitment] =
+        useState<IScheduledCommitment | null>(null)
+    const [initialDraft, setInitialDraft] =
+        useState<CommitmentDraftEnvelope | null>(null)
+    const [showArchived, setShowArchived] = useState(false)
     const consumedDraftRef = useRef<string | null>(null)
 
-    // `selected` guarda una foto del momento del click: al refrescar la lista tras
-    // cambiar la agenda de montos hay que releer la versión viva del compromiso.
     const selectedLive = selected
-        ? commitments.find((c) => c._id.toString() === selected._id.toString()) ?? selected
+        ? commitments.find(
+              (commitment) =>
+                  commitment._id.toString() === selected._id.toString()
+          ) ?? selected
+        : null
+    const amountCommitmentLive = amountCommitment
+        ? commitments.find(
+              (commitment) =>
+                  commitment._id.toString() === amountCommitment._id.toString()
+          ) ?? amountCommitment
         : null
 
     usePageTitle('Compromisos')
@@ -361,15 +201,9 @@ function CommitmentsPageInner() {
         const wantsCreate = searchParams.get('create') === '1'
         if (!draftId && !wantsCreate) return
 
-        // El borrador viaja por sessionStorage: en la URL sólo va su id, porque
-        // los campos llevan datos financieros personales.
-        //
-        // El ref hace la lectura idempotente: en dev StrictMode ejecuta el efecto
-        // dos veces y la segunda pasada, al no encontrar nada, pisaba el borrador.
         if (draftId && consumedDraftRef.current !== draftId) {
             consumedDraftRef.current = draftId
             const envelope = takeCaptureDraft<CommitmentDraftFields>(draftId)
-            // Un sobre vencido o de otra versión abre el alta vacía.
             if (envelope) setInitialDraft(envelope)
         }
 
@@ -378,99 +212,182 @@ function CommitmentsPageInner() {
         router.replace('/commitments', { scroll: false })
     }, [router, searchParams])
 
-    const commitmentsWithRecentApply = useMemo(
+    const activeCommitments = useMemo(
         () =>
-            commitments.map((commitment) => ({
-                ...commitment,
-                appliedThisMonth: commitment.appliedThisMonth || appliedId === commitment._id.toString(),
-            })),
-        [appliedId, commitments]
+            commitments.filter((commitment) =>
+                ['active', 'ending_soon'].includes(
+                    commitment.lifecycleStatus ?? 'active'
+                ) && commitment.occursThisPeriod !== false
+            ),
+        [commitments]
     )
-
     const pendingCommitments = useMemo(
         () =>
-            commitmentsWithRecentApply.filter(
-                (commitment) => !commitment.appliedThisMonth && commitment.applyMode === 'manual'
+            activeCommitments.filter(
+                (commitment) => !commitment.appliedThisMonth
             ),
-        [commitmentsWithRecentApply]
+        [activeCommitments]
     )
-
     const appliedCommitments = useMemo(
-        () => commitmentsWithRecentApply.filter((commitment) => commitment.appliedThisMonth),
-        [commitmentsWithRecentApply]
-    )
-
-    const automaticCommitments = useMemo(
         () =>
-            commitmentsWithRecentApply.filter(
-                (commitment) => !commitment.appliedThisMonth && commitment.applyMode === 'auto_month_start'
+            activeCommitments.filter((commitment) => commitment.appliedThisMonth),
+        [activeCommitments]
+    )
+    const upcomingCommitments = useMemo(
+        () =>
+            commitments.filter(
+                (commitment) =>
+                    commitment.lifecycleStatus === 'upcoming' ||
+                    (['active', 'ending_soon'].includes(
+                        commitment.lifecycleStatus ?? 'active'
+                    ) &&
+                        commitment.occursThisPeriod === false)
             ),
-        [commitmentsWithRecentApply]
+        [commitments]
+    )
+    const archivedCommitments = useMemo(
+        () =>
+            commitments.filter((commitment) =>
+                ['expired', 'inactive'].includes(
+                    commitment.lifecycleStatus ?? ''
+                )
+            ),
+        [commitments]
+    )
+    const reminderCount = useMemo(
+        () =>
+            commitments.filter(
+                (commitment) =>
+                    !commitment.appliedThisMonth &&
+                    !['expired', 'inactive'].includes(
+                        commitment.lifecycleStatus ?? ''
+                    ) &&
+                    ['due', 'overdue'].includes(commitment.reminderState ?? '')
+            ).length,
+        [commitments]
     )
 
-    const outstandingCount = useMemo(
-        () => commitmentsWithRecentApply.filter((commitment) => !commitment.appliedThisMonth).length,
-        [commitmentsWithRecentApply]
-    )
-
-    const handleCreate = () => {
+    function handleCreate() {
+        setInitialDraft(null)
         setSelected(null)
         setDialogOpen(true)
     }
 
-    const handleEdit = (commitment: IScheduledCommitment) => {
+    function handleEdit(commitment: IScheduledCommitment) {
+        setInitialDraft(null)
         setSelected(commitment)
         setDialogOpen(true)
     }
 
-    const handleDelete = (id: string) => setDeleteId(id)
-
-    const handleApply = (commitment: IScheduledCommitment) => {
+    function handleApply(commitment: IScheduledCommitment) {
         setApplyCommitment(commitment)
         setApplyDialogOpen(true)
     }
 
-    const handleDeleteConfirm = async () => {
+    function handleUpdateAmount(commitment: IScheduledCommitment) {
+        setAmountCommitment(commitment)
+        setAmountDialogOpen(true)
+    }
+
+    async function handleDeleteConfirm() {
         if (!deleteId) return
         try {
             await deleteCommitment(deleteId)
+            await fetchCommitments({ silent: true })
             success('Compromiso desactivado correctamente')
-        } catch (err) {
-            toastError(err instanceof Error ? err.message : 'Error al desactivar compromiso')
+        } catch (caught) {
+            toastError(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Error al desactivar compromiso'
+            )
         } finally {
             setDeleteId(null)
         }
     }
 
-    const handleSubmit = async (data: CommitmentFormData) => {
+    async function handleReactivate(commitment: IScheduledCommitment) {
+        try {
+            await updateCommitment(commitment._id.toString(), { isActive: true })
+            await fetchCommitments({ silent: true })
+            success('Compromiso reactivado')
+        } catch (caught) {
+            toastError(
+                caught instanceof Error
+                    ? caught.message
+                    : 'No se pudo reactivar el compromiso'
+            )
+        }
+    }
+
+    async function handleSubmit(data: CommitmentFormData) {
         try {
             if (selected) {
-                await updateCommitment(selected._id.toString(), data as Record<string, unknown>)
+                await updateCommitment(
+                    selected._id.toString(),
+                    data as Record<string, unknown>
+                )
                 success('Compromiso actualizado correctamente')
             } else {
                 await createCommitment(data as Record<string, unknown>)
                 success('Compromiso creado correctamente')
+                await refreshSuggestions()
             }
+            await fetchCommitments({ silent: true })
             setDialogOpen(false)
-        } catch (err) {
-            toastError(err instanceof Error ? err.message : 'Error al guardar compromiso')
+            setInitialDraft(null)
+        } catch (caught) {
+            if (caught instanceof ApiError && caught.details?.length) {
+                throw caught
+            }
+            toastError(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Error al guardar compromiso'
+            )
+            throw caught
         }
     }
 
-    const handleApplySubmit = async (commitmentId: string, data: Record<string, unknown>) => {
+    async function handleApplySubmit(
+        commitmentId: string,
+        data: Record<string, unknown>
+    ) {
         try {
             await apiJson(`/api/commitments/${commitmentId}/apply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             })
+            invalidateData(COMMITMENT_INVALIDATION_TAGS)
+            await fetchCommitments({ silent: true })
             success('Compromiso aplicado correctamente')
             setApplyDialogOpen(false)
-            setAppliedId(commitmentId)
-            invalidateData(COMMITMENT_INVALIDATION_TAGS)
-            window.setTimeout(() => setAppliedId(null), 1800)
-        } catch (err) {
-            toastError(err instanceof Error ? err.message : 'Error al aplicar compromiso')
+        } catch (caught) {
+            toastError(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Error al aplicar compromiso'
+            )
+        }
+    }
+
+    function handleAcceptSuggestion(suggestion: CommitmentSuggestion) {
+        setSelected(null)
+        setInitialDraft(buildSuggestionDraft(suggestion))
+        setDialogOpen(true)
+    }
+
+    async function handleDismissSuggestion(suggestion: CommitmentSuggestion) {
+        try {
+            await dismissSuggestion(suggestion)
+            success('Finp no volverá a sugerir este patrón')
+        } catch (caught) {
+            toastError(
+                caught instanceof Error
+                    ? caught.message
+                    : 'No se pudo descartar la sugerencia'
+            )
         }
     }
 
@@ -485,215 +402,272 @@ function CommitmentsPageInner() {
     }
 
     return (
-        <motion.div className="px-4 py-3.5 pb-24 md:px-6 md:py-6 md:pb-6 max-w-5xl mx-auto space-y-3.5 md:space-y-6" {...fadeIn}>
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <motion.main
+            className="mx-auto max-w-5xl space-y-5 px-4 py-4 pb-24 md:space-y-7 md:px-6 md:py-6 md:pb-6"
+            {...fadeIn}
+        >
+            <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Compromisos</h1>
-                    <p className="mt-1 text-xs text-muted-foreground md:text-sm">
-                        Organizá tus pagos recurrentes y aplicalos sin perder de vista qué ya pasó este mes.
+                    <h1 className="text-xl font-semibold tracking-tight md:text-2xl">
+                        Compromisos
+                    </h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Anticipá pagos, recordá vencimientos y registralos con su
+                        monto vigente.
                     </p>
                 </div>
-
-                <Button size="sm" onClick={handleCreate} className="gap-2 w-full h-9 md:h-9 md:w-auto">
-                    <Plus className="h-4 w-4" />
+                <Button
+                    onClick={handleCreate}
+                    className="min-h-11 w-full gap-2 md:w-auto"
+                >
+                    <Plus className="size-4" />
                     Nuevo compromiso
                 </Button>
+            </header>
+
+            <MobileCardCarousel
+                hint="Deslizá para recorrer el resumen"
+                ariaLabel="Resumen de compromisos"
+            >
+                <SummaryCard
+                    title="Vigentes"
+                    value={String(activeCommitments.length)}
+                    hint="Compromisos activos del período actual"
+                />
+                <SummaryCard
+                    title="Pendientes"
+                    value={String(pendingCommitments.length)}
+                    hint="Todavía requieren tu confirmación"
+                />
+                <SummaryCard
+                    title="Recordatorios"
+                    value={String(reminderCount)}
+                    hint="Vencen pronto o ya pasaron su fecha"
+                />
+            </MobileCardCarousel>
+            <div className="hidden gap-3 md:grid md:grid-cols-3">
+                <SummaryCard
+                    title="Vigentes"
+                    value={String(activeCommitments.length)}
+                    hint="Compromisos activos del período actual"
+                />
+                <SummaryCard
+                    title="Pendientes"
+                    value={String(pendingCommitments.length)}
+                    hint="Todavía requieren tu confirmación"
+                />
+                <SummaryCard
+                    title="Recordatorios"
+                    value={String(reminderCount)}
+                    hint="Vencen pronto o ya pasaron su fecha"
+                />
             </div>
 
+            {(suggestionsLoading || suggestions.length > 0) && (
+                <section className="space-y-3">
+                    <div className="flex items-center gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
+                            <Bell className="size-4.5" />
+                        </div>
+                        <div>
+                            <h2 className="font-semibold">Sugerencias de Finp</h2>
+                            <p className="text-xs text-muted-foreground">
+                                Patrones mensuales del historial. Siempre requieren
+                                revisión.
+                            </p>
+                        </div>
+                    </div>
+                    {suggestionsLoading ? (
+                        <Skeleton className="h-44 rounded-2xl" />
+                    ) : (
+                        <div className="grid gap-3 md:grid-cols-2">
+                            {suggestions.map((suggestion) => (
+                                <CommitmentSuggestionCard
+                                    key={suggestion.subjectKey}
+                                    suggestion={suggestion}
+                                    onAccept={handleAcceptSuggestion}
+                                    onDismiss={(item) =>
+                                        void handleDismissSuggestion(item)
+                                    }
+                                />
+                            ))}
+                        </div>
+                    )}
+                </section>
+            )}
+
             {commitments.length === 0 ? (
-                <div
-                    className="rounded-2xl"
-                    style={{ background: 'var(--card)', border: '0.5px solid var(--border)' }}
-                >
+                <div className="rounded-2xl border bg-card">
                     <EmptyState
                         icon={Calendar}
                         title="Sin compromisos programados"
-                        description="Agregá alquiler, servicios, cuotas u otros gastos fijos para tenerlos siempre a mano."
+                        description="Agregá alquiler, servicios u otros pagos para anticiparlos y recordarlos."
                         actionLabel="Nuevo compromiso"
                         onAction={handleCreate}
                     />
                 </div>
             ) : (
-                <>
-                    <MobileCardCarousel
-                        hint="Deslizá para recorrer el resumen"
-                        ariaLabel="Resumen de compromisos"
-                    >
-                        <SummaryCard
-                            title="Compromisos activos"
-                            value={String(commitments.length)}
-                            hint="Todo lo que sigue vigente y aparece en tu planificación"
-                        />
-                        <SummaryCard
-                            title="Pendientes este mes"
-                            value={String(outstandingCount)}
-                            hint="Incluye manuales y automáticos que todavía no impactaron"
-                        />
-                        <SummaryCard
-                            title="Configurados como automáticos"
-                            value={String(automaticCommitments.length)}
-                            hint="La ejecución automática todavía no está activa"
-                        />
-                    </MobileCardCarousel>
-                    <div className="hidden md:grid md:grid-cols-3 md:gap-3">
-                        <SummaryCard
-                            title="Compromisos activos"
-                            value={String(commitments.length)}
-                            hint="Todo lo que sigue vigente y aparece en tu planificación"
-                        />
-                        <SummaryCard
-                            title="Pendientes este mes"
-                            value={String(outstandingCount)}
-                            hint="Incluye manuales y automáticos que todavía no impactaron"
-                        />
-                        <SummaryCard
-                            title="Configurados como automáticos"
-                            value={String(automaticCommitments.length)}
-                            hint="La ejecución automática todavía no está activa"
-                        />
-                    </div>
+                <motion.div
+                    className="space-y-7"
+                    variants={staggerContainer}
+                    initial="initial"
+                    animate="animate"
+                >
+                    <CommitmentSection
+                        title="Pendientes del período"
+                        description="Listos para revisar y registrar manualmente."
+                        icon={Wallet}
+                        accent="#0284C7"
+                        commitments={pendingCommitments}
+                        onApply={handleApply}
+                        onEdit={handleEdit}
+                        onUpdateAmount={handleUpdateAmount}
+                        onDeactivate={setDeleteId}
+                        onReactivate={(item) => void handleReactivate(item)}
+                    />
+                    <CommitmentSection
+                        title="Aplicados este período"
+                        description="Conservan la fecha y el monto realmente registrados."
+                        icon={CheckCircle}
+                        accent="#10B981"
+                        commitments={appliedCommitments}
+                        onApply={handleApply}
+                        onEdit={handleEdit}
+                        onUpdateAmount={handleUpdateAmount}
+                        onDeactivate={setDeleteId}
+                        onReactivate={(item) => void handleReactivate(item)}
+                    />
+                    <CommitmentSection
+                        title="Próximos"
+                        description="Empiezan en una fecha futura y todavía no afectan el período."
+                        icon={Clock3}
+                        accent="#7C3AED"
+                        commitments={upcomingCommitments}
+                        onApply={handleApply}
+                        onEdit={handleEdit}
+                        onUpdateAmount={handleUpdateAmount}
+                        onDeactivate={setDeleteId}
+                        onReactivate={(item) => void handleReactivate(item)}
+                    />
 
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('commitments-pending')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{
-                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
-                                color: 'var(--foreground)',
-                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
-                                boxShadow: 'var(--card-shadow)',
-                            }}
-                        >
-                            <Clock3 className="h-3.5 w-3.5 text-[var(--sky)]" />
-                            Pendientes
-                            <span className="text-muted-foreground">({pendingCommitments.length})</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('commitments-applied')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{
-                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
-                                color: 'var(--foreground)',
-                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
-                                boxShadow: 'var(--card-shadow)',
-                            }}
-                        >
-                            <CheckCircle className="h-3.5 w-3.5 text-[#10B981]" />
-                            Aplicados
-                            <span className="text-muted-foreground">({appliedCommitments.length})</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('commitments-automatic')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.25 text-[10px] font-medium transition-colors md:gap-2 md:px-3 md:py-2 md:text-xs"
-                            style={{
-                                background: 'color-mix(in srgb, var(--secondary) 92%, transparent)',
-                                color: 'var(--foreground)',
-                                border: '0.5px solid color-mix(in srgb, var(--foreground) 8%, transparent)',
-                                boxShadow: 'var(--card-shadow)',
-                            }}
-                        >
-                            <Sparkles className="h-3.5 w-3.5 text-[#D97706]" />
-                            Preparados
-                            <span className="text-muted-foreground">({automaticCommitments.length})</span>
-                        </button>
-                    </div>
-
-                    <motion.div className="space-y-6 md:space-y-8" variants={staggerContainer} initial="initial" animate="animate">
-                        <div id="commitments-pending">
-                            <CommitmentSection
-                                title="Pendientes del mes"
-                                description="Los que todavía podés aplicar o revisar manualmente."
-                                icon={Wallet}
-                                accent="#0284C7"
-                                commitments={pendingCommitments}
-                                onApply={handleApply}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                            />
-                        </div>
-
-                        <div id="commitments-applied">
-                            <CommitmentSection
-                                title="Aplicados este mes"
-                                description="Quedaron registrados en el período actual."
-                                icon={CheckCircle}
-                                accent="#10B981"
-                                commitments={appliedCommitments}
-                                onApply={handleApply}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                            />
-                        </div>
-
-                        <div id="commitments-automatic">
-                            <CommitmentSection
-                                title="Pendientes de ejecución automática"
-                                description="La ejecución automática todavía no está activa."
-                                icon={Repeat}
-                                accent="#D97706"
-                                commitments={automaticCommitments}
-                                onApply={handleApply}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                            />
-                        </div>
-                    </motion.div>
-                </>
+                    {archivedCommitments.length > 0 && (
+                        <section className="space-y-3">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="min-h-11 w-full justify-between"
+                                onClick={() =>
+                                    setShowArchived((current) => !current)
+                                }
+                                aria-expanded={showArchived}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Archive className="size-4" />
+                                    Finalizados y desactivados (
+                                    {archivedCommitments.length})
+                                </span>
+                                <ChevronDown
+                                    className={`size-4 transition-transform ${
+                                        showArchived ? 'rotate-180' : ''
+                                    }`}
+                                />
+                            </Button>
+                            {showArchived && (
+                                <CommitmentSection
+                                    title="Historial de compromisos"
+                                    description="No afectan proyecciones ni pendientes actuales."
+                                    icon={Archive}
+                                    accent="#64748B"
+                                    commitments={archivedCommitments}
+                                    onApply={handleApply}
+                                    onEdit={handleEdit}
+                                    onUpdateAmount={handleUpdateAmount}
+                                    onDeactivate={setDeleteId}
+                                    onReactivate={(item) =>
+                                        void handleReactivate(item)
+                                    }
+                                />
+                            )}
+                        </section>
+                    )}
+                </motion.div>
             )}
 
             <CommitmentDialog
                 open={dialogOpen}
                 onOpenChange={(open) => {
                     setDialogOpen(open)
-                    // El borrador se usa una sola vez: reabrir el alta no debe
-                    // repetir datos que el usuario ya descartó.
-                    if (!open) setInitialDraft(null)
+                    if (!open) {
+                        setInitialDraft(null)
+                        setSelected(null)
+                    }
                 }}
                 commitment={selectedLive}
                 initialDraft={initialDraft}
                 categories={categories}
                 accounts={accounts}
                 onSubmit={handleSubmit}
-                onScheduleChange={() => void fetchCommitments({ silent: true })}
+            />
+
+            <CommitmentAmountDialog
+                open={amountDialogOpen}
+                onOpenChange={setAmountDialogOpen}
+                commitment={amountCommitmentLive}
+                onChange={() => void fetchCommitments({ silent: true })}
             />
 
             <ApplyCommitmentDialog
                 open={applyDialogOpen}
                 onOpenChange={setApplyDialogOpen}
-                commitment={applyCommitment ? {
-                    _id: applyCommitment._id.toString(),
-                    description: applyCommitment.description,
-                    amount: applyCommitment.amount,
-                    currency: applyCommitment.currency,
-                    dayOfMonth: applyCommitment.dayOfMonth,
-                    resolvedAmount: applyCommitment.resolvedAmount,
-                    amountPolicy: applyCommitment.amountPolicy,
-                    amountCertainty: applyCommitment.amountCertainty,
-                    defaultAccountId: getRefId(applyCommitment.accountId),
-                } : null}
+                commitment={
+                    applyCommitment
+                        ? {
+                              _id: applyCommitment._id.toString(),
+                              description: applyCommitment.description,
+                              amount: applyCommitment.amount,
+                              currency: applyCommitment.currency,
+                              dayOfMonth: applyCommitment.dayOfMonth,
+                              resolvedAmount: applyCommitment.resolvedAmount,
+                              amountPolicy: applyCommitment.amountPolicy,
+                              amountCertainty: applyCommitment.amountCertainty,
+                              defaultAccountId: getReferenceId(
+                                  applyCommitment.accountId
+                              ),
+                          }
+                        : null
+                }
                 accounts={accounts}
                 period={currentPeriod ?? getFallbackPeriod()}
                 onSubmit={handleApplySubmit}
             />
 
-            <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-                <AlertDialogContent className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl">
+            <AlertDialog
+                open={Boolean(deleteId)}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteId(null)
+                }}
+            >
+                <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>¿Desactivar este compromiso?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            ¿Desactivar este compromiso?
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Dejará de aparecer en la proyección y en la lista activa, pero el historial se conserva.
+                            Dejará de aparecer en la proyección y en los pendientes.
+                            Su historial y sus aplicaciones se conservan.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm}>Desactivar</AlertDialogAction>
+                        <AlertDialogAction
+                            onClick={() => void handleDeleteConfirm()}
+                        >
+                            Desactivar
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </motion.div>
+        </motion.main>
     )
 }
 
