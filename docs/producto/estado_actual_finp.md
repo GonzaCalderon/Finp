@@ -1,218 +1,341 @@
 # Estado actual de Finp
 
-Ultima actualizacion: 2026-05-16
+> Estado: vigente
+> Audiencia: producto, desarrollo, calidad y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: alcance implementado y verificado
 
-## 1. Vision general
+## Índice
 
-Finp es una aplicacion de finanzas personales con una capa colaborativa real. El producto combina gestion privada de cuentas, transacciones y proyeccion con contextos compartidos donde varias personas pueden registrar gastos, saldar saldos y dejar trazabilidad.
+1. [Resumen ejecutivo](#1-resumen-ejecutivo)
+2. [Estado técnico](#2-estado-técnico)
+3. [Finanzas personales](#3-finanzas-personales)
+4. [Captura, reglas y aprendizaje](#4-captura-reglas-y-aprendizaje)
+5. [Compromisos y proyección](#5-compromisos-y-proyección)
+6. [Espacios](#6-espacios)
+7. [Deudas](#7-deudas)
+8. [Notificaciones y pendientes](#8-notificaciones-y-pendientes)
+9. [Experiencia y plataformas](#9-experiencia-y-plataformas)
+10. [Calidad](#10-calidad)
+11. [Limitaciones conocidas](#11-limitaciones-conocidas)
+12. [Último bloque entregado](#12-último-bloque-entregado)
 
-Hoy Finp esta pensado como un sistema hibrido:
+## 1. Resumen ejecutivo
 
-- finanzas personales como fuente principal de control diario;
-- espacios como contexto compartido persistente;
-- deudas como modulo propio para obligaciones pendientes;
-- notificaciones e insights como capa de seguimiento y accion.
-
-Principios actuales del producto:
-
-- separar dinero real de dinero operacional;
-- no mezclar automaticamente la contabilidad personal con la compartida;
-- preservar privacidad por usuario;
-- mostrar contexto accionable antes que complejidad contable;
-- priorizar trazabilidad sobre automatismos irreversibles.
-
-## 2. Finanzas personales
-
-Finp ya cubre un flujo personal amplio:
-
-- cuentas en ARS y USD, incluidas cuentas multi-moneda;
-- transacciones de ingreso, gasto, gasto con tarjeta, transferencia, cambio, pago de tarjeta y ajuste;
-- dashboard por periodo financiero configurable;
-- resumen de cashflow y vistas de flujo como parte de la capa analitica;
-- categorias personalizadas y categorias por defecto;
-- reglas automaticas de categorizacion;
-- importacion desde Excel con revision previa por filas;
-- fecha de inicio operativo para no contaminar metricas con historial previo;
-- ocultamiento global de montos;
-- preferencias persistidas por usuario.
-
-Tambien existe una capa madura para tarjetas y compromisos:
-
-- gastos con tarjeta de credito;
-- planes de cuotas personales;
-- resumen mensual por tarjeta;
-- deuda pendiente por cuotas;
-- pagos de tarjeta;
-- compromisos recurrentes aplicables a transacciones;
-- proyeccion basada en compromisos y cuotas.
-
-En la capa de reportes personales ya esta consolidada la idea de monto operacional:
-
-- dashboard, reportes y vistas operativas priorizan la parte propia;
-- cuentas y movimientos reales muestran el impacto efectivo sobre saldo.
-
-## 3. Espacios
-
-Espacios ya es un modulo funcional de producto, no un experimento.
-
-Capacidades actuales:
-
-- listado de espacios y detalle responsive;
-- espacios compartidos con participantes, roles y configuracion;
-- creacion guiada con tipos principales priorizados en UI;
-- modos de funcionamiento del espacio y estado del espacio;
-- movimientos compartidos con split configurable:
-  - partes iguales;
-  - responsable unico;
-  - porcentajes;
-  - montos fijos;
-- balances por participante;
-- pagos entre participantes mediante settlements;
-- vista de deuda directa o simplificada segun `debtMode`;
-- pagos recomendados para saldar el espacio;
-- categorias internas del espacio;
-- actividad del espacio;
-- adjuntos persistentes de imagen y PDF;
-- edicion y anulacion logica con trazabilidad.
-- invitaciones por link con expiracion y revocacion;
-- onboarding `space-first` para usuarios invitados;
-- configuracion separada entre General y Mi Finp.
-
-Sincronizacion personal desde Espacios:
-
-- cada participante puede registrar su propio impacto en Finp;
-- el impacto es privado por usuario mediante `SpaceEntryPersonalImpact`;
-- el movimiento compartido no cambia a "linked" como estado global;
-- el detalle del movimiento expone una seccion "Tu Finp";
-- si el movimiento cambia materialmente o se anula, el impacto personal pasa a `needs_review`.
-- cada participante puede definir estrategia personal de categoria:
-  - elegir al impactar;
-  - usar el nombre del espacio como categoria automatica;
-  - usar categoria fija;
-  - mapear categorias internas a categorias personales.
-- la categoria automatica queda oculta del CRUD normal de categorias, pero aparece en transacciones/reportes si tiene uso;
-- la migracion de categoria automatica solo toca transacciones personales del usuario y del espacio.
-
-Invitaciones:
-
-- un owner/admin puede generar, regenerar o revocar el link activo del espacio;
-- el link vence en 1, 3 o 7 dias;
-- no se guarda token plano;
-- antes de aceptar no se muestran movimientos, balances, deudas ni detalles financieros;
-- un usuario nuevo puede registrarse, aceptar y entrar al espacio sin configurar cuentas ni categorias.
-
-Tipos de espacio:
-
-- el flujo principal de creacion prioriza Pareja, Grupo/Hogar, Viaje y Proyecto;
-- el dominio ya contempla tambien Evento, Personal y Otro para casos especiales.
-
-## 4. Deudas
-
-Deudas ya es un modulo propio conectado con Espacios y Finanzas personales.
-
-Capacidades actuales:
-
-- vista `/debts` con posicion neta;
-- separacion operativa entre "Debo" y "Me deben";
-- deudas manuales;
-- deudas derivadas de espacios;
-- pagos de deuda;
-- cobros de deuda;
-- estados activos, parciales, pagados e ignorados;
-- ignorar y restaurar deudas derivadas de espacios;
-- consolidacion por persona/relacion;
-- timeline de movimientos de deuda;
-- sincronizacion idempotente cuando cambia un espacio.
-
-Reglas actuales:
-
-- pagar o cobrar deuda mueve dinero real en cuentas;
-- pagar o cobrar deuda no suma gasto ni ingreso operacional;
-- el modulo respeta el criterio de deuda del espacio cuando la deuda nace en Espacios;
-- la UI de deudas esta orientada a personas y relaciones, no a asientos contables.
-
-## 5. Notificaciones
-
-Finp tiene una capa global de notificaciones y seguimiento ya integrada al uso diario.
-
-Incluye:
-
-- campana global con badge de unread y pending;
-- tabs para Todas, Pendientes, Espacios, Deudas y Archivadas;
-- estados `unread`, `read`, `archived` y `dismissed`;
-- `actionStatus` para distinguir pendiente, completado, ignorado o cancelado;
-- pendientes accionables vinculados a impactos personales y revisiones;
-- review flows para movimientos de espacios que fueron editados o anulados;
-- NavInsight en navegacion para resumir senales importantes;
-- swipe mobile para archivar o descartar;
-- resolucion automatica de notificaciones stale cuando la accion ya fue atendida.
-
-Tipos de senales ya activos:
-
-- gastos compartidos que esperan decision;
-- revisiones `needs_review`;
-- actividad nueva en espacios;
-- novedades de deudas;
-- imports en borrador;
-- compromisos proximos;
-- insights de resumen como categoria fuerte del mes o tendencia de tarjeta.
-
-## 6. Mobile y desktop
-
-La experiencia actual esta pensada como web app responsive:
-
-- sidebar en desktop;
-- bottom navigation y menu "Mas" en mobile;
-- sheets y dialogs adaptados a mobile;
-- espacios, deudas y notificaciones con trabajo responsive real;
-- soporte de safe areas y layouts tactiles;
-- dark mode y light mode.
-
-Estado actual de app installable:
-
-- no hay PWA operativa;
-- no hay service worker;
-- no hay cache offline;
-- no hay base local para uso sin conexion.
-
-## 7. Testing y calidad
-
-La base de calidad ya existe y esta creciendo sobre Fase 6:
-
-- Vitest para logica, dominio y componentes criticos;
-- Playwright preparado para desktop y mobile;
-- tests unitarios para:
-  - notificaciones;
-  - `SpaceEntryPersonalImpact`;
-  - `personal-sync-events`;
-  - `nav-insights`;
-  - `debt-sync`;
-  - montos operacionales;
-  - split y categorias de espacios;
-  - `data-sync`;
-  - validaciones clave;
-- CI con lint, build y unit tests.
-
-Mecanismos relevantes de robustez ya presentes:
-
-- invalidacion cliente por tags con `data-sync`;
-- polling controlado para notificaciones;
-- refresco por foco y visibilidad de pestana;
-- dedupe en notificaciones y pendientes;
-- tests orientados a privacidad y consistencia de estados.
+Finp es una aplicación web funcional de finanzas personales y compartidas. Cubre registro, análisis, automatización, proyección, colaboración y seguimiento.
 
 Estado general:
 
-- la base es buena para preproduccion controlada;
-- todavia falta ampliar integration/API, E2E y QA de cierre.
+- base apta para preproducción controlada;
+- dominio personal amplio;
+- Espacios y Deudas operativos;
+- Captura rápida con aprendizaje y orientación;
+- calidad automatizada sólida en lógica y servicios;
+- falta cerrar E2E, validación con datos reales y algunos flujos mobile antes de una liberación más amplia.
 
-## 8. Limitaciones actuales conocidas
+La especificación completa está en [`especificacion_funcional.md`](especificacion_funcional.md). Las prioridades viven sólo en [`roadmap_finp.md`](roadmap_finp.md).
 
-- no hay realtime real entre usuarios;
-- no hay offline ni PWA funcional;
-- cuotas dentro de Espacios todavia no existen;
-- la configuracion personal de espacios todavia no esta cerrada;
-- no hay sincronizacion automatica completa entre ediciones/anulaciones de espacios y transacciones personales;
-- persiste compatibilidad legacy alrededor de `linkedTransactionId` y `status: linked`;
-- invitaciones por link siguen pendientes como flujo de producto;
-- la integracion profunda entre tarjetas y Deudas sigue diferida.
+## 2. Estado técnico
+
+Verificado localmente el 2026-07-25 sobre `dev`:
+
+- Next.js 16.2.6, React 19.2.3 y TypeScript;
+- MongoDB y Mongoose;
+- autenticación con NextAuth;
+- 98 rutas API;
+- typecheck limpio;
+- ESLint limpio;
+- build de producción limpio, con 63 páginas generadas;
+- 621 unit tests aprobados en 74 archivos;
+- 5 tests declarados como `todo`;
+- 40 escenarios E2E registrados para desktop y mobile;
+- E2E no ejecutados en esta revisión porque falta `.env.test.local`;
+- CI activo para lint, build y unit tests;
+- job E2E preparado, pero desactivado.
+
+Ramas:
+
+- `main`: producción;
+- `dev`: desarrollo;
+- al momento de la revisión, `dev` coincide con su referencia local `origin/dev`.
+- las referencias remotas disponibles muestran historia divergente: 13 commits exclusivos de `origin/main` y 12 de `origin/dev`;
+- la mayoría de los commits exclusivos de `main` son merges de releases, pero `main` no es ancestro de `dev`;
+- se debe ejecutar un fetch y auditar contenido antes de normalizar la historia.
+
+## 3. Finanzas personales
+
+### Disponible
+
+- cuentas ARS, USD y multi-moneda;
+- saldos iniciales e historial;
+- categorías por defecto y personalizadas;
+- transacciones de ingreso, gasto, tarjeta, transferencia, cambio, pago de tarjeta y ajuste;
+- dashboard por período financiero configurable;
+- saldo disponible acumulado separado del resultado del período;
+- cashflow y visualizaciones;
+- tarjetas y planes de cuotas;
+- importación Excel con revisión;
+- fecha de inicio operativo;
+- ocultamiento global de montos;
+- preferencias persistidas.
+
+### Exactitud financiera incorporada
+
+- arrastre de saldos negativos entre períodos;
+- pagos y cobros de deuda sin impacto operacional;
+- corrección del doble descuento de compras en cuotas;
+- patrimonio con tarjetas y deudas personales;
+- consistencia de préstamos entre Dashboard y Transacciones;
+- compra/venta de USD con cuentas, montos y cotización coherentes.
+
+### Validación pendiente
+
+El código y los tests cubren las reglas principales, pero falta smoke con datos reales para:
+
+- saldo acumulado e histórico;
+- pago total y parcial de deuda;
+- cuotas;
+- períodos con inicio personalizado;
+- ARS/USD;
+- saldos negativos.
+
+## 4. Captura, reglas y aprendizaje
+
+### Captura rápida disponible
+
+- acceso desde FAB y tecla `Q`;
+- parser de gasto/ingreso, monto, moneda, fecha, descripción, cuenta, categoría y comercio;
+- autocompletado y resumen vivo;
+- preview sin escritura;
+- impacto de saldo;
+- validaciones compartidas con Transacciones;
+- derivación al formulario completo;
+- detección de duplicados;
+- advertencias de fechas;
+- deshacer durante ocho segundos.
+
+### Reglas
+
+- motor compartido por creación, importación, cuotas, compromisos e impactos personales autorizados;
+- normalización;
+- simulación sin escritura;
+- detección de conflictos y prioridades;
+- trazabilidad en la transacción;
+- sugerencias revisables y descartables;
+- reevaluación de traza al editar.
+
+### Aprendizaje
+
+- alias sincronizados;
+- patrones de descripción, cuenta, categoría y comercio;
+- precedencia conservadora;
+- explicación y evidencia;
+- aceptación, corrección, descarte, reversión y abandono;
+- pausa, olvido, restauración, conversión a regla y reinicio;
+- retención limitada de eventos;
+- aislamiento por usuario.
+
+### Orientación disponible
+
+Captura rápida distingue:
+
+- transacción independiente;
+- aplicación de compromiso pendiente;
+- preparación de un compromiso nuevo.
+
+Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrador tipado, versionado y con procedencia.
+
+## 5. Compromisos y proyección
+
+### Disponible
+
+- compromisos recurrentes;
+- aplicación a transacciones;
+- monto fijo;
+- monto variable a confirmar;
+- agenda manual de montos con vigencia;
+- monto vigente y fecha efectiva coherentes en Compromisos y Dashboard;
+- alta y edición guiadas en tres pasos;
+- progreso mobile compacto y tres pasos visibles en desktop;
+- validación al escribir, retorno al primer paso inválido y errores de servidor
+  asociados al campo correspondiente;
+- selector de categorías compartido con Nueva transacción, con búsqueda, chips
+  y ranking por historial;
+- selector táctil 1–31 y vista previa exacta de vencimiento y recordatorio;
+- agenda de montos separada e historial rápido colapsable;
+- cambio de monto desde ahora, próximo vencimiento o fecha elegida;
+- historia monetaria vigente y pasada inmutable;
+- fecha de aplicación visible;
+- recordatorios in-app relativos al vencimiento;
+- estados `upcoming`, `active`, `ending_soon`, `expired` e `inactive`;
+- finalizados y desactivados conservados en una sección colapsada;
+- candidatos mensuales con criterio híbrido, confianza mínima, afinidad por
+  categoría y descarte persistente;
+- snapshot por aplicación;
+- estados derivados;
+- procedencia visible;
+- proyección con monto correcto por período;
+- actualización opcional de períodos futuros sin reescribir historia;
+- backfill idempotente con modo `dry-run`.
+
+### No disponible todavía
+
+- compromisos compartidos en Espacios;
+- ajustes porcentuales;
+- índices oficiales;
+- scheduler para `auto_month_start`;
+- notificaciones push o recordatorios fuera de la aplicación;
+- escenarios avanzados de proyección.
+
+## 6. Espacios
+
+### Disponible
+
+- listado, creación y detalle responsive;
+- tipos principales y configuraciones;
+- participantes y roles;
+- movimientos compartidos;
+- split igual, único, porcentual y por montos;
+- balances directos o simplificados;
+- settlements y pagos recomendados;
+- categorías internas;
+- actividad;
+- imágenes y PDF persistentes;
+- edición y anulación lógica;
+- invitaciones por link con expiración y revocación;
+- onboarding `space-first`;
+- configuración General y Mi Finp;
+- impacto personal privado;
+- categoría automática, fija o mapeada;
+- revisión cuando cambia el origen.
+
+### No disponible todavía
+
+- cuotas dentro de Espacios;
+- compromisos de Espacios;
+- reintegros avanzados;
+- realtime;
+- sincronización automática completa de todas las ediciones/anulaciones con transacciones personales;
+- eliminación definitiva de compatibilidad legacy.
+
+## 7. Deudas
+
+### Disponible
+
+- posición neta;
+- “Debo” y “Me deben”;
+- deudas manuales y derivadas de Espacios;
+- pagos y cobros;
+- estados activos, parciales, pagados e ignorados;
+- ignorar y restaurar;
+- consolidación por relación;
+- timeline;
+- sincronización idempotente desde Espacios;
+- operación atómica entre cuenta, deuda y movimiento.
+
+### Experiencia por cerrar
+
+- detalle y resolución de pendientes en mobile;
+- integración más profunda con tarjetas;
+- registrar un préstamo en Finp desde Deudas.
+
+## 8. Notificaciones y pendientes
+
+### Disponible
+
+- campana global y badges;
+- filtros por tipo y estado;
+- leído, archivado y descartado;
+- estado de acción separado;
+- pendientes de impacto personal;
+- revisión de movimientos editados o anulados;
+- actividad de Espacios y novedades de Deudas;
+- imports, compromisos e insights;
+- swipe mobile;
+- deduplicación y resolución de estados obsoletos;
+- polling, foco y visibilidad.
+
+### Cobertura pendiente
+
+Cinco unit tests permanecen como `todo`:
+
+- archivar/restaurar por swipe;
+- descartar por swipe sin resolver la acción;
+- cambios de monto en pendientes de Espacios;
+- usuario removido de un split;
+- usuario agregado a un split.
+
+## 9. Experiencia y plataformas
+
+### Disponible
+
+- sidebar desktop;
+- bottom navigation mobile;
+- sheets y dialogs responsive;
+- light y dark mode;
+- safe areas;
+- recorridos táctiles;
+- ocultamiento de montos.
+
+### No disponible
+
+- PWA operativa;
+- service worker;
+- cache offline;
+- base local;
+- aplicación Android o iOS;
+- sincronización local-first.
+
+Mobile web sigue siendo la superficie prioritaria.
+
+## 10. Calidad
+
+### Fortalezas
+
+- cobertura unitaria amplia de dominio;
+- servicios compartidos para reglas financieras;
+- tests de privacidad, aislamiento e idempotencia;
+- Playwright preparado para Chromium desktop y mobile;
+- CI para verificaciones principales;
+- build de producción reproducible.
+
+### Brechas
+
+- E2E fuera del CI;
+- falta `.env.test.local` estándar para ejecución local;
+- cobertura de integración/API desigual;
+- validación visual y accesibilidad no sistematizadas;
+- cobertura no bloquea CI;
+- faltan métricas de rendimiento y presupuesto de bundle.
+
+## 11. Limitaciones conocidas
+
+- `InstallmentPlan` no se limpia al eliminar la transacción que lo originó.
+- El hermano de un pago dual con `paymentGroupId` se reporta, pero no se elimina por inferencia.
+- `intent_completed` no se emite al crear un compromiso desde un borrador.
+- `getNavInsightsForUser` no tiene test de integración.
+- `auto_month_start` no tiene scheduler.
+- La detección híbrida de candidatos a compromiso está implementada, incluye el
+  caso de control Pizza y sigue pendiente de validación E2E con datos reales
+  representativos.
+- La orientación aún no cubre reglas, cuotas, Deudas, Espacios e Importación.
+- La proyección no distingue completamente cuotas de consumos de un pago.
+- No hay realtime ni offline.
+
+Cada limitación priorizada tiene un único registro en el roadmap.
+
+## 12. Último bloque entregado
+
+Commit `429352a`, 2026-07-24:
+
+- compromisos personales variables;
+- agenda y snapshots;
+- orientación desde Captura rápida;
+- borradores con procedencia;
+- onboarding y ayuda contextual;
+- descartes funcionales;
+- reevaluación de reglas al editar;
+- cascada de limpieza de compromisos, impactos y notificaciones;
+- período financiero unificado en lista, Dashboard, Proyección e insights.
+
+Documentación técnica: [`../tecnico/compromisos_variables_y_orientacion.md`](../tecnico/compromisos_variables_y_orientacion.md).

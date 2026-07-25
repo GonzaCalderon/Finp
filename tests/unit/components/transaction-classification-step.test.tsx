@@ -68,9 +68,7 @@ describe('TransactionClassificationStep', () => {
                 categoryId={undefined}
                 appliedRuleName={null}
                 categoryQuery=""
-                normalizedCategoryQuery=""
                 availableCategories={categories}
-                visibleCategories={categories}
                 selectedCategory={undefined}
                 onCategorySelect={() => undefined}
                 onCategoryQueryChange={() => undefined}
@@ -94,16 +92,14 @@ describe('TransactionClassificationStep', () => {
                 categoryId={undefined}
                 appliedRuleName={null}
                 categoryQuery=""
-                normalizedCategoryQuery=""
                 availableCategories={[category('Supermercado', '#22c55e')]}
-                visibleCategories={[category('Supermercado', '#22c55e')]}
                 selectedCategory={undefined}
                 onCategorySelect={() => undefined}
                 onCategoryQueryChange={onQueryChange}
             />
         )
 
-        fireEvent.change(screen.getByPlaceholderText('Buscar categoria'), {
+        fireEvent.change(screen.getByPlaceholderText('Buscar categoría'), {
             target: { value: 'super' },
         })
 
@@ -120,9 +116,7 @@ describe('TransactionClassificationStep', () => {
                 categoryId={selected._id.toString()}
                 appliedRuleName={null}
                 categoryQuery=""
-                normalizedCategoryQuery=""
                 availableCategories={[selected]}
-                visibleCategories={[selected]}
                 selectedCategory={selected}
                 categoryReason="La usaste en movimientos similares."
                 ruleProposal={{

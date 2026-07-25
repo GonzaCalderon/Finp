@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Account, Category, ImportBatch, ImportRow, InstallmentPlan, Transaction } from '@/lib/models'
+import { Account, Category, ImportBatch, ImportRow, InstallmentPlan } from '@/lib/models'
 import { IMPORT_ROW_STATUS, IMPORT_SOURCE_TYPES } from '@/lib/constants'
+import { createTransactionForUser } from '@/lib/server/transactions'
 import type { IAccount, ICategory, ImportParsedData } from '@/types'
 import {
     evaluateImportRow,
@@ -10,6 +11,18 @@ import {
     mergeImportRawDataFallbacks,
     typeSupportsCategory,
 } from '@/lib/utils/import-transactions'
+
+function getReferenceId(value: unknown): string | undefined {
+    if (!value) return undefined
+    if (typeof value === 'string') return value
+    if (typeof value === 'object' && '_id' in value) {
+        const id = (value as { _id?: { toString(): string } })._id
+        return id?.toString()
+    }
+    return typeof (value as { toString?: unknown }).toString === 'function'
+        ? String(value)
+        : undefined
+}
 
 // POST /api/import/[batchId]/confirm — confirmar importación y crear transacciones
 export async function POST(
@@ -146,36 +159,59 @@ export async function POST(
                     firstClosingMonth: data.firstClosingMonth,
                 })
 
-                tx = await Transaction.create({
-                    userId: session.user.id,
-                    type: normalizedType,
-                    amount: data.amount,
-                    currency: data.currency,
-                    date: data.date,
-                    description,
-                    categoryId: typeSupportsCategory(normalizedType) ? data.categoryId : undefined,
-                    sourceAccountId: data.sourceAccountId,
-                    notes: data.notes,
-                    installmentPlanId: plan._id,
-                    status: 'confirmed',
-                    createdFrom: 'web',
-                    importBatchId: batch._id,
-                    importedAt: now,
-                    importSourceType: IMPORT_SOURCE_TYPES.XLSX_TEMPLATE,
-                })
+                try {
+                    tx = await createTransactionForUser(
+                        session.user.id,
+                        {
+                            type: normalizedType,
+                            amount: data.amount,
+                            currency: data.currency,
+                            date: data.date,
+                            description,
+                            categoryId: typeSupportsCategory(normalizedType) ? data.categoryId : undefined,
+                            sourceAccountId: data.sourceAccountId,
+                            notes: data.notes,
+                        },
+                        {
+                            createdFrom: 'web',
+                            status: 'confirmed',
+                            metadata: {
+                                installmentPlanId: plan._id,
+                                importBatchId: batch._id,
+                                importedAt: now,
+                                importSourceType: IMPORT_SOURCE_TYPES.XLSX_TEMPLATE,
+                            },
+                        }
+                    )
+                } catch (error) {
+                    await InstallmentPlan.deleteOne({
+                        _id: plan._id,
+                        userId: session.user.id,
+                    })
+                    throw error
+                }
+
+                const resolvedCategoryId = getReferenceId(tx.categoryId)
+                if (resolvedCategoryId && resolvedCategoryId !== data.categoryId) {
+                    try {
+                        await InstallmentPlan.updateOne(
+                            { _id: plan._id, userId: session.user.id },
+                            { $set: { categoryId: resolvedCategoryId } }
+                        )
+                    } catch (error) {
+                        console.error(
+                            `No se pudo sincronizar la categoria del plan importado ${plan._id}:`,
+                            error
+                        )
+                    }
+                }
             } else {
                 const txDoc: Record<string, unknown> = {
-                    userId: session.user.id,
                     type: normalizedType,
                     amount: data.amount,
                     currency: data.currency,
                     date: data.date,
                     description,
-                    createdFrom: 'web',
-                    status: 'confirmed',
-                    importBatchId: batch._id,
-                    importedAt: now,
-                    importSourceType: IMPORT_SOURCE_TYPES.XLSX_TEMPLATE,
                 }
 
                 if (typeSupportsCategory(normalizedType) && data.categoryId) {
@@ -203,7 +239,19 @@ export async function POST(
                     txDoc.destinationAccountId = data.destinationAccountId
                 }
 
-                tx = await Transaction.create(txDoc)
+                tx = await createTransactionForUser(
+                    session.user.id,
+                    txDoc,
+                    {
+                        createdFrom: 'web',
+                        status: 'confirmed',
+                        metadata: {
+                            importBatchId: batch._id,
+                            importedAt: now,
+                            importSourceType: IMPORT_SOURCE_TYPES.XLSX_TEMPLATE,
+                        },
+                    }
+                )
             }
 
             await ImportRow.updateOne(

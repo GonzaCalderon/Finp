@@ -267,7 +267,7 @@ export function RecentSpaceAttachmentsCard({
         .slice(0, 4)
 
     return (
-        <SpaceSurface accent="var(--chart-5)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Comprobantes"
                 title="Adjuntos recientes"
@@ -319,7 +319,7 @@ export function SpacePendingConfirmationsCard({
     onReview: (action: Extract<ISpacePendingAction, { kind: 'confirmation' }>) => void
 }) {
     return (
-        <SpaceSurface accent="var(--chart-2)">
+        <SpaceSurface>
             <SpaceSectionHeading
                 eyebrow="Revisión"
                 title="Pendientes dentro del espacio"

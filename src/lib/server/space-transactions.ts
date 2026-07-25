@@ -1,12 +1,7 @@
 import { Types } from 'mongoose'
-import { Account, Transaction } from '@/lib/models'
-import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
-import {
-    getInitialBalancesByCurrency,
-    supportsCurrency,
-} from '@/lib/utils/accounts'
+import { createTransactionForUser } from '@/lib/server/transactions'
 import type { Currency } from '@/lib/constants'
-import type { IAccount, ISpaceEntry, ITransaction } from '@/types'
+import type { ISpaceEntry, ITransaction } from '@/types'
 
 type CreateSpaceTransactionOptions = {
     entry: ISpaceEntry
@@ -44,34 +39,10 @@ export async function createTransactionFromSpaceEntry({
         throw new Error('La cuenta seleccionada no es válida.')
     }
 
-    const account = await Account.findOne({
-        _id: accountId,
-        userId,
-    }).lean<IAccount | null>()
-
-    if (!account) {
-        throw new Error('La cuenta seleccionada no existe o no pertenece al usuario.')
-    }
-
     const entryCurrency = entry.currency as Currency
-    if (!supportsCurrency(account, entryCurrency)) {
-        throw new Error(`La cuenta "${account.name}" no opera en ${entry.currency}.`)
-    }
-
     const transactionAmount = amountOverride ?? entry.amount
     const transactionType = transactionTypeOverride ?? mapEntryTypeToTransactionType(entry.type)
     const transactionDate = dateOverride ?? entry.date
-
-    if (transactionType !== 'income' && account.allowNegativeBalance === false) {
-        const balances = await calculateAccountBalancesByCurrency(account._id, account.userId, {
-            initialBalances: getInitialBalancesByCurrency(account),
-        })
-        const balance = balances[entryCurrency]
-
-        if (balance - transactionAmount < 0) {
-            throw new Error(`Saldo insuficiente en "${account.name}".`)
-        }
-    }
 
     // Operational amount: only set when the reporting amount differs from the account impact.
     // This happens when the payer advances the full cost but their personal share is smaller.
@@ -80,29 +51,29 @@ export async function createTransactionFromSpaceEntry({
             ? operationalAmountOverride
             : undefined
 
-    const payload: Partial<ITransaction> = {
-        userId: account.userId,
+    const payload: Record<string, unknown> = {
         type: transactionType,
         amount: transactionAmount,
         currency: entryCurrency,
         date: transactionDate,
         description: description?.trim() || entry.title,
-        categoryId: categoryId
-            ? new Types.ObjectId(categoryId)
-            : undefined,
-        status: 'confirmed',
-        createdFrom: 'web',
-        spaceId: entry.spaceId,
-        spaceEntryId: entry._id,
-        spaceNameSnapshot,
-        operationalAmount: resolvedOperationalAmount,
+        categoryId,
+        spaceId: entry.spaceId.toString(),
+        spaceEntryId: entry._id.toString(),
     }
 
     if (transactionType === 'income') {
-        payload.destinationAccountId = account._id
+        payload.destinationAccountId = accountId
     } else {
-        payload.sourceAccountId = account._id
+        payload.sourceAccountId = accountId
     }
 
-    return Transaction.create(payload)
+    return createTransactionForUser(userId, payload, {
+        createdFrom: 'web',
+        status: 'confirmed',
+        metadata: {
+            spaceNameSnapshot,
+            operationalAmount: resolvedOperationalAmount,
+        },
+    })
 }

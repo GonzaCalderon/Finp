@@ -65,16 +65,15 @@ import type {
 import { apiJson } from '@/lib/client/auth-client'
 import { DURATION, easeSmooth, easeSoft } from '@/lib/utils/animations'
 import {
-    getDescriptionAlias,
     getRecentCategoryIds,
     getStoredAccountId,
     getStoredExpensePaymentMethod,
     getStoredTransactionType,
-    persistDescriptionAlias,
     persistTransactionDialogPrefs,
     type DialogAccountContext,
     type PaymentMethod,
 } from '@/components/shared/transaction-dialog-prefs'
+import { TRANSACTION_FORM_TYPE_LABELS } from '@/components/shared/transaction-dialog/constants'
 
 interface TransactionDialogProps {
     open: boolean
@@ -89,6 +88,7 @@ interface TransactionDialogProps {
     rules?: ITransactionRule[]
     defaultAccountId?: string
     monthStartDay?: number
+    initialData?: Partial<TransactionFormInput>
 }
 
 type TransactionStepId = 'type' | 'main' | 'details' | 'classification' | 'review'
@@ -106,17 +106,6 @@ type CardPaymentDraft = {
     amount: number
     additionalEnabled: boolean
     secondaryAmount: number
-}
-
-const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
-    income: 'Ingreso',
-    expense: 'Gasto',
-    credit_card_expense: 'Gasto con TC',
-    transfer: 'Transferencia',
-    exchange: 'Cambio',
-    credit_card_payment: 'Pago de tarjeta',
-    debt_payment: 'Pago de tarjeta',
-    adjustment: 'Ajuste',
 }
 
 const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string; icon: ReactNode }> = [
@@ -299,6 +288,7 @@ export function TransactionDialog({
     rules = [],
     defaultAccountId,
     monthStartDay = 1,
+    initialData,
 }: TransactionDialogProps) {
     const {
         control,
@@ -639,7 +629,6 @@ export function TransactionDialog({
         [categoryStorageType, open]
     )
 
-    const normalizedCategoryQuery = categoryQuery.trim().toLowerCase()
     const rankedCategoryIds = useMemo(
         () =>
             orderCategoryIds({
@@ -659,26 +648,8 @@ export function TransactionDialog({
                 .filter((category): category is ICategory => Boolean(category)),
         [filteredCategories, rankedCategoryIds]
     )
-    const visibleCategories = useMemo(
-        () =>
-            normalizedCategoryQuery
-                ? rankedCategories.filter((category) =>
-                    category.name.toLowerCase().includes(normalizedCategoryQuery)
-                )
-                : rankedCategories,
-        [normalizedCategoryQuery, rankedCategories]
-    )
-    const storedDescriptionAlias = description ? getDescriptionAlias(description) : undefined
     const effectiveTextSuggestion: DescriptionTextSuggestion | undefined =
-        storedDescriptionAlias
-            ? {
-                kind: 'correction',
-                value: storedDescriptionAlias.description,
-                merchant: storedDescriptionAlias.merchant,
-                confidence: 1,
-                reason: 'Alias que corregiste anteriormente.',
-            }
-            : descriptionSignals.textSuggestion
+        descriptionSignals.textSuggestion
     const selectedCategoryRanking = categoryId
         ? categoryHistoryRanking.find((item) => item.categoryId === categoryId)
         : undefined
@@ -884,8 +855,46 @@ export function TransactionDialog({
             return
         }
 
+        if (initialData) {
+            const initialType = initialData.type ?? 'expense'
+            reset({
+                type: initialType,
+                amount: initialData.amount ?? 0,
+                currency: initialData.currency ?? 'ARS',
+                date: initialData.date ?? new Date(),
+                description: initialData.description ?? '',
+                categoryId: initialData.categoryId,
+                sourceAccountId: initialData.sourceAccountId,
+                destinationAccountId: initialData.destinationAccountId,
+                destinationAmount: initialData.destinationAmount,
+                destinationCurrency: initialData.destinationCurrency,
+                exchangeRate: initialData.exchangeRate,
+                notes: initialData.notes ?? '',
+                merchant: initialData.merchant ?? '',
+            })
+            const initialSource = accounts.find(
+                (account) => account._id.toString() === initialData.sourceAccountId
+            )
+            setPaymentMethod(
+                initialSource?.type === 'cash'
+                    ? 'cash'
+                    : initialSource?.type === 'credit_card'
+                        ? 'credit_card'
+                        : 'debit'
+            )
+            setInstallmentCount(1)
+            setFirstClosingMonth('')
+            setShowMoreOptions(Boolean(initialData.notes || initialData.merchant))
+            setAdjustmentSign('+')
+            setCurrentStepIndex(1)
+            return
+        }
+
         const storedType = getStoredTransactionType()
-        const initialType = storedType && TRANSACTION_TYPE_LABELS[storedType] ? storedType : 'expense'
+        const initialType =
+            storedType && TRANSACTION_FORM_TYPE_LABELS[storedType]
+                ? storedType
+                : 'expense'
         const initialPaymentMethod = initialType === 'expense' ? getStoredExpensePaymentMethod() ?? 'debit' : 'debit'
 
         const nextDefaults: Partial<TransactionFormData> = {
@@ -917,6 +926,7 @@ export function TransactionDialog({
         accounts,
         existingInstallmentCount,
         getPreselectedExpenseAccount,
+        initialData,
         open,
         reset,
         resolveStoredAccount,
@@ -1496,12 +1506,6 @@ export function TransactionDialog({
     }, [setValue])
 
     const handleAcceptDescriptionSuggestion = useCallback((suggestion: DescriptionTextSuggestion) => {
-        const previousDescription = description
-        persistDescriptionAlias(
-            previousDescription,
-            suggestion.value,
-            suggestion.merchant
-        )
         setValue('description', suggestion.value, {
             shouldValidate: true,
             shouldDirty: true,
@@ -1512,10 +1516,9 @@ export function TransactionDialog({
                 shouldDirty: true,
             })
         }
-    }, [description, merchant, setValue])
+    }, [merchant, setValue])
 
     const handleApplySimilarTransaction = useCallback((suggestion: SimilarTransactionSuggestion) => {
-        persistDescriptionAlias(description, suggestion.description, suggestion.merchant)
         setValue('description', suggestion.description, {
             shouldValidate: true,
             shouldDirty: true,
@@ -1576,7 +1579,7 @@ export function TransactionDialog({
                 shouldDirty: true,
             })
         }
-    }, [accounts, description, filteredCategories, isExpense, setValue])
+    }, [accounts, filteredCategories, isExpense, setValue])
 
     const handleCreateSuggestedRule = useCallback(async () => {
         if (!onCreateRule || !suggestedRuleProposal || !selectedCategory || !categoryStorageType) return
@@ -2250,9 +2253,7 @@ export function TransactionDialog({
             categoryId={categoryId}
             appliedRuleName={appliedRuleName}
             categoryQuery={categoryQuery}
-            normalizedCategoryQuery={normalizedCategoryQuery}
-            availableCategories={filteredCategories}
-            visibleCategories={visibleCategories}
+            availableCategories={rankedCategories}
             selectedCategory={selectedCategory}
             categoryReason={selectedCategoryRanking?.reason}
             ruleProposal={suggestedRuleProposal}
@@ -2359,7 +2360,9 @@ export function TransactionDialog({
                                         color: headerSurface.color,
                                     }}
                                 >
-                                    {primaryFlowType === 'expense' ? 'Gasto' : TRANSACTION_TYPE_LABELS[type]}
+                                {primaryFlowType === 'expense'
+                                    ? 'Gasto'
+                                    : TRANSACTION_FORM_TYPE_LABELS[type]}
                                 </span>
                                 {showHeaderPaymentMethod && <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/45 px-2.5 py-1 text-muted-foreground">{paymentMethodLabel}</span>}
                                 {showHeaderInstallmentSummary && <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/45 px-2.5 py-1 text-muted-foreground">{installmentPlanSummary}</span>}

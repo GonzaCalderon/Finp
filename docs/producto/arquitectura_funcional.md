@@ -1,6 +1,17 @@
 # Arquitectura funcional de Finp
 
-Ultima actualizacion: 2026-05-16
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: relaciones conceptuales entre dominios
+
+## Índice
+
+1. [Dinero real vs. dinero operacional](#1-dinero-real-vs-dinero-operacional)
+2. [Espacios](#2-espacios)
+3. [Deudas](#3-deudas)
+4. [Notificaciones, pendientes y review](#4-notificaciones-pendientes-y-review)
+5. [Principios estructurales](#5-principios-estructurales)
 
 Este documento explica como piensa Finp el dominio. No describe implementacion puntual; fija conceptos y limites de producto para futuras decisiones.
 

@@ -456,7 +456,7 @@ export function RecentPendingPanel({
     const recentActions = actions.slice(0, compact ? 3 : 4)
 
     return (
-        <SpaceSurface accent="var(--chart-2)" padding={compact ? 'p-4' : 'p-5 md:p-6'}>
+        <SpaceSurface padding={compact ? 'p-4' : 'p-5 md:p-6'}>
             <SpaceSectionHeading
                 eyebrow="Pendientes"
                 title="Pendientes recientes"
@@ -538,7 +538,7 @@ export function SpacesPendingDialog({
                                 <Skeleton className="h-36 rounded-[28px]" />
                             </div>
                         ) : filteredActions.length === 0 ? (
-                            <SpaceSurface accent="var(--chart-2)" padding="p-6">
+                            <SpaceSurface padding="p-6">
                                 <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
                                     <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                                         <Bell className="h-6 w-6 text-muted-foreground" />

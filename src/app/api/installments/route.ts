@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { InstallmentPlan, Transaction } from '@/lib/models'
 import { installmentSchema } from '@/lib/validations'
+import { createTransactionForUser } from '@/lib/server/transactions'
+import { isServiceError } from '@/lib/server/errors'
 
 export async function GET() {
     try {
@@ -94,21 +96,47 @@ export async function POST(request: Request) {
             firstClosingMonth: data.firstClosingMonth,
         })
 
-        const transaction = await Transaction.create({
-            userId: session.user.id,
-            type: 'credit_card_expense',
-            amount: data.totalAmount,
-            currency: data.currency,
-            date: data.purchaseDate,
-            description: data.description,
-            categoryId: data.categoryId,
-            sourceAccountId: data.accountId,
-            notes: data.notes,
-            merchant: data.merchant,
-            installmentPlanId: plan._id,
-            status: 'confirmed',
-            createdFrom: 'web',
-        })
+        let transaction
+        try {
+            transaction = await createTransactionForUser(
+                session.user.id,
+                {
+                    type: 'credit_card_expense',
+                    amount: data.totalAmount,
+                    currency: data.currency,
+                    date: data.purchaseDate,
+                    description: data.description,
+                    categoryId: data.categoryId,
+                    sourceAccountId: data.accountId,
+                    notes: data.notes,
+                    merchant: data.merchant,
+                },
+                {
+                    createdFrom: 'web',
+                    status: 'confirmed',
+                    metadata: { installmentPlanId: plan._id },
+                }
+            )
+        } catch (error) {
+            await InstallmentPlan.deleteOne({ _id: plan._id, userId: session.user.id })
+            throw error
+        }
+
+        const populatedCategory = transaction?.categoryId as
+            | { _id?: { toString(): string } }
+            | { toString(): string }
+            | undefined
+        const resolvedCategoryId =
+            populatedCategory && '_id' in populatedCategory
+                ? populatedCategory._id?.toString()
+                : populatedCategory?.toString()
+
+        if (resolvedCategoryId && resolvedCategoryId !== data.categoryId) {
+            await InstallmentPlan.updateOne(
+                { _id: plan._id, userId: session.user.id },
+                { $set: { categoryId: resolvedCategoryId } }
+            )
+        }
 
         const populatedPlan = await InstallmentPlan.findById(plan._id)
             .populate('accountId', 'name type currency')
@@ -130,6 +158,12 @@ export async function POST(request: Request) {
             transaction: populatedTransaction,
         }, { status: 201 })
     } catch (error) {
+        if (isServiceError(error)) {
+            return NextResponse.json(
+                { error: error.message, code: error.code, details: error.details },
+                { status: error.status }
+            )
+        }
         console.error('Error al crear plan de cuotas:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
     }

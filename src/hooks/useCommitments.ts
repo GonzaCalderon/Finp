@@ -9,6 +9,9 @@ import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 
 export function useCommitments() {
     const [commitments, setCommitments] = useState<IScheduledCommitment[]>([])
+    // El período financiero lo resuelve el servidor con monthStartDay: calcularlo
+    // acá como mes calendario haría que la UI aplique un período que el servidor rechaza.
+    const [currentPeriod, setCurrentPeriod] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -17,8 +20,14 @@ export function useCommitments() {
             if (!options?.silent) {
                 setLoading(true)
             }
-            const data = await apiJson<{ commitments: IScheduledCommitment[] }>('/api/commitments')
+            const data = await apiJson<{
+                commitments: IScheduledCommitment[]
+                currentPeriod?: string
+            }>('/api/commitments')
             setCommitments(data.commitments)
+            if (data.currentPeriod) {
+                setCurrentPeriod(data.currentPeriod)
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar compromisos')
         } finally {
@@ -65,6 +74,7 @@ export function useCommitments() {
 
     return {
         commitments,
+        currentPeriod,
         loading,
         error,
         fetchCommitments,

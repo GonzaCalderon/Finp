@@ -1,6 +1,21 @@
 # Deudas en Finp
 
-Ultima actualizacion: 2026-05-16
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: reglas funcionales de Deudas
+
+## Índice
+
+1. [Definición](#1-que-son-las-deudas)
+2. [Propósito](#2-para-que-existe-un-modulo-propio)
+3. [Tipos](#3-tipos-de-deuda)
+4. [Pagos y cobros](#4-pagos-y-cobros)
+5. [Consolidación](#5-consolidacion-y-estado)
+6. [Relaciones](#6-relacion-con-cuentas)
+7. [Decisiones](#10-decisiones-consolidadas)
+
+Las posibilidades futuras descritas aquí no establecen prioridad. El backlog único es [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 1. Que son las deudas
 

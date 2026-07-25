@@ -1,30 +1,8 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { TransactionRule } from '@/lib/models'
-import { RULE_APPLIES_TO, RULE_FIELDS, RULE_CONDITIONS } from '@/lib/constants'
-
-const ruleSchema = z.object({
-    name: z.string().min(1).max(100),
-    isActive: z.boolean().optional().default(true),
-    priority: z.number().int().min(0).max(9999).optional().default(0),
-    appliesTo: z.enum([
-        RULE_APPLIES_TO.EXPENSE,
-        RULE_APPLIES_TO.INCOME,
-        RULE_APPLIES_TO.ANY,
-    ]),
-    field: z.enum([RULE_FIELDS.DESCRIPTION, RULE_FIELDS.MERCHANT]),
-    condition: z.enum([
-        RULE_CONDITIONS.CONTAINS,
-        RULE_CONDITIONS.EQUALS,
-        RULE_CONDITIONS.STARTS_WITH,
-    ]),
-    value: z.string().min(1).max(200),
-    categoryId: z.string().optional(),
-    setType: z.enum(['expense', 'income']).optional(),
-    normalizeMerchant: z.string().max(200).optional(),
-})
+import { transactionRuleInputSchema } from '@/lib/validations/transaction-rule'
 
 export async function GET() {
     try {
@@ -50,7 +28,7 @@ export async function POST(request: Request) {
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const body = await request.json()
-        const parsed = ruleSchema.safeParse(body)
+        const parsed = transactionRuleInputSchema.safeParse(body)
 
         if (!parsed.success) {
             return NextResponse.json(

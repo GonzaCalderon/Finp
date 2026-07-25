@@ -37,6 +37,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { CategoryDialog } from '@/components/shared/CategoryDialog'
+import { QuickCaptureLearningSection } from '@/components/settings/QuickCaptureLearningSection'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { fadeIn, fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { cn } from '@/lib/utils'
@@ -59,7 +60,7 @@ import type { ICategory } from '@/types'
 
 type DefaultCategoryItem = { name: string; type: string; color: string }
 
-type TabKey = 'cuenta' | 'preferencias' | 'categorias'
+type TabKey = 'cuenta' | 'preferencias' | 'categorias' | 'captura'
 
 // ─── Category sub-components (moved from categories/page.tsx) ─────────────────
 
@@ -1033,7 +1034,7 @@ function SettingsContent() {
 
     useEffect(() => {
         const tab = searchParams.get('tab') as TabKey | null
-        if (tab && ['cuenta', 'preferencias', 'categorias'].includes(tab)) {
+        if (tab && ['cuenta', 'preferencias', 'categorias', 'captura'].includes(tab)) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setActiveTab(tab)
         }
@@ -1042,6 +1043,7 @@ function SettingsContent() {
     const tabs: { key: TabKey; label: string }[] = [
         { key: 'cuenta', label: 'Cuenta' },
         { key: 'preferencias', label: 'Preferencias' },
+        { key: 'captura', label: 'Aprendizaje y atajos' },
         { key: 'categorias', label: 'Categorías' },
     ]
 
@@ -1074,6 +1076,7 @@ function SettingsContent() {
                     {activeTab === 'cuenta' && <AccountSection />}
                     {activeTab === 'preferencias' && <PreferencesSection />}
                     {activeTab === 'categorias' && <CategoriesSection />}
+                    {activeTab === 'captura' && <QuickCaptureLearningSection />}
                 </motion.div>
             </AnimatePresence>
         </motion.div>

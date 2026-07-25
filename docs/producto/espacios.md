@@ -1,6 +1,21 @@
 # Espacios en Finp
 
-Ultima actualizacion: 2026-05-16
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: reglas funcionales de Espacios
+
+## Índice
+
+1. [Qué es un Espacio](#1-que-es-un-espacio)
+2. [Tipos](#2-tipos-de-espacio)
+3. [Capacidades](#3-que-puede-hacer-un-espacio-hoy)
+4. [Categorías, invitaciones y configuración](#4-categorias-internas-del-espacio)
+5. [Deuda y settlements](#5-deuda-directa-y-simplificada)
+6. [Impacto personal](#7-impacto-personal-y-sincronizacion-con-finp)
+7. [Decisiones y evolución](#9-decisiones-ya-tomadas)
+
+Las posibilidades futuras descritas aquí no establecen prioridad. El backlog único es [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 1. Que es un espacio
 
@@ -214,16 +229,15 @@ Ya existe en buena parte:
 
 ### Configuracion personal del espacio
 
-Todavia no esta cerrada como flujo de producto, pero ya tiene base conceptual clara.
+Está disponible en la sección Mi Finp y es privada por participante:
 
-Pendientes principales:
+- elegir al registrar el impacto;
+- usar una categoría automática con el nombre del Espacio;
+- usar una categoría personal fija;
+- mapear categoría del Espacio a categoría personal;
+- migrar la categoría automática cuando cambia la estrategia.
 
-- como impactar automaticamente en Mi Finp;
-- categoria virtual por nombre del espacio;
-- categoria personal fija;
-- mapeo categoria del espacio -> categoria personal;
-- preferencia de registrar manualmente cada gasto;
-- preferencia de seguir o ignorar ciertas deudas del espacio.
+La decisión de impactar un movimiento sigue siendo personal. Automatizaciones adicionales requieren consentimiento y deben conservar la privacidad.
 
 ## 9. Decisiones ya tomadas
 
@@ -235,13 +249,14 @@ Pendientes principales:
 - los adjuntos son privados y autenticados;
 - la retencion de adjuntos se informa, pero la limpieza automatica todavia no esta cerrada.
 
-## 10. Pendientes futuros ya identificados
+## 10. Evolución
 
-- invitaciones por link;
-- configuracion personal del espacio;
-- categorias virtuales y mapeo personal;
-- cuotas en espacios;
-- realtime;
-- slugs amigables;
-- sincronizacion automatica avanzada con transacciones personales;
-- migracion completa del legacy de `linkedTransactionId`.
+Las extensiones consideradas para Espacios —cuotas, compromisos, realtime, slugs, reintegros, sincronización avanzada y retiro de legacy— se describen y priorizan únicamente en [`roadmap_finp.md`](roadmap_finp.md).
+
+Toda evolución debe preservar:
+
+- un único movimiento compartido como origen;
+- impacto personal privado por usuario;
+- separación entre total, parte propia y adelanto;
+- idempotencia;
+- permisos y trazabilidad.

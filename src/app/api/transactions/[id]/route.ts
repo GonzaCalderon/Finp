@@ -10,6 +10,10 @@ import { getCommonSupportedCurrencies, getInitialBalancesByCurrency, supportsCur
 import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 import { getBalanceBeforeReplacingTransaction } from '@/lib/utils/transaction-account-impact'
+import { recordTransactionLearningEvent } from '@/lib/server/quick-capture-learning'
+import { unlinkTransactionDependents } from '@/lib/server/transaction-teardown'
+import { resolveRuleTraceForEdit } from '@/lib/server/transactions'
+import { syncApplicationSnapshotFromTransaction } from '@/lib/server/commitments'
 
 export async function GET(
     request: Request,
@@ -213,6 +217,15 @@ export async function PATCH(
 
         const existingTransaction = oldTransaction
 
+        // La traza de regla se recalcula en cada edición: si no, el pill de
+        // procedencia sigue mostrando la regla del alta aunque ya no coincida.
+        const ruleTrace = await resolveRuleTraceForEdit(session.user.id, {
+            type: data.type,
+            description,
+            merchant: data.merchant,
+            categoryId: data.categoryId,
+        })
+
         const transaction = await Transaction.findOneAndUpdate(
             {
                 _id: id,
@@ -238,16 +251,36 @@ export async function PATCH(
                     paymentGroupId: data.paymentGroupId ?? existingTransaction?.paymentGroupId,
                     notes: data.notes,
                     merchant: data.merchant,
+                    ...(ruleTrace.matched
+                        ? {
+                            appliedRuleId: ruleTrace.appliedRuleId,
+                            appliedRuleNameSnapshot: ruleTrace.appliedRuleNameSnapshot,
+                            appliedRuleMatchSnapshot: ruleTrace.appliedRuleMatchSnapshot,
+                            appliedRuleActions:
+                                Object.keys(ruleTrace.appliedRuleActions).length > 0
+                                    ? ruleTrace.appliedRuleActions
+                                    : undefined,
+                        }
+                        : {}),
                 },
-                ...(data.type !== 'exchange'
-                    ? {
-                        $unset: {
+                $unset: {
+                    ...(data.type !== 'exchange'
+                        ? {
                             destinationAmount: 1,
                             destinationCurrency: 1,
                             exchangeRate: 1,
-                        },
-                    }
-                    : {}),
+                        }
+                        : {}),
+                    // Ya ninguna regla coincide: la traza se borra en vez de mentir.
+                    ...(ruleTrace.matched
+                        ? {}
+                        : {
+                            appliedRuleId: 1,
+                            appliedRuleNameSnapshot: 1,
+                            appliedRuleMatchSnapshot: 1,
+                            appliedRuleActions: 1,
+                        }),
+                },
             },
             {
                 new: true,
@@ -291,7 +324,44 @@ export async function PATCH(
             }
         }
 
-        return NextResponse.json({ transaction })
+        // Si la transacción nació de un compromiso, la foto de la aplicación se
+        // actualiza para reflejar lo que realmente pasó en ese período. La
+        // plantilla NO se toca: cambiar los próximos períodos es una acción
+        // explícita y aparte.
+        let commitmentTemplateUpdateAvailable = false
+        if (transaction.commitmentApplicationId) {
+            try {
+                commitmentTemplateUpdateAvailable = await syncApplicationSnapshotFromTransaction(
+                    session.user.id,
+                    transaction._id.toString(),
+                    {
+                        amount: data.amount,
+                        currency: data.currency,
+                        description,
+                        categoryId: data.categoryId,
+                        accountId: data.sourceAccountId,
+                    }
+                )
+            } catch (snapshotError) {
+                console.error('No se pudo sincronizar la aplicación del compromiso:', snapshotError)
+            }
+        }
+
+        try {
+            await recordTransactionLearningEvent({
+                userId: session.user.id,
+                type: 'transaction_edited',
+                transaction,
+                eventId: `transaction_edited:${transaction._id.toString()}:${transaction.updatedAt?.getTime() ?? Date.now()}`,
+            })
+        } catch (learningError) {
+            console.error(
+                'No se pudo registrar el aprendizaje de la edición:',
+                learningError
+            )
+        }
+
+        return NextResponse.json({ transaction, commitmentTemplateUpdateAvailable })
     } catch (error) {
         console.error('Error al actualizar transacción:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -313,10 +383,21 @@ export async function DELETE(
 
         await connectDB()
 
-        const existing = await Transaction.findOne(
-            { _id: id, userId: session.user.id },
-            { type: 1 }
-        ).lean<{ type: string } | null>()
+        const existing = await Transaction.findOne({
+            _id: id,
+            userId: session.user.id,
+        }).lean<{
+            _id: { toString(): string }
+            type: string
+            currency?: string
+            description?: string
+            merchant?: string
+            sourceAccountId?: unknown
+            destinationAccountId?: unknown
+            categoryId?: unknown
+            paymentGroupId?: string | null
+            updatedAt?: Date
+        } | null>()
 
         if (!existing) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
@@ -332,6 +413,11 @@ export async function DELETE(
             )
         }
 
+        // Se desvincula antes de borrar: si el borrado falla, no queda una
+        // aplicación revertida apuntando a una transacción que sigue viva... y si
+        // se hiciera después, un fallo dejaría los huérfanos que había hasta ahora.
+        const teardown = await unlinkTransactionDependents(session.user.id, existing)
+
         const transaction = await Transaction.findOneAndDelete({
             _id: id,
             userId: session.user.id,
@@ -341,7 +427,34 @@ export async function DELETE(
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
         }
 
-        return NextResponse.json({ message: 'Transacción eliminada correctamente' })
+        try {
+            const isUndo =
+                new URL(request.url).searchParams.get('reason') ===
+                'quick_capture_undo'
+            await recordTransactionLearningEvent({
+                userId: session.user.id,
+                type: isUndo ? 'transaction_undone' : 'transaction_deleted',
+                transaction,
+                eventId: `${isUndo ? 'transaction_undone' : 'transaction_deleted'}:${transaction._id.toString()}`,
+            })
+        } catch (learningError) {
+            console.error(
+                'No se pudo registrar el aprendizaje del borrado:',
+                learningError
+            )
+        }
+
+        // Se devuelve qué se revirtió para que el toast pueda explicarlo en vez
+        // de que el usuario descubra el efecto colateral por su cuenta.
+        return NextResponse.json({
+            message: 'Transacción eliminada correctamente',
+            reverted: {
+                commitment: teardown.revertedCommitment ?? null,
+                personalImpact: teardown.unlinkedPersonalImpact,
+                notifications: teardown.resolvedNotifications,
+                orphanPaymentSiblingId: teardown.orphanPaymentSiblingId ?? null,
+            },
+        })
     } catch (error) {
         console.error('Error al eliminar transacción:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

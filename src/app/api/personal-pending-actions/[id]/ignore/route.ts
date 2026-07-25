@@ -94,9 +94,8 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
             )
         }
 
-        // Reabrir notificación — usar dedupeKey estable del pendiente restaurado
+        // Reabrir la notificación con la clave estable construida por el helper.
         if (updated.actionType && updated.entryId && updated.spaceId) {
-            const dedupeKey = `pending-action:${session.user.id}:${updated.entryId.toString()}:${updated.actionType}`
             safeUpsertNotificationByDedupeKey(
                 buildNotificationFromPendingAction(
                     {

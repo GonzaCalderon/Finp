@@ -103,11 +103,30 @@ export function installClientFetchAuthInterceptor() {
 
 export class ApiError extends Error {
     status: number
+    code?: string
+    details?: Array<{
+        path?: Array<string | number>
+        message?: string
+        code?: string
+    }>
 
-    constructor(message: string, status: number) {
+    constructor(
+        message: string,
+        status: number,
+        options?: {
+            code?: string
+            details?: Array<{
+                path?: Array<string | number>
+                message?: string
+                code?: string
+            }>
+        }
+    ) {
         super(message)
         this.name = 'ApiError'
         this.status = status
+        this.code = options?.code
+        this.details = options?.details
     }
 }
 
@@ -117,7 +136,16 @@ export async function apiJson<T>(
 ): Promise<T> {
     const response = await fetch(input, init)
     const text = await response.text()
-    let data = {} as T & { error?: string; message?: string }
+    let data = {} as T & {
+        error?: string
+        message?: string
+        code?: string
+        details?: Array<{
+            path?: Array<string | number>
+            message?: string
+            code?: string
+        }>
+    }
 
     if (text) {
         try {
@@ -134,7 +162,17 @@ export async function apiJson<T>(
                 : data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
                     ? data.message
                 : 'Error al procesar la solicitud',
-            response.status
+            response.status,
+            {
+                code:
+                    data && typeof data === 'object' && typeof data.code === 'string'
+                        ? data.code
+                        : undefined,
+                details:
+                    data && typeof data === 'object' && Array.isArray(data.details)
+                        ? data.details
+                        : undefined,
+            }
         )
     }
 

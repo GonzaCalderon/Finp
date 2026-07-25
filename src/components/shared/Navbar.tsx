@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
+import { QuickCaptureDialog } from '@/components/shared/QuickCaptureDialog'
 import { TransactionDialog } from '@/components/shared/TransactionDialog'
 import { NavInsight } from '@/components/shared/NavInsight'
 import { Button } from '@/components/ui/button'
@@ -38,7 +39,11 @@ import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { useNotifications } from '@/contexts/NotificationsContext'
 import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { usePreferences } from '@/hooks/usePreferences'
-import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
+import type {
+    TransactionFormData,
+    TransactionFormInput,
+    InstallmentFormData,
+} from '@/lib/validations'
 import { useInstallments } from '@/hooks/useInstallments'
 import { apiJson } from '@/lib/client/auth-client'
 import {
@@ -164,11 +169,6 @@ function isBottomRouteActive(pathname: string, href: string) {
     return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-function compactCount(count: number) {
-    if (count > 99) return '99+'
-    return String(count)
-}
-
 function getPeriodInfo(date = new Date()) {
     const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
     const progress = Math.min(1, Math.max(0, date.getDate() / daysInMonth))
@@ -215,6 +215,7 @@ function hrefAction(params: Omit<FabAction, 'onPress'> & { currentPathname: stri
 export function getMobileFabConfig(params: {
     pathname: string
     openTransactionDialog: () => void
+    openQuickCapture?: () => void
     openCreditCardExpense?: () => void
     openAccountDialog?: () => void
     openSpaceDialog?: () => void
@@ -231,6 +232,7 @@ export function getMobileFabConfig(params: {
     const {
         pathname,
         openTransactionDialog,
+        openQuickCapture,
         openAccountDialog,
         openSpaceDialog,
         openDebtDialog,
@@ -239,10 +241,18 @@ export function getMobileFabConfig(params: {
         spaceAction,
     } = params
 
+    const quickCapture: FabAction = {
+        id: 'quick-capture',
+        label: 'Captura rápida',
+        description: 'Escribí el movimiento',
+        icon: Wand2,
+        tone: 'primary',
+        onPress: openQuickCapture ?? openTransactionDialog,
+    }
     const newTransaction: FabAction = {
         id: 'new-transaction',
-        label: 'Nueva transaccion',
-        description: 'Gasto o ingreso rapido',
+        label: 'Nueva transacción',
+        description: 'Formulario completo',
         icon: ArrowLeftRight,
         tone: 'primary',
         onPress: openTransactionDialog,
@@ -330,6 +340,7 @@ export function getMobileFabConfig(params: {
 
     if (pathname === '/spaces') {
         return buildConfig('Acciones de espacios', [
+            quickCapture,
             spaceAction
                 ? {
                     id: 'space-action',
@@ -347,21 +358,22 @@ export function getMobileFabConfig(params: {
 
     if (pathname === '/transactions/credit-card') {
         return buildConfig('Acciones de tarjeta', [
+            quickCapture,
             newTransaction,
             importExcel,
         ].filter(Boolean) as FabAction[])
     }
 
     if (pathname === '/transactions/import' || pathname.startsWith('/transactions/import/')) {
-        return buildConfig('Nueva transaccion', [newTransaction])
+        return buildConfig('Nueva transacción', [quickCapture, newTransaction])
     }
 
     if (pathname === '/transactions') {
-        return buildConfig('Acciones de movimientos', [newTransaction, importExcel])
+        return buildConfig('Acciones de movimientos', [quickCapture, newTransaction, importExcel])
     }
 
     if (pathname === '/accounts') {
-        return buildConfig('Acciones de cuentas', [accountAction, newTransaction].filter(Boolean) as FabAction[])
+        return buildConfig('Acciones de cuentas', [quickCapture, accountAction, newTransaction].filter(Boolean) as FabAction[])
     }
 
     if (pathname === '/debts') {
@@ -383,7 +395,7 @@ export function getMobileFabConfig(params: {
                 href: '/debts?create=1',
                 currentPathname: pathname,
             })
-        return buildConfig('Acciones de deudas', [debtAction, newTransaction].filter(Boolean) as FabAction[])
+        return buildConfig('Acciones de deudas', [quickCapture, debtAction, newTransaction].filter(Boolean) as FabAction[])
     }
 
     if (pathname === '/commitments') {
@@ -405,7 +417,7 @@ export function getMobileFabConfig(params: {
                 href: '/commitments?create=1',
                 currentPathname: pathname,
             })
-        return buildConfig('Acciones de compromisos', [commitmentAction, newTransaction].filter(Boolean) as FabAction[])
+        return buildConfig('Acciones de compromisos', [quickCapture, commitmentAction, newTransaction].filter(Boolean) as FabAction[])
     }
 
     if (pathname === '/rules') {
@@ -427,11 +439,12 @@ export function getMobileFabConfig(params: {
                 href: '/rules?create=1',
                 currentPathname: pathname,
             })
-        return buildConfig('Acciones de reglas', [ruleAction].filter(Boolean) as FabAction[])
+        return buildConfig('Acciones de reglas', [quickCapture, ruleAction].filter(Boolean) as FabAction[])
     }
 
     if (pathname === '/dashboard') {
         return buildConfig('Acciones rapidas', [
+            quickCapture,
             newTransaction,
             importExcel,
             accountAction,
@@ -440,6 +453,7 @@ export function getMobileFabConfig(params: {
     }
 
     return buildConfig('Acciones rapidas', [
+        quickCapture,
         newTransaction,
         importExcel,
         accountAction,
@@ -677,6 +691,10 @@ function SidebarContent({ insight, insightLoading }: { insight: NavInsightType; 
 
 function useTransactionLauncher() {
     const [txDialogOpen, setTxDialogOpen] = useState(false)
+    const [quickCaptureOpen, setQuickCaptureOpen] = useState(false)
+    const [initialTransactionData, setInitialTransactionData] = useState<
+        Partial<TransactionFormInput> | undefined
+    >()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
     const { rules, createRule } = useTransactionRules()
@@ -694,6 +712,7 @@ function useTransactionLauncher() {
             invalidateData(TRANSACTION_INVALIDATION_TAGS)
             success('Transaccion creada correctamente')
             setTxDialogOpen(false)
+            setInitialTransactionData(undefined)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al crear transaccion')
         }
@@ -712,6 +731,7 @@ function useTransactionLauncher() {
             invalidateData(TRANSACTION_INVALIDATION_TAGS)
             success(items.length === 2 ? 'Pago dual registrado correctamente' : 'Transacciones creadas correctamente')
             setTxDialogOpen(false)
+            setInitialTransactionData(undefined)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al crear transacciones')
         }
@@ -722,6 +742,7 @@ function useTransactionLauncher() {
             await createPlan(data)
             success('Compra en cuotas registrada correctamente')
             setTxDialogOpen(false)
+            setInitialTransactionData(undefined)
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al registrar compra en cuotas')
         }
@@ -730,6 +751,26 @@ function useTransactionLauncher() {
     return {
         txDialogOpen,
         setTxDialogOpen,
+        quickCaptureOpen,
+        setQuickCaptureOpen,
+        initialTransactionData,
+        openFullTransaction: () => {
+            setInitialTransactionData(undefined)
+            setTxDialogOpen(true)
+        },
+        completeQuickCaptureDetails: (draft: Partial<TransactionFormInput>) => {
+            setInitialTransactionData(draft)
+            setQuickCaptureOpen(false)
+            setTxDialogOpen(true)
+        },
+        handleAppliedCommitment: (description: string, period: string) => {
+            const label = new Date(
+                Number(period.split('-')[0]),
+                Number(period.split('-')[1]) - 1,
+                1
+            ).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+            success(`Aplicaste “${description}” de ${label}.`)
+        },
         accounts,
         categories,
         rules,
@@ -749,6 +790,12 @@ function DesktopFloatingTransactionButton() {
     const {
         txDialogOpen,
         setTxDialogOpen,
+        quickCaptureOpen,
+        setQuickCaptureOpen,
+        initialTransactionData,
+        openFullTransaction,
+        completeQuickCaptureDetails,
+        handleAppliedCommitment,
         accounts,
         categories,
         rules,
@@ -761,7 +808,8 @@ function DesktopFloatingTransactionButton() {
 
     const fabConfig = getMobileFabConfig({
         pathname,
-        openTransactionDialog: () => setTxDialogOpen(true),
+        openTransactionDialog: openFullTransaction,
+        openQuickCapture: () => setQuickCaptureOpen(true),
         spaceAction,
         navigate: (href) => router.push(href),
     })
@@ -771,9 +819,37 @@ function DesktopFloatingTransactionButton() {
     }
 
     useEffect(() => {
+        // The menu must close when navigation removes the contextual FAB.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (fabConfig.mode === 'hidden' && open) setOpenState(false)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fabConfig.mode, open])
+
+    useEffect(() => {
+        function handleQuickCaptureShortcut(event: globalThis.KeyboardEvent) {
+            if (
+                event.key.toLowerCase() !== 'q' ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.altKey ||
+                !window.matchMedia('(min-width: 768px)').matches
+            ) {
+                return
+            }
+            const target = event.target as HTMLElement | null
+            if (
+                target?.isContentEditable ||
+                target?.tagName === 'INPUT' ||
+                target?.tagName === 'TEXTAREA' ||
+                target?.tagName === 'SELECT'
+            ) {
+                return
+            }
+            event.preventDefault()
+            setQuickCaptureOpen(true)
+        }
+        window.addEventListener('keydown', handleQuickCaptureShortcut)
+        return () => window.removeEventListener('keydown', handleQuickCaptureShortcut)
+    }, [setQuickCaptureOpen])
 
     if (fabConfig.mode === 'hidden') return null
 
@@ -885,6 +961,17 @@ function DesktopFloatingTransactionButton() {
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}
+                initialData={initialTransactionData}
+            />
+            <QuickCaptureDialog
+                open={quickCaptureOpen}
+                onOpenChange={setQuickCaptureOpen}
+                accounts={accounts}
+                categories={categories}
+                rules={rules}
+                defaultAccountId={preferences.defaultAccountId}
+                onCompleteDetails={completeQuickCaptureDetails}
+                onAppliedCommitment={handleAppliedCommitment}
             />
         </>
     )
@@ -1276,6 +1363,12 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
     const {
         txDialogOpen,
         setTxDialogOpen,
+        quickCaptureOpen,
+        setQuickCaptureOpen,
+        initialTransactionData,
+        openFullTransaction,
+        completeQuickCaptureDetails,
+        handleAppliedCommitment,
         accounts,
         categories,
         rules,
@@ -1288,7 +1381,8 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
 
     const fabConfig = getMobileFabConfig({
         pathname,
-        openTransactionDialog: () => setTxDialogOpen(true),
+        openTransactionDialog: openFullTransaction,
+        openQuickCapture: () => setQuickCaptureOpen(true),
         spaceAction,
         navigate: (href) => router.push(href),
     })
@@ -1442,6 +1536,17 @@ function MobileBottomBar({ insight, insightLoading }: { insight: NavInsightType;
                 rules={rules}
                 defaultAccountId={preferences.defaultAccountId}
                 monthStartDay={preferences.monthStartDay}
+                initialData={initialTransactionData}
+            />
+            <QuickCaptureDialog
+                open={quickCaptureOpen}
+                onOpenChange={setQuickCaptureOpen}
+                accounts={accounts}
+                categories={categories}
+                rules={rules}
+                defaultAccountId={preferences.defaultAccountId}
+                onCompleteDetails={completeQuickCaptureDetails}
+                onAppliedCommitment={handleAppliedCommitment}
             />
         </>
     )

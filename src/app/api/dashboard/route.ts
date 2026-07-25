@@ -22,7 +22,10 @@ import {
     startsOnOrAfterOperationalStart,
 } from '@/lib/utils/operational-start'
 import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
-import { DEBT_STATUSES } from '@/lib/constants'
+import { COMMITMENT_APPLICATION_STATUSES, DEBT_STATUSES } from '@/lib/constants'
+import { countOccurrencesInPeriod } from '@/lib/server/projection'
+import { resolveCommitmentAmountForPeriod } from '@/lib/server/commitment-amounts'
+import { resolveCommitmentOccurrenceForPeriod } from '@/lib/utils/commitment-dates'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
@@ -597,23 +600,89 @@ export async function GET(request: Request) {
 
         // Compromisos pendientes del mes
         const activeCommitments = await ScheduledCommitment.find({ userId, isActive: true })
-        const appliedThisMonth = await CommitmentApplication.find({ userId, period: month })
+        // Una aplicación revertida no cuenta: el período volvió a estar pendiente.
+        const appliedThisMonth = await CommitmentApplication.find({
+            userId,
+            period: month,
+            status: COMMITMENT_APPLICATION_STATUSES.REGISTERED,
+        })
         const appliedIds = new Set(appliedThisMonth.map((a) => a.commitmentId.toString()))
+        const appliedByCommitment = new Map(
+            appliedThisMonth.map((application) => [
+                application.commitmentId.toString(),
+                application,
+            ])
+        )
+        const commitmentAmountHistory = await CommitmentApplication.find({
+            userId,
+            status: COMMITMENT_APPLICATION_STATUSES.REGISTERED,
+        })
+            .sort({ period: -1 })
+            .select({ commitmentId: 1, 'snapshot.amount': 1 })
+            .lean<
+                Array<{
+                    commitmentId: { toString(): string }
+                    snapshot?: { amount?: number }
+                }>
+            >()
+        const recentAmountsByCommitment = new Map<string, number[]>()
+        for (const application of commitmentAmountHistory) {
+            const amount = application.snapshot?.amount
+            if (typeof amount !== 'number') continue
+            const key = application.commitmentId.toString()
+            const recent = recentAmountsByCommitment.get(key) ?? []
+            if (recent.length < 6) recent.push(amount)
+            recentAmountsByCommitment.set(key, recent)
+        }
+        const resolvedAmounts = new Map(
+            activeCommitments.map((commitment) => {
+                const key = commitment._id.toString()
+                return [
+                    key,
+                    resolveCommitmentAmountForPeriod(commitment, month, {
+                        monthStartDay,
+                        dueDate:
+                            resolveCommitmentOccurrenceForPeriod(
+                                commitment,
+                                month,
+                                monthStartDay
+                            ) ?? undefined,
+                        registeredApplication: appliedByCommitment.get(key) ?? null,
+                        recentAmounts: recentAmountsByCommitment.get(key) ?? [],
+                    }),
+                ] as const
+            })
+        )
+        // Se respeta la vigencia: un compromiso que ya terminó no puede figurar
+        // como pendiente del período, porque induce a aplicarlo de nuevo.
         const pendingCommitments = (currentPeriodHasCoverage ? activeCommitments : [])
-            .filter((c) => c.recurrence === 'monthly' && !appliedIds.has(c._id.toString()))
+            .filter(
+                (c) =>
+                    c.recurrence === 'monthly' &&
+                    !appliedIds.has(c._id.toString()) &&
+                    countOccurrencesInPeriod(c, startOfMonth, endOfMonth) > 0
+            )
             .map((c) => ({
                 _id: c._id,
                 description: c.description,
-                amount: c.amount,
+                amount: resolvedAmounts.get(c._id.toString())?.amount ?? c.amount,
                 currency: c.currency,
                 dayOfMonth: c.dayOfMonth,
             }))
 
         // Total de compromisos mensuales fijos (aplicados o pendientes)
         const totalMonthlyCommitments = activeCommitments
-            .filter((c) => c.recurrence === 'monthly')
+            .filter(
+                (c) =>
+                    c.recurrence === 'monthly' &&
+                    countOccurrencesInPeriod(c, startOfMonth, endOfMonth) > 0
+            )
             .reduce((totals, c) => {
-                addCurrencyAmount(totals, c.currency, c.amount)
+                addCurrencyAmount(
+                    totals,
+                    c.currency,
+                    resolvedAmounts.get(c._id.toString())?.amount ?? c.amount
+                )
                 return totals
             }, emptyCurrencyTotals())
 

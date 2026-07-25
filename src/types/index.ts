@@ -3,6 +3,13 @@ import type {
     AccountType,
     ApplyMode,
     CategoryType,
+    CommitmentAmountPolicy,
+    CommitmentAmountSource,
+    CommitmentApplicationOrigin,
+    CommitmentApplicationStatus,
+    CommitmentEstimationMode,
+    CommitmentLifecycleStatus,
+    CommitmentReminderState,
     CreatedFrom,
     Currency,
     ImportBatchStatus,
@@ -15,6 +22,31 @@ import type {
     TransactionStatus,
     TransactionType,
 } from '@/lib/constants'
+
+export type {
+    QuickCaptureAliasDto,
+    QuickCaptureAliasTargetType,
+    QuickCaptureAppliedPersonalization,
+    QuickCaptureContextResponse,
+    QuickCaptureDraft,
+    QuickCaptureCommitmentDto,
+    QuickCaptureFrequent,
+    QuickCaptureInterpretation,
+    QuickCaptureLearnedPatternDto,
+    QuickCaptureLearningContext,
+    QuickCaptureLearningEventInput,
+    QuickCaptureLearningEventType,
+    QuickCaptureLearningMethod,
+    QuickCaptureLearningMetrics,
+    QuickCaptureLearningProfileDto,
+    QuickCapturePatternTriggerKind,
+    QuickCaptureSuggestion,
+    QuickCaptureSuggestionSource,
+    QuickCaptureToken,
+    TransactionAccountImpact,
+    TransactionPreviewIssue,
+    TransactionPreviewResponse,
+} from './quick-capture'
 
 export interface UserPreferences {
     defaultView: 'dashboard' | 'transactions' | 'accounts' | 'projection'
@@ -109,6 +141,18 @@ export interface ITransaction {
     createdFrom: CreatedFrom
     appliedRuleId?: Types.ObjectId
     appliedRuleNameSnapshot?: string
+    appliedRuleMatchSnapshot?: {
+        field: RuleField
+        condition: RuleCondition
+        value: string
+        normalizedFieldValue: string
+        normalizedRuleValue: string
+    }
+    appliedRuleActions?: {
+        categoryId?: Types.ObjectId
+        setType?: 'expense' | 'income'
+        normalizeMerchant?: string
+    }
     importBatchId?: Types.ObjectId
     importedAt?: Date
     importSourceType?: ImportSourceType
@@ -121,6 +165,15 @@ export interface ITransaction {
      * Undefined for most transactions — falls back to `amount`.
      */
     operationalAmount?: number
+    /**
+     * Procedencia de compromiso. Se escribe al aplicar y permite mostrar
+     * `Compromiso: Alquiler · julio 2026` sin resolver la relación inversa.
+     * `commitmentNameSnapshot` sobrevive al borrado del compromiso.
+     */
+    commitmentId?: Types.ObjectId
+    commitmentApplicationId?: Types.ObjectId
+    commitmentPeriod?: string
+    commitmentNameSnapshot?: string
     createdAt: Date
     updatedAt: Date
 }
@@ -199,6 +252,8 @@ export interface ITransactionRule {
     categoryId?: Types.ObjectId
     setType?: 'expense' | 'income'
     normalizeMerchant?: string
+    matchCount?: number
+    lastMatchedAt?: Date
     createdAt: Date
     updatedAt: Date
 }
@@ -220,6 +275,18 @@ export interface IInstallmentPlan {
     updatedAt: Date
 }
 
+/**
+ * Un tramo de la agenda de montos: el importe vigente a partir de una fecha.
+ * Cambiar el monto desde una fecha no reescribe las aplicaciones históricas.
+ */
+export interface ICommitmentAmountEntry {
+    effectiveFrom: Date
+    amount: number
+    source: 'initial' | 'manual'
+    note?: string
+    createdAt: Date
+}
+
 export interface IScheduledCommitment {
     _id: Types.ObjectId
     userId: Types.ObjectId
@@ -237,7 +304,46 @@ export interface IScheduledCommitment {
     updatedAt: Date
     startDate: Date
     endDate?: Date
+    /** Días antes del vencimiento en que Finp empieza a recordarlo. */
+    reminderLeadDays?: number
+    amountPolicy: CommitmentAmountPolicy
+    amountSchedule: ICommitmentAmountEntry[]
+    estimationMode: CommitmentEstimationMode
+    /** `normalizeRuleText(description)`, para el matching de Captura rápida. */
+    normalizedDescription?: string
+    /** Otras denominaciones conocidas, ya normalizadas. */
+    aliases: string[]
+    createdFrom: 'web' | 'quick_capture'
     appliedThisMonth?: boolean
+    /** Resueltos por el servidor para el período actual; no se persisten. */
+    resolvedAmount?: number
+    amountSource?: CommitmentAmountSource
+    amountCertainty?: 'confirmed' | 'calculated' | 'estimated' | 'pending_amount'
+    resolvedAmountEffectiveFrom?: Date
+    resolvedDueDate?: Date
+    nextDueDate?: Date
+    nextReminderDate?: Date
+    occursThisPeriod?: boolean
+    lifecycleStatus?: CommitmentLifecycleStatus
+    reminderState?: CommitmentReminderState
+    reminderDate?: Date
+    currentApplication?: {
+        _id: Types.ObjectId
+        appliedAt: Date
+        snapshot?: ICommitmentApplicationSnapshot
+    }
+}
+
+/** Foto financiera de lo que se registró en un período concreto. */
+export interface ICommitmentApplicationSnapshot {
+    amount: number
+    currency: Currency
+    description: string
+    categoryId?: Types.ObjectId
+    accountId?: Types.ObjectId
+    amountSource: CommitmentAmountSource
+    dueDate?: Date
+    computedAt: Date
 }
 
 export interface ICommitmentApplication {
@@ -248,6 +354,11 @@ export interface ICommitmentApplication {
     transactionId?: Types.ObjectId
     appliedAt: Date
     appliedBy: 'manual' | 'system'
+    status: CommitmentApplicationStatus
+    snapshot?: ICommitmentApplicationSnapshot
+    origin: CommitmentApplicationOrigin
+    revertedAt?: Date
+    revertedReason?: string
 }
 
 export * from './space'

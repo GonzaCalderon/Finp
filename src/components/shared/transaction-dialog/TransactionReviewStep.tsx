@@ -7,22 +7,12 @@ import { DURATION, easeSmooth, easeSoft, staggerContainer, staggerItem } from '@
 import { getExchangeOperationLabel } from '@/lib/utils/exchange'
 import type { TransactionFormInput } from '@/lib/validations'
 import type { IAccount, ICategory } from '@/types'
+import { TRANSACTION_FORM_TYPE_LABELS } from './constants'
 import { StepSection } from './StepSection'
 import { SummaryCard, SummaryLine, subtlePanelStyle } from './shared-ui'
 
 type CardPaymentMode = 'full' | 'partial'
 type CardPaymentSelection = 'ars' | 'usd' | 'ars_usd'
-
-const TRANSACTION_TYPE_LABELS: Record<TransactionFormInput['type'], string> = {
-    income: 'Ingreso',
-    expense: 'Gasto',
-    credit_card_expense: 'Gasto con TC',
-    transfer: 'Transferencia',
-    exchange: 'Cambio',
-    credit_card_payment: 'Pago de tarjeta',
-    debt_payment: 'Pago de tarjeta',
-    adjustment: 'Ajuste',
-}
 
 interface PaymentSummaryData {
     currency: string
@@ -178,7 +168,7 @@ export function TransactionReviewStep({
                                 ? exchangeOperationLabel
                                 : primaryFlowType === 'expense'
                                     ? 'Gasto'
-                                    : TRANSACTION_TYPE_LABELS[type]}
+                    : TRANSACTION_FORM_TYPE_LABELS[type]}
                         </span>
                         {isExpense && <span className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">{paymentMethodLabel}</span>}
                         {usesCardExpensePlanFlow && <span className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">{installmentPlanSummary}</span>}

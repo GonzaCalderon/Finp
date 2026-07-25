@@ -43,6 +43,69 @@ export const APPLY_MODES = {
     AUTO_MONTH_START: 'auto_month_start',
 } as const
 
+export const COMMITMENT_LIFECYCLE_STATUSES = {
+    UPCOMING: 'upcoming',
+    ACTIVE: 'active',
+    ENDING_SOON: 'ending_soon',
+    EXPIRED: 'expired',
+    INACTIVE: 'inactive',
+} as const
+
+export const COMMITMENT_REMINDER_STATES = {
+    UPCOMING: 'upcoming',
+    DUE: 'due',
+    OVERDUE: 'overdue',
+} as const
+
+/**
+ * Política de monto de un compromiso.
+ * - `fixed`: el mismo valor sigue vigente hasta que el usuario lo cambia.
+ * - `variable`: Finp prepara el período pero pide confirmar el importe real.
+ */
+export const COMMITMENT_AMOUNT_POLICIES = {
+    FIXED: 'fixed',
+    VARIABLE: 'variable',
+} as const
+
+/** Cómo estimar un compromiso variable mientras no hay monto confirmado. */
+export const COMMITMENT_ESTIMATION_MODES = {
+    TEMPLATE: 'template',
+    LAST: 'last',
+    AVERAGE: 'average',
+} as const
+
+/** De dónde salió el monto usado en una aplicación concreta. */
+export const COMMITMENT_AMOUNT_SOURCES = {
+    TEMPLATE: 'template',
+    SCHEDULE: 'schedule',
+    MANUAL: 'manual',
+    ESTIMATED: 'estimated',
+} as const
+
+/**
+ * Estados persistidos de una aplicación: la fila sólo existe cuando algo ocurrió.
+ * Los estados previos (`scheduled`, `awaiting_amount`, `ready`) se derivan al leer.
+ */
+export const COMMITMENT_APPLICATION_STATUSES = {
+    REGISTERED: 'registered',
+    SKIPPED: 'skipped',
+    CANCELLED: 'cancelled',
+    REVERTED: 'reverted',
+} as const
+
+/** Estados derivados, que nunca se persisten. */
+export const COMMITMENT_APPLICATION_DERIVED_STATUSES = {
+    SCHEDULED: 'scheduled',
+    AWAITING_AMOUNT: 'awaiting_amount',
+    READY: 'ready',
+} as const
+
+export const COMMITMENT_APPLICATION_ORIGINS = {
+    MANUAL: 'manual',
+    QUICK_CAPTURE: 'quick_capture',
+    SYSTEM: 'system',
+} as const
+
 export const TRANSACTION_STATUS = {
     CONFIRMED: 'confirmed',
     PLANNED: 'planned',
@@ -50,6 +113,7 @@ export const TRANSACTION_STATUS = {
 
 export const CREATED_FROM = {
     WEB: 'web',
+    QUICK_CAPTURE: 'quick_capture',
     TELEGRAM: 'telegram',
     SYSTEM: 'system',
 } as const
@@ -309,6 +373,23 @@ export type Currency = typeof CURRENCIES[keyof typeof CURRENCIES]
 export type SpaceCurrency = string
 export type RecurrenceType = typeof RECURRENCE_TYPES[keyof typeof RECURRENCE_TYPES]
 export type ApplyMode = typeof APPLY_MODES[keyof typeof APPLY_MODES]
+export type CommitmentLifecycleStatus =
+    typeof COMMITMENT_LIFECYCLE_STATUSES[keyof typeof COMMITMENT_LIFECYCLE_STATUSES]
+export type CommitmentReminderState =
+    typeof COMMITMENT_REMINDER_STATES[keyof typeof COMMITMENT_REMINDER_STATES]
+export type CommitmentAmountPolicy = typeof COMMITMENT_AMOUNT_POLICIES[keyof typeof COMMITMENT_AMOUNT_POLICIES]
+export type CommitmentEstimationMode = typeof COMMITMENT_ESTIMATION_MODES[keyof typeof COMMITMENT_ESTIMATION_MODES]
+export type CommitmentAmountSource = typeof COMMITMENT_AMOUNT_SOURCES[keyof typeof COMMITMENT_AMOUNT_SOURCES]
+export type CommitmentApplicationStatus =
+    typeof COMMITMENT_APPLICATION_STATUSES[keyof typeof COMMITMENT_APPLICATION_STATUSES]
+export type CommitmentApplicationDerivedStatus =
+    typeof COMMITMENT_APPLICATION_DERIVED_STATUSES[keyof typeof COMMITMENT_APPLICATION_DERIVED_STATUSES]
+/** Unión completa: lo que la UI muestra, persistido o derivado. */
+export type CommitmentApplicationState =
+    | CommitmentApplicationStatus
+    | CommitmentApplicationDerivedStatus
+export type CommitmentApplicationOrigin =
+    typeof COMMITMENT_APPLICATION_ORIGINS[keyof typeof COMMITMENT_APPLICATION_ORIGINS]
 export type TransactionStatus = typeof TRANSACTION_STATUS[keyof typeof TRANSACTION_STATUS]
 export type CreatedFrom = typeof CREATED_FROM[keyof typeof CREATED_FROM]
 export type RuleAppliesTo = typeof RULE_APPLIES_TO[keyof typeof RULE_APPLIES_TO]

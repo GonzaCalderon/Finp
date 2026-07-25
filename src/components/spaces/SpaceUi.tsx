@@ -255,13 +255,11 @@ export function SpaceCurrencyStack({
 export function SpaceSurface({
     children,
     className,
-    accent: _accent = 'var(--sky)',
     padding = 'p-5 md:p-6',
     style,
 }: {
     children: ReactNode
     className?: string
-    accent?: string
     padding?: string
     style?: CSSProperties
 }) {

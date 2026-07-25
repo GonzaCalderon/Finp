@@ -1,135 +1,390 @@
-# Plan de calidad y estabilizacion - Finp
+# Estrategia de calidad y estabilización de Finp
 
-**Ultima actualizacion:** 2026-05-16
+> Estado: vigente
+> Audiencia: desarrollo, calidad, producto y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: verificación y criterios de calidad
 
-Documento dedicado para ordenar la estabilizacion posterior a una Fase 6 grande. El roadmap principal vive en `docs/producto/roadmap_finp.md`.
+## Índice
 
----
+1. [Objetivo](#1-objetivo)
+2. [Modelo de calidad](#2-modelo-de-calidad)
+3. [Riesgos prioritarios](#3-riesgos-prioritarios)
+4. [Pirámide de pruebas](#4-pirámide-de-pruebas)
+5. [Matriz por tipo de cambio](#5-matriz-por-tipo-de-cambio)
+6. [Dominio financiero](#6-dominio-financiero)
+7. [APIs y seguridad](#7-apis-y-seguridad)
+8. [Mobile-first y experiencia](#8-mobile-first-y-experiencia)
+9. [E2E](#9-e2e)
+10. [Rendimiento](#10-rendimiento)
+11. [Dependencias](#11-dependencias)
+12. [CI y ramas](#12-ci-y-ramas)
+13. [Datos de prueba](#13-datos-de-prueba)
+14. [Criterio de release](#14-criterio-de-release)
+15. [Estado actual](#15-estado-actual)
+16. [Referencias](#16-referencias)
 
-## Objetivo general
+## 1. Objetivo
 
-Garantizar que Finp pueda pasar a preproduccion con confianza despues de cambios grandes en Espacios, Deudas, sincronizacion multiusuario, pendientes accionables, notificaciones e impacto personal.
+La calidad de Finp consiste en preservar:
 
----
+- exactitud funcional;
+- confiabilidad;
+- seguridad;
+- rendimiento;
+- mantenibilidad;
+- compatibilidad;
+- usabilidad y accesibilidad;
+- capacidad de recuperación.
 
-## Riesgos principales
+La cantidad de tests es una señal, no la definición de calidad.
 
-- saldos incorrectos;
-- deudas duplicadas;
-- pendientes interpretados como vinculados;
-- notificaciones stale o mal resueltas;
-- usuarios viendo cuentas/categorias privadas de otros;
-- dashboard usando total pagado en vez de parte propia;
-- transacciones personales modificadas automaticamente por eventos compartidos.
+## 2. Modelo de calidad
 
----
+Finp toma como referencia las características de ISO/IEC 25010 y las adapta:
 
-## Piramide y matriz de testing
+| Característica | Aplicación |
+|---|---|
+| Adecuación funcional | Las operaciones representan correctamente la intención. |
+| Eficiencia | Mobile, bundle, consultas y procesos razonables. |
+| Compatibilidad | Rutas, datos y migraciones evolucionan sin romper usos vigentes. |
+| Usabilidad | Flujos claros, breves, accesibles y recuperables. |
+| Fiabilidad | Operaciones atómicas, idempotentes y tolerantes a reintentos. |
+| Seguridad | Aislamiento, autorización, privacidad y dependencias. |
+| Mantenibilidad | Servicios compartidos, tipos, pruebas y documentación. |
+| Portabilidad/flexibilidad | Web responsive y evolución de plataforma no bloqueada. |
+| Safety | Evitar daño financiero por automatización o fallo parcial. |
 
-Piramide:
+## 3. Riesgos prioritarios
 
-- Unit tests: logica pura, estados, privacidad, montos, dedupe.
-- Integration/API tests: route handlers, auth, ownership y persistencia mockeada o DB de test.
-- Component tests: acciones criticas de UI sin cubrir flujos completos.
-- E2E Playwright: multiusuario, mobile/desktop y navegacion real.
-- QA manual complementario: revision visual y flujos de dinero end-to-end.
+1. Saldo, período o moneda incorrectos.
+2. Escritura parcial de una operación financiera.
+3. Acceso a datos de otro usuario o Espacio.
+4. Duplicación por reintento.
+5. Reescritura histórica.
+6. Estado compartido que expone decisiones privadas.
+7. UI mobile que impide revisar o resolver.
+8. Automatización sin consentimiento.
+9. Migración sobre ambiente equivocado.
+10. Dependencia o proceso con costo no evaluado.
 
-Matriz de flujos criticos:
+La profundidad de pruebas se decide por riesgo, no por tamaño del diff.
 
-| Flujo | Unit | Integration/API | Component | E2E | Manual |
+## 4. Pirámide de pruebas
+
+### Unitarias
+
+Para:
+
+- cálculos;
+- períodos;
+- monedas;
+- normalización;
+- ranking;
+- validaciones;
+- estado derivado;
+- transformaciones.
+
+Deben ser rápidas, deterministas y sin red.
+
+### Integración y servicios
+
+Para:
+
+- coordinación entre modelos;
+- permisos;
+- idempotencia;
+- transacciones de base;
+- cascadas;
+- reglas compartidas;
+- aislamiento por usuario.
+
+### Componentes
+
+Para:
+
+- interacción;
+- validación visible;
+- estados;
+- foco;
+- accesibilidad básica;
+- responsive cuando pueda verificarse sin navegador completo.
+
+### E2E
+
+Para:
+
+- recorridos críticos;
+- autenticación;
+- integración entre módulos;
+- borradores y navegación;
+- errores recuperables;
+- mobile y desktop.
+
+No usar E2E para cada combinación de lógica que puede cubrir una prueba menor.
+
+## 5. Matriz por tipo de cambio
+
+| Cambio | Unit | Integration/API | Componente | E2E | Visual |
 |---|---:|---:|---:|---:|---:|
-| Crear gasto de espacio | Si | Si | Parcial | Si | Si |
-| Impactar en Finp | Si | Si | Parcial | Si | Si |
-| Editar movimiento | Si | Si | No | Si | Si |
-| Anular movimiento | Si | Si | No | Si | Si |
-| Pagar/cobrar deuda | Si | Si | Parcial | Si | Si |
-| Archivar/eliminar notificacion | Si | Si | Si | Si | Si |
-| Dashboard/transacciones/cuentas | Si | Si | Parcial | Si | Si |
-| Mobile/desktop navigation | No | No | Parcial | Si | Si |
+| Utilidad pura | obligatorio | no habitual | no | no | no |
+| Regla financiera | obligatorio | obligatorio | según UI | flujo crítico | sí |
+| Route Handler | bordes | obligatorio | no | según riesgo | no |
+| Componente compartido | lógica | según datos | obligatorio | si es crítico | sí |
+| Flujo entre módulos | obligatorio | obligatorio | obligatorio | obligatorio | sí |
+| Migración | transformación | base de prueba | no | no | revisión de reporte |
+| Diseño/tokens | no | no | según componente | smoke | obligatorio |
+| Dependencia | según uso | según uso | según uso | según riesgo | bundle/seguridad |
 
----
+## 6. Dominio financiero
 
-## Bloques
+Toda función financiera relevante considera:
 
-### 6T.1 - Infra de testing y factories
+- ARS y USD;
+- cuenta mono y multi-moneda;
+- saldo suficiente e insuficiente;
+- período actual e histórico;
+- `monthStartDay`;
+- fecha en límites;
+- monto cero, negativo, grande y decimal;
+- edición;
+- eliminación;
+- duplicado;
+- retry;
+- relación derivada;
+- usuario no autorizado.
 
-**Estado:** en curso.
+Casos especializados:
 
-Incluye helpers de IDs, factories de dominio, mocks de auth, mocks de Mongoose, assertions comunes y documentacion breve para escribir tests nuevos sin duplicar setup.
+- tarjeta y cuotas;
+- pago total/parcial;
+- cambio compra/venta;
+- deuda manual/derivada;
+- parte propia y total de Espacio;
+- compromiso fijo/variable;
+- snapshot histórico.
 
-### 6T.2 - Unit tests criticos
+## 7. APIs y seguridad
 
-**Estado:** en curso.
+Cada API nueva o modificada prueba:
 
-Incluye tests de notificaciones, `SpaceEntryPersonalImpact`, eventos de sync personal, edicion/anulacion de movimientos, Deudas, montos operativos vs reales, `data-sync` y componentes minimos de notificaciones.
+- `401` sin sesión;
+- `403` cuando existe pero no está autorizado;
+- `404` sin revelar recursos ajenos cuando corresponda;
+- validación de body, params y query;
+- propiedad del recurso;
+- rol de Espacio;
+- conflicto e idempotencia;
+- error de dependencia;
+- respuesta sin campos privados.
 
-### 6T.3 - Integration/API tests
+Revisión de seguridad:
 
-**Estado:** siguiente bloque recomendado.
+- inyección;
+- mass assignment;
+- enumeración;
+- autorización horizontal;
+- tokens;
+- archivos;
+- logs;
+- secretos;
+- rate abuse;
+- dependencias.
 
-Cubrir endpoints con auth, ownership, validaciones, status codes, privacidad y persistencia controlada. Prioridad: notificaciones, pending actions, personal impact, debts y entries de espacios.
+OWASP Secure Coding Practices es referencia mínima.
 
-### 6T.4 - E2E Playwright multiusuario/mobile
+## 8. Mobile-first y experiencia
 
-**Estado:** posterior al bloque API.
+Orden:
 
-Cubrir flujos reales de usuario A/B: crear gasto, ver pending, impactar, editar/anular, revisar notificaciones, pagar/cobrar deuda y navegacion mobile/desktop.
+1. Chromium mobile;
+2. comprobación táctil y teclado virtual;
+3. desktop.
 
-### 6RC - Release candidate preproduccion
+Verificar:
 
-**Estado:** posterior.
+- viewport angosto;
+- áreas táctiles;
+- safe areas;
+- scroll;
+- foco;
+- overlays;
+- teclado;
+- texto largo;
+- montos grandes;
+- ARS/USD;
+- light/dark;
+- carga, vacío, error, éxito y recuperación;
+- movimiento reducido;
+- labels y contraste.
 
-Ejecutar suite ampliada, QA manual guiado, revision de datos semilla, smoke test de build y checklist de regresion antes de abrir preproduccion controlada.
+Un flujo no está cerrado si sólo funciona en desktop.
 
-### Realtime
+## 9. E2E
 
-**Estado:** fuera del cierre actual.
+### Entorno
 
-Evaluar realtime para notificaciones, pending actions, actividad de espacios y sincronizacion de vistas multiusuario. No bloquear la estabilizacion actual con realtime.
+- `.env.test.local` no versionado;
+- base exclusiva;
+- usuario de prueba;
+- servidor dedicado en puerto 3001;
+- seed idempotente;
+- ninguna URI de desarrollo o producción.
 
----
+### Suite crítica
 
-## Estrategia de CI
+- autenticación;
+- transacción;
+- Captura rápida;
+- orientación con borrador;
+- aplicación de compromiso;
+- importación;
+- deuda;
+- impacto personal de Espacio;
+- permisos de invitación.
 
-Pull request:
+### CI
 
-```bash
-npm ci
-npm run lint
-npx tsc --noEmit
-npm run test:unit
-npm run build
-```
+Activar por etapas:
 
-Release candidate:
+1. smoke mobile;
+2. smoke desktop;
+3. integración crítica;
+4. suite completa programada si el costo lo requiere.
 
-```bash
-npm run test:coverage
-npm run test:e2e
-```
+Si ejecutar todo en cada PR es costoso, presentar tiempos, costo y alternativas antes de decidir.
 
----
+## 10. Rendimiento
 
-## Testing manual complementario
+Medir:
 
-- crear gasto de espacio con pagador actual y no pagador;
-- impactar gasto en Finp y validar cuenta/categoria privada;
-- editar monto, fecha, pagador y split;
-- anular movimiento con impactos linked y pending;
-- pagar/cobrar deuda manual y de espacio;
-- archivar, restaurar y eliminar notificaciones;
-- revisar Dashboard, Transacciones y Cuentas;
-- navegar en mobile y desktop, incluyendo menus y sheets.
+- bundle por ruta;
+- tiempo de carga;
+- trabajo cliente;
+- queries y agregaciones;
+- memoria;
+- polling;
+- tamaño de payload;
+- almacenamiento;
+- procesos batch.
 
----
+Áreas críticas:
 
-## Que queda fuera por ahora
+- Dashboard;
+- Transacciones;
+- Proyección;
+- gráficos;
+- aprendizaje;
+- notificaciones;
+- futuros schedulers.
 
-- integration tests completos;
-- E2E completos;
-- sincronizacion realtime;
-- objetivo alto de coverage;
-- performance testing;
-- visual regression testing;
-- reversas contables automaticas;
-- migracion legacy masiva.
+Primero establecer línea base. Después definir presupuestos y alertas.
+
+## 11. Dependencias
+
+Antes de integrar:
+
+- reputación y mantenimiento;
+- licencia;
+- vulnerabilidades;
+- tamaño;
+- compatibilidad;
+- alternativas;
+- costo de migración;
+- scripts de instalación.
+
+Después:
+
+- build;
+- tests;
+- `npm audit`;
+- análisis de bundle si afecta cliente;
+- decisión documentada si es estructural.
+
+OpenSSF Scorecard es una señal, no una garantía.
+
+## 12. CI y ramas
+
+### Pull requests a `dev`
+
+Requerir:
+
+- lint;
+- typecheck;
+- unit;
+- build;
+- tests adicionales según riesgo;
+- documentación actualizada.
+
+### Promoción `dev` → `main`
+
+Requerir:
+
+- P0 sin regresiones;
+- E2E críticos;
+- smoke mobile/desktop;
+- migraciones ensayadas;
+- variables y operación revisadas;
+- rollback razonable;
+- `main` contenido en `dev`.
+
+### Protección
+
+Recomendado:
+
+- no force-push;
+- checks requeridos;
+- conversaciones resueltas;
+- PR para integrar;
+- reglas equivalentes en `main` y `dev` según riesgo.
+
+## 13. Datos de prueba
+
+- No usar producción.
+- Separar desarrollo de E2E.
+- Generar datos representativos sin copiar información personal.
+- Incluir monedas, períodos, negativos, cuotas, deudas y Espacios.
+- Limpiar de forma acotada.
+- Scripts destructivos requieren destino explícito.
+- Seeds y factories deben ser idempotentes o indicar precondición.
+
+## 14. Criterio de release
+
+Una versión puede promoverse cuando:
+
+- build y checks están limpios;
+- no hay P0 abiertos introducidos por el release;
+- migraciones fueron probadas;
+- recorridos críticos pasaron mobile y desktop;
+- errores conocidos tienen impacto y workaround documentados;
+- documentación y roadmap reflejan realidad;
+- se conoce el rollback;
+- el prompter aprobó costos o riesgos materiales.
+
+## 15. Estado actual
+
+Verificado 2026-07-25:
+
+- 621 unit tests aprobados;
+- 74 archivos de unit tests;
+- 5 `todo`;
+- 40 escenarios E2E registrados;
+- typecheck, lint y build limpios;
+- CI con lint, build y unit;
+- E2E desactivado;
+- cobertura no bloqueante;
+- smoke financiero real pendiente.
+
+Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
+
+## 16. Referencias
+
+- [ISO/IEC 25010:2023](https://www.iso.org/standard/78176.html)
+- [OWASP Secure Coding Practices](https://owasp.org/www-project-secure-coding-practices-quick-reference-guide/stable-en/02-checklist/05-checklist)
+- [W3C Mobile Accessibility](https://www.w3.org/WAI/standards-guidelines/mobile/)
+- [Next.js Package Bundling](https://nextjs.org/docs/app/guides/package-bundling)
+- [OpenSSF Scorecard](https://openssf.org/scorecard/)
+- [npm audit reports](https://docs.npmjs.com/about-audit-reports/)
+- [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+
+Consulta: 2026-07-25.
