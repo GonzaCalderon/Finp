@@ -1,11 +1,27 @@
 # Compromisos variables y Captura rápida como orientador — implementación
 
-**Última actualización:** 2026-07-25
+> Estado: vigente
+> Audiencia: desarrollo, calidad y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: implementación del bloque de compromisos variables y orientación
+
+## Índice
+
+1. [Contexto](#1-contexto-de-partida)
+2. [Modelo](#2-modelo-de-datos)
+3. [Servicios](#3-servicios-y-su-responsabilidad)
+4. [Orientación](#4-contrato-de-orientación)
+5. [APIs](#5-apis)
+6. [UX](#6-ux)
+7. [Deuda y extensión](#7-deuda-conocida-y-extensión)
+8. [Verificación y backfill](#8-verificación)
 
 Documentación técnica del bloque implementado el 2026-07-25. El diseño funcional vive en
 `docs/producto/compromisos_espacios_y_proyeccion.md` y
 `docs/producto/captura_rapida_como_orientador.md`; este documento explica **cómo quedó
 construido**, qué decisiones se tomaron y dónde extenderlo.
+
+La sección de deuda conserva contexto técnico. La prioridad y el estado vigente de cada pendiente viven únicamente en `docs/producto/roadmap_finp.md`.
 
 ---
 
@@ -238,21 +254,17 @@ explícito y no figure como aplicada.
 
 ---
 
-## 7. Deuda conocida y próximos pasos
+## 7. Deuda conocida y extensión
 
-### Pendiente explícito de este bloque
+La deuda detectada durante este bloque se administra en el roadmap único:
 
-1. **`InstallmentPlan` no se limpia** al eliminar la transacción que lo originó. La dirección
-   inversa sí está resuelta (`api/installments/[id]/route.ts`). Merece su propio bloque con
-   verificación de saldos.
-2. **El hermano de un pago dual** (`paymentGroupId`) se **reporta** pero no se borra: mueve
-   dinero real y no debería resolverse por inferencia.
-3. **`intent_completed` no se emite en la derivación.** Falta emitirlo desde Compromisos cuando
-   la plantilla se crea con un `draft` presente. Sin eso, la métrica de finalización sólo cubre
-   las aplicaciones, no las derivaciones.
-4. **`getNavInsightsForUser` sigue sin test de integración**: sólo está testeado
-   `buildNavInsightsFromSignals`. El cambio de período se verificó a mano.
-5. **`auto_month_start`** está modelado y rotulado en la UI, pero no hay scheduler.
+- `FINP-P1-001`: cascada de `InstallmentPlan`;
+- `FINP-P1-002`: evento `intent_completed`;
+- `FINP-P1-003`: integración de NavInsights;
+- `FINP-P1-004`: política para pagos duales;
+- `FINP-P4-002`: scheduler de `auto_month_start`.
+
+Este documento conserva el contexto de implementación; [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md) conserva estado, prioridad y criterio.
 
 ### Cómo agregar el próximo destino de orientación
 

@@ -29,6 +29,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Documentación
+        run: npm run docs:check
+
   # ─── Build ───────────────────────────────────────────────────────────────────
   build:
     name: Build

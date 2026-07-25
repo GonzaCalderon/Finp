@@ -1,444 +1,220 @@
 # Finp
 
-Finp es una aplicación web de gestión financiera personal. Permite registrar y analizar cuentas, transacciones, ingresos, gastos, tarjetas de crédito, cuotas, compromisos recurrentes, reglas automáticas, proyecciones e importaciones desde Excel.
+Finp es una aplicación web de finanzas personales y compartidas. Ayuda a registrar, entender y anticipar cuentas, transacciones, tarjetas, cuotas, compromisos, proyección, deudas y gastos compartidos.
 
-El proyecto está construido con Next.js, React, TypeScript, MongoDB, Mongoose y NextAuth.
+La experiencia busca reducir el esfuerzo de mantener las finanzas al día mediante captura rápida, importación, reglas y aprendizaje controlado.
 
-## Estado del proyecto
+## Índice
 
-Finp ya cuenta con una base funcional amplia:
+1. [Estado](#1-estado)
+2. [Documentación](#2-documentación)
+3. [Stack](#3-stack)
+4. [Requisitos](#4-requisitos)
+5. [Instalación](#5-instalación)
+6. [Variables de entorno](#6-variables-de-entorno)
+7. [Comandos](#7-comandos)
+8. [Estructura](#8-estructura)
+9. [Testing](#9-testing)
+10. [Ramas](#10-ramas)
+11. [Antes de contribuir](#11-antes-de-contribuir)
 
-- Autenticación con email y contraseña.
-- Dashboard financiero por período.
-- Cuentas en ARS y USD, incluyendo cuentas multi-moneda.
-- Transacciones: ingresos, gastos, transferencias, cambios, pagos de tarjeta, ajustes y gastos con tarjeta.
-- Tarjetas de crédito y planes de cuotas.
-- Compromisos programados.
-- Proyección futura.
-- Reglas automáticas de categorización.
-- Categorías personalizadas y predeterminadas.
-- Importación de movimientos desde Excel con revisión previa.
-- UI responsive con navegación desktop y mobile.
-- Tema claro/oscuro.
-- Ocultamiento global de montos.
-- Tests unitarios y E2E.
-- CI con lint, build y unit tests.
+## 1. Estado
 
-Documentación complementaria:
+Finp está en preproducción controlada.
 
-- [Informe de estado actual](./informe-estado-finp.md)
-- [Diseño de Finp](./design.md)
+Disponible:
 
-## Stack
+- finanzas personales en ARS/USD;
+- transacciones, cuentas y categorías;
+- tarjetas y cuotas;
+- compromisos variables y proyección;
+- reglas, importación y Captura rápida;
+- aprendizaje personal administrable;
+- Espacios compartidos;
+- Deudas;
+- notificaciones, pendientes e insights;
+- experiencia responsive mobile-first.
 
-- Next.js `16.1.7`
-- React `19.2.3`
-- TypeScript
-- MongoDB
-- Mongoose
-- NextAuth v5 beta
-- Tailwind CSS 4
-- Zod
-- React Hook Form
-- Framer Motion
-- Radix UI / componentes UI propios
-- Recharts, D3 y d3-sankey
-- ExcelJS y xlsx
-- Vitest
-- Playwright
+Ver el alcance comprobado en [`docs/producto/estado_actual_finp.md`](docs/producto/estado_actual_finp.md) y las prioridades en [`docs/producto/roadmap_finp.md`](docs/producto/roadmap_finp.md).
 
-## Requisitos
+## 2. Documentación
 
-- Node.js 20 o superior.
-- npm.
-- MongoDB local o una URI de MongoDB Atlas.
+### Punto de entrada
 
-Para desarrollo local con MongoDB instalado:
+Toda la documentación se navega desde [`docs/README.md`](docs/README.md). Ese índice indica qué leer según la tarea.
 
-```bash
-mongod
-```
+Los agentes deben empezar por [`AGENTS.md`](AGENTS.md).
 
-También podés usar una base en Atlas configurando `MONGODB_URI`.
+### Documentos principales
 
-## Instalación
+| Documento | Descripción |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | Estatuto obligatorio para agentes y reglas de trabajo. |
+| [`docs/README.md`](docs/README.md) | Índice canónico y rutas de lectura. |
+| [`docs/producto/especificacion_funcional.md`](docs/producto/especificacion_funcional.md) | Propósito, conceptos, módulos y comportamiento esperado. |
+| [`docs/producto/estado_actual_finp.md`](docs/producto/estado_actual_finp.md) | Qué está implementado y verificado. |
+| [`docs/producto/roadmap_finp.md`](docs/producto/roadmap_finp.md) | Único backlog y prioridades. |
+| [`design.md`](design.md) | Definiciones de diseño, interacción, animación y responsive. |
+| [`docs/tecnico/arquitectura.md`](docs/tecnico/arquitectura.md) | Capas, fuentes de verdad, persistencia y seguridad. |
+| [`docs/tecnico/guia_desarrollo.md`](docs/tecnico/guia_desarrollo.md) | Cómo implementar, reutilizar, manejar errores y trabajar con Git. |
+| [`docs/calidad/plan_calidad_estabilizacion_finp.md`](docs/calidad/plan_calidad_estabilizacion_finp.md) | Estrategia de pruebas y release. |
+| [`docs/estandares/documentacion.md`](docs/estandares/documentacion.md) | Cómo crear y mantener documentación y fuentes. |
+| [`docs/decisiones/README.md`](docs/decisiones/README.md) | Registro de decisiones duraderas. |
+
+Los documentos históricos viven en `docs/archivados/` y no dirigen el desarrollo.
+
+## 3. Stack
+
+- Next.js 16 y React 19;
+- TypeScript;
+- MongoDB y Mongoose;
+- NextAuth;
+- Tailwind CSS;
+- Radix/shadcn y componentes propios;
+- React Hook Form y Zod;
+- Recharts y D3;
+- ExcelJS/xlsx;
+- Vitest y Testing Library;
+- Playwright;
+- GitHub Actions.
+
+Las versiones exactas viven en `package.json`.
+
+## 4. Requisitos
+
+- Node.js 20 o superior;
+- npm;
+- MongoDB local o Atlas;
+- variables de entorno;
+- para E2E, una base de prueba separada.
+
+## 5. Instalación
 
 ```bash
 npm install
 ```
 
-## Variables de entorno
-
-Creá un archivo `.env.local` en la raíz del proyecto.
-
-```bash
-MONGODB_URI=mongodb://localhost:27017/finp
-NEXTAUTH_SECRET=un-secreto-largo-y-seguro
-NEXTAUTH_URL=http://localhost:3000
-```
-
-Variables requeridas:
-
-| Variable | Uso |
-| --- | --- |
-| `MONGODB_URI` | Conexión a MongoDB |
-| `NEXTAUTH_SECRET` | Firma de tokens/sesiones de NextAuth |
-| `NEXTAUTH_URL` | URL base de la app para NextAuth |
-
-Notas:
-
-- `.env.local` no debe commitearse.
-- En producción, `NEXTAUTH_URL` debe apuntar a la URL pública real.
-- Para tests E2E existe `.env.test.example`.
-
-## Desarrollo local
+Crear `.env.local` y luego:
 
 ```bash
 npm run dev
 ```
 
-La app queda disponible en:
+Abrir `http://localhost:3000`.
 
-```text
-http://localhost:3000
+## 6. Variables de entorno
+
+Desarrollo:
+
+```env
+MONGODB_URI=mongodb://localhost:27017/finp
+NEXTAUTH_SECRET=<secreto-local>
+NEXTAUTH_URL=http://localhost:3000
 ```
 
-Si es la primera vez que usás la app, registrá un usuario desde:
+Según las funciones usadas pueden requerirse variables adicionales para almacenamiento o servicios externos. No versionar secretos.
 
-```text
-http://localhost:3000/register
-```
+E2E usa `.env.test.local`, basado en `.env.test.example`, y un servidor dedicado en el puerto 3001.
 
-Después podés iniciar sesión en:
+Nunca apuntar pruebas a desarrollo o producción.
 
-```text
-http://localhost:3000/login
-```
+## 7. Comandos
 
-## Scripts
+| Comando | Uso |
+|---|---|
+| `npm run dev` | Servidor de desarrollo. |
+| `npm run build` | Build de producción. |
+| `npm run start` | Servidor de producción local. |
+| `npm run typecheck` | Verificación TypeScript. |
+| `npm run lint` | ESLint. |
+| `npm run test:unit` | Unit tests. |
+| `npm run test:watch` | Vitest en watch. |
+| `npm run test:coverage` | Cobertura unitaria. |
+| `npm run test:e2e` | Playwright desktop/mobile. |
+| `npm run test:e2e:ui` | Playwright UI. |
+| `npm run test:seed` | Seed E2E. |
+| `npm run backfill:commitments` | Dry-run del backfill. |
+| `npm run backfill:commitments -- --apply` | Aplica el backfill; requiere revisión y backup. |
 
-| Script | Descripción |
-| --- | --- |
-| `npm run dev` | Levanta Next.js en modo desarrollo |
-| `npm run build` | Compila la app para producción |
-| `npm run start` | Ejecuta la app compilada |
-| `npm run lint` | Corre ESLint |
-| `npm run test` | Corre Vitest |
-| `npm run test:unit` | Corre tests unitarios |
-| `npm run test:watch` | Corre Vitest en modo watch |
-| `npm run test:coverage` | Corre coverage unitario |
-| `npm run test:e2e` | Corre Playwright headless |
-| `npm run test:e2e:ui` | Abre Playwright UI |
-| `npm run test:e2e:debug` | Corre Playwright con inspector |
-| `npm run test:seed` | Crea usuario y datos iniciales para E2E |
-
-## Estructura
+## 8. Estructura
 
 ```text
 src/
-  app/
-    (auth)/                 Login y registro
-    (app)/                  Área autenticada
-    api/                    Route handlers internos
-    modules/                Módulos por dominio
-  components/
-    shared/                 Componentes de producto
-    ui/                     Primitivas UI
-  contexts/                 Providers de estado cliente
-  hooks/                    Hooks de datos e interacción
-  lib/
-    client/                 Helpers cliente
-    constants/              Constantes de dominio
-    db/                     Conexión a MongoDB
-    env/                    Validación de entorno
-    models/                 Modelos Mongoose
-    utils/                  Lógica de dominio
-    validations/            Schemas Zod
-  types/                    Tipos compartidos
+├── app/                 páginas y APIs
+├── components/          UI compartida y módulos
+├── contexts/            contexto React
+├── hooks/               acceso cliente
+├── lib/
+│   ├── client/
+│   ├── models/
+│   ├── server/
+│   ├── utils/
+│   └── validations/
+└── types/
+
 tests/
-  unit/                     Tests unitarios
-  e2e/                      Tests Playwright
+├── unit/
+├── e2e/
+└── helpers/
+
+docs/
+├── producto/
+├── tecnico/
+├── calidad/
+├── estandares/
+├── decisiones/
+└── archivados/
 ```
 
-## Dominios principales
+Ver [`docs/tecnico/arquitectura.md`](docs/tecnico/arquitectura.md).
 
-### Autenticación
+## 9. Testing
 
-NextAuth usa provider de credenciales. Las contraseñas se guardan hasheadas con bcryptjs. Las rutas autenticadas están protegidas por `src/proxy.ts` y las APIs validan sesión con `auth()`.
-
-Archivos relevantes:
-
-- `src/lib/auth.ts`
-- `src/proxy.ts`
-- `src/components/shared/SessionGuard.tsx`
-
-### Cuentas
-
-Las cuentas representan bancos, efectivo, billeteras, tarjetas, deudas y ahorros. Pueden operar en ARS, USD o ambas monedas. Los saldos se calculan desde transacciones e importes iniciales.
-
-Archivos relevantes:
-
-- `src/lib/models/account.model.ts`
-- `src/lib/utils/accounts.ts`
-- `src/lib/utils/balance.ts`
-- `src/contexts/AccountsContext.tsx`
-
-### Transacciones
-
-Las transacciones son el centro del producto. Soportan ingresos, gastos, gastos con tarjeta, transferencias, cambios, pagos de tarjeta y ajustes.
-
-Archivos relevantes:
-
-- `src/lib/models/transaction.model.ts`
-- `src/lib/validations/transaction.ts`
-- `src/hooks/useTransactions.ts`
-- `src/app/api/transactions/route.ts`
-
-### Tarjetas y cuotas
-
-Los gastos con tarjeta y los planes de cuotas tienen lógica propia para calcular cuota activa, deuda pendiente y resumen mensual.
-
-Archivos relevantes:
-
-- `src/lib/models/installment-plan.model.ts`
-- `src/lib/utils/credit-card.ts`
-- `src/app/api/installments/route.ts`
-- `src/app/(app)/transactions/credit-card/page.tsx`
-
-### Importación Excel
-
-La importación crea un batch en borrador, parsea filas, detecta errores/duplicados, permite revisión manual y recién después confirma la creación de transacciones.
-
-Archivos relevantes:
-
-- `src/lib/utils/excel-parser.ts`
-- `src/lib/utils/excel-template.ts`
-- `src/lib/utils/import-transactions.ts`
-- `src/app/api/import/route.ts`
-- `src/app/(app)/transactions/import/[batchId]/page.tsx`
-
-## Base de datos
-
-Finp usa MongoDB con Mongoose.
-
-Modelos principales:
-
-- `User`
-- `Account`
-- `Category`
-- `Transaction`
-- `InstallmentPlan`
-- `ScheduledCommitment`
-- `CommitmentApplication`
-- `TransactionRule`
-- `ImportBatch`
-- `ImportRow`
-
-La conexión se centraliza en:
-
-```text
-src/lib/db/index.ts
-```
-
-La conexión mantiene cache global para evitar reconexiones repetidas durante desarrollo y en entornos serverless.
-
-## Tests unitarios
+Chequeo base:
 
 ```bash
-npm run test:unit
-```
-
-Con coverage:
-
-```bash
-npm run test:coverage
-```
-
-Los tests unitarios viven en:
-
-```text
-tests/unit
-```
-
-Actualmente cubren validaciones y utilidades críticas de dominio.
-
-## Tests E2E
-
-Los tests E2E usan Playwright y corren contra una base de test.
-
-Primero copiá el archivo de ejemplo:
-
-```bash
-Copy-Item .env.test.example .env.test.local
-```
-
-Configurá `.env.test.local`:
-
-```bash
-MONGODB_URI=mongodb://localhost:27017/finp-test
-NEXTAUTH_SECRET=un-secreto-largo-para-test-local
-NEXTAUTH_URL=http://localhost:3000
-TEST_USER_EMAIL=test@finp.dev
-TEST_USER_PASSWORD=TestPass123!
-PLAYWRIGHT_BASE_URL=http://localhost:3000
-```
-
-Creá el usuario y datos base:
-
-```bash
-npm run test:seed
-```
-
-Corré los E2E:
-
-```bash
-npm run test:e2e
-```
-
-Modos útiles:
-
-```bash
-npm run test:e2e:ui
-npm run test:e2e:debug
-```
-
-Notas:
-
-- Playwright usa puerto `3001` localmente según `playwright.config.ts`.
-- Los tests corren en desktop Chromium y mobile Chromium.
-- Los E2E no están activos en CI por defecto.
-- Si un E2E falla a mitad, puede quedar data de test sucia.
-
-## CI
-
-El workflow está en:
-
-```text
-.github/workflows/ci.yml
-```
-
-Jobs activos:
-
-- Lint.
-- Build.
-- Unit tests.
-- Coverage no bloqueante.
-
-El job E2E está documentado en el workflow, pero comentado. Para activarlo hay que configurar secrets de test y una base MongoDB dedicada.
-
-## Diseño y UI
-
-El sistema visual se define principalmente en:
-
-```text
-src/app/globals.css
-```
-
-Características:
-
-- Tema claro y oscuro.
-- Tokens CSS para color, radius, shadow y sidebar.
-- Navegación desktop con sidebar.
-- Navegación mobile con bottom bar.
-- Action sheet mobile para acciones rápidas.
-- Componentes UI propios en `src/components/ui`.
-- Componentes de producto en `src/components/shared`.
-
-Ver más detalle en:
-
-- [design.md](./design.md)
-
-## Mobile y offline
-
-Estado actual:
-
-- Finp es responsive y tiene una experiencia mobile web cuidada.
-- Todavía no es una app mobile nativa.
-- Todavía no es PWA instalable.
-- Todavía no tiene uso offline real.
-
-Para avanzar hacia mobile/offline, el camino recomendado es:
-
-1. Convertir la app en PWA instalable.
-2. Agregar service worker y cache de la shell.
-3. Agregar persistencia local con IndexedDB.
-4. Agregar cola de cambios offline.
-5. Diseñar sincronización con MongoDB.
-6. Evaluar Capacitor si se busca publicar en stores.
-
-## Flujo recomendado de trabajo
-
-Antes de abrir un PR o cerrar una tarea:
-
-```bash
+npm run typecheck
 npm run lint
-npm run build
 npm run test:unit
+npm run build
 ```
 
-Si tocaste flujos críticos de usuario:
+Si se modifica un recorrido crítico:
 
 ```bash
 npm run test:e2e
 ```
 
-Si tocaste dominio financiero, revisar especialmente:
+Estado verificado el 2026-07-25:
 
-- Cálculo de saldos.
-- Períodos financieros.
-- Tarjetas y cuotas.
-- Importación.
-- Multi-moneda.
-- Ocultar montos.
+- 589 unit tests aprobados;
+- 5 `todo`;
+- 36 escenarios E2E registrados;
+- E2E pendiente de entorno local reproducible y activación en CI.
 
-## Troubleshooting
+## 10. Ramas
 
-### Falta `MONGODB_URI`
+- `main`: producción.
+- `dev`: integración y próximo release.
+- ramas cortas desde `dev`: `codex/*`, `feature/*`, `fix/*`, `docs/*` o `refactor/*`.
 
-Revisá que exista `.env.local` y que tenga:
+Regla:
 
-```bash
-MONGODB_URI=mongodb://localhost:27017/finp
+```text
+main debe estar contenido en dev, o ambas pueden estar iguales tras un release
 ```
 
-### NextAuth redirige mal
+Los PR normales apuntan a `dev`. La promoción productiva es `dev → main`. Un hotfix en `main` debe reintegrarse a `dev`.
 
-Revisá:
+## 11. Antes de contribuir
 
-```bash
-NEXTAUTH_URL=http://localhost:3000
-```
-
-En producción debe ser la URL pública.
-
-### No puedo loguearme
-
-- Verificá que el usuario exista.
-- Verificá que la app esté apuntando a la DB correcta.
-- En E2E, corré `npm run test:seed`.
-
-### Playwright no encuentra la app
-
-- Revisá `.env.test.local`.
-- Revisá `PLAYWRIGHT_BASE_URL`.
-- Si hay conflicto de puerto, cerrá servidores previos o ajustá la configuración.
-
-### Los saldos no coinciden
-
-Los saldos se calculan desde transacciones e importes iniciales. Revisá:
-
-- Transacciones de origen/destino.
-- Moneda de la cuenta.
-- Saldos iniciales por moneda.
-- Fecha de inicio operativo.
-- Planes de cuotas en tarjetas.
-
-## Documentación relacionada
-
-- [Informe de estado actual de Finp](./informe-estado-finp.md)
-- [Diseño de Finp](./design.md)
-- [Setup de E2E](./tests/e2e/helpers/README.md)
-
-## Licencia
+1. Leer [`AGENTS.md`](AGENTS.md).
+2. Elegir la ruta adecuada en [`docs/README.md`](docs/README.md).
+3. Revisar el backlog único.
+4. Trabajar desde `dev` en una rama corta.
+5. Reutilizar servicios y componentes.
+6. Verificar mobile primero y desktop después.
+7. Ejecutar pruebas proporcionales al riesgo.
+8. Actualizar documentación y roadmap.
 
 Proyecto privado.

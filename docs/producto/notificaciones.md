@@ -1,6 +1,22 @@
 # Notificaciones e insights en Finp
 
-Ultima actualizacion: 2026-05-16
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: reglas funcionales de seguimiento
+
+## Índice
+
+1. [Alcance](#1-que-cubre-esta-capa)
+2. [Centro de notificaciones](#2-notificationcenter)
+3. [Pendientes](#3-pending-actions-vs-notifications)
+4. [Review](#4-review-flows)
+5. [Insights](#5-navinsight)
+6. [Responsive](#6-mobile-y-desktop)
+7. [Actualización](#7-polling-e-invalidacion)
+8. [Semántica y decisiones](#8-prioridades-y-semantica)
+
+Los pendientes de implementación viven únicamente en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 1. Que cubre esta capa
 

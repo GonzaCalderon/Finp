@@ -1,12 +1,27 @@
 # Compromisos, Espacios y proyección
 
-Última actualización: 2026-07-24
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: diseño funcional de compromisos y su evolución
 
-Estado: diseño funcional para revisión. No representa todavía un contrato técnico cerrado.
+## Índice
+
+1. [Problema y estado](#1-problema)
+2. [Principio y casos](#2-principio-funcional)
+3. [Modelo](#4-modelo-funcional-propuesto)
+4. [Políticas de monto](#5-políticas-de-monto)
+5. [Espacios](#6-integración-con-espacios)
+6. [Proyección e índices](#7-proyección)
+7. [Permisos, notificaciones e historia](#9-permisos-y-colaboración)
+8. [Captura y recurrencia](#111-integración-con-captura-rápida)
+9. [Evolución, riesgos y decisiones](#12-dependencias-de-evolución)
+
+Las fases describen dependencias funcionales. La prioridad vive únicamente en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 1. Problema
 
-Los compromisos actuales son personales, tienen un monto base fijo y se aplican como transacciones privadas. Este modelo no cubre correctamente dos necesidades centrales:
+Desde el 2026-07-25, los compromisos personales admiten monto fijo, monto variable a confirmar y una agenda manual de montos por fecha. Conservan snapshot de cada aplicación. El modelo todavía no cubre correctamente dos necesidades centrales:
 
 1. Compromisos compartidos que pertenecen a un Espacio, como alquiler, expensas, luz, gas, internet o compras habituales del hogar.
 2. Compromisos cuyos montos cambian periódicamente por ajustes manuales, porcentajes pautados o índices externos.
@@ -394,61 +409,19 @@ El candidato debe:
 
 Los candidatos funcionales reutilizan eventos y feedback del aprendizaje personal, pero se modelan separados de las personalizaciones de cuenta, categoría o comercio.
 
-## 12. Fases sugeridas
+## 12. Dependencias de evolución
 
-### Fase 1: compromisos personales variables — implementada el 2026-07-25
+La evolución funcional debe respetar estas dependencias:
 
-- historial de montos;
-- cambios efectivos desde una fecha;
-- monto variable a confirmar;
-- proyección usando el monto correcto por período;
-- snapshots y estados de aplicación;
-- procedencia visible en la transacción generada.
+1. compromisos personales con historia y snapshot;
+2. orientación segura desde Captura rápida;
+3. recurrencia explicable;
+4. contexto compartido e impacto personal;
+5. ajustes pautados;
+6. índices con snapshot y fallback;
+7. proyección por niveles de certeza.
 
-### Fase 2: Captura rápida y orientación — implementada el 2026-07-25
-
-- compromisos pendientes en el contexto de Captura rápida;
-- aplicación segura desde el diálogo;
-- derivación de nuevas plantillas con borrador precargado;
-- onboarding contextual;
-- vínculo reversible entre transacción y aplicación.
-
-### Fase 3: recurrencia aprendida
-
-- candidatos mensuales desde historial vigente;
-- explicación de evidencia y política de monto propuesta;
-- feedback, descarte persistente y recuperación con nueva evidencia;
-- sugerencias coordinadas entre Captura rápida y Compromisos.
-
-### Fase 4: compromisos en Espacios
-
-- contexto `space`;
-- categoría y reparto;
-- aplicación idempotente a un movimiento;
-- impacto privado mediante el flujo existente.
-
-### Fase 5: ajustes pautados
-
-- agenda de montos;
-- porcentajes por fecha;
-- redondeo;
-- vista de próximos aumentos.
-
-### Fase 6: índices
-
-- fuentes oficiales;
-- cálculo por índice;
-- rezagos;
-- fallback manual;
-- trazabilidad del dato.
-
-### Fase 7: proyección avanzada
-
-- certeza de cada monto;
-- parte propia y salida de cuenta;
-- escenarios;
-- alertas por cambios;
-- conexión con límites y objetivos de ahorro.
+Los dos primeros niveles están implementados. Los demás describen dependencias del diseño, no un backlog paralelo. Sus ítems, estados y prioridades viven únicamente en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 13. Riesgos
 

@@ -1,4 +1,9 @@
-# Backlog de feedback de uso real
+# Backlog de feedback de uso real — archivo histórico
+
+> Estado: archivado  
+> Archivado: 2026-07-25  
+> Reemplazado por: [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md)  
+> Motivo: Finp mantiene un único backlog canónico.
 
 Ultima actualizacion: 2026-07-24
 

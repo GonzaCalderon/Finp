@@ -1,6 +1,17 @@
 # Criterio de entrega de motores y automatizaciones
 
-Última actualización: 2026-07-24
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo, calidad y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: criterio especializado de entrega de automatizaciones
+
+## Índice
+
+1. [Definición de terminado](#definición-de-terminado)
+2. [Revisión previa](#revisión-previa-a-cada-entrega)
+3. [Motor de reglas](#aplicación-al-motor-de-reglas)
+4. [Captura rápida](#aplicación-a-captura-rápida)
+5. [Sugerencias funcionales](#aplicación-a-sugerencias-funcionales)
 
 Una mejora de lógica no está terminada cuando el motor calcula correctamente. Está terminada cuando el usuario puede descubrirla, entenderla, controlarla y verificar su efecto en todos los puntos donde corresponde.
 

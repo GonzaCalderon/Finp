@@ -1,10 +1,24 @@
 # Captura rápida como orientador de Finp
 
-Última actualización: 2026-07-24
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: contrato funcional de orientación
+
+## Índice
+
+1. [Visión y límites](#1-visión)
+2. [Ciclo y contrato](#3-ciclo-común-de-orientación)
+3. [Jerarquía](#5-jerarquía-y-resguardos)
+4. [Experiencia](#6-experiencia-propuesta)
+5. [Onboarding](#7-onboarding-y-descubrimiento)
+6. [Compromisos](#8-integración-con-compromisos)
+7. [Evolución](#9-adopción-gradual)
+8. [Métricas y límites](#10-métricas-de-éxito)
 
 Documentación técnica de la implementación: `docs/tecnico/compromisos_variables_y_orientacion.md`.
 
-Estado: Etapas 1 y 2 implementadas el 2026-07-25. Captura rápida ya distingue las tres intenciones de Compromisos, aplica pendientes dentro del diálogo, deriva altas con un borrador tipado y versionado, y expone onboarding contextual con `¿Qué puedo escribir?`. Las Etapas 3 y 4 (recurrencia aprendida y otros destinos) siguen pendientes.
+Las Etapas 1 y 2 están implementadas. Las siguientes etapas describen el contrato de evolución; su prioridad vive únicamente en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 1. Visión
 

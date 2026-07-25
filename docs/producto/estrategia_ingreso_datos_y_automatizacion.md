@@ -1,8 +1,23 @@
 # Estrategia de ingreso de datos y automatización
 
-Última actualización: 2026-07-24
+> Estado: vigente
+> Audiencia: producto, diseño, desarrollo y agentes
+> Última actualización: 2026-07-25
+> Fuente de verdad: estrategia funcional de captura y automatización
 
-Estado: documento de producto para revisión. Las ideas y fases descritas aquí no implican aprobación automática de implementación.
+## Índice
+
+1. [Principio y objetivos](#1-principio-de-producto)
+2. [Experiencia](#3-principios-de-experiencia)
+3. [Modos de ingreso](#4-modos-de-ingreso-propuestos)
+4. [Reglas y categorías](#5-relación-con-reglas-y-categorías)
+5. [Recurrencia y relevancia](#6-gastos-repetidos-grandes-y-atípicos)
+6. [Hábito y métricas](#7-hábito-y-recordatorios)
+7. [Evolución funcional](#9-evolución-funcional)
+8. [Entrega, riesgos y decisiones](#91-criterio-transversal-de-entrega)
+9. [Referencias](#12-referencias-de-patrones)
+
+Las etapas descritas aquí explican una evolución posible. La prioridad y el estado de cada trabajo viven únicamente en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 1. Principio de producto
 
@@ -344,66 +359,20 @@ No se recomienda una racha rígida ni premiar la cantidad de gastos ingresados.
 
 Las métricas deben evaluar calidad y ahorro de esfuerzo, no incentivar la creación de movimientos.
 
-## 9. Fases propuestas
+## 9. Evolución funcional
 
-### Fase A: base confiable
+La estrategia evoluciona en este orden conceptual:
 
-- Unificar el motor de reglas. Implementado el 2026-07-24.
-- Corregir acciones actualmente incompletas. `setType` implementado para movimientos simples.
-- Normalizar descripción y comercio. Normalización de coincidencias implementada.
-- Añadir explicabilidad y deshacer. Trazabilidad y vista previa implementadas; Captura rápida ya ofrece deshacer, mientras la reversión guiada de otras automatizaciones sigue pendiente.
-- Medir tiempo, abandono y correcciones.
+1. una base confiable de reglas, validación y trazabilidad;
+2. captura rápida con aprendizaje controlado;
+3. orientación hacia módulos especializados;
+4. revisión opcional;
+5. información accionable por categoría y recurrencia;
+6. asistencia avanzada sólo cuando la calidad de los datos lo permita.
 
-### Fase B: captura rápida
+Espacios, Compromisos y Proyección atraviesan esta evolución: deben distinguir contexto personal o compartido, parte propia, certeza de monto y procedencia.
 
-- Entrada compacta: implementada.
-- Atajo desktop y acceso persistente mobile: implementados.
-- Interpretacion de texto y resumen vivo: implementados.
-- Valores predeterminados, alias personales y sugerencias: implementados.
-- Accesos frecuentes automaticos: implementados.
-- Validacion financiera, ARS/USD, duplicados y deshacer: implementados.
-- Responsive express: implementado con resumen inmediato, detalles manuales colapsados, frecuentes contenidos y sin scroll horizontal global.
-- Vocabulario argentino inicial: implementado para fechas relativas, dias de semana y abreviaturas; debe seguir ampliandose con evidencia real.
-- Autocompletado: reglas, atajos y movimientos frecuentes proponen completar prefijos con un sufijo tenue dentro del texto; Enter, Espacio o toque aceptan en mobile y Tab, Enter o Espacio en desktop. Doble Espacio consecutivo conserva el prefijo escrito y descarta la propuesta.
-- Coherencia de vista previa: los campos visibles consumen el resultado normalizado del servidor, incluidas categoria, tipo y comercio aplicados por reglas.
-- Aprendizaje y metricas: implementados con eventos best-effort, impresiones y aceptaciones comparables, procedencia `quick_capture`, patrones reconstruibles y controles por usuario.
-- Pendiente evolutivo: fijar frecuentes, ampliar vocabulario argentino con evidencia real y mostrar procedencia/correcciones en el detalle de Transacciones.
-- Dirección siguiente: incorporar onboarding contextual y orientación gradual hacia Compromisos y otros flujos especializados.
-
-### Fase C: revisión diaria
-
-- Bandeja de movimientos.
-- Confirmación individual y en lote.
-- Crear regla o compromiso desde una corrección.
-- Recordatorios contextuales.
-
-### Fase D: categorías accionables
-
-- Detalle por categoría.
-- Evolución, comercios y movimientos relevantes.
-- Límites manuales.
-- Alertas y proyección al cierre.
-
-### Fase E: asistencia avanzada
-
-- Pegar notificaciones.
-- OCR de comprobantes.
-- Límites recomendados.
-- Detección de anomalías.
-- Objetivos de ahorro conectados con categorías y proyección.
-
-### Línea transversal: Espacios y compromisos
-
-- contexto personal o compartido;
-- compromisos de hogar aplicables a movimientos de Espacio;
-- montos variables y aumentos desde una fecha;
-- parte propia en proyección;
-- integración posterior con índices oficiales;
-- trazabilidad de cada cálculo.
-- aplicación de compromisos pendientes desde Captura rápida;
-- creación de borradores de compromiso desde lenguaje recurrente;
-- candidatos mensuales explicables basados en historial;
-- procedencia visible y vínculo reversible entre aplicación y transacción.
+Este orden expresa dependencias de producto. Los ítems, estados y prioridades viven únicamente en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 9.1 Criterio transversal de entrega
 
