@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
+import { SpaceEntry, SpaceEntryPersonalImpact, Transaction } from '@/lib/models'
 import {
     createPersonalImpactFromSpaceEntry,
     getPersonalImpactForEntries,
@@ -15,6 +15,7 @@ import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spacePersonalImpactSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
 import type { ISpaceEntry, ISpaceEntryPersonalImpact } from '@/types'
+import { unlinkTransactionDependents } from '@/lib/server/transaction-teardown'
 
 type Params = Promise<{ id: string; entryId: string }>
 
@@ -175,35 +176,59 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        // Remover impacto: cubre tanto LINKED como NEEDS_REVIEW
-        // El badge "En tu Finp" desaparece; la transacción personal NO se elimina
-        const removed = await SpaceEntryPersonalImpact.findOneAndUpdate(
+        const impact = await SpaceEntryPersonalImpact.findOne(
             {
                 spaceId: id,
                 entryId,
                 userId: session.user.id,
                 status: { $in: [SPACE_PERSONAL_IMPACT_STATUSES.LINKED, SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW] },
-            },
-            {
-                $set: {
-                    status: SPACE_PERSONAL_IMPACT_STATUSES.REMOVED,
-                    removedAt: new Date(),
-                    reviewedAt: new Date(),
-                    reviewedResolution: 'removed',
-                },
-                $unset: { transactionId: 1, accountId: 1 },
-            },
-            { new: false }
+            }
         ).lean<ISpaceEntryPersonalImpact | null>()
 
-        if (removed) {
+        if (!impact) {
+            return NextResponse.json({ ok: true, deletedTransaction: false })
+        }
+
+        let deletedTransaction = false
+        if (impact.transactionId) {
+            const transaction = await Transaction.findOneAndDelete({
+                _id: impact.transactionId,
+                userId: session.user.id,
+            })
+
+            if (transaction) {
+                deletedTransaction = true
+                // El teardown es la única regla que marca el impacto como REMOVED,
+                // suelta sus referencias y cancela dependencias de la transacción.
+                await unlinkTransactionDependents(session.user.id, transaction)
+            }
+        }
+
+        // Compatibilidad con impactos cuyo movimiento ya no existe: quitar sigue
+        // siendo idempotente y deja el estado personal cerrado.
+        if (!deletedTransaction) {
+            await SpaceEntryPersonalImpact.updateOne(
+                { _id: impact._id, userId: session.user.id },
+                {
+                    $set: {
+                        status: SPACE_PERSONAL_IMPACT_STATUSES.REMOVED,
+                        removedAt: new Date(),
+                        reviewedAt: new Date(),
+                        reviewedResolution: 'removed',
+                    },
+                    $unset: { transactionId: 1, accountId: 1 },
+                }
+            )
+        }
+
+        if (impact) {
             await resolveNotificationsForTarget({
-                personalImpactId: removed._id.toString(),
+                personalImpactId: impact._id.toString(),
                 actionStatus: NOTIFICATION_ACTION_STATUSES.COMPLETED,
             })
         }
 
-        return NextResponse.json({ ok: true })
+        return NextResponse.json({ ok: true, deletedTransaction })
     } catch (error) {
         console.error('Error al desvincular impacto personal:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

@@ -17,7 +17,8 @@
         "test:e2e:debug": "playwright test --debug",
         "test:seed": "npx tsx tests/e2e/helpers/seed.ts",
     "typecheck": "tsc --noEmit",
-    "backfill:commitments": "npx tsx scripts/backfill-commitments.ts"
+    "backfill:commitments": "npx tsx scripts/backfill-commitments.ts",
+    "repair:payment-groups": "npx tsx scripts/repair-payment-groups.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",

@@ -70,7 +70,13 @@ import { getOperationalStartFinancialPeriod } from '@/lib/utils/operational-star
 import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
 import { isSplitTransaction } from '@/lib/utils/operational-amount'
 import { apiJson } from '@/lib/client/auth-client'
+import { cn } from '@/lib/utils'
 import { COMMITMENT_INVALIDATION_TAGS, invalidateData, NOTIFICATION_INVALIDATION_TAGS, TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/data-sync'
+import {
+    describePaymentGroupChoice,
+    type PaymentGroupMember,
+} from '@/lib/utils/payment-group'
+import { formatCurrencyAmount } from '@/lib/utils/currency-format'
 import type { CategoryOption, Filters } from '@/lib/utils/transactions'
 import type { TransactionFormData, InstallmentFormData } from '@/lib/validations'
 import type { ICategory, ITransaction, IAccount } from '@/types'
@@ -106,6 +112,33 @@ const TRANSACTION_TYPE_COLORS: Record<
 
 // Types that cannot be edited or deleted through the transaction form.
 const NON_EDITABLE_TYPES = new Set(['personal_debt_payment', 'personal_debt_collect'])
+
+type RemoveFromFinpTarget = {
+    transactionId: string
+    spaceId: string
+    spaceEntryId?: string
+    accountName: string
+    amount: number
+    currency: string
+    direction: 'Ingreso' | 'Salida'
+}
+
+function buildRemoveFromFinpTarget(transaction: ITransaction): RemoveFromFinpTarget {
+    const isIncome = transaction.type === 'income'
+    const account = (
+        isIncome ? transaction.destinationAccountId : transaction.sourceAccountId
+    ) as unknown as { name?: string } | null
+
+    return {
+        transactionId: transaction._id.toString(),
+        spaceId: transaction.spaceId!.toString(),
+        spaceEntryId: transaction.spaceEntryId?.toString(),
+        accountName: account?.name ?? 'Cuenta sin identificar',
+        amount: transaction.amount,
+        currency: transaction.currency,
+        direction: isIncome ? 'Ingreso' : 'Salida',
+    }
+}
 
 const SORT_OPTIONS = [
     { value: 'date_desc', label: 'Más reciente' },
@@ -863,11 +896,9 @@ function TransactionsPageInner() {
     const [transactionDialogOpen, setTransactionDialogOpen] = useState(searchParams.get('new') === '1')
     const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null)
     const [deleteId, setDeleteId] = useState<string | null>(null)
-    const [removeFromFinpTarget, setRemoveFromFinpTarget] = useState<{
-        transactionId: string
-        spaceId: string
-        spaceEntryId?: string
-    } | null>(null)
+    const [deleteScope, setDeleteScope] = useState<'single' | 'group'>('single')
+    const [deletePaymentGroup, setDeletePaymentGroup] = useState<PaymentGroupMember[]>([])
+    const [removeFromFinpTarget, setRemoveFromFinpTarget] = useState<RemoveFromFinpTarget | null>(null)
     const [removingFromFinp, setRemovingFromFinp] = useState(false)
 
     const { accounts, loading: accountsLoading } = useAccounts()
@@ -998,8 +1029,24 @@ function TransactionsPageInner() {
         setTransactionDialogOpen(true)
     }
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         setDeleteId(id)
+        setDeleteScope('single')
+        setDeletePaymentGroup([])
+
+        const target = transactions.find((transaction) => transaction._id.toString() === id)
+        if (!target?.paymentGroupId) return
+
+        try {
+            const data = await apiJson<{
+                paymentGroup?: { id: string; members: PaymentGroupMember[] } | null
+            }>(
+                `/api/transactions/${id}`
+            )
+            setDeletePaymentGroup(data.paymentGroup?.members ?? [])
+        } catch {
+            // El borrado individual sigue disponible aunque no cargue el grupo.
+        }
     }
 
     // Borrar la compra también da de baja su plan de cuotas: el impacto se
@@ -1007,12 +1054,15 @@ function TransactionsPageInner() {
     const installmentCountPendingDelete = deleteId
         ? getInstallmentPlanCount(transactions.find((t) => t._id.toString() === deleteId))
         : null
+    const paymentGroupChoice = deleteId && deletePaymentGroup.length > 0
+        ? describePaymentGroupChoice(deleteId, deletePaymentGroup)
+        : null
 
     const handleDeleteConfirm = async () => {
         if (!deleteId) return
 
         try {
-            const reverted = await deleteTransaction(deleteId)
+            const reverted = await deleteTransaction(deleteId, { scope: deleteScope })
             if (reverted?.commitment) {
                 success(
                     `Transacción eliminada. El compromiso volvió a quedar pendiente en ${formatCommitmentPeriod(reverted.commitment.period)}.`
@@ -1022,12 +1072,18 @@ function TransactionsPageInner() {
                     `Transacción eliminada. También se dio de baja el plan de ${reverted.installmentPlan.installmentCount} cuotas.`
                 )
             } else {
-                success('Transacción eliminada correctamente')
+                success(
+                    deleteScope === 'group'
+                        ? 'Pago completo eliminado correctamente'
+                        : 'Transacción eliminada correctamente'
+                )
             }
         } catch (err) {
             toastError(err instanceof Error ? err.message : 'Error al eliminar transacción')
         } finally {
             setDeleteId(null)
+            setDeleteScope('single')
+            setDeletePaymentGroup([])
         }
     }
 
@@ -1035,11 +1091,14 @@ function TransactionsPageInner() {
         if (!removeFromFinpTarget) return
         setRemovingFromFinp(true)
         try {
-            const { transactionId, spaceId, spaceEntryId } = removeFromFinpTarget
-            if (spaceEntryId) {
-                await apiJson(`/api/spaces/${spaceId}/entries/${spaceEntryId}/personal-impact`, { method: 'DELETE' })
+            const { spaceId, spaceEntryId } = removeFromFinpTarget
+            if (!spaceEntryId) {
+                throw new Error('El movimiento no conserva la referencia al espacio.')
             }
-            await deleteTransaction(transactionId)
+            await apiJson(
+                `/api/spaces/${spaceId}/entries/${spaceEntryId}/personal-impact`,
+                { method: 'DELETE' }
+            )
             await Promise.all([
                 invalidateData(TRANSACTION_INVALIDATION_TAGS),
                 invalidateData(NOTIFICATION_INVALIDATION_TAGS),
@@ -1678,17 +1737,15 @@ function TransactionsPageInner() {
                                                             )}
 
                                                             {transaction.spaceId && !NON_EDITABLE_TYPES.has(transaction.type) && (
-                                                                <span className="flex items-center sm:hidden">
-                                                                    ·
+                                                                <span className="flex sm:hidden">
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => setRemoveFromFinpTarget({
-                                                                            transactionId: transaction._id.toString(),
-                                                                            spaceId: transaction.spaceId!.toString(),
-                                                                            spaceEntryId: transaction.spaceEntryId?.toString(),
-                                                                        })}
-                                                                        className="ml-1 text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors"
+                                                                        onClick={() => setRemoveFromFinpTarget(
+                                                                            buildRemoveFromFinpTarget(transaction)
+                                                                        )}
+                                                                        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-destructive/20 px-3 text-xs font-medium text-destructive transition-colors active:bg-destructive/10"
                                                                     >
+                                                                        <Unlink className="h-3.5 w-3.5" />
                                                                         Quitar de mi Finp
                                                                     </button>
                                                                 </span>
@@ -1848,11 +1905,9 @@ function TransactionsPageInner() {
                                                                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                                                 aria-label="Quitar de mi Finp"
                                                                 title="Quitar de mi Finp"
-                                                                onClick={() => setRemoveFromFinpTarget({
-                                                                    transactionId: transaction._id.toString(),
-                                                                    spaceId: transaction.spaceId!.toString(),
-                                                                    spaceEntryId: transaction.spaceEntryId?.toString(),
-                                                                })}
+                                                                onClick={() => setRemoveFromFinpTarget(
+                                                                    buildRemoveFromFinpTarget(transaction)
+                                                                )}
                                                             >
                                                                 <Unlink size={15} />
                                                             </Button>
@@ -1918,7 +1973,16 @@ function TransactionsPageInner() {
                 monthStartDay={preferences.monthStartDay}
             />
 
-            <AlertDialog open={Boolean(deleteId)} onOpenChange={(open) => !open && setDeleteId(null)}>
+            <AlertDialog
+                open={Boolean(deleteId)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDeleteId(null)
+                        setDeleteScope('single')
+                        setDeletePaymentGroup([])
+                    }
+                }}
+            >
                 <AlertDialogContent
                     className="border-foreground/[0.08] bg-background/95 backdrop-blur-sm shadow-2xl"
                 >
@@ -1930,9 +1994,46 @@ function TransactionsPageInner() {
                                 : 'Esta acción no se puede deshacer.'}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    {paymentGroupChoice?.canDeleteGroup && (
+                        <div className="grid gap-2" role="radiogroup" aria-label="Alcance del borrado">
+                            {([
+                                {
+                                    scope: 'single' as const,
+                                    label: paymentGroupChoice.singleLabel,
+                                    description: paymentGroupChoice.singleDescription,
+                                },
+                                {
+                                    scope: 'group' as const,
+                                    label: paymentGroupChoice.groupLabel,
+                                    description: paymentGroupChoice.groupDescription,
+                                },
+                            ]).map((option) => (
+                                <button
+                                    key={option.scope}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={deleteScope === option.scope}
+                                    onClick={() => setDeleteScope(option.scope)}
+                                    className={cn(
+                                        'min-h-11 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                                        deleteScope === option.scope
+                                            ? 'border-sky-500 bg-sky-500/10'
+                                            : 'border-foreground/10 hover:bg-muted/60'
+                                    )}
+                                >
+                                    <span className="block text-sm font-medium">{option.label}</span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                        {option.description}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm}>Eliminar</AlertDialogAction>
+                        <AlertDialogAction onClick={handleDeleteConfirm}>
+                            {deleteScope === 'group' ? 'Eliminar pago completo' : 'Eliminar esta parte'}
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -1944,9 +2045,30 @@ function TransactionsPageInner() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Quitar de tu Finp?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Esto solo quitará el movimiento de tus finanzas personales. El movimiento seguirá vigente en el espacio y el balance del grupo no cambia.
+                            Se eliminará la transacción personal. El movimiento seguirá vigente en el espacio y el balance del grupo no cambia.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    {removeFromFinpTarget && (
+                        <div className="grid grid-cols-2 gap-3 rounded-xl border border-foreground/10 bg-muted/35 p-3 text-sm">
+                            <div>
+                                <p className="text-xs text-muted-foreground">Dirección</p>
+                                <p className="mt-1 font-medium">{removeFromFinpTarget.direction}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-muted-foreground">Importe exacto</p>
+                                <p className="mt-1 font-medium tabular-nums">
+                                    {formatCurrencyAmount(
+                                        removeFromFinpTarget.amount,
+                                        removeFromFinpTarget.currency
+                                    )}
+                                </p>
+                            </div>
+                            <div className="col-span-2">
+                                <p className="text-xs text-muted-foreground">Cuenta</p>
+                                <p className="mt-1 font-medium">{removeFromFinpTarget.accountName}</p>
+                            </div>
+                        </div>
+                    )}
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={removingFromFinp}>Cancelar</AlertDialogCancel>
                         <AlertDialogAction onClick={handleRemoveFromFinpConfirm} disabled={removingFromFinp}>

@@ -19,6 +19,11 @@ export interface TransactionTeardownResult {
     orphanPaymentSiblingId?: string
 }
 
+export interface PaymentGroupNormalizationResult {
+    groupId: string
+    clearedMemberIds: string[]
+}
+
 type TeardownTransaction = {
     _id: { toString(): string }
     paymentGroupId?: string | null
@@ -179,4 +184,37 @@ export async function unlinkTransactionDependents(
     }
 
     return result
+}
+
+/**
+ * Un grupo de pago sólo existe mientras conserva al menos dos partes. Al
+ * borrar una parte no se borra la restante, pero sí se limpia su referencia
+ * para que no siga apareciendo como un pago dual incompleto.
+ */
+export async function normalizePaymentGroup(
+    userId: string,
+    paymentGroupId?: string | null
+): Promise<PaymentGroupNormalizationResult | null> {
+    if (!paymentGroupId) return null
+
+    const members = await Transaction.find({
+        userId,
+        paymentGroupId,
+    }).select({ _id: 1 })
+
+    if (members.length >= 2) return null
+
+    const clearedMemberIds = members.map((member) => member._id.toString())
+    if (clearedMemberIds.length > 0) {
+        await Transaction.updateMany(
+            {
+                userId,
+                paymentGroupId,
+                _id: { $in: clearedMemberIds },
+            },
+            { $unset: { paymentGroupId: 1 } }
+        )
+    }
+
+    return { groupId: paymentGroupId, clearedMemberIds }
 }

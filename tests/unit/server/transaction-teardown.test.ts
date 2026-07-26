@@ -4,7 +4,12 @@ const mocks = vi.hoisted(() => ({
     revertApplicationForTransaction: vi.fn(),
     SpaceEntryPersonalImpact: { findOneAndUpdate: vi.fn() },
     Notification: { updateMany: vi.fn() },
-    Transaction: { findOne: vi.fn(), exists: vi.fn() },
+    Transaction: {
+        findOne: vi.fn(),
+        find: vi.fn(),
+        exists: vi.fn(),
+        updateMany: vi.fn(),
+    },
     InstallmentPlan: { findOneAndDelete: vi.fn() },
 }))
 
@@ -19,7 +24,10 @@ vi.mock('@/lib/models', () => ({
     InstallmentPlan: mocks.InstallmentPlan,
 }))
 
-const { unlinkTransactionDependents } = await import('@/lib/server/transaction-teardown')
+const {
+    normalizePaymentGroup,
+    unlinkTransactionDependents,
+} = await import('@/lib/server/transaction-teardown')
 
 const transaction = { _id: { toString: () => 'transaction-1' } }
 
@@ -34,7 +42,9 @@ describe('unlinkTransactionDependents', () => {
         mocks.SpaceEntryPersonalImpact.findOneAndUpdate.mockResolvedValue(null)
         mocks.Notification.updateMany.mockResolvedValue({ modifiedCount: 0 })
         mocks.Transaction.findOne.mockReturnValue(selectChain(null))
+        mocks.Transaction.find.mockReturnValue(selectChain([]))
         mocks.Transaction.exists.mockResolvedValue(null)
+        mocks.Transaction.updateMany.mockResolvedValue({ modifiedCount: 0 })
         mocks.InstallmentPlan.findOneAndDelete.mockResolvedValue(null)
     })
 
@@ -194,5 +204,38 @@ describe('unlinkTransactionDependents', () => {
 
         expect(result.unlinkedPersonalImpact).toBe(false)
         expect(result.resolvedNotifications).toBe(1)
+    })
+
+    it('limpia el group id cuando queda una sola parte', async () => {
+        mocks.Transaction.find.mockReturnValue(
+            selectChain([{ _id: { toString: () => 'transaction-2' } }])
+        )
+
+        const result = await normalizePaymentGroup('user-1', 'group-1')
+
+        expect(result).toEqual({
+            groupId: 'group-1',
+            clearedMemberIds: ['transaction-2'],
+        })
+        expect(mocks.Transaction.updateMany).toHaveBeenCalledWith(
+            {
+                userId: 'user-1',
+                paymentGroupId: 'group-1',
+                _id: { $in: ['transaction-2'] },
+            },
+            { $unset: { paymentGroupId: 1 } }
+        )
+    })
+
+    it('conserva un grupo válido de dos partes', async () => {
+        mocks.Transaction.find.mockReturnValue(
+            selectChain([
+                { _id: { toString: () => 'transaction-1' } },
+                { _id: { toString: () => 'transaction-2' } },
+            ])
+        )
+
+        expect(await normalizePaymentGroup('user-1', 'group-1')).toBeNull()
+        expect(mocks.Transaction.updateMany).not.toHaveBeenCalled()
     })
 })

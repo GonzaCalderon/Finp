@@ -20,6 +20,8 @@ import type {
     SpaceTrendPoint,
 } from '@/types'
 
+export { formatCurrencyAmount } from '@/lib/utils/currency-format'
+
 type ShareAllocation = {
     participantId: string
     amount: number
@@ -501,15 +503,6 @@ export function formatSpaceDateRange(startDate?: Date, endDate?: Date) {
 export function formatSpaceDate(date?: Date) {
     if (!date) return 'Sin fecha'
     return format(new Date(date), 'dd MMM yyyy', { locale: es })
-}
-
-export function formatCurrencyAmount(amount: number, currency: string, options?: Intl.NumberFormatOptions) {
-    return new Intl.NumberFormat('es-AR', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: currency === 'ARS' ? 0 : 2,
-        ...options,
-    }).format(amount)
 }
 
 export function resolveSpaceStatusTone(status: SpaceStatus) {
