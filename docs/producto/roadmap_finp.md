@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -62,6 +62,11 @@ Principios:
 - automatización explicable y reversible;
 - no aumentar costo operativo sin presentar alternativas;
 - no iniciar una expansión grande con P0 abiertos evitables.
+
+Las ampliaciones de Captura rápida, Proyección y análisis incorporadas el
+2026-07-26 conservan por ahora su ubicación P2/P3. Su orden relativo se revisará
+en la próxima priorización general y no desplaza P0/P1 sin una decisión
+explícita.
 
 ## 3. Prioridad P0 — confianza financiera y cierre operativo
 
@@ -144,15 +149,6 @@ Principios:
 - Alcance: completar dos unit tests `todo`.
 - Criterio: archivar/restaurar y descartar no resuelven por accidente una acción pendiente.
 
-### FINP-P1-010 — Normalizar historia de `main` y `dev`
-
-- Estado: `validación`.
-- Hallazgo: las referencias locales de `origin/main...origin/dev` muestran 13 commits exclusivos de `main` y 12 de `dev`.
-- Contexto: los commits exclusivos de `main` son principalmente merges de releases, pero rompen la relación de ancestro esperada.
-- Próximo análisis: fetch, comparación de árboles y revisión de PR pendientes.
-- Criterio: `origin/main` es ancestro de `origin/dev`, o ambas ramas quedan iguales después de una promoción; ningún cambio productivo queda ausente en `dev`.
-- Restricción: no reescribir historia ni resolver con reset destructivo.
-
 ## 5. Prioridad P2 — recurrencia y orientación
 
 ### FINP-P2-001 — Candidatos mensuales explicables
@@ -170,11 +166,20 @@ Principios:
 - Evidencia: motor puro, endpoint autenticado sin cache, borrador guiado,
   descarte persistente y pruebas unitarias/API. Falta smoke E2E con base aislada.
 
-### FINP-P2-002 — Orientación a cuotas
+### FINP-P2-002 — Captura rápida con tarjeta y orientación a cuotas
 
 - Estado: `pendiente`.
 - Dependencias: FINP-P1-001 y contrato de borradores vigente.
-- Criterio: interpretación, traslado, validación final, mobile/desktop, error y finalización medidos.
+- Alcance:
+  - reconocer un consumo con tarjeta desde texto explícito y contexto;
+  - completar directamente un consumo en un pago cuando tarjeta, monto,
+    moneda, fecha y categoría sean válidos;
+  - trasladar un consumo en varias cuotas al flujo especializado con los datos
+    interpretados y su procedencia;
+  - distinguir consumo, cuota y pago del resumen.
+- Criterio: reglas y validaciones compartidas con Tarjetas, selección clara de
+  tarjeta, impacto anticipado, aprendizaje prudente, mobile/desktop, errores,
+  deshacer y finalización medidos.
 
 ### FINP-P2-003 — Orientación a reglas
 
@@ -202,16 +207,38 @@ Principios:
 - Alcance: borradores, imports, movimientos incompletos y sugerencias de confianza media.
 - Restricción: complemento opcional; no bloquea el registro.
 
-### FINP-P2-008 — Categorías accionables
+### FINP-P2-008 — Centro de análisis por categorías
 
 - Estado: `en discovery`.
-- Alcance: evolución, comercios, recurrentes, gastos grandes, proyección y límites.
+- Alcance:
+  - evolución por período;
+  - monto y participación de cada categoría;
+  - recorrido categoría → cuentas/tarjetas → movimientos;
+  - comparación entre cuentas, tarjetas y métodos de pago;
+  - navegación relacionada con Proyección sin incorporar toda la gestión en
+    esa pantalla.
 - Dependencias: calidad de ingreso, normalización y procedencia.
+- Criterio a definir: período, monedas, conversiones, datos incompletos,
+  categorías modificadas, rendimiento de agregaciones y experiencia
+  mobile-first.
 
-### FINP-P2-009 — Gastos grandes y atípicos
+### FINP-P2-009 — Patrones y gastos atípicos
 
 - Estado: `en discovery`.
-- Criterio a definir: relevancia por historial, ingreso, límite e impacto en proyección; permitir marcar extraordinarios.
+- Alcance: patrones por categoría, comercio, cuenta, tarjeta y método de pago.
+- Criterio a definir: relevancia por historial, estacionalidad, ingreso, límite
+  e impacto en proyección; explicar la comparación y permitir marcar un gasto
+  como extraordinario.
+
+### FINP-P2-010 — Objetivos y límites por categoría
+
+- Estado: `en discovery`.
+- Alcance: objetivo o límite por período, avance, desvío, alertas y efecto
+  esperado sobre la planificación.
+- Restricción: un límite informa y orienta; no bloquea ni reclasifica
+  transacciones automáticamente.
+- Criterio a definir: arrastre entre períodos, multi-moneda, edición histórica,
+  categorías sin datos y relación con ingresos y Proyección.
 
 ## 6. Prioridad P3 — colaboración y proyección
 
@@ -235,11 +262,20 @@ Principios:
 
 - Estado: `pendiente`.
 - Alcance:
-  - cuotas vs. consumos de un pago;
+  - grupos separados `Compromisos`, `TC · cuotas` y `TC · un pago`;
+  - recorrido período → tipo → tarjeta → categoría → movimiento;
+  - monto y porcentaje por categoría dentro de cada tarjeta y tipo;
+  - compatibilidad con planes de una cuota y consumos históricos sin plan, sin
+    omisiones ni doble conteo;
   - certeza de monto;
   - parte propia;
   - salida de cuenta;
+  - vistas por tipo, tarjeta o categoría con preferencia persistida;
   - escenarios.
+- Criterio: la vista predeterminada y la personalización deben definirse en
+  discovery; cambiar de vista no cambia reglas, totales ni inclusión de datos.
+- Relación: comparte agregaciones y navegación con FINP-P2-008/009/010, pero
+  Proyección conserva foco futuro y no absorbe toda la administración histórica.
 
 ### FINP-P3-005 — Parte propia igual a cero
 
@@ -339,6 +375,13 @@ Principios:
 - medir rendimiento antes de adoptar procesos costosos.
 
 ## 10. Cerrado recientemente
+
+### 2026-07-26
+
+- ramas `main` y `dev` sincronizadas en `1c3ee40` después de la promoción, sin
+  diferencias de árbol ni reescritura de historia;
+- prueba de privacidad de borradores de Captura rápida convertida en
+  determinista y CI nuevamente verde.
 
 ### 2026-07-25
 

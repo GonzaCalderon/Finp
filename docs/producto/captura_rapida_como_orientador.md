@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: contrato funcional de orientación
 
 ## Índice
@@ -42,6 +42,8 @@ Las sugerencias de funciones son también una forma de descubrimiento progresivo
 Captura rápida puede resolver directamente:
 
 - gastos e ingresos simples;
+- consumos con tarjeta en un pago cuando la tarjeta y los datos obligatorios
+  son explícitos o pueden confirmarse dentro del diálogo;
 - aplicación de un compromiso existente cuando la coincidencia es clara;
 - correcciones mínimas de monto, fecha, cuenta, categoría o comercio;
 - confirmación o descarte de una sugerencia.
@@ -49,7 +51,9 @@ Captura rápida puede resolver directamente:
 Captura rápida debe derivar con un borrador:
 
 - creación o configuración avanzada de compromisos;
-- tarjetas y cuotas;
+- consumos con tarjeta en varias cuotas;
+- consumos con tarjeta cuya tarjeta, moneda o configuración necesaria siga
+  siendo ambigua;
 - transferencias y cambios de moneda;
 - deudas, préstamos y cobros;
 - movimientos compartidos de Espacios;
@@ -57,6 +61,11 @@ Captura rápida debe derivar con un borrador:
 - creación de reglas.
 
 La derivación no se considera un fallo de interpretación. Es el resultado correcto cuando la intención pertenece a un dominio con decisiones adicionales.
+
+Captura rápida debe distinguir un consumo con tarjeta del pago del resumen. No
+puede registrar el primero como gasto de una cuenta común ni convertir el
+segundo en un nuevo consumo. En ambos casos reutiliza las validaciones y reglas
+del dominio de Tarjetas.
 
 ## 3. Ciclo común de orientación
 
@@ -167,6 +176,8 @@ Acciones:
 
 - `Cena 60000 con Ana y Juan` puede sugerir un movimiento en un Espacio.
 - `Le presté 50000 a Pedro` puede derivar a Deudas.
+- `Supermercado 45000 con Visa` puede resolverse como consumo con tarjeta en un
+  pago si la tarjeta queda identificada.
 - `Notebook 1200 USD en 6 cuotas` debe abrir el flujo de tarjeta y cuotas.
 - `Siempre que diga Uber ponelo en Transporte` puede abrir una regla precargada.
 - texto tabular o varias líneas estructuradas puede sugerir Importación.
@@ -271,7 +282,8 @@ La propuesta explica cantidad de coincidencias, período observado y variación 
 ### Etapa 4: otros módulos
 
 - reglas;
-- cuotas;
+- tarjetas: consumo en un pago dentro de Captura rápida y derivación de cuotas
+  con borrador;
 - Deudas;
 - Espacios;
 - Importación.

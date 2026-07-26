@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -145,6 +145,9 @@ Captura rápida distingue:
 
 Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrador tipado, versionado y con procedencia.
 
+Captura rápida todavía no interpreta ni registra consumos con tarjeta de
+crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
+
 ## 5. Compromisos y proyección
 
 ### Disponible
@@ -175,6 +178,7 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - estados derivados;
 - procedencia visible;
 - proyección con monto correcto por período;
+- proyección de cuotas múltiples agrupada por tarjeta y detallada por consumo;
 - actualización opcional de períodos futuros sin reescribir historia;
 - backfill idempotente con modo `dry-run`.
 
@@ -185,6 +189,12 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - índices oficiales;
 - scheduler para `auto_month_start`;
 - notificaciones push o recordatorios fuera de la aplicación;
+- consumos con tarjeta en un pago dentro de Proyección;
+- separación visible entre `TC · un pago` y `TC · cuotas`;
+- agrupación de Proyección por categoría con porcentaje y detalle;
+- vistas de Proyección personalizables;
+- centro de análisis histórico por categoría, cuenta, tarjeta y método de pago;
+- objetivos y límites por categoría;
 - escenarios avanzados de proyección.
 
 ## 6. Espacios
@@ -319,23 +329,24 @@ Mobile web sigue siendo la superficie prioritaria.
   caso de control Pizza y sigue pendiente de validación E2E con datos reales
   representativos.
 - La orientación aún no cubre reglas, cuotas, Deudas, Espacios e Importación.
-- La proyección no distingue completamente cuotas de consumos de un pago.
+- Captura rápida no cubre todavía consumos con tarjeta de crédito.
+- La proyección omite consumos con tarjeta en un pago y no ofrece todavía el
+  recorrido tarjeta → categoría → movimiento.
+- No existe una superficie dedicada para análisis histórico, patrones,
+  anomalías, objetivos y límites por categoría.
 - No hay realtime ni offline.
 
 Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Commit `429352a`, 2026-07-24:
+Promoción `1c3ee40`, 2026-07-25:
 
-- compromisos personales variables;
-- agenda y snapshots;
-- orientación desde Captura rápida;
-- borradores con procedencia;
-- onboarding y ayuda contextual;
-- descartes funcionales;
-- reevaluación de reglas al editar;
-- cascada de limpieza de compromisos, impactos y notificaciones;
-- período financiero unificado en lista, Dashboard, Proyección e insights.
+- cierre mobile-first del alta y edición de Compromisos;
+- recordatorios y fechas mensuales desde una fuente única;
+- monto vigente, vigencias futuras e historial inmutable;
+- sugerencias recurrentes con criterio híbrido y descarte persistente;
+- integración entre Captura rápida y Compromisos;
+- documentación funcional, técnica, de diseño y decisiones actualizada.
 
 Documentación técnica: [`../tecnico/compromisos_variables_y_orientacion.md`](../tecnico/compromisos_variables_y_orientacion.md).

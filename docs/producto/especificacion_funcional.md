@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -312,6 +312,19 @@ Antes de escribir:
 - anticipa impacto;
 - detecta duplicados y fechas especiales.
 
+Captura rápida también debe admitir consumos con tarjeta de crédito, porque son
+una operación cotidiana de alta frecuencia:
+
+- un consumo en un pago puede resolverse dentro del diálogo cuando tarjeta,
+  monto, moneda y fecha son válidos;
+- un consumo en varias cuotas conserva lo interpretado y abre el flujo
+  especializado para confirmar tarjeta, cantidad de cuotas, primer cierre y
+  demás datos propios del plan;
+- si la tarjeta no puede identificarse con suficiente confianza, Finp pregunta
+  o deriva sin convertir el consumo en un gasto de cuenta común;
+- un consumo con tarjeta y el pago del resumen son operaciones distintas y no
+  se infieren una de otra.
+
 ### Orientación
 
 Captura rápida distingue:
@@ -479,10 +492,13 @@ El sistema deduplica señales y resuelve estados obsoletos cuando la acción ya 
 
 ## 14. Proyección y anticipación
 
+### Proyección
+
 La proyección combina:
 
 - compromisos;
-- cuotas;
+- consumos con tarjeta en un pago;
+- consumos con tarjeta en cuotas;
 - aplicaciones y montos por período;
 - saldos o cashflow esperado.
 
@@ -500,6 +516,42 @@ Las fechas de compromiso se derivan desde una única regla de dominio. Los días
 29–31 se ajustan al último día real del mes, la primera ocurrencia nunca precede
 la fecha de inicio y el recordatorio puede cruzar al mes anterior. Una ocurrencia
 anterior al inicio no es pendiente ni forma parte de la proyección.
+
+La lectura de tarjetas debe separar `TC · un pago` de `TC · cuotas`; una compra
+en un pago no desaparece ni se presenta como cuota múltiple. Dentro de cada
+grupo, el recorrido esperado es:
+
+1. período;
+2. tipo de proyección;
+3. tarjeta;
+4. categoría, con monto y porcentaje sobre esa tarjeta y ese tipo;
+5. consumos individuales.
+
+La agregación no modifica la contabilidad ni duplica consumos. Debe contemplar
+tanto la representación vigente como datos históricos compatibles y conservar
+una única fuente para período, moneda, categoría y monto.
+
+La persona puede elegir vistas útiles —por tipo, tarjeta o categoría— y Finp
+puede recordar su preferencia. Esa personalización cambia la presentación, no
+la inclusión de movimientos ni las reglas financieras.
+
+### Análisis y planificación
+
+Proyección responde principalmente cómo pueden evolucionar los próximos
+períodos. El análisis histórico y la administración de hábitos forman una
+superficie relacionada, pero distinta, que debe permitir:
+
+- consultar gastos por categoría y período;
+- profundizar desde categoría a cuentas, tarjetas y movimientos;
+- comparar categorías y métodos de pago;
+- detectar patrones y montos fuera de lo habitual con evidencia explicable;
+- definir objetivos y límites por categoría;
+- revisar avance, desvíos y efecto esperado sobre la proyección.
+
+Proyección y análisis pueden compartir agregaciones y ofrecer navegación entre
+sí, pero no deben concentrar todos los recorridos en una sola pantalla. Un
+límite u objetivo informa y orienta; no bloquea ni altera una transacción por
+sí mismo.
 
 ## 15. Integraciones entre funciones
 
