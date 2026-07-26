@@ -48,7 +48,10 @@ import { DURATION, easeSmooth, fadeIn, staggerContainer, staggerItem } from '@/l
 import type { InstallmentFormData, TransactionFormData } from '@/lib/validations'
 import type { ITransaction } from '@/types'
 import type { InstallmentPlanWithTransaction } from '@/hooks/useCreditCardExpenses'
-import { getSingleCreditCardExpenseStatusForMonth } from '@/lib/utils/credit-card'
+import {
+    getSingleCreditCardExpenseStatusForMonth,
+    type CardPaymentState,
+} from '@/lib/utils/credit-card'
 import { apiJson } from '@/lib/client/auth-client'
 import { cn } from '@/lib/utils'
 import {
@@ -99,6 +102,14 @@ const DEFAULT_FILTERS: PageFilters = {
     categoryFilter: 'all',
     statusFilter: 'active',
     installmentFilter: 'all',
+}
+
+const PAYMENT_STATE_LABELS: Record<CardPaymentState, string> = {
+    no_charges: 'Sin consumos',
+    unpaid: 'Sin pagar',
+    partial: 'Pago parcial',
+    paid: 'Pagada',
+    overpaid: 'Saldo a favor',
 }
 
 function getCurrentMonth() {
@@ -629,6 +640,7 @@ function CreditCardExpensesPageInner() {
     const { createPlan, updatePlan } = useInstallments()
     const {
         allItems,
+        paymentSummaries,
         loading,
         error,
         deletePlan,
@@ -786,48 +798,33 @@ function CreditCardExpensesPageInner() {
     const animatedRemainingDebt = useAnimatedTotals(overviewTotals.remainingDebt)
 
     const cardSummaries = useMemo(() => {
-        const summaries = new Map<string, {
-            cardId: string
-            name: string
-            color: string | null
-            monthlyDue: { ars: number; usd: number }
-            remainingDebt: { ars: number; usd: number }
-            itemCount: number
-        }>()
-
-        summaryItems.forEach((item) => {
+        const remainingByCard = new Map<string, CurrencyTotals>()
+        allItems.forEach((item) => {
             const accountRef = item.kind === 'plan' ? item.plan.accountId : item.transaction.sourceAccountId
             const cardId = getRefId(accountRef)
             if (!cardId) return
-
-            const existing = summaries.get(cardId) ?? {
-                cardId,
-                name: getRefName(accountRef) ?? 'Tarjeta',
-                color: getRefColor(accountRef),
-                monthlyDue: { ars: 0, usd: 0 },
-                remainingDebt: { ars: 0, usd: 0 },
-                itemCount: 0,
-            }
-
+            const remainingDebt = remainingByCard.get(cardId) ?? { ars: 0, usd: 0 }
             const currency = item.kind === 'plan' ? item.plan.currency : item.transaction.currency
-            const monthlyImpact = getMonthlyImpact(item, selectedMonth, preferences.monthStartDay)
-            const remainingDebt = getRemainingForItem(item, selectedMonth, preferences.monthStartDay)
-
             if (currency === 'USD') {
-                existing.monthlyDue.usd += monthlyImpact
-                existing.remainingDebt.usd += remainingDebt
+                remainingDebt.usd += getRemainingForItem(item, selectedMonth, preferences.monthStartDay)
             } else {
-                existing.monthlyDue.ars += monthlyImpact
-                existing.remainingDebt.ars += remainingDebt
+                remainingDebt.ars += getRemainingForItem(item, selectedMonth, preferences.monthStartDay)
             }
-            existing.itemCount += 1
-            summaries.set(cardId, existing)
+            remainingByCard.set(cardId, remainingDebt)
         })
 
-        return Array.from(summaries.values()).sort(
-            (a, b) => (b.remainingDebt.ars + b.remainingDebt.usd) - (a.remainingDebt.ars + a.remainingDebt.usd)
-        )
-    }, [preferences.monthStartDay, selectedMonth, summaryItems])
+        return paymentSummaries.map((summary) => ({
+            cardId: summary.cardId,
+            name: summary.cardName ?? 'Tarjeta',
+            color: summary.cardColor ?? null,
+            monthlyDue: summary.due,
+            monthlyPaid: summary.paid,
+            monthlyPending: summary.pending,
+            paymentState: summary.state,
+            remainingDebt: remainingByCard.get(summary.cardId) ?? { ars: 0, usd: 0 },
+            itemCount: summary.items.length,
+        }))
+    }, [allItems, paymentSummaries, preferences.monthStartDay, selectedMonth])
 
     const handleEditItem = (item: CCExpenseItem | null) => {
         if (!item) return
@@ -1134,7 +1131,7 @@ function CreditCardExpensesPageInner() {
                                 boxShadow: 'var(--card-shadow)',
                             }}
                         >
-                            No hay tarjetas con gastos para los filtros seleccionados.
+                            No hay tarjetas configuradas para este período.
                         </div>
                     ) : (
                         <>
@@ -1177,26 +1174,17 @@ function CreditCardExpensesPageInner() {
                                                 )}
                                                 <p className="truncate text-sm font-medium">{card.name}</p>
                                             </div>
-                                            {selected && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="shrink-0 text-sky-600"
-                                                    style={{
-                                                        borderColor: card.color ? `${card.color}55` : undefined,
-                                                        color: card.color ?? undefined,
-                                                    }}
-                                                >
-                                                    Filtrada
-                                                </Badge>
-                                            )}
+                                            <Badge variant="outline" className="shrink-0">
+                                                {PAYMENT_STATE_LABELS[card.paymentState]}
+                                            </Badge>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4 border-t border-foreground/[0.07] pt-3">
                                             <div className="min-w-0">
-                                                <p className="text-[11px] text-muted-foreground">Deuda restante</p>
+                                                <p className="text-[11px] text-muted-foreground">Pendiente este mes</p>
                                                 <div className="mt-1">
                                                     <CurrencyBreakdownAmount
-                                                        totals={card.remainingDebt}
+                                                        totals={card.monthlyPending}
                                                         hidden={hidden}
                                                         primaryColor="var(--foreground)"
                                                         secondaryColor="var(--muted-foreground)"
@@ -1205,10 +1193,10 @@ function CreditCardExpensesPageInner() {
                                                 </div>
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="text-[11px] text-muted-foreground">Resumen mensual</p>
+                                                <p className="text-[11px] text-muted-foreground">Pagado este mes</p>
                                                 <div className="mt-1">
                                                     <CurrencyBreakdownAmount
-                                                        totals={card.monthlyDue}
+                                                        totals={card.monthlyPaid}
                                                         hidden={hidden}
                                                         primaryColor="var(--foreground)"
                                                         secondaryColor="var(--muted-foreground)"
@@ -1216,9 +1204,7 @@ function CreditCardExpensesPageInner() {
                                                     />
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    {(card.monthlyDue.ars > 0 || card.monthlyDue.usd > 0)
-                                                        ? 'impacta este mes'
-                                                        : 'sin impacto este mes'}
+                                                    Deuda futura: ARS {card.remainingDebt.ars.toLocaleString('es-AR')}
                                                 </p>
                                             </div>
                                         </div>
@@ -1265,26 +1251,17 @@ function CreditCardExpensesPageInner() {
                                                 )}
                                                 <p className="truncate text-sm font-medium">{card.name}</p>
                                             </div>
-                                            {selected && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="shrink-0 text-sky-600"
-                                                    style={{
-                                                        borderColor: card.color ? `${card.color}55` : undefined,
-                                                        color: card.color ?? undefined,
-                                                    }}
-                                                >
-                                                    Filtrada
-                                                </Badge>
-                                            )}
+                                            <Badge variant="outline" className="shrink-0">
+                                                {PAYMENT_STATE_LABELS[card.paymentState]}
+                                            </Badge>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4 border-t border-foreground/[0.07] pt-3">
                                             <div className="min-w-0">
-                                                <p className="text-[11px] text-muted-foreground">Deuda restante</p>
+                                                <p className="text-[11px] text-muted-foreground">Pendiente este mes</p>
                                                 <div className="mt-1">
                                                     <CurrencyBreakdownAmount
-                                                        totals={card.remainingDebt}
+                                                        totals={card.monthlyPending}
                                                         hidden={hidden}
                                                         primaryColor="var(--foreground)"
                                                         secondaryColor="var(--muted-foreground)"
@@ -1293,10 +1270,10 @@ function CreditCardExpensesPageInner() {
                                                 </div>
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="text-[11px] text-muted-foreground">Resumen mensual</p>
+                                                <p className="text-[11px] text-muted-foreground">Pagado este mes</p>
                                                 <div className="mt-1">
                                                     <CurrencyBreakdownAmount
-                                                        totals={card.monthlyDue}
+                                                        totals={card.monthlyPaid}
                                                         hidden={hidden}
                                                         primaryColor="var(--foreground)"
                                                         secondaryColor="var(--muted-foreground)"

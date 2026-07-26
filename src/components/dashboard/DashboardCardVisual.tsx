@@ -13,6 +13,14 @@ import type { DashboardCardBrand } from '@/components/dashboard/dashboard-utils'
 import type { DashboardCreditCard } from '@/components/dashboard/types'
 import { cn } from '@/lib/utils'
 
+const PAYMENT_STATE_LABELS: Record<DashboardCreditCard['paymentState'], string> = {
+    no_charges: 'Sin consumos',
+    unpaid: 'Sin pagar',
+    partial: 'Pago parcial',
+    paid: 'Pagada',
+    overpaid: 'Saldo a favor',
+}
+
 function ProcessorBadge({ brand, label }: { brand: DashboardCardBrand; label: string }) {
     const logoByBrand: Partial<Record<DashboardCardBrand, { src: string; width: number; height: number; className?: string }>> = {
         visa: { src: '/card-networks/Visa.png', width: 90, height: 30, className: 'max-h-[1.9rem]' },
@@ -107,6 +115,9 @@ export function DashboardCardVisual({
                         {card.institution && (
                             <p className="text-sm text-muted-foreground">{card.institution}</p>
                         )}
+                        <span className="inline-flex rounded-full border border-foreground/10 bg-background/60 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+                            {PAYMENT_STATE_LABELS[card.paymentState]}
+                        </span>
                     </div>
 
                     <div className="flex flex-col items-end gap-3 text-right">
@@ -161,9 +172,9 @@ export function DashboardCardVisual({
                         </p>
                     </div>
                     <div className="text-right">
-                        <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Impacto mensual</p>
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Pagado este mes</p>
                         <CurrencyBreakdownAmount
-                            totals={card.monthlyDue}
+                            totals={card.monthlyPaid}
                             hidden={hidden}
                             primaryColor="var(--foreground)"
                             secondaryColor="var(--muted-foreground)"
