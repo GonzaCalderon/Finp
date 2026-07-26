@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -171,6 +171,8 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Usuario/preferencias | `User` | Aislamiento por identidad autenticada. |
 | Saldo de cuentas | transacciones + saldos iniciales | No guardar un saldo derivado como autoridad paralela. |
 | Movimiento personal | `Transaction` | Tipo y vínculos determinan efecto. |
+| Resumen de tarjeta | transacciones del período + `credit-card.ts` | Total, pagado, pendiente y crédito se derivan por tarjeta y moneda; nunca se suman ARS y USD. |
+| Grupo de pago dual | `Transaction.paymentGroupId` | Vincula una intención de pago; el usuario elige el alcance del borrado y un grupo con menos de dos miembros se normaliza. |
 | Cuotas | `InstallmentPlan` + transacciones relacionadas | Evitar doble impacto. El plan vive mientras exista su compra originaria: eliminar una arrastra la otra. |
 | Compromiso | `ScheduledCommitment` | Plantilla, política y agenda. |
 | Aplicación | subdocumento/relación de compromiso | Snapshot por período y transacción. |
@@ -189,7 +191,7 @@ Servicios relevantes en `src/lib/server/`:
 | Grupo | Responsabilidad |
 |---|---|
 | `transactions.ts` | creación y edición de movimientos con reglas comunes |
-| `transaction-teardown.ts` | limpieza de relaciones antes de eliminar, incluida la cascada del plan de cuotas |
+| `transaction-teardown.ts` | limpieza de relaciones antes de eliminar, incluida la cascada del plan de cuotas y normalización de grupos de pago |
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
@@ -251,7 +253,10 @@ Los efectos derivados deben:
 - detectar entidades existentes;
 - resolver o reportar inconsistencias.
 
-No borrar por inferencia relaciones ambiguas que también muevan dinero. Reportar y pedir una decisión.
+No borrar por inferencia relaciones ambiguas que también muevan dinero. Cuando
+la relación es conocida, la API expone alcances explícitos y el usuario elige.
+El pago dual admite `single` y `group`; el primer alcance conserva la otra parte
+y elimina su identificador de grupo huérfano.
 
 ## 11. Autenticación, autorización y privacidad
 

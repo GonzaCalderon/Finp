@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -145,6 +145,13 @@ Requisitos:
 - acciones destructivas alejadas de acciones frecuentes.
 
 El responsive no consiste en ocultar contenido importante. Debe reorganizarlo conservando significado y capacidad de acción.
+
+Los flujos financieros con contenido variable usan una estructura estable:
+encabezado y cierre fuera del área desplazable, cuerpo con scroll propio y CTA
+primario visible sobre la safe area. En mobile, un diálogo alto pasa a pantalla
+completa o sheet inferior de hasta `90dvh`; en desktop usa un diálogo mediano o
+sheet lateral. Abrir un detalle desde una relación conserva un regreso explícito
+al contexto anterior.
 
 ## 7. Color, tipografía y superficie
 

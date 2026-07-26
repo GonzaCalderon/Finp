@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: reglas funcionales de Espacios
 
 ## Índice
@@ -210,6 +210,12 @@ Estados relevantes del impacto personal:
 - `cancelled`;
 - `removed`;
 - `needs_review`.
+
+La acción `Quitar de Mi Finp` elimina la transacción personal vinculada y marca
+el impacto privado como `removed`. No borra ni edita el movimiento compartido.
+Es idempotente: repetirla sobre un impacto ya quitado no crea otro efecto. La
+confirmación muestra cuenta, dirección, monto y moneda para que el usuario pueda
+anticipar el cambio.
 
 Cuando una edicion cambia el reparto de manera material, los pendientes se
 reconcilian contra el reparto nuevo:

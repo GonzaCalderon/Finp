@@ -75,6 +75,10 @@ Ramas:
 - saldo disponible acumulado separado del resultado del período;
 - cashflow y visualizaciones;
 - tarjetas y planes de cuotas;
+- resumen de tarjeta por período y moneda con total, pagado, pendiente, crédito
+  y estado `sin consumos`, `impaga`, `parcial`, `pagada` o `saldo a favor`;
+- pagos de tarjeta duales vinculados como una misma intención, con borrado
+  explícito de una parte o del grupo completo;
 - importación Excel con revisión;
 - fecha de inicio operativo;
 - ocultamiento global de montos;
@@ -223,6 +227,8 @@ crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
 - configuración General y Mi Finp;
 - impacto personal privado;
 - categoría automática, fija o mapeada;
+- alta y baja del impacto personal desde el movimiento del Espacio; quitarlo
+  elimina la transacción personal vinculada sin alterar el origen compartido;
 - revisión cuando cambia el origen;
 - reconciliación de pendientes al cambiar el reparto: se actualizan, cancelan o
   crean según quién deba decidir con el reparto nuevo.
@@ -249,11 +255,13 @@ crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
 - consolidación por relación;
 - timeline;
 - sincronización idempotente desde Espacios;
-- operación atómica entre cuenta, deuda y movimiento.
+- operación atómica entre cuenta, deuda y movimiento;
+- detalle inferior en mobile y lateral en desktop, con continuidad al volver a
+  la relación;
+- alta, pago y cobro responsive con encabezado y acciones fuera del scroll.
 
 ### Experiencia por cerrar
 
-- detalle y resolución de pendientes en mobile;
 - integración más profunda con tarjetas;
 - registrar un préstamo en Finp desde Deudas.
 
@@ -326,7 +334,9 @@ Mobile web sigue siendo la superficie prioritaria.
 
 ## 11. Limitaciones conocidas
 
-- El hermano de un pago dual con `paymentGroupId` se reporta, pero no se elimina por inferencia.
+- Los grupos históricos de pagos duales se reparan sólo con
+  `npm run repair:payment-groups`; el comando es `dry-run` por defecto y no debe
+  aplicarse sin identificar la base y revisar el resultado.
 - `auto_month_start` no tiene scheduler.
 - La detección híbrida de candidatos a compromiso está implementada, incluye el
   caso de control Pizza y sigue pendiente de validación E2E con datos reales
@@ -343,13 +353,11 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Promoción `1c3ee40`, 2026-07-25:
+Bloque P1, 2026-07-26:
 
-- cierre mobile-first del alta y edición de Compromisos;
-- recordatorios y fechas mensuales desde una fuente única;
-- monto vigente, vigencias futuras e historial inmutable;
-- sugerencias recurrentes con criterio híbrido y descarte persistente;
-- integración entre Captura rápida y Compromisos;
-- documentación funcional, técnica, de diseño y decisiones actualizada.
-
-Documentación técnica: [`../tecnico/compromisos_variables_y_orientacion.md`](../tecnico/compromisos_variables_y_orientacion.md).
+- resumen y estado de tarjetas con separación estricta por moneda;
+- borrado explícito y normalización de pagos duales;
+- alta y baja segura del impacto privado de Espacios en Mi Finp;
+- cierre responsive de los recorridos críticos de Deudas;
+- fundamentos compartidos de importes, sheets y totales por moneda;
+- decisiones 0003 y 0004, dominios, arquitectura y roadmap actualizados.

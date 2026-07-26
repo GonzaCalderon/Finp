@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -80,3 +80,8 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0002 — Criterio híbrido para sugerencias de compromisos`](0002-criterio-hibrido-sugerencias-de-compromisos.md):
   umbral de confianza, evidencia temporal, estabilidad, afinidad por categoría
   y caso de control Pizza.
+- [`0003 — Borrado explícito de pagos duales`](0003-borrado-explicito-de-pagos-duales.md):
+  elección entre una parte y el grupo completo, compatibilidad y reparación de
+  grupos huérfanos.
+- [`0004 — Resumen bimonetario de tarjetas`](0004-resumen-bimonetario-de-tarjetas.md):
+  fuente compartida, estados derivados y separación estricta entre ARS y USD.

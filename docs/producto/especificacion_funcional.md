@@ -262,8 +262,10 @@ El flujo distingue qué se entrega y qué se recibe, cuentas compatibles, cotiza
 - resumen por período;
 - deuda pendiente;
 - pagos de tarjeta;
-- estado del período por tarjeta: pagada, parcial o impaga, sin presentar un pago
-  parcial como total.
+- estado del período por tarjeta y moneda: sin consumos, pagada, parcial, impaga
+  o con saldo a favor, sin presentar un pago parcial como total ni sumar ARS y
+  USD;
+- alcance explícito al eliminar un pago dual: una parte o el grupo completo.
 
 Una cuota no debe duplicar el impacto de la compra que la originó.
 
@@ -433,6 +435,8 @@ Cada participante decide si y cómo registrar su impacto en Finp:
 - vínculo con una transacción existente.
 
 Si el movimiento compartido cambia materialmente, el impacto personal pasa a revisión.
+Quitar el movimiento de Mi Finp elimina su transacción personal vinculada y
+marca el impacto privado como removido; no modifica el movimiento compartido.
 
 ### Configuración personal
 
@@ -455,7 +459,9 @@ Deudas permite:
 - pagar o cobrar total o parcialmente;
 - ignorar o restaurar deudas derivadas;
 - consolidar por persona;
-- consultar timeline.
+- consultar timeline;
+- abrir una relación, profundizar en una deuda y volver sin perder contexto;
+- completar alta, pago y cobro en mobile con acciones siempre visibles.
 
 Pagar o cobrar:
 

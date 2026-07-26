@@ -113,29 +113,6 @@ Los principios de producto y de trabajo viven en
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
 
-### FINP-P1-004 — Política para pagos duales
-
-- Estado: `en discovery`.
-- Problema: al eliminar una parte, el hermano con `paymentGroupId` sólo se reporta.
-- Requiere: decisión del prompter.
-- Decisión requerida: conservar, ofrecer eliminar, o tratar el grupo como unidad.
-- Criterio: decisión registrada y comportamiento cubierto sin inferencia riesgosa.
-
-### FINP-P1-005 — Deudas mobile
-
-- Estado: `pendiente`.
-- Criterio: abrir detalle, comprender origen y resolver pendientes sin paneles inaccesibles ni saltos.
-
-### FINP-P1-006 — Estado de tarjetas
-
-- Estado: `pendiente`.
-- Criterio: cada tarjeta muestra período, total, pendiente y estado pagada/parcial/impaga; pagos parciales no aparecen como totales.
-
-### FINP-P1-007 — Registrar o quitar de Mi Finp
-
-- Estado: `pendiente`.
-- Criterio: CTA claro, impacto previo, monedas y formato correctos, acción de quitar visible en mobile.
-
 ### FINP-P1-011 — Rotar credenciales remotas expuestas
 
 - Estado: `pendiente`.
@@ -372,6 +349,17 @@ documental corre con `npm run docs:check`.
 
 ### 2026-07-26
 
+- FINP-P1-004: un pago dual se elimina con alcance explícito: una sola parte o
+  el grupo ARS + USD. El borrado parcial normaliza grupos huérfanos y existe un
+  reparador idempotente en modo `dry-run`;
+- FINP-P1-005: Deudas usa detalle inferior en mobile, lateral en desktop,
+  navegación de regreso entre relación y deuda, y formularios de pago, cobro y
+  alta con encabezado y acciones siempre accesibles;
+- FINP-P1-006: Dashboard y Tarjetas comparten un resumen bimonetario por período
+  con total, pagado, pendiente, crédito y estado por tarjeta, sin sumar ARS y USD;
+- FINP-P1-007: movimientos de Espacios permiten registrar y quitar el impacto
+  privado desde mobile. Quitar elimina la transacción personal vinculada y no
+  modifica el movimiento compartido;
 - FINP-P1-008: editar el reparto de un movimiento reconcilia los pendientes. A
   quien le cambió el monto se le actualiza el pendiente y se refresca su aviso;
   quien salió del split lo ve cancelado y su notificación resuelta; quien entró
