@@ -213,13 +213,8 @@ Los principios de producto y de trabajo viven en
 ### FINP-P2-008 — Centro de análisis por categorías
 
 - Estado: `en discovery`.
-- Alcance:
-  - evolución por período;
-  - monto y participación de cada categoría;
-  - recorrido categoría → cuentas/tarjetas → movimientos;
-  - comparación entre cuentas, tarjetas y métodos de pago;
-  - navegación relacionada con Proyección sin incorporar toda la gestión en
-    esa pantalla.
+- Alcance: análisis histórico por categoría según
+  [`especificacion_funcional.md`](especificacion_funcional.md) §14.
 - Dependencias: calidad de ingreso, normalización y procedencia.
 - Criterio a definir: período, monedas, conversiones, datos incompletos,
   categorías modificadas, rendimiento de agregaciones y experiencia
@@ -264,17 +259,10 @@ Los principios de producto y de trabajo viven en
 ### FINP-P3-004 — Proyección avanzada
 
 - Estado: `pendiente`.
-- Alcance:
-  - grupos separados `Compromisos`, `TC · cuotas` y `TC · un pago`;
-  - recorrido período → tipo → tarjeta → categoría → movimiento;
-  - monto y porcentaje por categoría dentro de cada tarjeta y tipo;
-  - compatibilidad con planes de una cuota y consumos históricos sin plan, sin
-    omisiones ni doble conteo;
-  - certeza de monto;
-  - parte propia;
-  - salida de cuenta;
-  - vistas por tipo, tarjeta o categoría con preferencia persistida;
-  - escenarios.
+- Alcance: la lectura por tipo, tarjeta y categoría descripta en
+  [`especificacion_funcional.md`](especificacion_funcional.md) §14, más certeza de
+  monto, parte propia, salida de cuenta y escenarios. Incluye planes de una cuota y
+  consumos históricos sin plan, sin omisiones ni doble conteo.
 - Criterio: la vista predeterminada y la personalización deben definirse en
   discovery; cambiar de vista no cambia reglas, totales ni inclusión de datos.
 - Relación: comparte agregaciones y navegación con FINP-P2-008/009/010, pero

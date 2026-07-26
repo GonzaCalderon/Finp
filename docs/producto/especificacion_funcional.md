@@ -44,15 +44,9 @@ Las aplicaciones de gestión financiera dependen de datos actualizados. Cuando n
 - la pérdida de confianza desmotiva el uso;
 - registrar deja de sentirse útil.
 
-Finp responde con:
-
-- captura rápida;
-- múltiples caminos de ingreso;
-- importación asistida;
-- reglas;
-- aprendizaje personal;
-- revisión y sugerencias;
-- recompensa inmediata mediante saldos, contexto, proyección e insights.
+Finp responde bajando el costo de registrar —captura rápida, varios caminos de
+ingreso, importación asistida, reglas y aprendizaje personal— y devolviendo algo
+útil de inmediato: saldos, contexto, proyección e insights.
 
 La automatización debe reducir trabajo, no ocultar decisiones financieras.
 
@@ -67,7 +61,7 @@ Finp busca ser un compañero financiero:
 - colaborativo, sin exponer la contabilidad privada;
 - útil en mobile y profundo en web.
 
-La web es el producto principal. Una aplicación mobile nativa o multiplataforma es una evolución posible que requiere discovery técnico y madurez funcional previa.
+La dirección de plataformas está en [Mobile y evolución de plataformas](#16-mobile-y-evolución-de-plataformas).
 
 ## 4. Principios funcionales
 
@@ -268,7 +262,8 @@ El flujo distingue qué se entrega y qué se recibe, cuentas compatibles, cotiza
 - resumen por período;
 - deuda pendiente;
 - pagos de tarjeta;
-- distinción futura más clara entre pago total, parcial e impago.
+- estado del período por tarjeta: pagada, parcial o impaga, sin presentar un pago
+  parcial como total.
 
 Una cuota no debe duplicar el impacto de la compra que la originó.
 
@@ -346,7 +341,7 @@ Una intención explícita tiene prioridad. Las funciones complejas reciben un bo
 
 Una importación no debe saltar validaciones disponibles en el ingreso manual.
 
-### Revisión futura
+### Bandeja de revisión
 
 Una bandeja diaria puede agrupar borradores, imports, movimientos incompletos y sugerencias. Debe ser un complemento, no un requisito para registrar.
 
@@ -397,18 +392,17 @@ El historial puede sugerir:
 
 Crear una entidad o automatización siempre requiere confirmación.
 
-Un candidato de compromiso usa un criterio híbrido. Un monto estable, con
-variación de hasta 10 %, requiere al menos tres meses; un monto variable,
-al menos cinco. Además exige 75 % de cobertura temporal, como máximo una
-coincidencia mensual y confianza mínima de 0,82. La confianza combina
-recurrencia, estabilidad y afinidad de categoría.
+Un candidato de compromiso exige evidencia híbrida —duración, cobertura,
+estabilidad del monto y afinidad de categoría— y es más estricto con montos
+variables que con montos estables. La confianza es un umbral de presentación: no
+se muestra como certeza ni autoriza una escritura.
 
-Servicios, Suscripciones, Educación, Hogar, Impuestos y Préstamos bonifican la
-señal. Restaurantes y delivery, Supermercado, Indumentaria, Viajes y Otros
-gastos la penalizan; seis o más repeticiones pueden compensar esa penalización.
 El candidato explica período, cobertura, estabilidad, día y categoría, descarta
 movimientos ya vinculados y recuerda rechazos. Abre el alta guiada con un
 borrador; nunca crea la plantilla automáticamente.
+
+Los umbrales exactos y las categorías que bonifican o penalizan la señal viven en
+[`../decisiones/0002-criterio-hibrido-sugerencias-de-compromisos.md`](../decisiones/0002-criterio-hibrido-sugerencias-de-compromisos.md).
 
 ## 11. Espacios
 
@@ -583,7 +577,9 @@ Eliminar una transacción debe identificar y resolver compromisos, impactos, not
 
 ## 16. Mobile y evolución de plataformas
 
-Finp es hoy una aplicación web responsive.
+Finp es hoy una aplicación web responsive y la web es el producto principal. Una
+aplicación mobile nativa o multiplataforma es una evolución posible que requiere
+discovery técnico y madurez funcional previa.
 
 Dirección:
 
