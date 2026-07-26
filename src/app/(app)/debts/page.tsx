@@ -103,6 +103,7 @@ function DebtsPageInner() {
     const [selectedRelationKey, setSelectedRelationKey] = useState<string | null>(null)
     const [highlightedDebtId, setHighlightedDebtId] = useState<string | null>(null)
     const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null)
+    const [detailReturnRelationKey, setDetailReturnRelationKey] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
     const [createPrefillName, setCreatePrefillName] = useState('')
     const [createFromRelation, setCreateFromRelation] = useState(false)
@@ -253,10 +254,26 @@ function DebtsPageInner() {
         }
     }
 
+    const detailReturnRelationship = detailReturnRelationKey
+        ? allRelationships.find((relationship) => relationship.key === detailReturnRelationKey) ?? null
+        : null
+
     const panelHandlers = {
-        onViewDebt: (debt: IDebt) => setSelectedDebtId(idToString(debt._id)),
-        onPay: (debt: IDebt) => setPayDebtTarget(debt),
-        onCollect: (debt: IDebt) => setCollectDebtTarget(debt),
+        onViewDebt: (debt: IDebt) => {
+            if (isMobile) {
+                setDetailReturnRelationKey(selectedRelationKey)
+                setSelectedRelationKey(null)
+            }
+            setSelectedDebtId(idToString(debt._id))
+        },
+        onPay: (debt: IDebt) => {
+            if (isMobile) setSelectedRelationKey(null)
+            setPayDebtTarget(debt)
+        },
+        onCollect: (debt: IDebt) => {
+            if (isMobile) setSelectedRelationKey(null)
+            setCollectDebtTarget(debt)
+        },
         onNewDebt: handlePanelNewDebt,
     }
 
@@ -367,7 +384,7 @@ function DebtsPageInner() {
             </div>
 
             <AnimatePresence mode="wait">
-                {selectedRel ? (
+                {!isMobile && selectedRel ? (
                     <motion.aside
                         key={selectedRel.key}
                         className="hidden w-96 shrink-0 overflow-hidden border-l bg-card md:flex md:flex-col"
@@ -403,7 +420,10 @@ function DebtsPageInner() {
             <DebtDetailSheet
                 open={Boolean(selectedDebtId)}
                 onOpenChange={(open) => {
-                    if (!open) setSelectedDebtId(null)
+                    if (!open) {
+                        setSelectedDebtId(null)
+                        setDetailReturnRelationKey(null)
+                    }
                 }}
                 debtId={selectedDebtId}
                 hidden={hidden}
@@ -412,6 +432,12 @@ function DebtsPageInner() {
                 onIgnore={handleIgnore}
                 onRestore={handleRestore}
                 onCancel={handleCancel}
+                onBack={detailReturnRelationship ? () => {
+                    setSelectedDebtId(null)
+                    setSelectedRelationKey(detailReturnRelationship.key)
+                    setDetailReturnRelationKey(null)
+                } : undefined}
+                backLabel={detailReturnRelationship?.name}
                 getDebtWithMovements={getDebtWithMovements}
             />
 

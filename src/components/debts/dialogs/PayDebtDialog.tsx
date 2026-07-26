@@ -96,15 +96,21 @@ export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: 
 
     return (
         <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v) }}>
-            <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Pagar deuda</DialogTitle>
-                    <DialogDescription>
-                        Registra un pago y actualiza el saldo pendiente de esta deuda.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent
+                variant="fullscreen-mobile"
+                className="gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-md"
+            >
+                <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
+                    <div className="shrink-0 border-b border-border/70 px-5 py-5 sm:px-6">
+                        <DialogHeader>
+                            <DialogTitle>Pagar deuda</DialogTitle>
+                            <DialogDescription>
+                                Registra un pago y actualiza el saldo pendiente de esta deuda.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
 
-                <div className="space-y-4">
+                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
                     <div className="rounded-lg border p-3 text-sm space-y-0.5" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
                         <span className="text-muted-foreground">Deuda con </span>
                         <span className="font-medium">{debt.counterpartyNameSnapshot}</span>
@@ -197,16 +203,17 @@ export function PayDebtDialog({ open, onOpenChange, debt, accounts, onSubmit }: 
                             <p className="text-muted-foreground">También se registrará el pago en el espacio.</p>
                         )}
                     </div>
-                </div>
+                    </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-                        Cancelar
-                    </Button>
-                    <Button onClick={handleSubmit} disabled={submitting}>
-                        {submitting ? 'Guardando…' : 'Registrar pago'}
-                    </Button>
-                </DialogFooter>
+                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-5 py-4 backdrop-blur sm:px-6">
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleSubmit} disabled={submitting}>
+                            {submitting ? 'Guardando…' : 'Registrar pago'}
+                        </Button>
+                    </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     )

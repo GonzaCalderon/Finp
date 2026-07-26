@@ -81,15 +81,21 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, lockCounterp
 
     return (
         <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v) }}>
-            <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Nueva deuda</DialogTitle>
-                    <DialogDescription>
-                        Registra una deuda manual para hacer seguimiento del saldo pendiente.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent
+                variant="fullscreen-mobile"
+                className="gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-md"
+            >
+                <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
+                    <div className="shrink-0 border-b border-border/70 px-5 py-5 sm:px-6">
+                        <DialogHeader>
+                            <DialogTitle>Nueva deuda</DialogTitle>
+                            <DialogDescription>
+                                Registra una deuda manual para hacer seguimiento del saldo pendiente.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
 
-                <div className="space-y-4">
+                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
                     {lockCounterparty && counterpartyName && (
                         <p className="text-xs text-muted-foreground rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
                             Esta acción se registrará dentro de la relación con <strong>{counterpartyName}</strong>.
@@ -163,16 +169,17 @@ export function CreateDebtDialog({ open, onOpenChange, prefillName, lockCounterp
                             onChange={(e) => setNotes(e.target.value)}
                         />
                     </div>
-                </div>
+                    </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-                        Cancelar
-                    </Button>
-                    <Button onClick={handleSubmit} disabled={submitting}>
-                        {submitting ? 'Guardando…' : 'Registrar deuda'}
-                    </Button>
-                </DialogFooter>
+                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-5 py-4 backdrop-blur sm:px-6">
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleSubmit} disabled={submitting}>
+                            {submitting ? 'Guardando…' : 'Registrar deuda'}
+                        </Button>
+                    </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     )

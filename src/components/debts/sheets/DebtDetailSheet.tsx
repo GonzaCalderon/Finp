@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-react'
 import {
     Sheet,
     SheetContent,
@@ -30,6 +30,7 @@ import {
     DebtAmountInline,
 } from '@/components/debts/DebtsUi'
 import type { IDebt, IDebtMovement } from '@/types/debt'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 
 interface DebtDetailSheetProps {
     open: boolean
@@ -41,6 +42,8 @@ interface DebtDetailSheetProps {
     onIgnore: (debt: IDebt) => void
     onRestore: (debt: IDebt) => void
     onCancel: (debt: IDebt) => void
+    onBack?: () => void
+    backLabel?: string
     getDebtWithMovements: (id: string) => Promise<{ debt: IDebt; movements: IDebtMovement[] }>
 }
 
@@ -86,11 +89,14 @@ export function DebtDetailSheet({
     onIgnore,
     onRestore,
     onCancel,
+    onBack,
+    backLabel,
     getDebtWithMovements,
 }: DebtDetailSheetProps) {
     const [debt, setDebt] = useState<IDebt | null>(null)
     const [movements, setMovements] = useState<IDebtMovement[]>([])
     const [loading, setLoading] = useState(false)
+    const isMobile = useMediaQuery('(max-width: 767px)')
 
     useEffect(() => {
         if (!open || !debtId) return
@@ -119,8 +125,21 @@ export function DebtDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={handleOpenChange}>
-            <SheetContent className="w-full sm:max-w-lg flex flex-col gap-0 p-0 overflow-y-auto">
+            <SheetContent
+                side={isMobile ? 'bottom' : 'right'}
+                className="flex h-[90dvh] w-full flex-col gap-0 overflow-y-auto p-0 sm:h-full sm:max-w-lg"
+            >
                 <SheetHeader className="px-6 pt-6 pb-4">
+                    {onBack && isMobile ? (
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="mb-2 inline-flex min-h-10 items-center gap-2 self-start rounded-lg pr-3 text-sm font-medium text-primary"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                            Volver a {backLabel ?? 'la persona'}
+                        </button>
+                    ) : null}
                     <SheetTitle className="text-base">Detalle de deuda</SheetTitle>
                     <SheetDescription className="text-xs">
                         {debt ? `Con ${debt.counterpartyNameSnapshot}` : 'Cargando…'}
@@ -232,7 +251,7 @@ export function DebtDetailSheet({
 
                         <Separator />
 
-                        <div className="px-6 py-4 space-y-2">
+                        <div className="sticky bottom-0 z-10 space-y-2 border-t border-border/70 bg-background/95 px-6 py-4 backdrop-blur">
                             {isActionable && debt.direction === 'payable' && (
                                 <Button
                                     className="w-full"

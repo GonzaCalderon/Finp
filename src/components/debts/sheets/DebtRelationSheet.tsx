@@ -36,7 +36,7 @@ export function DebtRelationSheet({
 }: DebtRelationSheetProps) {
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl p-0" showCloseButton>
+            <SheetContent side="bottom" className="h-[90dvh] rounded-t-2xl p-0" showCloseButton>
                 <SheetHeader className="sr-only">
                     <SheetTitle>{rel?.name ?? 'Detalle de deuda'}</SheetTitle>
                     <SheetDescription>Detalle de relación de deuda</SheetDescription>
