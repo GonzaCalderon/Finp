@@ -87,7 +87,10 @@ explícita.
 ### FINP-P0-003 — Entorno y suite E2E reproducibles
 
 - Estado: `pendiente`.
-- Alcance: crear guía y `.env.test.local` fuera de Git, sembrar base aislada y ejecutar los 40 escenarios.
+- Disponible: `.env.test.local` no versionado, `.env.test.example`, guía de
+  ejecución y servidor dedicado en el puerto 3001.
+- Pendiente: verificar que las variables apunten sólo a una base de prueba,
+  completar un seed idempotente y ejecutar los 40 escenarios.
 - Criterio: E2E mobile y desktop reproducibles sin tocar desarrollo ni producción.
 
 ### FINP-P0-004 — Activar E2E crítico en CI

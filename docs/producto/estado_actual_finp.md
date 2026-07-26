@@ -49,7 +49,9 @@ Verificado localmente el 2026-07-25 sobre `dev`:
 - 621 unit tests aprobados en 74 archivos;
 - 5 tests declarados como `todo`;
 - 40 escenarios E2E registrados para desktop y mobile;
-- E2E no ejecutados en esta revisión porque falta `.env.test.local`;
+- `.env.test.local` existe y está excluido de Git; los E2E no se ejecutaron en
+  esta revisión porque todavía falta validar el aislamiento del entorno y
+  completar la ejecución reproducible de la suite;
 - CI activo para lint, build y unit tests;
 - job E2E preparado, pero desactivado.
 
@@ -312,7 +314,8 @@ Mobile web sigue siendo la superficie prioritaria.
 ### Brechas
 
 - E2E fuera del CI;
-- falta `.env.test.local` estándar para ejecución local;
+- `.env.test.local` y la guía local existen; falta validar base aislada, seed
+  idempotente y ejecución completa reproducible;
 - cobertura de integración/API desigual;
 - validación visual y accesibilidad no sistematizadas;
 - cobertura no bloquea CI;
