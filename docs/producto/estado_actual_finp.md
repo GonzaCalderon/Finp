@@ -46,7 +46,7 @@ Verificado localmente el 2026-07-26 sobre `dev`:
 - typecheck limpio;
 - ESLint limpio;
 - build de producción limpio, con 63 páginas generadas;
-- 637 unit tests aprobados en 76 archivos;
+- 655 unit tests aprobados en 77 archivos;
 - 5 tests declarados como `todo`;
 - 40 escenarios E2E registrados para desktop y mobile;
 - `.env.test.local` existe y está excluido de Git; los E2E no se ejecutaron en
@@ -312,6 +312,7 @@ Mobile web sigue siendo la superficie prioritaria.
 - cobertura unitaria amplia de dominio;
 - servicios compartidos para reglas financieras;
 - tests de privacidad, aislamiento e idempotencia;
+- orquestación de NavInsights cubierta en período, aislamiento y señales;
 - Playwright preparado para Chromium desktop y mobile;
 - CI para verificaciones principales;
 - build de producción reproducible.
@@ -329,7 +330,6 @@ Mobile web sigue siendo la superficie prioritaria.
 ## 11. Limitaciones conocidas
 
 - El hermano de un pago dual con `paymentGroupId` se reporta, pero no se elimina por inferencia.
-- `getNavInsightsForUser` no tiene test de integración.
 - `auto_month_start` no tiene scheduler.
 - La detección híbrida de candidatos a compromiso está implementada, incluye el
   caso de control Pizza y sigue pendiente de validación E2E con datos reales

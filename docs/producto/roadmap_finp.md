@@ -110,11 +110,6 @@ Los principios de producto y de trabajo viven en
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
 
-### FINP-P1-003 — Integración de NavInsights
-
-- Estado: `pendiente`.
-- Criterio: `getNavInsightsForUser` tiene cobertura de período, aislamiento y señales.
-
 ### FINP-P1-004 — Política para pagos duales
 
 - Estado: `en discovery`.
@@ -374,6 +369,10 @@ documental corre con `npm run docs:check`.
 
 ### 2026-07-26
 
+- FINP-P1-003: `getNavInsightsForUser` queda cubierto en período, aislamiento y
+  señales. El aislamiento se verifica sobre las catorce consultas del servicio y
+  el conteo falla si se agrega una sin dueño declarado. La verificación contra una
+  base real es alcance de FINP-P0-003;
 - FINP-P1-002: Compromisos emite `intent_completed` al crear la plantilla desde
   un borrador derivado; el `eventId` deriva del borrador, así la derivación queda
   registrada una sola vez y aceptar el CTA sigue siendo un estado distinto;
