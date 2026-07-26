@@ -1,40 +1,27 @@
 import type { IInstallmentPlan, ITransaction } from '@/types'
 import { buildMonthlyCardPaymentSummary, isCreditCardPaymentType } from '@/lib/utils/credit-card'
 import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
+import {
+    addCurrencyAmount,
+    addCurrencyTotals,
+    emptyCurrencyTotals,
+    subtractCurrencyTotals,
+    type CurrencyTotals,
+} from '@/lib/utils/currency-totals'
 
-export type CurrencyTotals = {
-    ars: number
-    usd: number
-}
+export {
+    addCurrencyAmount,
+    addCurrencyTotals,
+    emptyCurrencyTotals,
+    subtractCurrencyTotals,
+    type CurrencyTotals,
+} from '@/lib/utils/currency-totals'
 
 export interface TransactionPeriodSummary {
     income: CurrencyTotals
     expense: CurrencyTotals
     creditCardExpense: CurrencyTotals
     balance: CurrencyTotals
-}
-
-export function emptyCurrencyTotals(): CurrencyTotals {
-    return { ars: 0, usd: 0 }
-}
-
-export function addCurrencyAmount(totals: CurrencyTotals, currency: string, amount: number) {
-    if (currency === 'USD') totals.usd += amount
-    else totals.ars += amount
-}
-
-export function addCurrencyTotals(left: CurrencyTotals, right: CurrencyTotals): CurrencyTotals {
-    return {
-        ars: left.ars + right.ars,
-        usd: left.usd + right.usd,
-    }
-}
-
-export function subtractCurrencyTotals(left: CurrencyTotals, right: CurrencyTotals): CurrencyTotals {
-    return {
-        ars: left.ars - right.ars,
-        usd: left.usd - right.usd,
-    }
 }
 
 export function buildTransactionPeriodSummary({

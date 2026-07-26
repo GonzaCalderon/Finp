@@ -17,7 +17,7 @@ interface ResponsiveAmountProps {
 
 export function ResponsiveAmount({
     amount,
-    currency = 'ARS',
+    currency,
     hidden = false,
     color,
     className,
@@ -44,9 +44,20 @@ export function ResponsiveAmount({
         return <span className={className} style={{ color }}>••••</span>
     }
 
+    let safeCurrency = currency?.trim().toUpperCase()
+    if (!safeCurrency) {
+        console.warn('[ResponsiveAmount] Moneda ausente. Se usará ARS.')
+        safeCurrency = 'ARS'
+    } else try {
+        new Intl.NumberFormat('es-AR', { style: 'currency', currency: safeCurrency })
+    } catch {
+        console.warn(`[ResponsiveAmount] Moneda inválida "${currency ?? ''}". Se usará ARS.`)
+        safeCurrency = 'ARS'
+    }
+
     const compact = new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency,
+        currency: safeCurrency,
         maximumFractionDigits: compactMaximumFractionDigits,
         minimumFractionDigits: 0,
         notation: 'compact',
@@ -54,7 +65,7 @@ export function ResponsiveAmount({
 
     const full = new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency,
+        currency: safeCurrency,
         maximumFractionDigits: fullMaximumFractionDigits,
     }).format(amount)
 
