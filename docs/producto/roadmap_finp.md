@@ -97,8 +97,11 @@ Los principios de producto y de trabajo viven en
 - Desbloquea: FINP-P0-001, FINP-P0-004 y la evidencia final de FINP-P2-001.
 - Disponible: `.env.test.local` no versionado, `.env.test.example`, guía de
   ejecución y servidor dedicado en el puerto 3001.
-- Pendiente: verificar que las variables apunten sólo a una base de prueba,
-  completar un seed idempotente y ejecutar los 40 escenarios.
+- Hallazgo 2026-07-26: `appName` identifica la conexión como test, pero la URI
+  todavía resuelve la misma base remota que desarrollo. No ejecutar seed ni E2E
+  hasta cambiar el nombre de base en la ruta de conexión.
+- Pendiente: apuntar a una base remota exclusiva, completar un seed idempotente
+  y seguro, y ejecutar los 40 escenarios.
 - Criterio: E2E mobile y desktop reproducibles sin tocar desarrollo ni producción.
 
 ### FINP-P0-004 — Activar E2E crítico en CI
@@ -132,6 +135,17 @@ Los principios de producto y de trabajo viven en
 
 - Estado: `pendiente`.
 - Criterio: CTA claro, impacto previo, monedas y formato correctos, acción de quitar visible en mobile.
+
+### FINP-P1-011 — Rotar credenciales remotas expuestas
+
+- Estado: `pendiente`.
+- Prioridad operativa: no bloquea desarrollo local ni documentación.
+- Alcance: rotar la credencial del usuario de MongoDB, revocar la anterior y
+  actualizar los entornos locales autorizados.
+- Restricción: la credencial actual no se copia a CI ni a otros servicios; la
+  rotación debe completarse antes de configurar los secretos de FINP-P0-004.
+- Criterio: credencial anterior inválida, aplicación conectando con la nueva y
+  ausencia de secretos en logs, commits y artefactos.
 
 
 ## 5. Prioridad P2 — recurrencia y orientación
