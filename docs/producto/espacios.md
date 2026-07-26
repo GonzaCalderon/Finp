@@ -211,6 +211,20 @@ Estados relevantes del impacto personal:
 - `removed`;
 - `needs_review`.
 
+Cuando una edicion cambia el reparto de manera material, los pendientes se
+reconcilian contra el reparto nuevo:
+
+- a quien le cambio el monto se le actualiza su pendiente y se refresca el aviso,
+  porque sigue teniendo la misma decision por tomar con otras cifras;
+- a quien salio del reparto se le cancela el pendiente y se resuelve su
+  notificacion: ya no le corresponde registrar nada;
+- a quien entro al reparto se le crea un pendiente nuevo, sin duplicar si ya tenia
+  uno ni crearlo si ya registro el movimiento.
+
+Un pendiente todavia no es historia financiera, asi que actualizarlo no reescribe
+nada. Quien ya registro su impacto sigue el camino de revision, que si supone
+historia y por eso nunca se resuelve solo.
+
 ## 8. Configuracion global vs configuracion personal
 
 ### Configuracion global del espacio

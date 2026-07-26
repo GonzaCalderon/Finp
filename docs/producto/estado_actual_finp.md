@@ -46,8 +46,7 @@ Verificado localmente el 2026-07-26 sobre `dev`:
 - typecheck limpio;
 - ESLint limpio;
 - build de producción limpio, con 63 páginas generadas;
-- 655 unit tests aprobados en 77 archivos;
-- 5 tests declarados como `todo`;
+- 684 unit tests aprobados en 79 archivos, sin tests en `todo`;
 - 40 escenarios E2E registrados para desktop y mobile;
 - `.env.test.local` existe y está excluido de Git; los E2E no se ejecutaron en
   esta revisión porque todavía falta validar el aislamiento del entorno y
@@ -224,7 +223,9 @@ crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
 - configuración General y Mi Finp;
 - impacto personal privado;
 - categoría automática, fija o mapeada;
-- revisión cuando cambia el origen.
+- revisión cuando cambia el origen;
+- reconciliación de pendientes al cambiar el reparto: se actualizan, cancelan o
+  crean según quién deba decidir con el reparto nuevo.
 
 ### No disponible todavía
 
@@ -272,15 +273,11 @@ crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
 - deduplicación y resolución de estados obsoletos;
 - polling, foco y visibilidad.
 
-### Cobertura pendiente
+### Cobertura
 
-Cinco unit tests permanecen como `todo`:
-
-- archivar/restaurar por swipe;
-- descartar por swipe sin resolver la acción;
-- cambios de monto en pendientes de Espacios;
-- usuario removido de un split;
-- usuario agregado a un split.
+No quedan unit tests en `todo`. Están cubiertos el swipe en ambos sentidos, que
+leer, archivar, restaurar y descartar no resuelvan la acción pendiente, y la
+reconciliación de pendientes cuando cambia el reparto de un movimiento.
 
 ## 9. Experiencia y plataformas
 

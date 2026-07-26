@@ -86,7 +86,7 @@ describe('detectSpaceEntryMaterialChanges', () => {
         expect(result.isMaterial).toBe(false)
     })
 
-    it.todo('pending existente que cambia monto debe actualizarse/cancelarse con regla explícita')
-    it.todo('pending de usuario removido del split debe cancelarse y resolver su notificación')
-    it.todo('usuario agregado al split debe recibir un pending nuevo')
+    // Qué pasa con los pendientes cuando el cambio es material —monto nuevo,
+    // participante removido o agregado— se verifica en `pending-actions-sync.test.ts`:
+    // esta función sólo detecta el cambio, no decide sus consecuencias.
 })

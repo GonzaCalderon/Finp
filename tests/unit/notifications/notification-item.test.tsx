@@ -1,8 +1,14 @@
 import React from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Types } from 'mongoose'
 import type { INotification } from '@/types/notification'
+
+type PanInfoLike = {
+    offset: { x: number; y: number }
+    velocity: { x: number; y: number }
+}
+type DragHandler = (event: unknown, info: PanInfoLike) => void
 
 const mocks = vi.hoisted(() => ({
     push: vi.fn(),
@@ -10,6 +16,13 @@ const mocks = vi.hoisted(() => ({
     dismiss: vi.fn().mockResolvedValue(undefined),
     archive: vi.fn().mockResolvedValue(undefined),
     unarchive: vi.fn().mockResolvedValue(undefined),
+    // El mock de framer-motion descarta los handlers de drag al renderizar un div
+    // plano, así que se capturan acá para poder disparar el gesto.
+    drag: {} as {
+        onDragStart?: (event: unknown, info: PanInfoLike) => void
+        onDrag?: (event: unknown, info: PanInfoLike) => void
+        onDragEnd?: (event: unknown, info: PanInfoLike) => void
+    },
 }))
 
 vi.mock('next/navigation', () => ({
@@ -27,7 +40,25 @@ vi.mock('@/contexts/NotificationsContext', () => ({
 
 vi.mock('framer-motion', () => ({
     motion: {
-        div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+        div: (props: Record<string, unknown>) => {
+            if (props.drag) {
+                mocks.drag.onDragStart = props.onDragStart as DragHandler
+                mocks.drag.onDrag = props.onDrag as DragHandler
+                mocks.drag.onDragEnd = props.onDragEnd as DragHandler
+            }
+            // `drag*`, `onDrag*` y `style` con MotionValue no son props del DOM:
+            // se descartan para que quede un div plano y sin warnings de React.
+            const domProps = Object.fromEntries(
+                Object.entries(props).filter(
+                    ([key]) =>
+                        key !== 'children' &&
+                        key !== 'style' &&
+                        !key.startsWith('drag') &&
+                        !key.startsWith('onDrag')
+                )
+            )
+            return <div {...domProps}>{props.children as React.ReactNode}</div>
+        },
     },
     useMotionValue: () => 0,
     useTransform: () => 0,
@@ -116,6 +147,95 @@ describe('NotificationItem', () => {
         expect(mocks.push).not.toHaveBeenCalled()
     })
 
-    it.todo('swipe right archiva o restaura según estado')
-    it.todo('swipe left elimina/dismiss sin resolver pending action')
+    describe('swipe', () => {
+        // El componente resuelve el gesto 160 ms después de la animación de salida.
+        const RESOLVE_DELAY = 200
+
+        beforeEach(() => {
+            mocks.drag.onDragStart = undefined
+            mocks.drag.onDrag = undefined
+            mocks.drag.onDragEnd = undefined
+            vi.useFakeTimers()
+        })
+
+        afterEach(() => {
+            vi.useRealTimers()
+        })
+
+        function swipe(offsetX: number, velocityX = 0) {
+            const info: PanInfoLike = {
+                offset: { x: offsetX, y: 0 },
+                velocity: { x: velocityX, y: 0 },
+            }
+            mocks.drag.onDragStart?.(null, info)
+            mocks.drag.onDrag?.(null, info)
+            mocks.drag.onDragEnd?.(null, info)
+            vi.advanceTimersByTime(RESOLVE_DELAY)
+        }
+
+        it('swipe right archiva una notificación activa', () => {
+            const item = notification()
+            render(<NotificationItem notification={item} />)
+
+            swipe(100)
+
+            expect(mocks.archive).toHaveBeenCalledWith(item._id.toString())
+            expect(mocks.unarchive).not.toHaveBeenCalled()
+            expect(mocks.dismiss).not.toHaveBeenCalled()
+            expect(mocks.push).not.toHaveBeenCalled()
+        })
+
+        it('swipe right restaura una notificación archivada', () => {
+            const item = notification({ status: 'archived', actionStatus: 'none' })
+            render(<NotificationItem notification={item} />)
+
+            swipe(100)
+
+            expect(mocks.unarchive).toHaveBeenCalledWith(item._id.toString())
+            expect(mocks.archive).not.toHaveBeenCalled()
+        })
+
+        it('swipe left descarta sin tocar la acción pendiente', () => {
+            const item = notification({ actionStatus: 'pending' })
+            render(<NotificationItem notification={item} />)
+
+            swipe(-100)
+
+            expect(mocks.dismiss).toHaveBeenCalledWith(item._id.toString())
+            // Descartar el aviso no es resolver lo que el aviso pedía.
+            expect(mocks.archive).not.toHaveBeenCalled()
+            expect(mocks.markAsRead).not.toHaveBeenCalled()
+            expect(mocks.push).not.toHaveBeenCalled()
+        })
+
+        it('un gesto corto no resuelve nada', () => {
+            render(<NotificationItem notification={notification()} />)
+
+            swipe(40)
+
+            expect(mocks.archive).not.toHaveBeenCalled()
+            expect(mocks.dismiss).not.toHaveBeenCalled()
+        })
+
+        it('un gesto corto pero rápido sí resuelve', () => {
+            const item = notification()
+            render(<NotificationItem notification={item} />)
+
+            swipe(40, 800)
+
+            expect(mocks.archive).toHaveBeenCalledWith(item._id.toString())
+        })
+
+        it('arrastrar no abre la notificación al soltar', () => {
+            render(<NotificationItem notification={notification()} />)
+
+            const info: PanInfoLike = { offset: { x: 40, y: 0 }, velocity: { x: 0, y: 0 } }
+            mocks.drag.onDragStart?.(null, info)
+            mocks.drag.onDrag?.(null, info)
+            fireEvent.click(screen.getByText('Nuevo gasto').closest('[role="button"]')!)
+
+            expect(mocks.markAsRead).not.toHaveBeenCalled()
+            expect(mocks.push).not.toHaveBeenCalled()
+        })
+    })
 })

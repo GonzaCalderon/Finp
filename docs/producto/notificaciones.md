@@ -135,8 +135,11 @@ No reemplaza:
 
 ### Mobile
 
-- swipe derecho para archivar;
+- swipe derecho para archivar, o restaurar si ya estaba archivada;
 - swipe izquierdo para descartar;
+- el gesto se confirma por distancia o por velocidad, y arrastrar no abre la
+  notificación al soltar;
+- ninguno de los dos resuelve la acción pendiente: eso sólo lo hace atenderla;
 - tabs con scroll horizontal;
 - hint tactil en tabs activas.
 

@@ -133,17 +133,6 @@ Los principios de producto y de trabajo viven en
 - Estado: `pendiente`.
 - Criterio: CTA claro, impacto previo, monedas y formato correctos, acción de quitar visible en mobile.
 
-### FINP-P1-008 — Pendientes de cambios en splits
-
-- Estado: `pendiente`.
-- Alcance: completar los tres unit tests `todo` sobre cambio de monto, usuario removido y usuario agregado.
-- Criterio: pendientes y notificaciones se crean, actualizan o cancelan con regla explícita.
-
-### FINP-P1-009 — Swipe de notificaciones
-
-- Estado: `pendiente`.
-- Alcance: completar dos unit tests `todo`.
-- Criterio: archivar/restaurar y descartar no resuelven por accidente una acción pendiente.
 
 ## 5. Prioridad P2 — recurrencia y orientación
 
@@ -369,6 +358,14 @@ documental corre con `npm run docs:check`.
 
 ### 2026-07-26
 
+- FINP-P1-008: editar el reparto de un movimiento reconcilia los pendientes. A
+  quien le cambió el monto se le actualiza el pendiente y se refresca su aviso;
+  quien salió del split lo ve cancelado y su notificación resuelta; quien entró
+  recibe uno nuevo. La regla de quién debe decidir se comparte entre el alta y la
+  edición. Los `linked` siguen yendo a revisión, que es otro camino;
+- FINP-P1-009: swipe cubierto en ambos sentidos, con umbral por distancia y por
+  velocidad; leer, archivar, restaurar y descartar no escriben `actionStatus`, así
+  que ninguno resuelve por accidente la acción pendiente;
 - FINP-P1-003: `getNavInsightsForUser` queda cubierto en período, aislamiento y
   señales. El aislamiento se verifica sobre las catorce consultas del servicio y
   el conteo falla si se agrega una sin dueño declarado. La verificación contra una
