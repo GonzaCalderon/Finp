@@ -396,6 +396,7 @@ export async function DELETE(
             destinationAccountId?: unknown
             categoryId?: unknown
             paymentGroupId?: string | null
+            installmentPlanId?: unknown
             updatedAt?: Date
         } | null>()
 
@@ -450,6 +451,7 @@ export async function DELETE(
             message: 'Transacción eliminada correctamente',
             reverted: {
                 commitment: teardown.revertedCommitment ?? null,
+                installmentPlan: teardown.deletedInstallmentPlan ?? null,
                 personalImpact: teardown.unlinkedPersonalImpact,
                 notifications: teardown.resolvedNotifications,
                 orphanPaymentSiblingId: teardown.orphanPaymentSiblingId ?? null,

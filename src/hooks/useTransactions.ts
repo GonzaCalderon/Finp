@@ -162,11 +162,13 @@ export function useTransactions(filters: TransactionFilters = {}) {
     }
 
     const deleteTransaction = async (id: string) => {
-        // La respuesta informa qué se revirtió (aplicación de compromiso, impacto
-        // de Espacios) para poder explicarle el efecto colateral al usuario.
+        // La respuesta informa qué se revirtió (aplicación de compromiso, plan de
+        // cuotas, impacto de Espacios) para poder explicarle el efecto colateral
+        // al usuario.
         const result = await apiJson<{
             reverted?: {
                 commitment: { commitmentId: string; period: string } | null
+                installmentPlan: { planId: string; installmentCount: number } | null
                 personalImpact: boolean
             }
         }>(`/api/transactions/${id}`, { method: 'DELETE' })

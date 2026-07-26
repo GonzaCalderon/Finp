@@ -1002,6 +1002,12 @@ function TransactionsPageInner() {
         setDeleteId(id)
     }
 
+    // Borrar la compra también da de baja su plan de cuotas: el impacto se
+    // anticipa en la confirmación en vez de contarse recién en el toast.
+    const installmentCountPendingDelete = deleteId
+        ? getInstallmentPlanCount(transactions.find((t) => t._id.toString() === deleteId))
+        : null
+
     const handleDeleteConfirm = async () => {
         if (!deleteId) return
 
@@ -1010,6 +1016,10 @@ function TransactionsPageInner() {
             if (reverted?.commitment) {
                 success(
                     `Transacción eliminada. El compromiso volvió a quedar pendiente en ${formatCommitmentPeriod(reverted.commitment.period)}.`
+                )
+            } else if (reverted?.installmentPlan) {
+                success(
+                    `Transacción eliminada. También se dio de baja el plan de ${reverted.installmentPlan.installmentCount} cuotas.`
                 )
             } else {
                 success('Transacción eliminada correctamente')
@@ -1712,7 +1722,7 @@ function TransactionsPageInner() {
 
                                                             {transaction.type === 'credit_card_expense' && transaction.installmentPlanId && (
                                                                 <span className="text-xs font-medium" style={{ color: '#6366F1' }}>
-                                                                    · {((transaction.installmentPlanId as { installmentCount?: number } | null)?.installmentCount ?? 'N')} cuotas
+                                                                    · {getInstallmentPlanCount(transaction) ?? 'N'} cuotas
                                                                 </span>
                                                             )}
 
@@ -1915,7 +1925,9 @@ function TransactionsPageInner() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Eliminar esta transacción?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Esta acción no se puede deshacer.
+                            {installmentCountPendingDelete
+                                ? `También se dará de baja el plan de ${installmentCountPendingDelete} cuotas y sus cuotas dejarán de proyectarse. Esta acción no se puede deshacer.`
+                                : 'Esta acción no se puede deshacer.'}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1953,6 +1965,16 @@ export default function TransactionsPage() {
             <TransactionsPageInner />
         </Suspense>
     )
+}
+
+/**
+ * Cantidad de cuotas del plan asociado, o `null` si la transacción no nació de
+ * un plan. La API pobla `installmentPlanId` sólo con `installmentCount`.
+ */
+function getInstallmentPlanCount(transaction?: ITransaction | null): number | null {
+    if (!transaction?.installmentPlanId) return null
+    const plan = transaction.installmentPlanId as { installmentCount?: number } | null
+    return plan?.installmentCount ?? null
 }
 
 function isPositiveAdjustment(transaction: ITransaction) {

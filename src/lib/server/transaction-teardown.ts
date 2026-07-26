@@ -1,4 +1,4 @@
-import { Notification, SpaceEntryPersonalImpact, Transaction } from '@/lib/models'
+import { InstallmentPlan, Notification, SpaceEntryPersonalImpact, Transaction } from '@/lib/models'
 import {
     NOTIFICATION_ACTION_STATUSES,
     NOTIFICATION_STATUSES,
@@ -9,6 +9,8 @@ import { revertApplicationForTransaction } from '@/lib/server/commitments'
 export interface TransactionTeardownResult {
     /** Compromiso cuyo período volvió a quedar pendiente, si aplica. */
     revertedCommitment?: { commitmentId: string; period: string }
+    /** Plan de cuotas que se eliminó junto con su compra originaria. */
+    deletedInstallmentPlan?: { planId: string; installmentCount: number }
     /** Impacto personal de Espacios que se desvinculó. */
     unlinkedPersonalImpact: boolean
     /** Notificaciones pendientes que apuntaban a la transacción. */
@@ -20,6 +22,25 @@ export interface TransactionTeardownResult {
 type TeardownTransaction = {
     _id: { toString(): string }
     paymentGroupId?: string | null
+    /** Puede llegar como ObjectId (`lean`), como string o poblado. */
+    installmentPlanId?: unknown
+}
+
+/**
+ * Resuelve la referencia al plan sin asumir cómo se leyó la transacción: un
+ * `lean()` devuelve `ObjectId`, un populate devuelve el documento y un borrador
+ * puede traer el id como string.
+ */
+function resolveInstallmentPlanId(value: unknown): string | null {
+    if (!value) return null
+    if (typeof value === 'string') return value.trim() || null
+    if (typeof value === 'object' && '_id' in (value as Record<string, unknown>)) {
+        const nested = (value as { _id?: { toString(): string } })._id
+        return nested ? nested.toString() : null
+    }
+    return typeof (value as { toString?: () => string }).toString === 'function'
+        ? (value as { toString(): string }).toString()
+        : null
 }
 
 /**
@@ -31,7 +52,13 @@ type TeardownTransaction = {
  *
  * Cada paso es independiente y tolerante a fallos: no poder cerrar una
  * notificación no debe impedir borrar el movimiento. El estado financiero
- * (la aplicación del compromiso) se revierte primero, porque es el que importa.
+ * (la aplicación del compromiso y el plan de cuotas) se resuelve primero,
+ * porque es el que importa.
+ *
+ * Se ejecuta antes del borrado a propósito. Si después falla el borrado queda
+ * una transacción sin plan —visible y borrable de nuevo, y el reintento cierra
+ * el caso— en lugar de un plan huérfano proyectando cuotas de una compra que ya
+ * no existe, que era el estado que quedaba hasta ahora.
  */
 export async function unlinkTransactionDependents(
     userId: string,
@@ -48,7 +75,44 @@ export async function unlinkTransactionDependents(
     const reverted = await revertApplicationForTransaction(userId, transactionId)
     if (reverted) result.revertedCommitment = reverted
 
-    // 2. Impacto personal de Espacios. Se replica el criterio del handler de
+    // 2. Plan de cuotas: el plan es la fuente de verdad de las cuotas futuras y
+    //    Proyección, Dashboard y el resumen de tarjetas lo leen sin mirar la
+    //    compra que lo originó. Si sobrevive, esas superficies siguen cobrando
+    //    cuotas de una compra eliminada.
+    const installmentPlanId = resolveInstallmentPlanId(transaction.installmentPlanId)
+    if (installmentPlanId) {
+        try {
+            // Sólo cae el plan cuya única compra es la que se está borrando: si
+            // otra transacción sigue apuntándolo, el plan sigue teniendo dueño.
+            const otherPurchase = await Transaction.exists({
+                userId,
+                installmentPlanId,
+                _id: { $ne: transaction._id },
+            })
+
+            if (otherPurchase) {
+                console.warn(
+                    `El plan de cuotas ${installmentPlanId} conserva otra transacción asociada: no se elimina en cascada.`
+                )
+            } else {
+                const deletedPlan = await InstallmentPlan.findOneAndDelete({
+                    _id: installmentPlanId,
+                    userId,
+                })
+
+                if (deletedPlan) {
+                    result.deletedInstallmentPlan = {
+                        planId: installmentPlanId,
+                        installmentCount: deletedPlan.installmentCount,
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('No se pudo eliminar el plan de cuotas asociado:', error)
+        }
+    }
+
+    // 3. Impacto personal de Espacios. Se replica el criterio del handler de
     //    "Quitar de mi Finp": el impacto pasa a REMOVED y suelta la transacción.
     try {
         const impact = await SpaceEntryPersonalImpact.findOneAndUpdate(
@@ -77,7 +141,7 @@ export async function unlinkTransactionDependents(
         console.error('No se pudo desvincular el impacto personal:', error)
     }
 
-    // 3. Notificaciones que apuntaban a la transacción y seguían pendientes.
+    // 4. Notificaciones que apuntaban a la transacción y seguían pendientes.
     try {
         const notifications = await Notification.updateMany(
             {
@@ -98,7 +162,7 @@ export async function unlinkTransactionDependents(
         console.error('No se pudieron resolver las notificaciones:', error)
     }
 
-    // 4. Pago dual: no se borra el hermano por su cuenta — eso movería dinero sin
+    // 5. Pago dual: no se borra el hermano por su cuenta — eso movería dinero sin
     //    que el usuario lo pida — pero sí se informa para poder advertirlo.
     if (transaction.paymentGroupId) {
         try {
