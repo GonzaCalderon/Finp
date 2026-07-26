@@ -37,7 +37,7 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-07-25 sobre `dev`:
+Verificado localmente el 2026-07-26 sobre `dev`:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -46,7 +46,7 @@ Verificado localmente el 2026-07-25 sobre `dev`:
 - typecheck limpio;
 - ESLint limpio;
 - build de producción limpio, con 63 páginas generadas;
-- 621 unit tests aprobados en 74 archivos;
+- 630 unit tests aprobados en 75 archivos;
 - 5 tests declarados como `todo`;
 - 40 escenarios E2E registrados para desktop y mobile;
 - `.env.test.local` existe y está excluido de Git; los E2E no se ejecutaron en
@@ -86,6 +86,8 @@ Ramas:
 - arrastre de saldos negativos entre períodos;
 - pagos y cobros de deuda sin impacto operacional;
 - corrección del doble descuento de compras en cuotas;
+- baja del plan de cuotas junto con su compra originaria, sin cuotas
+  proyectadas de una compra eliminada;
 - patrimonio con tarjetas y deudas personales;
 - consistencia de préstamos entre Dashboard y Transacciones;
 - compra/venta de USD con cuentas, montos y cotización coherentes.
@@ -323,7 +325,6 @@ Mobile web sigue siendo la superficie prioritaria.
 
 ## 11. Limitaciones conocidas
 
-- `InstallmentPlan` no se limpia al eliminar la transacción que lo originó.
 - El hermano de un pago dual con `paymentGroupId` se reporta, pero no se elimina por inferencia.
 - `intent_completed` no se emite al crear un compromiso desde un borrador.
 - `getNavInsightsForUser` no tiene test de integración.

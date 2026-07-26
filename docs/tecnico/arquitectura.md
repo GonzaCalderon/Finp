@@ -171,7 +171,7 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Usuario/preferencias | `User` | Aislamiento por identidad autenticada. |
 | Saldo de cuentas | transacciones + saldos iniciales | No guardar un saldo derivado como autoridad paralela. |
 | Movimiento personal | `Transaction` | Tipo y vínculos determinan efecto. |
-| Cuotas | `InstallmentPlan` + transacciones relacionadas | Evitar doble impacto. |
+| Cuotas | `InstallmentPlan` + transacciones relacionadas | Evitar doble impacto. El plan vive mientras exista su compra originaria: eliminar una arrastra la otra. |
 | Compromiso | `ScheduledCommitment` | Plantilla, política y agenda. |
 | Aplicación | subdocumento/relación de compromiso | Snapshot por período y transacción. |
 | Regla | `TransactionRule` | Servicio compartido resuelve coincidencia y acciones. |
@@ -189,7 +189,7 @@ Servicios relevantes en `src/lib/server/`:
 | Grupo | Responsabilidad |
 |---|---|
 | `transactions.ts` | creación y edición de movimientos con reglas comunes |
-| `transaction-teardown.ts` | limpieza de relaciones antes de eliminar |
+| `transaction-teardown.ts` | limpieza de relaciones antes de eliminar, incluida la cascada del plan de cuotas |
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |

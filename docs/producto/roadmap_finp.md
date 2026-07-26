@@ -101,12 +101,6 @@ explícita.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
 
-### FINP-P1-001 — Cascada de `InstallmentPlan`
-
-- Estado: `pendiente`.
-- Problema: eliminar una transacción originaria no limpia el plan.
-- Criterio: eliminación y reversión conservan saldos, cuotas y trazabilidad; cubierto por unit/integration.
-
 ### FINP-P1-002 — Cierre de métricas de orientación
 
 - Estado: `pendiente`.
@@ -172,7 +166,8 @@ explícita.
 ### FINP-P2-002 — Captura rápida con tarjeta y orientación a cuotas
 
 - Estado: `pendiente`.
-- Dependencias: FINP-P1-001 y contrato de borradores vigente.
+- Dependencias: contrato de borradores vigente. La cascada de `InstallmentPlan`
+  ya está cerrada.
 - Alcance:
   - reconocer un consumo con tarjeta desde texto explícito y contexto;
   - completar directamente un consumo en un pago cuando tarjeta, monto,
@@ -381,6 +376,9 @@ explícita.
 
 ### 2026-07-26
 
+- FINP-P1-001: eliminar la compra originaria da de baja su `InstallmentPlan`, el
+  plan sólo cae si ninguna otra compra lo referencia, borrar el plan pasa por el
+  teardown compartido y la confirmación anticipa la baja de las cuotas;
 - ramas `main` y `dev` sincronizadas en `1c3ee40` después de la promoción, sin
   diferencias de árbol ni reescritura de historia;
 - prueba de privacidad de borradores de Captura rápida convertida en
