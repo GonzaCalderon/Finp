@@ -101,12 +101,6 @@ explícita.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
 
-### FINP-P1-002 — Cierre de métricas de orientación
-
-- Estado: `pendiente`.
-- Problema: falta `intent_completed` cuando se crea un compromiso desde borrador.
-- Criterio: aceptar y completar siguen siendo estados distintos y la derivación completada queda registrada una sola vez.
-
 ### FINP-P1-003 — Integración de NavInsights
 
 - Estado: `pendiente`.
@@ -376,6 +370,9 @@ explícita.
 
 ### 2026-07-26
 
+- FINP-P1-002: Compromisos emite `intent_completed` al crear la plantilla desde
+  un borrador derivado; el `eventId` deriva del borrador, así la derivación queda
+  registrada una sola vez y aceptar el CTA sigue siendo un estado distinto;
 - FINP-P1-001: eliminar la compra originaria da de baja su `InstallmentPlan`, el
   plan sólo cae si ninguna otra compra lo referencia, borrar el plan pasa por el
   teardown compartido y la confirmación anticipa la baja de las cuotas;

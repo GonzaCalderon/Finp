@@ -42,9 +42,11 @@ import { CommitmentSuggestionCard } from '@/components/commitments/CommitmentSug
 import { fadeIn, staggerContainer } from '@/lib/utils/animations'
 import { getCurrentFinancialPeriod } from '@/lib/utils/period'
 import { takeCaptureDraft } from '@/lib/client/capture-draft'
+import { reportCaptureIntentCompleted } from '@/lib/client/capture-intent-events'
 import {
     CAPTURE_DRAFT_TTL_MS,
     CAPTURE_DRAFT_VERSION,
+    type CaptureIntent,
     type CommitmentDraftEnvelope,
     type CommitmentDraftFields,
 } from '@/types/capture-intent'
@@ -180,6 +182,17 @@ function CommitmentsPageInner() {
         useState<CommitmentDraftEnvelope | null>(null)
     const [showArchived, setShowArchived] = useState(false)
     const consumedDraftRef = useRef<string | null>(null)
+    /**
+     * Derivación de Captura rápida en curso. Se completa cuando esta visita crea
+     * la plantilla; cualquier otro uso del diálogo la abandona, así aceptar el
+     * CTA y completar la función siguen siendo estados distintos.
+     */
+    const pendingIntentRef = useRef<{
+        draftId: string
+        intent: CaptureIntent
+        sessionId: string
+        startedAt: string
+    } | null>(null)
 
     const selectedLive = selected
         ? commitments.find(
@@ -204,7 +217,20 @@ function CommitmentsPageInner() {
         if (draftId && consumedDraftRef.current !== draftId) {
             consumedDraftRef.current = draftId
             const envelope = takeCaptureDraft<CommitmentDraftFields>(draftId)
-            if (envelope) setInitialDraft(envelope)
+            if (envelope) {
+                setInitialDraft(envelope)
+                // Sólo las derivaciones de Captura rápida cierran el embudo de
+                // orientación: un candidato aceptado acá es otra superficie.
+                pendingIntentRef.current =
+                    envelope.origin.surface === 'quick_capture'
+                        ? {
+                            draftId: envelope.draftId,
+                            intent: envelope.intent,
+                            sessionId: envelope.origin.sessionId,
+                            startedAt: envelope.origin.createdAt,
+                        }
+                        : null
+            }
         }
 
         setSelected(null)
@@ -269,12 +295,14 @@ function CommitmentsPageInner() {
 
     function handleCreate() {
         setInitialDraft(null)
+        pendingIntentRef.current = null
         setSelected(null)
         setDialogOpen(true)
     }
 
     function handleEdit(commitment: IScheduledCommitment) {
         setInitialDraft(null)
+        pendingIntentRef.current = null
         setSelected(commitment)
         setDialogOpen(true)
     }
@@ -331,6 +359,12 @@ function CommitmentsPageInner() {
             } else {
                 await createCommitment(data as Record<string, unknown>)
                 success('Compromiso creado correctamente')
+                // La plantilla existe: acá se cierra la derivación que empezó en
+                // Captura rápida. El ref se limpia primero para que un segundo
+                // alta en la misma visita no vuelva a contarla.
+                const pendingIntent = pendingIntentRef.current
+                pendingIntentRef.current = null
+                if (pendingIntent) void reportCaptureIntentCompleted(pendingIntent)
                 await refreshSuggestions()
             }
             await fetchCommitments({ silent: true })
@@ -374,6 +408,7 @@ function CommitmentsPageInner() {
 
     function handleAcceptSuggestion(suggestion: CommitmentSuggestion) {
         setSelected(null)
+        pendingIntentRef.current = null
         setInitialDraft(buildSuggestionDraft(suggestion))
         setDialogOpen(true)
     }
@@ -600,6 +635,9 @@ function CommitmentsPageInner() {
                     if (!open) {
                         setInitialDraft(null)
                         setSelected(null)
+                        // Cerrar sin crear abandona la derivación: no se completa
+                        // más tarde con un alta manual no relacionada.
+                        pendingIntentRef.current = null
                     }
                 }}
                 commitment={selectedLive}

@@ -194,8 +194,19 @@ una propuesta por frase.
 `derive` y `never`.
 
 `intent_accepted` e `intent_completed` son distintos a propósito: **tocar el CTA no equivale a
-completar la función**. Para `create_commitment`, `intent_completed` todavía **no se emite** —
-haría falta emitirlo desde Compromisos cuando la plantilla se crea de verdad (ver §7).
+completar la función**. Para `create_commitment`, Compromisos emite `intent_completed` mediante
+`reportCaptureIntentCompleted` (`src/lib/client/capture-intent-events.ts`) cuando la plantilla se
+crea de verdad.
+
+El `eventId` deriva del `draftId` (`intent_completed:<intent>:<draftId>`) y el endpoint inserta con
+`$setOnInsert`: un reintento, un doble submit o dos pestañas dejan **un solo** evento. La
+atribución se abandona si el diálogo se cierra sin crear, si se edita otro compromiso o si se
+acepta un candidato mensual, que es otra superficie. Un segundo alta en la misma visita tampoco
+vuelve a contar la derivación.
+
+El evento no lleva monto, descripción ni comercio: para el embudo sólo importa que la derivación
+terminó. Captura rápida conserva su cola con debounce porque emite muchos eventos por sesión; un
+destino emite uno solo y le alcanza un POST best-effort.
 
 > ⚠️ **Triplicación de enums.** Cada tipo de evento y método vive en tres archivos:
 > `src/types/quick-capture.ts`, el enum de Mongoose en
@@ -217,7 +228,7 @@ haría falta emitirlo desde Compromisos cuando la plantilla se crea de verdad (v
 | `GET /api/quick-capture/context` | Suma `commitments`, `currentPeriod` y `dismissedSuggestions`, con `.catch` tolerante. |
 | `POST` / `DELETE /api/quick-capture/suggestions/dismiss` | Descarte persistente, idempotente. |
 | `PATCH /api/quick-capture/learning/profile` | Acepta `markCaptureIntroSeen`. |
-| `DELETE /api/transactions/[id]` | Llama `unlinkTransactionDependents` **antes** de borrar y devuelve qué revirtió. |
+| `DELETE /api/transactions/[id]` | Llama `unlinkTransactionDependents` **antes** de borrar y devuelve qué revirtió, incluida la baja del plan de cuotas. |
 | `PATCH /api/transactions/[id]` | Sincroniza el snapshot, recalcula la traza de regla, devuelve `commitmentTemplateUpdateAvailable`. |
 
 ### Atomicidad del apply
@@ -291,8 +302,6 @@ explícito y no figure como aplicada.
 
 La deuda detectada durante este bloque se administra en el roadmap único:
 
-- `FINP-P1-001`: cascada de `InstallmentPlan`;
-- `FINP-P1-002`: evento `intent_completed`;
 - `FINP-P1-003`: integración de NavInsights;
 - `FINP-P1-004`: política para pagos duales;
 - `FINP-P4-002`: scheduler de `auto_month_start`.
@@ -307,8 +316,10 @@ El camino está preparado. Para sumar, por ejemplo, cuotas:
 2. Detectar la intención en `src/lib/utils/capture-intents.ts` (determinista, sin red).
 3. Aceptar `initialDraft` en el diálogo destino y leer `?draft=` en su página.
 4. Si el destino resuelve inline, agregar la rama en `handleOrientationAction`.
-5. Sumar el ejemplo a `CaptureHelpPanel` — **sólo cuando ya funcione**.
-6. E2E: interpretación, transporte del borrador, validación final y retorno ante error.
+5. Cerrar el embudo: llamar a `reportCaptureIntentCompleted` cuando el destino
+   complete la función de verdad, no cuando abra su formulario.
+6. Sumar el ejemplo a `CaptureHelpPanel` — **sólo cuando ya funcione**.
+7. E2E: interpretación, transporte del borrador, validación final y retorno ante error.
 
 ### Trampas del entorno que costaron bugs reales
 

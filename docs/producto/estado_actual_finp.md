@@ -46,7 +46,7 @@ Verificado localmente el 2026-07-26 sobre `dev`:
 - typecheck limpio;
 - ESLint limpio;
 - build de producción limpio, con 63 páginas generadas;
-- 630 unit tests aprobados en 75 archivos;
+- 637 unit tests aprobados en 76 archivos;
 - 5 tests declarados como `todo`;
 - 40 escenarios E2E registrados para desktop y mobile;
 - `.env.test.local` existe y está excluido de Git; los E2E no se ejecutaron en
@@ -148,6 +148,9 @@ Captura rápida distingue:
 - preparación de un compromiso nuevo.
 
 Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrador tipado, versionado y con procedencia.
+
+El embudo cierra: aceptar el CTA y completar la función se registran como estados
+distintos, y Compromisos anota la derivación completada una sola vez por borrador.
 
 Captura rápida todavía no interpreta ni registra consumos con tarjeta de
 crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
@@ -326,7 +329,6 @@ Mobile web sigue siendo la superficie prioritaria.
 ## 11. Limitaciones conocidas
 
 - El hermano de un pago dual con `paymentGroupId` se reporta, pero no se elimina por inferencia.
-- `intent_completed` no se emite al crear un compromiso desde un borrador.
 - `getNavInsightsForUser` no tiene test de integración.
 - `auto_month_start` no tiene scheduler.
 - La detección híbrida de candidatos a compromiso está implementada, incluye el

@@ -269,6 +269,8 @@ La propuesta explica cantidad de coincidencias, período observado y variación 
 - las tres intenciones se distinguen; una intención explícita nunca se reemplaza por evidencia histórica;
 - aplicación desde el diálogo reutilizando las validaciones del servicio de Compromisos, con `origin: quick_capture`;
 - derivación de altas con borrador precargado hacia `/commitments?draft=<id>`;
+- cierre del embudo: Compromisos emite `intent_completed` al crear la plantilla,
+  una sola vez por borrador derivado;
 - procedencia visible en Transacciones (`Compromiso: <nombre> · <período>`);
 - descarte persistente mediante `FunctionalSuggestionDismissal`.
 
