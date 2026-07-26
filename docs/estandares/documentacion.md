@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: personas y agentes que crean o modifican documentación
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: proceso documental
 
 ## Índice
@@ -18,8 +18,9 @@
 9. [Fuentes externas](#9-fuentes-externas)
 10. [Decisiones de otros sistemas](#10-decisiones-de-otros-sistemas)
 11. [Documentación en una entrega](#11-documentación-en-una-entrega)
-12. [Comprobación](#12-comprobación)
-13. [Referencias adoptadas](#13-referencias-adoptadas)
+12. [Costo de contexto](#12-costo-de-contexto)
+13. [Comprobación](#13-comprobación)
+14. [Referencias adoptadas](#14-referencias-adoptadas)
 
 ## 1. Objetivo
 
@@ -59,6 +60,13 @@ Preferir una definición clara y enlazada a repetir la misma explicación en var
 ### Progresión de detalle
 
 El lector empieza en `docs/README.md`, recibe una síntesis y profundiza sólo en el documento necesario.
+
+### Declarar la excepción, no el valor por defecto
+
+Cuando una regla tiene un caso mayoritario, se documenta sólo lo que se aparta de
+él. Un campo repetido en todos los ítems de una lista cuesta contexto en cada
+lectura y no informa nada; la ausencia del campo debe significar el caso normal.
+El roadmap aplica esto con `Requiere:`.
 
 ## 3. Tipos de documento
 
@@ -244,7 +252,63 @@ La descripción de una entrega debe indicar:
 - fuentes externas usadas;
 - pendientes agregados, modificados o cerrados en el roadmap.
 
-## 12. Comprobación
+## 12. Costo de contexto
+
+La documentación se paga en cada lectura. Un documento que nadie puede permitirse
+cargar no cumple su función, así que el costo es parte de la calidad y no una
+optimización posterior.
+
+### Camino obligatorio y camino opcional
+
+No todos los documentos cuestan lo mismo:
+
+| Camino | Documentos | Regla |
+|---|---|---|
+| Obligatorio | [`../../AGENTS.md`](../../AGENTS.md), [`../README.md`](../README.md) y [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md) | Se leen en toda tarea. Todo agregado se paga siempre: exigir justificación y compensar recortando. |
+| Opcional | dominio, técnico, calidad y decisiones | Se leen sólo cuando la tarea los toca. Pueden ser extensos si están bien indexados. |
+
+Medir antes de recortar. `Get-ChildItem docs -Recurse -Filter *.md` con el tamaño
+de cada archivo alcanza para saber dónde está el costo; recortar por intuición
+suele borrar lo valioso y dejar lo repetido.
+
+### Qué se borra
+
+Se elimina el contenido que ya no cambia una decisión ni habilita una tarea:
+
+- lo que Git o `docs/archivados/` ya conservan, en especial historial cerrado;
+- lo que el código expresa mejor, salvo el contrato, el límite y el motivo;
+- la misma explicación repetida en dos documentos vigentes: queda en el canónico y
+  el otro enlaza;
+- una intención diferida sin dueño ni disparador: o se convierte en ítem del
+  roadmap con criterio, o se borra;
+- una nota fechada cuyo plazo ya pasó.
+
+Borrar de un archivo versionado no pierde información: Git la conserva. Dejar
+contenido muerto en el camino obligatorio, en cambio, se paga en cada sesión.
+
+### Mejora continua
+
+Toda entrega deja la documentación al menos tan barata de leer como estaba. Si
+agrega texto al camino obligatorio, compensa recortando ahí mismo o justifica por
+qué ese costo permanente se gana.
+
+Cuando trabajar desde la documentación cueste esfuerzo evitable, la fricción se
+corrige en la misma entrega en lugar de anotarse para después. Los síntomas que
+obligan a revisar el proceso, no sólo el texto, son:
+
+- el ejecutor tuvo que deducir el alcance, la prioridad o el próximo paso;
+- un documento prometía trabajo que no se podía tomar;
+- una condición de cierre pedía algo que el repositorio no puede correr;
+- dos fuentes vigentes decían cosas distintas;
+- hizo falta explorar el código para responder algo que la documentación debía
+  contestar.
+
+Quien detecta el síntoma corrige la regla que lo permitió, no sólo el caso. Si la
+corrección cambia cómo se trabaja, se registra en este documento o en
+[`../../AGENTS.md`](../../AGENTS.md) según corresponda; si tiene alternativas
+relevantes, se registra como decisión.
+
+## 13. Comprobación
 
 Revisión mínima:
 
@@ -260,7 +324,7 @@ Revisión mínima:
 
 Cuando exista automatización documental, debe verificar como mínimo enlaces, archivos indexados, metadatos y estructura Markdown.
 
-## 13. Referencias adoptadas
+## 14. Referencias adoptadas
 
 - [Diátaxis](https://diataxis.fr/): separación entre tutoriales, procedimientos, referencia y explicación.
 - [Google Developer Documentation Style Guide](https://developers.google.com/style): claridad y consistencia para documentación técnica.

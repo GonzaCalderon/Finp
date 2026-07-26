@@ -15,7 +15,7 @@
 6. [Prioridad P3 — colaboración y proyección](#6-prioridad-p3-colaboración-y-proyección)
 7. [Prioridad P4 — plataforma y escalabilidad](#7-prioridad-p4-plataforma-y-escalabilidad)
 8. [Discovery futuro](#8-discovery-futuro)
-9. [Deuda de calidad transversal](#9-deuda-de-calidad-transversal)
+9. [Prácticas de calidad permanentes](#9-prácticas-de-calidad-permanentes)
 10. [Cerrado recientemente](#10-cerrado-recientemente)
 11. [Cómo actualizar este archivo](#11-cómo-actualizar-este-archivo)
 
@@ -40,6 +40,17 @@ Prioridades:
 - `P3`: expansión posterior;
 - `P4`: plataforma o largo plazo.
 
+Un ítem `validación` o `pendiente` que no puede avanzar declara `Bloqueado por:` y
+el ID que lo condiciona. Sin esa línea, el tope de la lista promete trabajo que no
+se puede tomar.
+
+Por omisión un ítem lo ejecuta un agente sin intervención; la ausencia de
+`Requiere:` significa "tomable ahora". Sólo se declara la excepción:
+
+- `Requiere: decisión del prompter`: hay alternativas que el agente no elige;
+- `Requiere: entorno o datos reales`: necesita secretos, base aislada, backup o
+  producción. `en discovery` ya implica decisión pendiente y no lo repite.
+
 Un documento de dominio puede describir una posibilidad, pero sólo este archivo decide prioridad.
 
 ## 2. Dirección de desarrollo
@@ -54,25 +65,19 @@ Orden:
 6. profundizar colaboración y proyección;
 7. estudiar mobile/offline cuando el producto web esté estable.
 
-Principios:
+Los principios de producto y de trabajo viven en
+[`../../AGENTS.md`](../../AGENTS.md) §4 y §6. Acá sólo rigen los de priorización:
 
-- bloques verticales y verificables;
-- mobile primero;
-- una fuente de verdad por regla;
-- automatización explicable y reversible;
-- no aumentar costo operativo sin presentar alternativas;
-- no iniciar una expansión grande con P0 abiertos evitables.
-
-Las ampliaciones de Captura rápida, Proyección y análisis incorporadas el
-2026-07-26 conservan por ahora su ubicación P2/P3. Su orden relativo se revisará
-en la próxima priorización general y no desplaza P0/P1 sin una decisión
-explícita.
+- no iniciar una expansión grande con P0 abiertos evitables;
+- una prioridad nueva no desplaza P0/P1 sin una decisión explícita.
 
 ## 3. Prioridad P0 — confianza financiera y cierre operativo
 
 ### FINP-P0-001 — Smoke financiero con datos reales
 
-- Estado: `validación`.
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P0-003.
+- Requiere: entorno o datos reales.
 - Alcance: saldo acumulado, saldos negativos, histórico, ARS/USD, préstamos, pago parcial/total de deuda y cuotas.
 - Criterio: Dashboard, Transacciones, Cuentas y Deudas coinciden para períodos actuales e históricos.
 - Evidencia: casos documentados, capturas mobile/desktop y ausencia de escrituras fuera de la base de prueba.
@@ -80,6 +85,7 @@ explícita.
 ### FINP-P0-002 — Ejecutar y validar backfill de compromisos
 
 - Estado: `pendiente`.
+- Requiere: entorno o datos reales.
 - Alcance: ejecutar `npm run backfill:commitments` en `dry-run`, revisar anomalías y aplicar sólo con aprobación.
 - Criterio: datos existentes tienen política, agenda, estado, snapshot y procedencia; las anomalías quedan resueltas o documentadas.
 - Riesgo: modifica datos; requiere backup y ambiente identificado.
@@ -87,6 +93,8 @@ explícita.
 ### FINP-P0-003 — Entorno y suite E2E reproducibles
 
 - Estado: `pendiente`.
+- Requiere: entorno o datos reales.
+- Desbloquea: FINP-P0-001, FINP-P0-004 y la evidencia final de FINP-P2-001.
 - Disponible: `.env.test.local` no versionado, `.env.test.example`, guía de
   ejecución y servidor dedicado en el puerto 3001.
 - Pendiente: verificar que las variables apunten sólo a una base de prueba,
@@ -95,8 +103,9 @@ explícita.
 
 ### FINP-P0-004 — Activar E2E crítico en CI
 
-- Estado: `pendiente`.
-- Dependencia: FINP-P0-003.
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P0-003.
+- Requiere: entorno o datos reales.
 - Criterio: flujos críticos ejecutan en CI con secretos y base aislada; reportes se conservan ante fallos.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
@@ -110,6 +119,7 @@ explícita.
 
 - Estado: `en discovery`.
 - Problema: al eliminar una parte, el hermano con `paymentGroupId` sólo se reporta.
+- Requiere: decisión del prompter.
 - Decisión requerida: conservar, ofrecer eliminar, o tratar el grupo como unidad.
 - Criterio: decisión registrada y comportamiento cubierto sin inferencia riesgosa.
 
@@ -145,6 +155,7 @@ explícita.
 ### FINP-P2-001 — Candidatos mensuales explicables
 
 - Estado: `validación`.
+- Bloqueado por: FINP-P0-003, sólo para la evidencia final.
 - Alcance: detectar recurrencia desde historial vigente.
 - Criterio:
   - evidencia por cantidad, período y variación;
@@ -353,18 +364,23 @@ explícita.
 - Estado: `pendiente`.
 - Objetivo: relacionar obligación, resumen y pago sin duplicar contabilidad.
 
-## 9. Deuda de calidad transversal
+## 9. Prácticas de calidad permanentes
+
+Esto **no es backlog**: son prácticas que toda entrega debe considerar y que por
+definición nunca se cierran. Cuando una se prioriza como trabajo concreto, deja de
+vivir acá y se convierte en un ítem con ID, criterio y estado.
 
 - aumentar integration/API tests;
-- activar E2E;
 - formalizar smoke visual mobile/desktop;
 - incorporar accesibilidad básica;
 - definir cobertura objetivo sin usarla como única medida;
 - revisar seguridad con OWASP;
 - evaluar dependencias con mantenimiento, licencia, bundle y vulnerabilidades;
-- automatizar validación de documentación y enlaces;
 - proteger `main` y `dev` con checks;
 - medir rendimiento antes de adoptar procesos costosos.
+
+Ya priorizadas como ítem: activar E2E es FINP-P0-004. Ya resueltas: la validación
+documental corre con `npm run docs:check`.
 
 ## 10. Cerrado recientemente
 
@@ -383,37 +399,15 @@ explícita.
 
 ### 2026-07-25
 
-- rediseño mobile-first de Compromisos en tres pasos;
-- stepper mobile compacto, categorías reutilizadas y validación accionable;
-- monto vigente unificado, fecha efectiva e historial accesible;
-- cambio de monto con tres vigencias e historia pasada inmutable;
-- recordatorios in-app y estados de fin de vigencia;
-- fechas mensuales y recordatorios derivados desde una única fuente;
-- candidatos mensuales con criterio híbrido y caso de control Pizza;
-- retiro de la automatización inerte de la interfaz;
-- compromisos personales variables;
-- agenda de montos y snapshots;
-- Captura rápida como orientador hacia Compromisos;
-- onboarding y ayuda contextual;
-- reevaluación de reglas al editar;
-- cascada parcial al eliminar transacciones;
-- unificación de `monthStartDay`.
+Promoción `1c3ee40`: Compromisos mobile-first en tres pasos, montos variables con
+agenda y vigencias, candidatos mensuales con criterio híbrido, y Captura rápida
+orientando hacia Compromisos. El detalle de lo entregado vive en
+[`estado_actual_finp.md`](estado_actual_finp.md) §12.
 
-### 2026-07-24
-
-- motor unificado de reglas;
-- simulación, conflictos y sugerencias;
-- Captura rápida con aprendizaje administrable.
-
-### 2026-07-23
-
-- saldo disponible acumulado;
-- exactitud de pagos de deuda y cuotas;
-- compra/venta de USD;
-- sugerencias inteligentes de transacción;
-- mejoras de calendario y categorías.
-
-El historial detallado vive en Git y en `docs/archivados/`.
+Se conservan sólo los bloques que todavía explican por qué el trabajo actual está
+donde está. Lo anterior al 2026-07-25 —motor de reglas, aprendizaje administrable,
+saldo acumulado, exactitud de deuda y cuotas, compra/venta de USD— vive en Git y en
+[`../archivados/`](../archivados/), que es donde hay que buscar historia.
 
 ## 11. Cómo actualizar este archivo
 
@@ -426,6 +420,10 @@ Al cerrar:
 
 - verificar el criterio;
 - actualizar estado actual y documentación de dominio;
+- **barrer las referencias entrantes**: buscar el ID en el repositorio y corregir
+  cada `Bloqueado por:`, `Desbloquea:` o `Dependencias:` que lo nombre, incluidas
+  las de documentos técnicos. Un ítem cerrado que sigue figurando como bloqueante
+  detiene trabajo que ya se puede tomar;
 - mover un resumen a “Cerrado recientemente”;
 - eliminar detalles que ya no ayuden a priorizar.
 
@@ -434,6 +432,10 @@ Al descubrir trabajo:
 - comprobar que no exista;
 - asignar ID y prioridad;
 - explicar problema y criterio de cierre;
+- declarar `Alcance:` cuando el borde no sea obvio; sin esa línea el ejecutor
+  decide solo qué entra, y eso puede ser una decisión de producto;
+- verificar que el criterio se pueda cumplir con lo que el repositorio ya puede
+  correr, o incluir en el alcance construir esa capacidad;
 - no crear otro backlog.
 
 Una prioridad nueva que desplace P0/P1 requiere explicar el motivo.
