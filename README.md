@@ -114,7 +114,11 @@ NEXTAUTH_URL=http://localhost:3000
 
 Según las funciones usadas pueden requerirse variables adicionales para almacenamiento o servicios externos. No versionar secretos.
 
-E2E usa `.env.test.local`, basado en `.env.test.example`, y un servidor dedicado en el puerto 3001.
+E2E usa `.env.test.local`, basado en `.env.test.example`, y un servidor dedicado
+en el puerto 3001. Antes de seed o Playwright, `npm run test:e2e:check` confirma
+que la base sea exclusiva y distinta de desarrollo. El seed incluye un usuario
+financiero independiente con casos ARS/USD, histórico, saldo negativo, cuotas y
+deudas pagadas parcial y totalmente.
 
 Nunca apuntar pruebas a desarrollo o producción.
 
@@ -130,6 +134,7 @@ Nunca apuntar pruebas a desarrollo o producción.
 | `npm run test:unit` | Unit tests. |
 | `npm run test:watch` | Vitest en watch. |
 | `npm run test:coverage` | Cobertura unitaria. |
+| `npm run test:e2e:check` | Valida aislamiento E2E sin conectar ni escribir. |
 | `npm run test:e2e` | Playwright desktop/mobile. |
 | `npm run test:e2e:ui` | Playwright UI. |
 | `npm run test:seed` | Seed E2E. |
@@ -182,15 +187,17 @@ npm run build
 Si se modifica un recorrido crítico:
 
 ```bash
+npm run test:e2e:check
+npm run test:seed
 npm run test:e2e
 ```
 
-Estado verificado el 2026-07-25:
+Estado verificado el 2026-07-28:
 
-- 589 unit tests aprobados;
-- 5 `todo`;
-- 36 escenarios E2E registrados;
-- E2E pendiente de entorno local reproducible y activación en CI.
+- 44 de 44 escenarios E2E aprobados en desktop y mobile contra la base aislada
+  `finp-e2e`;
+- el job E2E de CI está activo, pero no conecta hasta configurar
+  `MONGODB_URI_TEST` con la credencial rotada.
 
 ## 10. Ramas
 

@@ -77,54 +77,86 @@ jobs:
         run: npm run test:coverage
         continue-on-error: true   # No falla el workflow si la cobertura es baja
 
-  # ─── E2E (desactivado por defecto, listo para activar) ───────────────────────
-  # Para activar los E2E en CI:
-  # 1. Descomentá este job
-  # 2. Agregá los secrets en GitHub:
-  #    - MONGODB_URI_TEST → tu DB de test (puede ser MongoDB Atlas)
-  #    - NEXTAUTH_SECRET_TEST
-  #    - TEST_USER_EMAIL
-  #    - TEST_USER_PASSWORD
-  # 3. El usuario de test debe existir en la DB antes de correr los tests
-  #
-  # e2e:
-  #   name: E2E Tests
-  #   runs-on: ubuntu-latest
-  #   needs: [lint, build]
-  #   env:
-  #     MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
-  #     NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET_TEST }}
-  #     NEXTAUTH_URL: http://localhost:3000
-  #     TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-  #     TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-  #     CI: true
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: 20
-  #         cache: npm
-  #
-  #     - name: Instalar dependencias
-  #       run: npm ci
-  #
-  #     - name: Instalar browsers de Playwright
-  #       run: npx playwright install chromium --with-deps
-  #
-  #     - name: Build
-  #       run: npm run build
-  #
-  #     - name: Levantar servidor y correr E2E
-  #       run: |
-  #         npm run start &
-  #         sleep 5
-  #         npm run test:e2e
-  #
-  #     - name: Upload Playwright report
-  #       uses: actions/upload-artifact@v4
-  #       if: failure()
-  #       with:
-  #         name: playwright-report
-  #         path: playwright-report/
-  #         retention-days: 7
+  # ─── E2E crítico ─────────────────────────────────────────────────────────────
+  # El job queda operativo apenas MONGODB_URI_TEST apunte a finp-e2e con un
+  # usuario de alcance mínimo. Mientras la rotación está pendiente, informa el
+  # bloqueo y termina sin conectar. Los secretos de aplicación son efímeros.
+  e2e:
+    name: E2E Critical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [lint, build, unit-tests]
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
+      E2E_DATABASE_NAME: finp-e2e
+      NEXTAUTH_URL: http://localhost:3001
+      AUTH_TRUST_HOST: 'true'
+      PLAYWRIGHT_BASE_URL: http://localhost:3001
+      TEST_USER_EMAIL: ci-e2e@finp.invalid
+      CI: true
+    steps:
+      - name: Verificar credencial E2E
+        id: e2e-config
+        shell: bash
+        run: |
+          if [ -n "$MONGODB_URI" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::E2E pendiente hasta configurar MONGODB_URI_TEST después de rotar la credencial."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.e2e-config.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.e2e-config.outputs.ready == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Generar secretos efímeros
+        if: steps.e2e-config.outputs.ready == 'true'
+        shell: bash
+        run: |
+          nextauth_secret="$(openssl rand -hex 32)"
+          test_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$nextauth_secret"
+          echo "::add-mask::$test_password"
+          echo "NEXTAUTH_SECRET=$nextauth_secret" >> "$GITHUB_ENV"
+          echo "TEST_USER_PASSWORD=$test_password" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias
+        if: steps.e2e-config.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Instalar Chromium
+        if: steps.e2e-config.outputs.ready == 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Verificar aislamiento
+        if: steps.e2e-config.outputs.ready == 'true'
+        run: npm run test:e2e:check
+
+      - name: Preparar datos representativos
+        if: steps.e2e-config.outputs.ready == 'true'
+        run: npm run test:seed
+
+      - name: Build E2E
+        if: steps.e2e-config.outputs.ready == 'true'
+        run: npm run build
+
+      - name: E2E mobile y desktop
+        if: steps.e2e-config.outputs.ready == 'true'
+        run: npm run test:e2e
+
+      - name: Conservar reporte ante fallos
+        uses: actions/upload-artifact@v4
+        if: failure() && steps.e2e-config.outputs.ready == 'true'
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

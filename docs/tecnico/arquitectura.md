@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-07-28
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -39,7 +39,7 @@ flowchart LR
     web --> mongo["MongoDB"]
     web --> blob["Vercel Blob"]
     web --> rates["Proveedor de cotizaciones"]
-    ci["GitHub Actions"] --> checks["Lint · Build · Unit"]
+    ci["GitHub Actions"] --> checks["Lint · Build · Unit · E2E"]
 ```
 
 Finp es actualmente un monolito modular:

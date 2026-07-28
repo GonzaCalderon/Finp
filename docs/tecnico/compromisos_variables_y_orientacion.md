@@ -342,16 +342,16 @@ Vale dejarlas escritas porque van a volver:
 
 | | |
 |---|---|
-| Unit | 621 tests aprobados y 5 `todo`, 74 archivos. Incluye fechas, agenda inmutable, sugerencias híbridas, APIs y componentes del flujo. |
-| E2E | 40 tests registrados para desktop y Pixel 7. Incluye alta con fechas entre meses, recuperación de errores, categorías y las tres vigencias de monto. |
+| Unit | 724 tests aprobados, sin `todo`, en 87 archivos. Incluye fechas, agenda inmutable, sugerencias híbridas, APIs y componentes del flujo. |
+| E2E | 40 de 40 tests aprobados para desktop y Pixel 7 contra `finp-e2e`. Incluye alta con fechas entre meses, recuperación de errores, categorías y las tres vigencias de monto. |
 | Typecheck | `npx tsc --noEmit` limpio. Se agregó el script `npm run typecheck`, que no existía. |
 | Build | limpio. |
 
 ### Para correr los E2E hace falta `.env.test.local`
 
-No está en el repo. Playwright levanta su propio server en el 3001 con las variables de ese
-archivo, deliberadamente separado de la base de desarrollo del 3000. Copiar `.env.test.example`
-y apuntarlo a una base de test.
+El procedimiento canónico está en
+[`../../tests/e2e/helpers/README.md`](../../tests/e2e/helpers/README.md). Antes de
+seed o Playwright, `npm run test:e2e:check` debe confirmar una base exclusiva.
 
 ### Backfill
 
@@ -365,5 +365,7 @@ Idempotente. Completa `amountPolicy`, `estimationMode`, `createdFrom`, `aliases`
 aplicaciones existentes; y escribe la procedencia en sus transacciones.
 
 Reporta —sin tocarlas— las anomalías: aplicaciones sin transacción y aplicaciones cuya
-transacción fue borrada. En la base de desarrollo apareció **una** de estas últimas, que es
-exactamente el agujero que este bloque cierra.
+transacción fue borrada. El 2026-07-28 se verificó un respaldo lógico completo y se aplicó
+el backfill sobre `finm`: actualizó un compromiso, no modificó aplicaciones ni transacciones
+y el dry-run posterior quedó en cero cambios. Persiste documentada una aplicación cuya
+transacción ya había sido eliminada; el script la omite y conserva la referencia histórica.

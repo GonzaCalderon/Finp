@@ -2,7 +2,21 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { loginAsTestUser, gotoTransactions } from './helpers/auth'
 
 async function openTransactionDialog(page: Page) {
-    await page.getByTestId('btn-nueva-transaccion').click()
+    const emptyStateAction = page
+        .getByRole('button', { name: /Nueva transacción/i })
+        .first()
+
+    if (await emptyStateAction.isVisible().catch(() => false)) {
+        await emptyStateAction.click()
+    } else {
+        await page
+            .getByRole('button', { name: 'Abrir acciones rapidas' })
+            .click()
+        await page
+            .getByRole('button', { name: 'Nueva transacción', exact: true })
+            .click()
+    }
+
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
 }
 
@@ -46,13 +60,13 @@ async function crearIngreso(page: Page, descripcion: string, monto: string = '10
     await dialog.getByTestId('transaction-type-income').click()
     await continueStep(page)
 
+    await selectFromTrigger(
+        dialog.getByTestId('transaction-step-details').getByRole('combobox').first()
+    )
     await dialog.getByLabel('Monto').fill(monto)
-    await continueStep(page)
-
-    await selectFromTrigger(dialog.getByRole('button', { name: /selecciona cuenta destino/i }))
-    await continueStep(page)
-
     await llenarDescripcionActual(page, descripcion)
+    await continueStep(page)
+
     await elegirCategoria(dialog)
     await continueStep(page)
 
@@ -67,13 +81,15 @@ async function crearGasto(page: Page, descripcion: string, monto: string = '500'
     await continueStep(page)
 
     await dialog.getByLabel('Monto').fill(monto)
-    await continueStep(page)
-
-    await dialog.getByTestId('transaction-payment-debit').click()
-    await selectFromTrigger(dialog.getByRole('button', { name: /^selecciona cuenta$/i }))
-    await continueStep(page)
-
     await llenarDescripcionActual(page, descripcion)
+    await continueStep(page)
+
+    await dialog.getByTestId('transaction-payment-cash').click()
+    await selectFromTrigger(
+        dialog.getByTestId('transaction-step-details').getByRole('combobox').first()
+    )
+    await continueStep(page)
+
     await elegirCategoria(dialog)
     await continueStep(page)
 
@@ -88,14 +104,15 @@ async function crearGastoTarjetaUnaCuota(page: Page, descripcion: string, monto:
     await continueStep(page)
 
     await dialog.getByLabel('Monto').fill(monto)
+    await llenarDescripcionActual(page, descripcion)
     await continueStep(page)
 
     await dialog.getByTestId('transaction-payment-credit_card').click()
-    await selectFromTrigger(dialog.getByRole('button', { name: /selecciona tarjeta/i }).first())
-    await selectFromTrigger(dialog.getByRole('button', { name: /selecciona mes/i }))
+    const details = dialog.getByTestId('transaction-step-details')
+    await selectFromTrigger(details.getByRole('combobox').first())
+    await selectFromTrigger(details.getByRole('combobox').nth(1))
     await continueStep(page)
 
-    await llenarDescripcionActual(page, descripcion)
     await elegirCategoria(dialog)
     await continueStep(page)
 
@@ -124,7 +141,9 @@ test.describe('Transacciones', () => {
     test('crear gasto con tarjeta en 1 cuota mantiene primera cuota', async ({ page }) => {
         const descripcion = `Test tarjeta 1 cuota ${Date.now()}`
         await crearGastoTarjetaUnaCuota(page, descripcion)
-        await expect(page.locator(`text=${descripcion}`)).toBeVisible({ timeout: 8_000 })
+        await expect(page.getByText(descripcion, { exact: true })).toBeVisible({
+            timeout: 12_000,
+        })
     })
 
     test('editar transacción actualiza la descripción en la lista', async ({ page }) => {
@@ -135,13 +154,16 @@ test.describe('Transacciones', () => {
         await expect(page.locator(`text=${descripcionOriginal}`)).toBeVisible({ timeout: 8_000 })
 
         const transaccionRow = page.locator('[data-testid="transaction-item"]').filter({ hasText: descripcionOriginal }).first()
-        await transaccionRow.getByTestId('btn-editar-transaccion').last().click()
+        await transaccionRow.getByRole('button', { name: /Editar/ }).click()
         await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
 
         await continueStep(page)
+        const details = page
+            .getByRole('dialog')
+            .getByTestId('transaction-step-details')
+        await expect(details).toBeVisible()
+        await details.getByLabel(/descripci[oó]n$/i).fill(descripcionEditada)
         await continueStep(page)
-        await continueStep(page)
-        await llenarDescripcionActual(page, descripcionEditada)
         await continueStep(page)
         await submitStep(page, /guardar cambios/i)
 

@@ -60,6 +60,7 @@ export const TRANSACTION_INVALIDATION_TAGS: DataTag[] = [
 
 export const INSTALLMENT_INVALIDATION_TAGS: DataTag[] = [
     'credit-card-expenses',
+    'transactions',
     'dashboard',
     'projection',
     'accounts',

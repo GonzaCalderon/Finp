@@ -109,6 +109,9 @@ test.describe('Captura rápida', () => {
         ).toHaveCount(0)
 
         await input.fill('Verdu')
+        await expect(
+            dialog.getByTestId('quick-capture-inline-completion')
+        ).toHaveText('lería')
         await input.evaluate((element) => {
             const textarea = element as HTMLTextAreaElement
             const valueSetter = Object.getOwnPropertyDescriptor(
@@ -332,10 +335,14 @@ test.describe('Captura rápida', () => {
 
         await orientation.getByRole('button', { name: 'Configurar compromiso' }).click()
 
-        // Derivó a la página dedicada con el borrador aplicado, y los datos
-        // financieros no quedaron en la URL.
+        // Derivó a la página dedicada con un identificador opaco. Los datos
+        // financieros permanecen en sessionStorage y no viajan en la URL.
         await page.waitForURL(/\/commitments/)
-        expect(new URL(page.url()).searchParams.get('draft')).toBeNull()
+        const destination = new URL(page.url())
+        expect(destination.searchParams.get('draft')).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        )
+        expect([...destination.searchParams.keys()]).toEqual(['draft'])
 
         const commitmentDialog = page
             .getByRole('dialog')
@@ -403,6 +410,7 @@ test.describe('Captura rápida', () => {
         await orientation.getByRole('button', { name: 'Registrar aparte' }).click()
         await expect(orientation).toHaveCount(0)
         await expect(dialog.getByLabel('Describí el movimiento')).toHaveValue('Alquiler 675000')
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
     })
 
     test('la ayuda "¿Qué puedo escribir?" se abre, escribe un ejemplo y no rompe el layout', async ({

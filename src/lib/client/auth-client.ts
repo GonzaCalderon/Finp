@@ -135,6 +135,16 @@ export async function apiJson<T>(
     init?: RequestInit
 ): Promise<T> {
     const response = await fetch(input, init)
+
+    // Next.js puede convertir una respuesta protegida en una redirección HTML al
+    // login. No debe llegar al consumidor tipada como si fuera el JSON esperado.
+    if (didRedirectToLogin(response)) {
+        notifyAuthExpired()
+        throw new ApiError('Tu sesión expiró. Volvé a iniciar sesión.', 401, {
+            code: 'AUTH_REQUIRED',
+        })
+    }
+
     const text = await response.text()
     let data = {} as T & {
         error?: string

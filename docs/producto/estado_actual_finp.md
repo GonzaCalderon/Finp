@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-07-28
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -31,13 +31,17 @@ Estado general:
 - Espacios y Deudas operativos;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- falta cerrar E2E, validación con datos reales y algunos flujos mobile antes de una liberación más amplia.
+- E2E local reproducible en una base aislada;
+- smoke financiero real aprobado;
+- falta rotar la credencial de pruebas para que el job E2E ya configurado pueda
+  ejecutarse en CI.
 
 La especificación completa está en [`especificacion_funcional.md`](especificacion_funcional.md). Las prioridades viven sólo en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-07-26 sobre `dev`:
+Verificado localmente el 2026-07-28 sobre una rama corta nacida de `dev`
+(`e64a821`):
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -46,22 +50,26 @@ Verificado localmente el 2026-07-26 sobre `dev`:
 - typecheck limpio;
 - ESLint limpio;
 - build de producción limpio, con 63 páginas generadas;
-- 684 unit tests aprobados en 79 archivos, sin tests en `todo`;
-- 40 escenarios E2E registrados para desktop y mobile;
-- `.env.test.local` existe y está excluido de Git, pero todavía resuelve la
-  misma base remota que desarrollo: cambiar `appName` no cambia la base
-  seleccionada; no se ejecutaron seed ni E2E;
+- 729 unit tests aprobados en 88 archivos, sin tests en `todo`;
+- 44 de 44 escenarios E2E aprobados para desktop y mobile;
+- preflight E2E sin conexión y seed idempotente implementados; ambos rechazan
+  bases sin marcador explícito o iguales a desarrollo;
+- `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
+  desarrollo conserva `finm`;
+- el seed se ejecutó dos veces: reparó los usuarios general y financiero, sus
+  categorías, cuentas y datos representativos sin duplicados;
 - CI activo para lint, build y unit tests;
-- job E2E preparado, pero desactivado.
+- job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
+  la rotación.
 
 Ramas:
 
 - `main`: producción;
 - `dev`: desarrollo;
-- al momento de la revisión, `dev` coincide con su referencia local `origin/dev`.
-- las referencias remotas disponibles muestran historia divergente: 13 commits exclusivos de `origin/main` y 12 de `origin/dev`;
-- la mayoría de los commits exclusivos de `main` son merges de releases, pero `main` no es ancestro de `dev`;
-- se debe ejecutar un fetch y auditar contenido antes de normalizar la historia.
+- `dev` coincide con `origin/dev` en `e64a821`;
+- `origin/main` es ancestro de `origin/dev` y está 15 commits detrás;
+- la rama local `main` está 87 commits detrás de `origin/main` y no se usa para
+  trabajo hasta actualizarla de forma autorizada.
 
 ## 3. Finanzas personales
 
@@ -95,16 +103,13 @@ Ramas:
 - consistencia de préstamos entre Dashboard y Transacciones;
 - compra/venta de USD con cuentas, montos y cotización coherentes.
 
-### Validación pendiente
+### Validación real
 
-El código y los tests cubren las reglas principales, pero falta smoke con datos reales para:
-
-- saldo acumulado e histórico;
-- pago total y parcial de deuda;
-- cuotas;
-- períodos con inicio personalizado;
-- ARS/USD;
-- saldos negativos.
+El smoke sobre `finp-e2e` compara Dashboard, Transacciones, Cuentas y Deudas para
+el período actual y el anterior. Cubre saldo acumulado, saldo negativo, ARS/USD,
+cuotas y pagos total y parcial de deuda, con capturas mobile y desktop adjuntas al
+reporte de Playwright. El inicio de período personalizado mantiene cobertura
+unitaria, pero no forma parte de este fixture remoto.
 
 ## 4. Captura, reglas y aprendizaje
 
@@ -190,7 +195,8 @@ crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
 - proyección con monto correcto por período;
 - proyección de cuotas múltiples agrupada por tarjeta y detallada por consumo;
 - actualización opcional de períodos futuros sin reescribir historia;
-- backfill idempotente con modo `dry-run`.
+- backfill idempotente con modo `dry-run`, aplicado y verificado sobre `finm` el
+  2026-07-28.
 
 ### No disponible todavía
 
@@ -319,14 +325,17 @@ Mobile web sigue siendo la superficie prioritaria.
 - tests de privacidad, aislamiento e idempotencia;
 - orquestación de NavInsights cubierta en período, aislamiento y señales;
 - Playwright preparado para Chromium desktop y mobile;
-- CI para verificaciones principales;
+- preflight E2E compartido por configuración, seed y Playwright;
+- seed repetible que repara los usuarios general y financiero, categorías,
+  cuentas y dataset representativo;
+- suite completa aprobada contra `finp-e2e` sin escrituras en desarrollo;
+- CI para verificaciones principales y job E2E listo para ejecutarse apenas
+  reciba la credencial rotada;
 - build de producción reproducible.
 
 ### Brechas
 
-- E2E fuera del CI;
-- `.env.test.local` y la guía local existen; falta seleccionar una base remota
-  distinta en la ruta de la URI, asegurar el seed y ejecutar la suite completa;
+- primera ejecución remota de E2E bloqueada por la rotación de credenciales;
 - cobertura de integración/API desigual;
 - validación visual y accesibilidad no sistematizadas;
 - cobertura no bloquea CI;
@@ -338,9 +347,9 @@ Mobile web sigue siendo la superficie prioritaria.
   `npm run repair:payment-groups`; el comando es `dry-run` por defecto y no debe
   aplicarse sin identificar la base y revisar el resultado.
 - `auto_month_start` no tiene scheduler.
-- La detección híbrida de candidatos a compromiso está implementada, incluye el
-  caso de control Pizza y sigue pendiente de validación E2E con datos reales
-  representativos.
+- La detección híbrida de candidatos a compromiso está implementada e incluye el
+  caso de control Pizza; su validación específica contra historial remoto sigue
+  pendiente dentro de FINP-P2-001.
 - La orientación aún no cubre reglas, cuotas, Deudas, Espacios e Importación.
 - Captura rápida no cubre todavía consumos con tarjeta de crédito.
 - La proyección omite consumos con tarjeta en un pago y no ofrece todavía el
@@ -353,11 +362,15 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Bloque P1, 2026-07-26:
+Entorno E2E y smoke financiero, 2026-07-28:
 
-- resumen y estado de tarjetas con separación estricta por moneda;
-- borrado explícito y normalización de pagos duales;
-- alta y baja segura del impacto privado de Espacios en Mi Finp;
-- cierre responsive de los recorridos críticos de Deudas;
-- fundamentos compartidos de importes, sheets y totales por moneda;
-- decisiones 0003 y 0004, dominios, arquitectura y roadmap actualizados.
+- base Atlas `finp-e2e` separada de desarrollo y protegida por preflight;
+- usuarios general y financiero con datos deterministas preparados de forma
+  repetible;
+- 44 escenarios aprobados en desktop y mobile;
+- saldos actuales e históricos, ARS/USD, negativo, cuotas y deudas contrastados
+  entre Dashboard, Transacciones, Cuentas y Deudas;
+- job E2E de CI activo, con secretos de aplicación efímeros y artefactos ante
+  fallos; sólo espera la URI de Atlas rotada;
+- expiración de sesión segura y refresco inmediato de compras en cuotas;
+- pruebas y documentación alineadas con los recorridos vigentes.

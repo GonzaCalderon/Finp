@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-07-28
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -73,42 +73,16 @@ Los principios de producto y de trabajo viven en
 
 ## 3. Prioridad P0 — confianza financiera y cierre operativo
 
-### FINP-P0-001 — Smoke financiero con datos reales
-
-- Estado: `bloqueado`.
-- Bloqueado por: FINP-P0-003.
-- Requiere: entorno o datos reales.
-- Alcance: saldo acumulado, saldos negativos, histórico, ARS/USD, préstamos, pago parcial/total de deuda y cuotas.
-- Criterio: Dashboard, Transacciones, Cuentas y Deudas coinciden para períodos actuales e históricos.
-- Evidencia: casos documentados, capturas mobile/desktop y ausencia de escrituras fuera de la base de prueba.
-
-### FINP-P0-002 — Ejecutar y validar backfill de compromisos
-
-- Estado: `pendiente`.
-- Requiere: entorno o datos reales.
-- Alcance: ejecutar `npm run backfill:commitments` en `dry-run`, revisar anomalías y aplicar sólo con aprobación.
-- Criterio: datos existentes tienen política, agenda, estado, snapshot y procedencia; las anomalías quedan resueltas o documentadas.
-- Riesgo: modifica datos; requiere backup y ambiente identificado.
-
-### FINP-P0-003 — Entorno y suite E2E reproducibles
-
-- Estado: `pendiente`.
-- Requiere: entorno o datos reales.
-- Desbloquea: FINP-P0-001, FINP-P0-004 y la evidencia final de FINP-P2-001.
-- Disponible: `.env.test.local` no versionado, `.env.test.example`, guía de
-  ejecución y servidor dedicado en el puerto 3001.
-- Hallazgo 2026-07-26: `appName` identifica la conexión como test, pero la URI
-  todavía resuelve la misma base remota que desarrollo. No ejecutar seed ni E2E
-  hasta cambiar el nombre de base en la ruta de conexión.
-- Pendiente: apuntar a una base remota exclusiva, completar un seed idempotente
-  y seguro, y ejecutar los 40 escenarios.
-- Criterio: E2E mobile y desktop reproducibles sin tocar desarrollo ni producción.
-
 ### FINP-P0-004 — Activar E2E crítico en CI
 
 - Estado: `bloqueado`.
-- Bloqueado por: FINP-P0-003.
+- Bloqueado por: FINP-P1-011.
 - Requiere: entorno o datos reales.
+- Disponible: workflow activo con preflight, seed, build, Playwright
+  mobile/desktop, secretos de aplicación efímeros y artefactos ante fallos. Sin
+  `MONGODB_URI_TEST` informa el bloqueo y no conecta.
+- Pendiente externo: rotar la credencial, limitarla a `finp-e2e`, cargar la URI
+  nueva en GitHub y obtener la primera ejecución verde.
 - Criterio: flujos críticos ejecutan en CI con secretos y base aislada; reportes se conservan ante fallos.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
@@ -118,7 +92,7 @@ Los principios de producto y de trabajo viven en
 - Estado: `pendiente`.
 - Prioridad operativa: no bloquea desarrollo local ni documentación.
 - Alcance: rotar la credencial del usuario de MongoDB, revocar la anterior y
-  actualizar los entornos locales autorizados.
+  actualizar los entornos locales autorizados y `MONGODB_URI_TEST` en GitHub.
 - Restricción: la credencial actual no se copia a CI ni a otros servicios; la
   rotación debe completarse antes de configurar los secretos de FINP-P0-004.
 - Criterio: credencial anterior inválida, aplicación conectando con la nueva y
@@ -130,7 +104,6 @@ Los principios de producto y de trabajo viven en
 ### FINP-P2-001 — Candidatos mensuales explicables
 
 - Estado: `validación`.
-- Bloqueado por: FINP-P0-003, sólo para la evidencia final.
 - Alcance: detectar recurrencia desde historial vigente.
 - Criterio:
   - evidencia por cantidad, período y variación;
@@ -141,7 +114,8 @@ Los principios de producto y de trabajo viven en
   - descartes persistentes;
   - coordinación entre Captura rápida y Compromisos.
 - Evidencia: motor puro, endpoint autenticado sin cache, borrador guiado,
-  descarte persistente y pruebas unitarias/API. Falta smoke E2E con base aislada.
+  descarte persistente, pruebas unitarias/API y recorrido E2E de orientación.
+  Falta contrastar la sugerencia contra historial remoto representativo.
 
 ### FINP-P2-002 — Captura rápida con tarjeta y orientación a cuotas
 
@@ -347,6 +321,27 @@ documental corre con `npm run docs:check`.
 
 ## 10. Cerrado recientemente
 
+### 2026-07-28
+
+- FINP-P0-001: un usuario independiente y un seed determinista cubren dos
+  períodos, saldo acumulado y negativo, ARS/USD, una compra en tres cuotas y
+  préstamos pagados parcial y totalmente. Dashboard, Transacciones, Cuentas y
+  Deudas coinciden; las capturas mobile/desktop quedan adjuntas a Playwright y la
+  suite completa pasa 44 de 44 escenarios;
+- FINP-P0-002: después de verificar fuera de Git un respaldo lógico completo de
+  `finm`, el backfill actualizó un compromiso y no necesitó modificar aplicaciones
+  ni transacciones; el dry-run posterior quedó en cero cambios. Se conserva
+  documentada y sin tocar una aplicación cuya transacción ya había sido eliminada;
+- FINP-P0-003: Atlas usa la base exclusiva `finp-e2e`, distinta de `finm`; el
+  preflight confirma nombre y destino antes de conectar, el seed crea o repara el
+  usuario, 20 categorías, Efectivo y Tarjeta E2E sin duplicarlos en una segunda
+  ejecución, y los 44 escenarios Playwright pasan en Chromium desktop y Pixel 7;
+- las pruebas E2E se alinearon con el formulario vigente y con el contrato privado
+  de borradores; además, una compra en cuotas ahora invalida Transacciones y
+  aparece en la lista sin recargar;
+- una redirección HTML al login ya no puede interpretarse como respuesta JSON:
+  se informa sesión expirada sin romper el dashboard.
+
 ### 2026-07-26
 
 - FINP-P1-004: un pago dual se elimina con alcance explícito: una sola parte o
@@ -370,8 +365,7 @@ documental corre con `npm run docs:check`.
   que ninguno resuelve por accidente la acción pendiente;
 - FINP-P1-003: `getNavInsightsForUser` queda cubierto en período, aislamiento y
   señales. El aislamiento se verifica sobre las catorce consultas del servicio y
-  el conteo falla si se agrega una sin dueño declarado. La verificación contra una
-  base real es alcance de FINP-P0-003;
+  el conteo falla si se agrega una sin dueño declarado;
 - FINP-P1-002: Compromisos emite `intent_completed` al crear la plantilla desde
   un borrador derivado; el `eventId` deriva del borrador, así la derivación queda
   registrada una sola vez y aceptar el CTA sigue siendo un estado distinto;

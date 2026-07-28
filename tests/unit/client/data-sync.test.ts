@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     COMMITMENT_INVALIDATION_TAGS,
     DEBT_INVALIDATION_TAGS,
+    INSTALLMENT_INVALIDATION_TAGS,
     NOTIFICATION_INVALIDATION_TAGS,
     PERSONAL_PENDING_ACTIONS_INVALIDATION_TAGS,
     SPACE_INVALIDATION_TAGS,
@@ -22,6 +23,12 @@ describe('commitment invalidation tags', () => {
                 'account-detail',
             ])
         )
+    })
+})
+
+describe('installment invalidation tags', () => {
+    it('refreshes the transaction list after creating an installment plan', () => {
+        expect(INSTALLMENT_INVALIDATION_TAGS).toContain('transactions')
     })
 })
 
