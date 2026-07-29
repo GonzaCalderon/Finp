@@ -72,13 +72,16 @@ El seed es idempotente y acotado al usuario configurado. Crea o repara:
 - usuario y contraseña de test;
 - categorías predeterminadas;
 - cuenta Efectivo;
-- tarjeta bimonetaria Tarjeta E2E.
+- tarjeta bimonetaria Tarjeta E2E;
+- cuenta histórica no patrimonial y candidato recurrente P2;
 - usuario financiero independiente derivado del email de test;
 - dos períodos representativos con ARS/USD, saldo acumulado y negativo;
 - compra en tres cuotas;
 - préstamo parcialmente pagado y préstamo saldado.
 
-No imprime la contraseña ni elimina otros datos.
+Antes de recrear los fixtures, restaura transacciones, cuotas, compromisos y
+descartes del usuario general configurado. No toca otros usuarios, no imprime la
+contraseña y mantiene aislado el dataset del smoke financiero.
 
 ## 5. Ejecutar Playwright
 
@@ -89,6 +92,13 @@ npm run test:e2e:debug
 ```
 
 La suite corre con un worker sobre Chromium desktop y Pixel 7.
+
+Para validar el artefacto ya compilado localmente en PowerShell:
+
+```powershell
+$env:E2E_USE_PRODUCTION_BUILD='true'
+npm run test:e2e
+```
 
 El smoke financiero adjunta capturas de Dashboard, Transacciones, Cuentas y
 Deudas al reporte de Playwright en ambos proyectos.

@@ -110,6 +110,7 @@ Decisiones vigentes:
 - [`0002 — Criterio híbrido para sugerencias de compromisos`](decisiones/0002-criterio-hibrido-sugerencias-de-compromisos.md).
 - [`0003 — Borrado explícito de pagos duales`](decisiones/0003-borrado-explicito-de-pagos-duales.md).
 - [`0004 — Resumen bimonetario de tarjetas`](decisiones/0004-resumen-bimonetario-de-tarjetas.md).
+- [`0005 — Captura rápida, tarjetas y handoffs tipados`](decisiones/0005-captura-rapida-tarjetas-y-handoffs.md).
 
 Una decisión se documenta cuando:
 

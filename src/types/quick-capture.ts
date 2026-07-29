@@ -271,7 +271,7 @@ export interface TransactionAccountImpact {
 export interface TransactionPreviewResponse {
     valid: boolean
     normalized?: {
-        type: 'expense' | 'income'
+        type: 'expense' | 'income' | 'credit_card_expense'
         amount: number
         currency: Currency
         date: string

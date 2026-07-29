@@ -41,7 +41,6 @@ import { useTransactionRules } from '@/hooks/useTransactionRules'
 import { usePreferences } from '@/hooks/usePreferences'
 import type {
     TransactionFormData,
-    TransactionFormInput,
     InstallmentFormData,
 } from '@/lib/validations'
 import { useInstallments } from '@/hooks/useInstallments'
@@ -51,6 +50,7 @@ import {
     TRANSACTION_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
 import type { NavInsight as NavInsightType } from '@/types/nav-insight'
+import type { CaptureTransactionLaunchDraft } from '@/types/capture-intent'
 
 type NavKey =
     | 'dashboard'
@@ -693,7 +693,7 @@ function useTransactionLauncher() {
     const [txDialogOpen, setTxDialogOpen] = useState(false)
     const [quickCaptureOpen, setQuickCaptureOpen] = useState(false)
     const [initialTransactionData, setInitialTransactionData] = useState<
-        Partial<TransactionFormInput> | undefined
+        CaptureTransactionLaunchDraft | undefined
     >()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
@@ -702,13 +702,59 @@ function useTransactionLauncher() {
     const { success, error: toastError } = useToast()
     const { createPlan } = useInstallments()
 
+    const recordCompletedIntent = (transactionId?: string) => {
+        const draft = initialTransactionData
+        if (
+            draft?.origin !== 'quick_capture' ||
+            !draft.captureSessionId ||
+            !draft.captureIntent
+        ) {
+            return
+        }
+        const eventId =
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        void fetch('/api/quick-capture/learning/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                events: [{
+                    eventId,
+                    sessionId: draft.captureSessionId,
+                    type: 'intent_completed',
+                    method: 'submit',
+                    suggestionId: draft.captureIntent,
+                    transactionId,
+                }],
+            }),
+        }).catch(() => {})
+    }
+
     const handleCreateTransaction = async (data: TransactionFormData) => {
         try {
-            await apiJson('/api/transactions', {
+            const isQuickCapture = initialTransactionData?.origin === 'quick_capture'
+            const result = await apiJson<{ transaction?: { _id?: unknown } }>('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                body: JSON.stringify({
+                    ...data,
+                    ...(isQuickCapture
+                        ? {
+                            quickCapture: true,
+                            quickCaptureLearning: {
+                                sessionId: initialTransactionData.captureSessionId,
+                            },
+                            allowPotentialDuplicate:
+                                initialTransactionData.allowPotentialDuplicate === true,
+                        }
+                        : {}),
+                }),
             })
+            const transactionId = result.transaction?._id
+                ? String(result.transaction._id)
+                : undefined
+            recordCompletedIntent(transactionId)
             invalidateData(TRANSACTION_INVALIDATION_TAGS)
             success('Transaccion creada correctamente')
             setTxDialogOpen(false)
@@ -739,7 +785,24 @@ function useTransactionLauncher() {
 
     const handleCreateInstallment = async (data: InstallmentFormData) => {
         try {
-            await createPlan(data)
+            const isQuickCapture = initialTransactionData?.origin === 'quick_capture'
+            const result = await createPlan(
+                data,
+                isQuickCapture
+                    ? {
+                        quickCapture: true,
+                        quickCaptureLearning: {
+                            sessionId: initialTransactionData.captureSessionId ?? '',
+                        },
+                        allowPotentialDuplicate:
+                            initialTransactionData.allowPotentialDuplicate === true,
+                    }
+                    : undefined
+            )
+            const transactionId = result.transaction?._id
+                ? String(result.transaction._id)
+                : undefined
+            recordCompletedIntent(transactionId)
             success('Compra en cuotas registrada correctamente')
             setTxDialogOpen(false)
             setInitialTransactionData(undefined)
@@ -758,7 +821,7 @@ function useTransactionLauncher() {
             setInitialTransactionData(undefined)
             setTxDialogOpen(true)
         },
-        completeQuickCaptureDetails: (draft: Partial<TransactionFormInput>) => {
+        completeQuickCaptureDetails: (draft: CaptureTransactionLaunchDraft) => {
             setInitialTransactionData(draft)
             setQuickCaptureOpen(false)
             setTxDialogOpen(true)

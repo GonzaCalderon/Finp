@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-07-28
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -313,14 +313,22 @@ Captura rápida también debe admitir consumos con tarjeta de crédito, porque s
 una operación cotidiana de alta frecuencia:
 
 - un consumo en un pago puede resolverse dentro del diálogo cuando tarjeta,
-  monto, moneda y fecha son válidos;
+  monto, moneda, fecha y categoría son válidos; debe anticipar la deuda y el mes
+  de impacto;
 - un consumo en varias cuotas conserva lo interpretado y abre el flujo
   especializado para confirmar tarjeta, cantidad de cuotas, primer cierre y
   demás datos propios del plan;
 - si la tarjeta no puede identificarse con suficiente confianza, Finp pregunta
   o deriva sin convertir el consumo en un gasto de cuenta común;
 - un consumo con tarjeta y el pago del resumen son operaciones distintas y no
-  se infieren una de otra.
+  se infieren una de otra;
+- el pago del resumen transporta tarjeta, monto, moneda y fecha, pero exige que
+  la persona elija la cuenta de origen;
+- una referencia `cuota N de M` abre la revisión del plan existente y no crea
+  otro;
+- el primer mes propuesto es el próximo mes calendario y puede editarse antes de
+  confirmar;
+- una intención clasificada como tarjeta no ofrece salida como gasto simple.
 
 ### Orientación
 
@@ -331,6 +339,11 @@ Captura rápida distingue:
 3. preparación de una función nueva.
 
 Una intención explícita tiene prioridad. Las funciones complejas reciben un borrador tipado y versionado, con procedencia por campo.
+
+Para recurrencias, el orden es: recurrencia explícita, compromiso pendiente,
+candidato mensual aprendido y transacción simple. Captura rápida y Compromisos
+comparten identidad, evidencia y descarte del candidato; crear la plantilla o
+registrar sólo el gasto actual siempre requiere una elección.
 
 ### Importación
 

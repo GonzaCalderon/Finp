@@ -5,6 +5,7 @@ import { InstallmentPlan, Transaction } from '@/lib/models'
 import { installmentSchema } from '@/lib/validations'
 import { createTransactionForUser } from '@/lib/server/transactions'
 import { isServiceError } from '@/lib/server/errors'
+import { recordTransactionLearningEvent } from '@/lib/server/quick-capture-learning'
 
 export async function GET() {
     try {
@@ -80,6 +81,15 @@ export async function POST(request: Request) {
         await connectDB()
 
         const data = parsed.data
+        const isQuickCapture =
+            Boolean(body) &&
+            typeof body === 'object' &&
+            body.quickCapture === true
+        const captureSessionId =
+            isQuickCapture &&
+            typeof body.quickCaptureLearning?.sessionId === 'string'
+                ? body.quickCaptureLearning.sessionId.slice(0, 120)
+                : undefined
         const installmentAmount = data.totalAmount / data.installmentCount
 
         const plan = await InstallmentPlan.create({
@@ -112,8 +122,11 @@ export async function POST(request: Request) {
                     merchant: data.merchant,
                 },
                 {
-                    createdFrom: 'web',
+                    createdFrom: isQuickCapture ? 'quick_capture' : 'web',
                     status: 'confirmed',
+                    includePreviewSignals: isQuickCapture,
+                    allowPotentialDuplicate:
+                        isQuickCapture && body.allowPotentialDuplicate === true,
                     metadata: { installmentPlanId: plan._id },
                 }
             )
@@ -147,6 +160,25 @@ export async function POST(request: Request) {
             .populate('sourceAccountId', 'name type currency color')
             .populate('destinationAccountId', 'name type currency color')
             .populate('installmentPlanId', 'installmentCount')
+
+        if (isQuickCapture && populatedTransaction) {
+            await recordTransactionLearningEvent({
+                userId: session.user.id,
+                type: 'capture_confirmed',
+                transaction: populatedTransaction,
+                sessionId: captureSessionId,
+                durationMs:
+                    typeof body.quickCaptureLearning?.durationMs === 'number'
+                        ? body.quickCaptureLearning.durationMs
+                        : undefined,
+                eventId: `capture_confirmed:${populatedTransaction._id.toString()}`,
+            }).catch((telemetryError) => {
+                console.error(
+                    'No se pudo guardar telemetría de compra rápida con tarjeta:',
+                    telemetryError
+                )
+            })
+        }
 
         return NextResponse.json({
             plan: populatedPlan

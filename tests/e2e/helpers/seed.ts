@@ -12,6 +12,8 @@ import { DEFAULT_CATEGORIES } from '../../../src/lib/constants/defaultCategories
 import { Account } from '../../../src/lib/models/account.model'
 import { Category } from '../../../src/lib/models/category.model'
 import { User } from '../../../src/lib/models/user.model'
+import { FunctionalSuggestionDismissal } from '../../../src/lib/models/functional-suggestion-dismissal.model'
+import { ScheduledCommitment } from '../../../src/lib/models/scheduled-commitment.model'
 import { resolveE2EEnvironment } from './environment'
 import {
     buildFinancialSmokePeriods,
@@ -23,6 +25,21 @@ import {
 } from './financial-smoke'
 
 const TEST_NAME = 'Test User'
+const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
+const P2_CANDIDATE_SUBJECT_KEY = 'create_commitment|ARS|cobertura p2'
+const P2_HISTORY_ACCOUNT_NAME = 'Historial P2'
+
+async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no está conectado para reiniciar el usuario E2E.')
+
+    await Promise.all([
+        db.collection('transactions').deleteMany({ userId }),
+        db.collection('installmentplans').deleteMany({ userId }),
+        ScheduledCommitment.deleteMany({ userId }),
+        FunctionalSuggestionDismissal.deleteMany({ userId }),
+    ])
+}
 
 async function ensureTestUser(
     email: string,
@@ -97,6 +114,62 @@ async function ensureAccount(
 
     await Account.create({ userId, name, ...values })
     return true
+}
+
+async function seedP2RecurringCandidate(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no está conectado para sembrar P2.')
+
+    const [account, category] = await Promise.all([
+        Account.findOne({ userId, name: P2_HISTORY_ACCOUNT_NAME }),
+        Category.findOne({
+            userId,
+            type: 'expense',
+            name: 'Servicios',
+            isArchived: false,
+        }),
+    ])
+    if (!account || !category) {
+        throw new Error('No se pudo resolver cuenta o categoría para el candidato P2.')
+    }
+
+    const now = new Date()
+    const transactions = db.collection('transactions')
+    const rows = Array.from({ length: 4 }, (_, index) => {
+        const date = new Date(now.getFullYear(), now.getMonth() - 3 + index, 12, 12)
+        return {
+            _id: new mongoose.Types.ObjectId(
+                `72${String(index + 1).padStart(22, '0')}`
+            ),
+            userId,
+            type: 'expense',
+            amount: 16_000,
+            currency: 'ARS',
+            date,
+            description: P2_CANDIDATE_DESCRIPTION,
+            categoryId: category._id,
+            sourceAccountId: account._id,
+            status: 'confirmed',
+            createdFrom: 'system',
+            tags: ['e2e-p2-recurring-candidate'],
+            createdAt: date,
+            updatedAt: date,
+        }
+    })
+
+    await Promise.all(rows.map((row) =>
+        transactions.replaceOne({ _id: row._id }, row, { upsert: true })
+    ))
+    await Promise.all([
+        FunctionalSuggestionDismissal.deleteMany({
+            userId,
+            subjectKey: P2_CANDIDATE_SUBJECT_KEY,
+        }),
+        ScheduledCommitment.deleteMany({
+            userId,
+            description: P2_CANDIDATE_DESCRIPTION,
+        }),
+    ])
 }
 
 async function seedFinancialSmokeData(email: string, password: string) {
@@ -483,6 +556,7 @@ async function seed() {
             TEST_USER_EMAIL,
             TEST_USER_PASSWORD
         )
+        await resetGeneralE2EFinancialData(user._id)
         const categories = await ensureDefaultCategories(user._id)
         const cashCreated = await ensureAccount(user._id, 'Efectivo', {
             type: 'cash',
@@ -513,6 +587,19 @@ async function seed() {
                 creditLimit: 1_000_000,
             },
         })
+        const p2HistoryCreated = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
+            type: 'cash',
+            currency: 'ARS',
+            supportedCurrencies: ['ARS'],
+            defaultPaymentMethods: ['cash'],
+            initialBalance: 100_000,
+            initialBalances: { ARS: 100_000, USD: 0 },
+            color: '#14B8A6',
+            isActive: true,
+            includeInNetWorth: false,
+            allowNegativeBalance: false,
+        })
+        await seedP2RecurringCandidate(user._id)
         const financialSmoke = await seedFinancialSmokeData(
             TEST_USER_EMAIL,
             TEST_USER_PASSWORD
@@ -524,8 +611,9 @@ async function seed() {
             `   Categorías: ${categories.created} creadas, ${categories.updated} actualizadas`
         )
         console.log(
-            `   Cuentas base: ${Number(cashCreated) + Number(cardCreated)} creadas`
+            `   Cuentas base: ${Number(cashCreated) + Number(cardCreated) + Number(p2HistoryCreated)} creadas`
         )
+        console.log('   P2: candidato mensual explicable verificado')
         console.log(
             `   Smoke financiero: usuario ${financialSmoke.created ? 'creado' : 'actualizado'}, ` +
             `períodos ${financialSmoke.historical} y ${financialSmoke.current}`

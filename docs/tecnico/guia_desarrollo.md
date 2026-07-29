@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-28
 > Fuente de verdad: prácticas técnicas de implementación
 
 ## Índice
@@ -124,6 +124,12 @@ No extraer por anticipación.
 - estado derivado en lugar de duplicado;
 - discriminated unions para flujos con tipos distintos;
 - borradores tipados/versionados para derivación entre funciones.
+
+Los handoffs financieros usan contratos discriminados. La superficie de origen
+transporta sólo campos interpretados y procedencia; la de destino vuelve a
+validar autenticación, propiedad, tipo de cuenta, moneda y duplicados. Si una
+clasificación especializada no tiene una degradación financieramente correcta,
+no se ofrece una salida simple.
 
 ## 5. TypeScript y contratos
 

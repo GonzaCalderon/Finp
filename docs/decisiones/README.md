@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-07-26
+> Última actualización: 2026-07-28
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -85,3 +85,6 @@ La referencia informa; la decisión sigue siendo propia de Finp.
   grupos huérfanos.
 - [`0004 — Resumen bimonetario de tarjetas`](0004-resumen-bimonetario-de-tarjetas.md):
   fuente compartida, estados derivados y separación estricta entre ARS y USD.
+- [`0005 — Captura rápida, tarjetas y handoffs tipados`](0005-captura-rapida-tarjetas-y-handoffs.md):
+  clasificación financiera determinista, contratos discriminados, límites de
+  resolución local y transporte a superficies especializadas.

@@ -74,6 +74,8 @@ import {
     type PaymentMethod,
 } from '@/components/shared/transaction-dialog-prefs'
 import { TRANSACTION_FORM_TYPE_LABELS } from '@/components/shared/transaction-dialog/constants'
+import { getDefaultFirstClosingMonth } from '@/lib/utils/installments'
+import type { CaptureTransactionLaunchDraft } from '@/types/capture-intent'
 
 interface TransactionDialogProps {
     open: boolean
@@ -88,7 +90,7 @@ interface TransactionDialogProps {
     rules?: ITransactionRule[]
     defaultAccountId?: string
     monthStartDay?: number
-    initialData?: Partial<TransactionFormInput>
+    initialData?: CaptureTransactionLaunchDraft
 }
 
 type TransactionStepId = 'type' | 'main' | 'details' | 'classification' | 'review'
@@ -882,8 +884,26 @@ export function TransactionDialog({
                         ? 'credit_card'
                         : 'debit'
             )
-            setInstallmentCount(1)
-            setFirstClosingMonth('')
+            setInstallmentCount(initialData.installmentCount ?? 1)
+            setFirstClosingMonth(initialData.firstClosingMonth ?? '')
+            if (initialType === 'credit_card_payment') {
+                const initialCurrency = initialData.currency === 'USD' ? 'USD' : 'ARS'
+                setCardPaymentMode('partial')
+                setCardPaymentSelection(initialCurrency === 'USD' ? 'usd' : 'ars')
+                cardPaymentPartialDraftRef.current = {
+                    currency: initialCurrency,
+                    amount:
+                        typeof initialData.amount === 'number'
+                            ? initialData.amount
+                            : 0,
+                    additionalEnabled: false,
+                    secondaryAmount: 0,
+                }
+            } else {
+                setCardPaymentMode('full')
+                setCardPaymentSelection('ars')
+                cardPaymentPartialDraftRef.current = null
+            }
             setShowMoreOptions(Boolean(initialData.notes || initialData.merchant))
             setAdjustmentSign('+')
             setCurrentStepIndex(1)
@@ -1117,6 +1137,10 @@ export function TransactionDialog({
         if ((!isEditing && !hasReachedDetailsStep) || !open || isExpense) return
 
         if (showSource) {
+            const requiresExplicitSource =
+                initialData?.origin === 'quick_capture' &&
+                initialData.requireSourceAccountSelection === true &&
+                type === 'credit_card_payment'
             const sourceContext = getSourceAccountContext(type, paymentMethod)
             const preferredSource =
                 resolveStoredAccount(sourceContext, selectableSourceAccounts)
@@ -1125,7 +1149,7 @@ export function TransactionDialog({
                 (account) => account._id.toString() === sourceAccountId
             )
 
-            if (!isCurrentValid) {
+            if (!isCurrentValid && !(requiresExplicitSource && !sourceAccountId)) {
                 setValue('sourceAccountId', preferredSource?._id.toString() ?? undefined, { shouldValidate: true })
             }
         }
@@ -1146,6 +1170,7 @@ export function TransactionDialog({
     }, [
         destinationAccountId,
         hasReachedDetailsStep,
+        initialData,
         isEditing,
         isExpense,
         open,
@@ -1401,8 +1426,7 @@ export function TransactionDialog({
 
     useEffect(() => {
         if (!usesCardExpensePlanFlow || !date || firstClosingMonth) return
-        const next = new Date(date.getFullYear(), date.getMonth() + 1, 1)
-        const nextValue = formatMonthValue(next)
+        const nextValue = getDefaultFirstClosingMonth(date)
         if (monthOptions.some((option) => option.value === nextValue)) {
             setFirstClosingMonth(nextValue)
         }
@@ -1413,8 +1437,7 @@ export function TransactionDialog({
         setValue('date', selectedDate, { shouldValidate: true, shouldDirty: true })
         setIsDatePopoverOpen(false)
         if (usesCardExpensePlanFlow && !firstClosingMonth) {
-            const next = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1)
-            setFirstClosingMonth(formatMonthValue(next))
+            setFirstClosingMonth(getDefaultFirstClosingMonth(selectedDate))
             setFirstMonthError(null)
         }
     }, [firstClosingMonth, setValue, usesCardExpensePlanFlow])

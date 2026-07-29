@@ -2,8 +2,8 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
-> Fuente de verdad: implementación del bloque de compromisos variables y orientación
+> Última actualización: 2026-07-28
+> Fuente de verdad: implementación de compromisos y destinos de orientación
 
 ## Índice
 
@@ -16,7 +16,7 @@
 7. [Deuda y extensión](#7-deuda-conocida-y-extensión)
 8. [Verificación y backfill](#8-verificación)
 
-Documentación técnica del bloque implementado el 2026-07-25. El diseño funcional vive en
+Documentación técnica de Compromisos y de los destinos de orientación implementados. El diseño funcional vive en
 `docs/producto/compromisos_espacios_y_proyeccion.md` y
 `docs/producto/captura_rapida_como_orientador.md`; este documento explica **cómo quedó
 construido**, qué decisiones se tomaron y dónde extenderlo.
@@ -181,9 +181,14 @@ aviso del diálogo de Compromisos no anuncia la moneda cuando vino como `default
 
 ### Jerarquía de detección
 
-1. **Intención explícita** en el texto (`el 5 de cada mes`) → propone crear el compromiso.
+Las compras, cuotas, pagos y referencias a cuotas se clasifican primero para
+impedir que una operación de Tarjetas se escriba como gasto simple. Dentro de
+recurrencias:
+
+1. **Intención explícita** (`el 5 de cada mes`) → propone crear el compromiso.
 2. **Coincidencia con un pendiente** → propone aplicarlo.
-3. Nada → no interrumpe.
+3. **Candidato mensual aprendido** → reutiliza el candidato de Compromisos.
+4. Nada → no interrumpe.
 
 Una intención explícita **nunca** se reemplaza por evidencia histórica. Devuelve como máximo
 una propuesta por frase.
@@ -200,9 +205,9 @@ crea de verdad.
 
 El `eventId` deriva del `draftId` (`intent_completed:<intent>:<draftId>`) y el endpoint inserta con
 `$setOnInsert`: un reintento, un doble submit o dos pestañas dejan **un solo** evento. La
-atribución se abandona si el diálogo se cierra sin crear, si se edita otro compromiso o si se
-acepta un candidato mensual, que es otra superficie. Un segundo alta en la misma visita tampoco
-vuelve a contar la derivación.
+atribución se abandona si el diálogo se cierra sin crear o si se edita otro
+compromiso. Un segundo alta en la misma visita tampoco vuelve a contar la
+derivación.
 
 El evento no lleva monto, descripción ni comercio: para el embudo sólo importa que la derivación
 terminó. Captura rápida conserva su cola con debounce porque emite muchos eventos por sesión; un
@@ -222,6 +227,7 @@ destino emite uno solo y le alcanza un POST best-effort.
 | `GET /api/commitments` | Devuelve período, monto y fecha efectivos, `resolvedDueDate`, `nextDueDate`, `nextReminderDate`, `occursThisPeriod`, aplicación actual, ciclo de vida y recordatorio derivado. Los campos nuevos son opcionales para preservar compatibilidad. |
 | `POST` / `PATCH /api/commitments` | **zod en el servidor** (antes no había). Errores de datos dan 400 con detalle, no 500. El PATCH sólo escribe los campos enviados. |
 | `GET /api/commitments/suggestions` | Calcula candidatos mensuales sin escribir datos; respuesta privada y sin cache. |
+| `POST /api/installments` | Acepta procedencia de Captura rápida, confirmación de duplicados y telemetría estructurada; valida tarjeta, moneda y categoría, y devuelve plan y transacción padre. |
 | `POST` / `DELETE /api/commitments/[id]/amounts` | Alta y baja de tramos futuros. Acepta aumentos y disminuciones; rechaza editar o eliminar historia vigente/pasada con `IMMUTABLE_COMMITMENT_AMOUNT_HISTORY`. |
 | `POST /api/commitments/[id]/apply` | Acepta `origin`; escribe snapshot y procedencia; reutiliza filas `reverted`. |
 | `GET /api/projection` | Delega en `getProjectionForUser`. Devuelve `certainty` y `occurrences`. |
@@ -278,12 +284,17 @@ explícito y no figure como aplicada.
   prioriza el compromiso dentro de la ventana o después del vencimiento.
 - **Candidatos mensuales**: aplican el criterio híbrido del ADR 0002 y umbral
   0,82; muestran meses, cobertura, variación, día y categoría. Aceptar precarga
-  el alta; `No es un compromiso` persiste el rechazo.
+  el alta; `No es un compromiso` persiste el rechazo. Captura rápida los pide
+  una vez por apertura cuando existe texto útil y comparte `subjectKey`.
 
-- **Tarjeta de orientación** (`CaptureOrientationCard`): título, motivo, evidencia, y siempre
-  cuatro acciones — la principal, `Registrar sólo este gasto` / `Registrar aparte`, `Ahora no` y
-  `No volver a sugerir`. Anuncia el **importe que se va a aplicar**, no el previsto por la
-  plantilla, y aclara la diferencia cuando existe.
+- **Tarjeta de orientación** (`CaptureOrientationCard`): título, motivo,
+  evidencia y acciones permitidas por dominio. Compromisos admite registrar
+  aparte y descarte persistente. Tarjetas sólo admite la acción segura:
+  confirmar, completar en el flujo responsable o revisar el plan.
+- **Tarjetas**: selector inline para coincidencias múltiples; compra en un pago
+  con preview `credit_card_expense`; cuotas y pagos con borrador discriminado.
+  El primer mes es el próximo mes calendario editable. Un pago preserva monto,
+  moneda y fecha, pero nunca preselecciona la cuenta de origen.
 - Se silencia mientras haya bloqueos locales: primero se arregla el movimiento, después se orienta.
 - **Ayuda** (`CaptureHelpPanel`): galería por objetivo, con ejemplos accionables. Sólo anuncia
   capacidades **realmente disponibles**.
@@ -310,11 +321,11 @@ Este documento conserva el contexto de implementación; [`../producto/roadmap_fi
 
 ### Cómo agregar el próximo destino de orientación
 
-El camino está preparado. Para sumar, por ejemplo, cuotas:
+El camino está preparado. Para sumar otro dominio:
 
 1. Agregar el `CaptureIntent` y sus `DraftFields` en `src/types/capture-intent.ts`.
 2. Detectar la intención en `src/lib/utils/capture-intents.ts` (determinista, sin red).
-3. Aceptar `initialDraft` en el diálogo destino y leer `?draft=` en su página.
+3. Aceptar el borrador discriminado en el lanzador o diálogo destino.
 4. Si el destino resuelve inline, agregar la rama en `handleOrientationAction`.
 5. Cerrar el embudo: llamar a `reportCaptureIntentCompleted` cuando el destino
    complete la función de verdad, no cuando abra su formulario.
@@ -342,8 +353,8 @@ Vale dejarlas escritas porque van a volver:
 
 | | |
 |---|---|
-| Unit | 724 tests aprobados, sin `todo`, en 87 archivos. Incluye fechas, agenda inmutable, sugerencias híbridas, APIs y componentes del flujo. |
-| E2E | 40 de 40 tests aprobados para desktop y Pixel 7 contra `finp-e2e`. Incluye alta con fechas entre meses, recuperación de errores, categorías y las tres vigencias de monto. |
+| Unit | 745 tests aprobados, sin `todo`, en 92 archivos. Incluye recurrencias, matriz de tarjetas, APIs y componentes del flujo. |
+| E2E | 52 de 52 tests aprobados para desktop y Pixel 7 contra `finp-e2e`. Incluye candidato compartido, compra y Deshacer, cuotas, pago, revisión de plan y recorridos previos. |
 | Typecheck | `npx tsc --noEmit` limpio. Se agregó el script `npm run typecheck`, que no existía. |
 | Build | limpio. |
 

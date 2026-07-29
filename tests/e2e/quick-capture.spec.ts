@@ -2,6 +2,21 @@ import { expect, test } from '@playwright/test'
 
 import { loginAsTestUser } from './helpers/auth'
 
+async function openQuickCapture(
+    page: import('@playwright/test').Page,
+    projectName: string
+) {
+    if (projectName === 'mobile-chromium') {
+        await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+        await page.getByRole('button', { name: 'Captura rápida' }).click()
+    } else {
+        await page.keyboard.press('q')
+    }
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Captura rápida' })
+    await expect(dialog).toBeVisible()
+    return dialog
+}
+
 test.describe('Captura rápida', () => {
     test.beforeEach(async ({ page }) => {
         await page.route('**/api/transaction-rules', async (route) => {
@@ -75,6 +90,194 @@ test.describe('Captura rápida', () => {
             }
         })
         expect(layout).toEqual({ documentFits: true, dialogFits: true })
+    })
+
+    test('coordina un candidato mensual aprendido con el descarte persistente', async ({
+        page,
+    }, testInfo) => {
+        const subjectKey = 'create_commitment|ARS|cobertura p2'
+        const dialog = await openQuickCapture(page, testInfo.project.name)
+        await dialog
+            .getByLabel('Describí el movimiento')
+            .fill('Cobertura P2 16000')
+
+        const orientation = dialog.getByTestId('capture-orientation')
+        await expect(orientation).toBeVisible({ timeout: 8_000 })
+        await expect(orientation).toHaveAttribute('data-intent', 'create_commitment')
+        await expect(orientation).toContainText('se repite todos los meses')
+        await expect(orientation).toContainText('4 meses')
+
+        await orientation
+            .getByRole('button', { name: 'No volver a sugerir' })
+            .click()
+        await expect(orientation).toHaveCount(0)
+
+        await expect.poll(async () => {
+            const response = await page.request.get('/api/commitments/suggestions')
+            const payload = await response.json()
+            return (payload.suggestions ?? []).some(
+                (candidate: { subjectKey: string }) =>
+                    candidate.subjectKey === subjectKey
+            )
+        }).toBe(false)
+
+        const restored = await page.request.delete(
+            `/api/quick-capture/suggestions/dismiss?subjectKey=${encodeURIComponent(subjectKey)}`
+        )
+        expect(restored.ok()).toBe(true)
+    })
+
+    test('registra una compra de tarjeta en un pago y permite deshacerla', async ({
+        page,
+    }, testInfo) => {
+        const amount = 38_500 + (Date.now() % 5_000)
+        const dialog = await openQuickCapture(page, testInfo.project.name)
+        await dialog
+            .getByLabel('Describí el movimiento')
+            .fill(`Compra rápida ${amount} Tarjeta E2E`)
+
+        const orientation = dialog.getByTestId('capture-orientation')
+        await expect(orientation).toBeVisible({ timeout: 8_000 })
+        await expect(orientation).toContainText('compra con tarjeta')
+        await expect(dialog.getByTestId('quick-capture-card-select'))
+            .toContainText('Tarjeta E2E')
+        await expect(
+            dialog.getByTestId('quick-capture-first-closing-month')
+        ).not.toHaveValue('')
+
+        await orientation.getByRole('button', { name: 'Registrar compra' }).click()
+        await expect(page.getByText('Compra con tarjeta registrada')).toBeVisible({
+            timeout: 10_000,
+        })
+
+        await expect.poll(async () => {
+            const response = await page.request.get('/api/installments')
+            const payload = await response.json()
+            return (payload.plans ?? []).some(
+                (plan: { description: string; totalAmount: number }) =>
+                    plan.description === 'Rápida E2E' &&
+                    plan.totalAmount === amount
+            )
+        }).toBe(true)
+
+        await page.getByRole('button', { name: 'Deshacer' }).click()
+        await expect(page.getByText('Compra deshecha')).toBeVisible()
+        await expect.poll(async () => {
+            const response = await page.request.get('/api/installments')
+            const payload = await response.json()
+            return (payload.plans ?? []).some(
+                (plan: { description: string; totalAmount: number }) =>
+                    plan.description === 'Rápida E2E' &&
+                    plan.totalAmount === amount
+            )
+        }).toBe(false)
+    })
+
+    test('transporta una compra en cuotas al formulario completo y conserva el plan', async ({
+        page,
+    }, testInfo) => {
+        const amount = 120_000 + (Date.now() % 5_000)
+        const dialog = await openQuickCapture(page, testInfo.project.name)
+        await dialog
+            .getByLabel('Describí el movimiento')
+            .fill(`Notebook rápida ${amount} Tarjeta E2E en 6 cuotas`)
+
+        const orientation = dialog.getByTestId('capture-orientation')
+        await expect(orientation).toContainText('6 cuotas', { timeout: 8_000 })
+        await orientation.getByRole('button', { name: 'Revisar plan' }).click()
+
+        const fullDialog = page.getByRole('dialog').filter({ hasText: 'Nueva transaccion' })
+        await expect(fullDialog).toBeVisible()
+        await expect(fullDialog.getByLabel('Monto')).toHaveValue(
+            new Intl.NumberFormat('es-AR').format(amount)
+        )
+        await expect(fullDialog.getByLabel(/descripci[oó]n$/i))
+            .toHaveValue('Notebook rápida E2E')
+
+        await fullDialog.getByTestId('transaction-step-next').click()
+        const details = fullDialog.getByTestId('transaction-step-details')
+        await expect(details.getByRole('spinbutton')).toHaveValue('6')
+        await expect(details.getByRole('combobox').first()).toContainText('Tarjeta E2E')
+        await fullDialog.getByTestId('transaction-step-next').click()
+
+        const category = fullDialog
+            .locator('button')
+            .filter({ hasText: /supermercado|otros gastos|servicios/i })
+            .first()
+        await category.click()
+        await fullDialog.getByTestId('transaction-step-next').click()
+        await fullDialog.getByTestId('transaction-step-submit').click()
+        await expect(fullDialog).not.toBeVisible({ timeout: 10_000 })
+
+        let transactionId = ''
+        await expect.poll(async () => {
+            const response = await page.request.get('/api/installments')
+            const payload = await response.json()
+            const plan = (payload.plans ?? []).find(
+                (candidate: {
+                    description: string
+                    totalAmount: number
+                    installmentCount: number
+                    parentTransaction?: { _id?: string }
+                }) =>
+                    candidate.description === 'Notebook rápida E2E' &&
+                    candidate.totalAmount === amount
+            )
+            transactionId = plan?.parentTransaction?._id ?? ''
+            return plan?.installmentCount
+        }).toBe(6)
+
+        expect(transactionId).not.toBe('')
+        const cleanup = await page.request.delete(
+            `/api/transactions/${transactionId}?reason=e2e_cleanup`
+        )
+        expect(cleanup.ok()).toBe(true)
+    })
+
+    test('deriva pagos de resumen y cuotas existentes sin crear consumos', async ({
+        page,
+    }, testInfo) => {
+        const paymentDialog = await openQuickCapture(page, testInfo.project.name)
+        await paymentDialog
+            .getByLabel('Describí el movimiento')
+            .fill('Pagué el resumen Tarjeta E2E 50000')
+        const paymentOrientation = paymentDialog.getByTestId('capture-orientation')
+        await expect(paymentOrientation).toContainText('pago de tarjeta', {
+            timeout: 8_000,
+        })
+        await paymentOrientation
+            .getByRole('button', { name: 'Completar pago' })
+            .click()
+
+        const fullDialog = page.getByRole('dialog').filter({ hasText: 'Nueva transaccion' })
+        await expect(
+            fullDialog.getByText('Pago de tarjeta', { exact: true }).first()
+        ).toBeVisible()
+        await expect(
+            fullDialog
+                .getByRole('combobox')
+                .filter({ hasText: /Tarjeta E2E · ARS y USD/ })
+                .first()
+        ).toBeVisible()
+        await expect(
+            fullDialog.getByText('Cuenta desde la que pagas')
+        ).toBeVisible()
+        await expect(fullDialog.getByText('Selecciona cuenta', { exact: true }).first())
+            .toBeVisible()
+        await expect(fullDialog.getByLabel('Monto parcial')).toHaveValue('50.000')
+        await page.keyboard.press('Escape')
+        await expect(fullDialog).not.toBeVisible()
+
+        const reviewDialog = await openQuickCapture(page, testInfo.project.name)
+        await reviewDialog
+            .getByLabel('Describí el movimiento')
+            .fill('Notebook cuota 2 de 6')
+        const reviewOrientation = reviewDialog.getByTestId('capture-orientation')
+        await expect(reviewOrientation).toContainText('cuota 2 de 6')
+        await reviewOrientation
+            .getByRole('button', { name: 'Revisar en Tarjetas' })
+            .click()
+        await page.waitForURL(/\/transactions\/credit-card/)
     })
 
     test('muestra el autocompletado inline y refleja los campos resueltos por reglas', async ({

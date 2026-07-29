@@ -50,14 +50,15 @@ Verificado localmente el 2026-07-28 sobre una rama corta nacida de `dev`
 - typecheck limpio;
 - ESLint limpio;
 - build de producción limpio, con 63 páginas generadas;
-- 729 unit tests aprobados en 88 archivos, sin tests en `todo`;
-- 44 de 44 escenarios E2E aprobados para desktop y mobile;
-- preflight E2E sin conexión y seed idempotente implementados; ambos rechazan
+- 745 unit tests aprobados en 92 archivos, sin tests en `todo`;
+- 52 de 52 escenarios E2E aprobados para desktop y mobile;
+- preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
 - `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
   desarrollo conserva `finm`;
 - el seed se ejecutó dos veces: reparó los usuarios general y financiero, sus
-  categorías, cuentas y datos representativos sin duplicados;
+  categorías, cuentas y datos representativos sin duplicados; el usuario general
+  se restaura sin tocar el usuario independiente del smoke financiero;
 - CI activo para lint, build y unit tests;
 - job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
   la rotación.
@@ -117,6 +118,13 @@ unitaria, pero no forma parte de este fixture remoto.
 
 - acceso desde FAB y tecla `Q`;
 - parser de gasto/ingreso, monto, moneda, fecha, descripción, cuenta, categoría y comercio;
+- candidatos mensuales compartidos con Compromisos, cargados de forma diferida,
+  con la misma evidencia, identidad y descarte;
+- clasificación determinista de compra con tarjeta, compra en cuotas, pago de
+  resumen y referencia a una cuota existente;
+- compra en un pago confirmable con impacto y primer mes editable;
+- selector compacto cuando la tarjeta es ambigua;
+- handoff tipado de cuotas y pagos, sin perder borrador ni procedencia;
 - autocompletado y resumen vivo;
 - preview sin escritura;
 - impacto de saldo;
@@ -153,15 +161,21 @@ Captura rápida distingue:
 
 - transacción independiente;
 - aplicación de compromiso pendiente;
-- preparación de un compromiso nuevo.
+- preparación de un compromiso nuevo, incluido un candidato mensual aprendido;
+- compra con tarjeta en un pago o en cuotas;
+- pago de resumen;
+- revisión de una cuota existente.
 
-Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrador tipado, versionado y con procedencia.
+Puede aplicar el pendiente dentro del diálogo o abrir Compromisos y Tarjetas con
+un borrador tipado, versionado y con procedencia. Una intención de tarjeta nunca
+se ofrece como gasto simple.
 
 El embudo cierra: aceptar el CTA y completar la función se registran como estados
 distintos, y Compromisos anota la derivación completada una sola vez por borrador.
 
-Captura rápida todavía no interpreta ni registra consumos con tarjeta de
-crédito. El formulario completo y el módulo de Tarjetas sí los admiten.
+Los consumos en un pago se registran dentro del diálogo. Las cuotas y los pagos
+se confirman en el flujo completo; la cuenta de origen de un pago siempre la
+elige el usuario.
 
 ## 5. Compromisos y proyección
 
@@ -347,11 +361,9 @@ Mobile web sigue siendo la superficie prioritaria.
   `npm run repair:payment-groups`; el comando es `dry-run` por defecto y no debe
   aplicarse sin identificar la base y revisar el resultado.
 - `auto_month_start` no tiene scheduler.
-- La detección híbrida de candidatos a compromiso está implementada e incluye el
-  caso de control Pizza; su validación específica contra historial remoto sigue
-  pendiente dentro de FINP-P2-001.
-- La orientación aún no cubre reglas, cuotas, Deudas, Espacios e Importación.
-- Captura rápida no cubre todavía consumos con tarjeta de crédito.
+- La orientación aún no cubre reglas, Deudas, Espacios e Importación.
+- La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
+  elegir.
 - La proyección omite consumos con tarjeta en un pago y no ofrece todavía el
   recorrido tarjeta → categoría → movimiento.
 - No existe una superficie dedicada para análisis histórico, patrones,
@@ -362,15 +374,13 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Entorno E2E y smoke financiero, 2026-07-28:
+Recurrencias aprendidas y tarjetas desde Captura rápida, 2026-07-28:
 
-- base Atlas `finp-e2e` separada de desarrollo y protegida por preflight;
-- usuarios general y financiero con datos deterministas preparados de forma
-  repetible;
-- 44 escenarios aprobados en desktop y mobile;
-- saldos actuales e históricos, ARS/USD, negativo, cuotas y deudas contrastados
-  entre Dashboard, Transacciones, Cuentas y Deudas;
-- job E2E de CI activo, con secretos de aplicación efímeros y artefactos ante
-  fallos; sólo espera la URI de Atlas rotada;
-- expiración de sesión segura y refresco inmediato de compras en cuotas;
-- pruebas y documentación alineadas con los recorridos vigentes.
+- candidatos mensuales visibles y descartables desde Captura rápida y
+  Compromisos sin cambiar los umbrales vigentes;
+- compras con tarjeta en un pago confirmables y reversibles dentro del diálogo;
+- cuotas y pagos derivados con borradores tipados y datos preservados;
+- referencias a cuotas existentes abiertas en revisión sin duplicar planes;
+- clasificación, propiedad y moneda validadas con recorridos desktop y mobile;
+- detección, aceptación y finalización registradas por separado sin persistir el
+  texto financiero.

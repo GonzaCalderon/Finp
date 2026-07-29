@@ -33,9 +33,11 @@ import { CaptureOrientationCard } from '@/components/shared/CaptureOrientationCa
 import { buildCaptureDraft, putCaptureDraft } from '@/lib/client/capture-draft'
 import { detectCaptureIntents } from '@/lib/utils/capture-intents'
 import type {
+    CaptureTransactionLaunchDraft,
     CommitmentDraftFields,
     FunctionalSuggestionActionId,
 } from '@/types/capture-intent'
+import type { CommitmentSuggestion } from '@/lib/utils/commitment-suggestions'
 import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { CurrencyPillSelector } from '@/components/shared/CurrencyPillSelector'
 import {
@@ -66,8 +68,8 @@ import {
     invalidateData,
 } from '@/lib/client/data-sync'
 import type { Currency } from '@/lib/constants'
-import type { TransactionFormInput } from '@/lib/validations'
 import {
+    getSupportedCurrencies,
     isSimpleTransactionAccountType,
     supportsCurrency,
 } from '@/lib/utils/accounts'
@@ -116,7 +118,7 @@ type QuickCaptureDialogProps = {
     defaultAccountId?: string
     lastExpenseAccountId?: string
     lastIncomeAccountId?: string
-    onCompleteDetails: (draft: Partial<TransactionFormInput>) => void
+    onCompleteDetails: (draft: CaptureTransactionLaunchDraft) => void
     /** Se dispara cuando se aplicó un compromiso desde el diálogo. */
     onAppliedCommitment?: (description: string, period: string) => void
 }
@@ -316,6 +318,8 @@ export function QuickCaptureDialog({
     const [learning, setLearning] = useState<QuickCaptureLearningContext>()
     // Contexto de orientación: compromisos aplicables y descartes persistentes.
     const [commitments, setCommitments] = useState<QuickCaptureCommitmentDto[]>([])
+    const [learnedCommitmentCandidates, setLearnedCommitmentCandidates] =
+        useState<CommitmentSuggestion[]>([])
     const [currentPeriod, setCurrentPeriod] = useState<string | undefined>()
     const [dismissedSubjects, setDismissedSubjects] = useState<string[]>([])
     const [orientationBusy, setOrientationBusy] = useState(false)
@@ -344,6 +348,8 @@ export function QuickCaptureDialog({
     const [duplicateConfirmed, setDuplicateConfirmed] = useState(false)
     const [showManualDetails, setShowManualDetails] = useState(false)
     const [showLearningIntro, setShowLearningIntro] = useState(false)
+    const [selectedCardAccountId, setSelectedCardAccountId] = useState<string>()
+    const [cardFirstClosingMonth, setCardFirstClosingMonth] = useState<string>()
     const [dismissedPersonalizationKeys, setDismissedPersonalizationKeys] =
         useState<string[]>([])
     const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -366,12 +372,24 @@ export function QuickCaptureDialog({
     const learningEventQueueRef = useRef<QuickCaptureLearningEventInput[]>([])
     const shownSuggestionKeysRef = useRef(new Set<string>())
     const learningFlushTimerRef = useRef<number | null>(null)
+    const learnedCandidatesRequestedRef = useRef(false)
 
     const simpleAccounts = useMemo(
         () => accounts.filter((account) =>
             account.isActive !== false &&
             isSimpleTransactionAccountType(account.type)
         ),
+        [accounts]
+    )
+    const creditCards = useMemo(
+        () => accounts
+            .filter((account) => account.type === 'credit_card' && account.isActive !== false)
+            .map((account) => ({
+                id: resolveEntityId(account._id),
+                name: account.name,
+                currencies: getSupportedCurrencies(account),
+                isActive: account.isActive,
+            })),
         [accounts]
     )
 
@@ -429,10 +447,6 @@ export function QuickCaptureDialog({
         [draft, preview]
     )
 
-    const selectedAccount = accounts.find(
-        (account) =>
-            resolveEntityId(account._id) === resolvedDraft.accountId
-    )
     const selectedCategory = categories.find(
         (category) =>
             resolveEntityId(category._id) === resolvedDraft.categoryId
@@ -440,36 +454,92 @@ export function QuickCaptureDialog({
     const filteredCategories = categories.filter(
         (category) => !category.isArchived && category.type === resolvedDraft.type
     )
-    const clientIssues = localIssues(draft)
-    const clientIssuesCount = clientIssues.length
-
     /**
-     * Orientación funcional. Se calcula sobre el borrador ya resuelto para que la
-     * propuesta hable de lo mismo que muestra el resumen, y se silencia mientras
-     * haya bloqueos locales: primero se arregla el movimiento, después se orienta.
+     * Las clasificaciones de tarjeta se muestran aun con datos incompletos para
+     * impedir que el texto termine como un gasto simple. Las recomendaciones se
+     * mantienen no bloqueantes y usan el mismo orden de prioridad del dominio.
      */
     const orientation = useMemo(() => {
-        if (!currentPeriod || clientIssuesCount > 0) return null
-
         const [suggestion] = detectCaptureIntents({
             text,
-            draft: resolvedDraft,
+            draft,
             commitments,
             currentPeriod,
+            learnedCommitmentCandidates,
+            creditCards,
+            selectedCardAccountId,
             dismissedSubjects: [...dismissedSubjects, ...sessionDismissedSubjects],
         })
 
+        if (suggestion?.card) return suggestion
+        if (localIssues(draft).length > 0) return null
         return suggestion ?? null
     }, [
         text,
-        resolvedDraft,
+        draft,
         commitments,
         currentPeriod,
+        learnedCommitmentCandidates,
+        creditCards,
+        selectedCardAccountId,
         dismissedSubjects,
         sessionDismissedSubjects,
-        clientIssuesCount,
     ])
 
+    const cardPurchaseFields =
+        orientation?.draft?.kind === 'card_purchase'
+            ? orientation.draft.fields
+            : undefined
+    const effectiveCardAccountId =
+        selectedCardAccountId ?? cardPurchaseFields?.cardAccountId ?? orientation?.card?.accountId
+    const effectiveFirstClosingMonth =
+        cardFirstClosingMonth ?? cardPurchaseFields?.firstClosingMonth
+    const selectedAccount = accounts.find(
+        (account) =>
+            resolveEntityId(account._id) ===
+            (orientation?.card ? effectiveCardAccountId : resolvedDraft.accountId)
+    )
+    const orientationCardAccounts = orientation?.card
+        ? accounts.filter(
+            (account) =>
+                account.type === 'credit_card' &&
+                account.isActive !== false &&
+                orientation.card?.candidateAccountIds.includes(
+                    resolveEntityId(account._id)
+                ) &&
+                supportsCurrency(account, resolvedDraft.currency)
+        )
+        : []
+    const clientIssues = cardPurchaseFields
+        ? localIssues({
+            ...draft,
+            accountId: effectiveCardAccountId,
+            description: cardPurchaseFields.description ?? draft.description,
+        })
+        : orientation?.card
+            ? []
+            : localIssues(draft)
+    const previewPayload = useMemo(() => {
+        if (cardPurchaseFields) {
+            return {
+                type: 'credit_card_expense',
+                amount: cardPurchaseFields.amount,
+                currency: cardPurchaseFields.currency ?? draft.currency,
+                date: cardPurchaseFields.date ?? draft.date.toISOString(),
+                description: cardPurchaseFields.description ?? draft.description,
+                categoryId: cardPurchaseFields.categoryId ?? draft.categoryId,
+                merchant: cardPurchaseFields.merchant ?? draft.merchant,
+                sourceAccountId: effectiveCardAccountId,
+            }
+        }
+        if (orientation?.card) return null
+        return buildPayload(draft)
+    }, [
+        cardPurchaseFields,
+        draft,
+        effectiveCardAccountId,
+        orientation?.card,
+    ])
     const issues = clientIssues.length > 0 ? clientIssues : preview?.issues ?? []
     const blockingIssues = issues.filter((issue) => issue.severity === 'error')
     const warnings = issues.filter((issue) => issue.severity === 'warning')
@@ -485,6 +555,7 @@ export function QuickCaptureDialog({
     const canSubmit =
         !submitting &&
         !previewing &&
+        !orientation?.card &&
         clientIssues.length === 0 &&
         preview?.valid === true &&
         blockingIssues.length === 0 &&
@@ -499,6 +570,10 @@ export function QuickCaptureDialog({
         setShowManualDetails(false)
         setShowLearningIntro(false)
         setDismissedPersonalizationKeys([])
+        setSelectedCardAccountId(undefined)
+        setCardFirstClosingMonth(undefined)
+        setLearnedCommitmentCandidates([])
+        learnedCandidatesRequestedRef.current = false
         setSubmitting(false)
         spaceCompletionRef.current = null
     }, [])
@@ -680,6 +755,8 @@ export function QuickCaptureDialog({
 
     useEffect(() => {
         if (!open) return
+        learnedCandidatesRequestedRef.current = false
+        setLearnedCommitmentCandidates([])
         learningSessionIdRef.current = `capture:${createClientEventId()}`
         learningOpenedAtRef.current = Date.now()
         learningCompletedRef.current = false
@@ -691,6 +768,31 @@ export function QuickCaptureDialog({
         void loadContext()
         requestAnimationFrame(() => inputRef.current?.focus())
     }, [loadContext, open, queueLearningEvent])
+
+    useEffect(() => {
+        if (
+            !open ||
+            text.trim().length < 3 ||
+            learnedCandidatesRequestedRef.current
+        ) {
+            return
+        }
+
+        const timer = window.setTimeout(() => {
+            learnedCandidatesRequestedRef.current = true
+            void fetch('/api/commitments/suggestions', { cache: 'no-store' })
+                .then(async (response) => {
+                    if (!response.ok) throw new Error('No se pudieron cargar candidatos')
+                    return response.json() as Promise<{ suggestions?: CommitmentSuggestion[] }>
+                })
+                .then((data) => setLearnedCommitmentCandidates(data.suggestions ?? []))
+                .catch(() => {
+                    // La orientación aprendida es una mejora: no bloquea la captura.
+                })
+        }, 250)
+
+        return () => window.clearTimeout(timer)
+    }, [open, text])
 
     useEffect(() => {
         if (
@@ -780,7 +882,26 @@ export function QuickCaptureDialog({
     ])
 
     useEffect(() => {
-        if (!open || clientIssues.length > 0) {
+        if (!open || !orientation) return
+        const fingerprint = [
+            learningSessionIdRef.current,
+            'intent',
+            orientation.intent,
+            orientation.subjectKey,
+        ].join('|')
+        if (shownSuggestionKeysRef.current.has(fingerprint)) return
+        shownSuggestionKeysRef.current.add(fingerprint)
+        queueLearningEvent({
+            type: 'intent_detected',
+            method: 'automatic',
+            suggestionId: orientation.intent,
+            transactionType: draft.type,
+            currency: draft.currency,
+        })
+    }, [draft.currency, draft.type, open, orientation, queueLearningEvent])
+
+    useEffect(() => {
+        if (!open || clientIssues.length > 0 || !previewPayload) {
             setPreview(undefined)
             setPreviewing(false)
             return
@@ -794,7 +915,7 @@ export function QuickCaptureDialog({
                 const response = await fetch('/api/transactions/preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(buildPayload(draft)),
+                    body: JSON.stringify(previewPayload),
                     signal: controller.signal,
                 })
                 if (!response.ok) throw new Error('No se pudo validar la captura')
@@ -822,7 +943,7 @@ export function QuickCaptureDialog({
             controller.abort()
             window.clearTimeout(timer)
         }
-    }, [clientIssues.length, draft, open])
+    }, [clientIssues.length, open, previewPayload])
 
     function applySuggestion(
         suggestion: QuickCaptureSuggestion,
@@ -1064,6 +1185,8 @@ export function QuickCaptureDialog({
         setText(nextText)
         setOverrides({})
         setDismissedSuggestions([])
+        setSelectedCardAccountId(undefined)
+        setCardFirstClosingMonth(undefined)
     }
 
     async function persistSuggestion(suggestion: QuickCaptureSuggestion) {
@@ -1096,7 +1219,7 @@ export function QuickCaptureDialog({
         }
     }
 
-    function toFullFormDraft(): Partial<TransactionFormInput> {
+    function toFullFormDraft(): CaptureTransactionLaunchDraft {
         return {
             type: resolvedDraft.type,
             amount: resolvedDraft.amount,
@@ -1180,6 +1303,7 @@ export function QuickCaptureDialog({
         }
 
         if (actionId === 'never') {
+            if (suggestion.canPersistDismissal === false) return
             setSessionDismissedSubjects((current) => [...current, suggestion.subjectKey])
             setDismissedSubjects((current) => [...current, suggestion.subjectKey])
             queueLearningEvent({
@@ -1208,13 +1332,236 @@ export function QuickCaptureDialog({
             currency: draft.currency,
         })
 
+        if (suggestion.card) {
+            const cardAccountId =
+                selectedCardAccountId ??
+                suggestion.card.accountId ??
+                (suggestion.draft?.kind === 'card_purchase'
+                    ? suggestion.draft.fields.cardAccountId
+                    : suggestion.draft?.kind === 'card_payment'
+                        ? suggestion.draft.fields.destinationAccountId
+                        : undefined)
+
+            if (
+                suggestion.card.operation !== 'existing_installment' &&
+                !cardAccountId
+            ) {
+                setOrientationError('Elegí la tarjeta para continuar.')
+                return
+            }
+
+            if (suggestion.draft?.kind === 'card_review') {
+                learningCompletedRef.current = true
+                queueLearningEvent({
+                    type: 'capture_handoff',
+                    method: 'handoff',
+                    suggestionId: suggestion.intent,
+                })
+                void flushLearningEvents(true)
+                onOpenChange(false)
+                router.push(suggestion.draft.fields.href)
+                return
+            }
+
+            if (suggestion.draft?.kind === 'card_payment') {
+                const fields = suggestion.draft.fields
+                const handoff: CaptureTransactionLaunchDraft = {
+                    type: 'credit_card_payment',
+                    amount: fields.amount,
+                    currency: fields.currency ?? resolvedDraft.currency,
+                    date: fields.date ? new Date(fields.date) : resolvedDraft.date,
+                    description: fields.description ?? 'Pago de tarjeta',
+                    destinationAccountId: cardAccountId,
+                    origin: 'quick_capture',
+                    captureIntent: suggestion.intent,
+                    captureSessionId: learningSessionIdRef.current,
+                    allowPotentialDuplicate: duplicateConfirmed,
+                    requireSourceAccountSelection: true,
+                }
+                learningCompletedRef.current = true
+                queueLearningEvent({
+                    type: 'capture_handoff',
+                    method: 'handoff',
+                    suggestionId: suggestion.intent,
+                })
+                void flushLearningEvents(true)
+                onOpenChange(false)
+                onCompleteDetails(handoff)
+                return
+            }
+
+            if (suggestion.draft?.kind === 'card_purchase') {
+                const fields = suggestion.draft.fields
+                const amount = fields.amount ?? resolvedDraft.amount
+                const description =
+                    fields.description ?? resolvedDraft.description
+                const installmentCount =
+                    fields.installmentCount ?? suggestion.card.installmentCount ?? 1
+                const firstClosingMonth =
+                    cardFirstClosingMonth ??
+                    fields.firstClosingMonth ??
+                    suggestion.card.firstClosingMonth
+
+                if (!amount || amount <= 0) {
+                    setOrientationError('Ingresá el monto de la compra.')
+                    return
+                }
+                if (!description.trim()) {
+                    setOrientationError('Ingresá una descripción para la compra.')
+                    return
+                }
+                if (!firstClosingMonth) {
+                    setOrientationError('Elegí el mes de la primera cuota.')
+                    return
+                }
+
+                if (installmentCount > 1) {
+                    const handoff: CaptureTransactionLaunchDraft = {
+                        type: 'credit_card_expense',
+                        amount,
+                        currency: fields.currency ?? resolvedDraft.currency,
+                        date: fields.date ? new Date(fields.date) : resolvedDraft.date,
+                        description,
+                        categoryId: fields.categoryId ?? resolvedDraft.categoryId,
+                        merchant: fields.merchant ?? resolvedDraft.merchant,
+                        sourceAccountId: cardAccountId,
+                        installmentCount,
+                        firstClosingMonth,
+                        origin: 'quick_capture',
+                        captureIntent: suggestion.intent,
+                        captureSessionId: learningSessionIdRef.current,
+                        allowPotentialDuplicate: duplicateConfirmed,
+                    }
+                    learningCompletedRef.current = true
+                    queueLearningEvent({
+                        type: 'capture_handoff',
+                        method: 'handoff',
+                        suggestionId: suggestion.intent,
+                    })
+                    void flushLearningEvents(true)
+                    onOpenChange(false)
+                    onCompleteDetails(handoff)
+                    return
+                }
+
+                if (preview?.duplicate && !duplicateConfirmed) {
+                    setOrientationError(
+                        'Confirmá que querés registrar esta posible compra duplicada.'
+                    )
+                    return
+                }
+                if (preview && !preview.valid) {
+                    setOrientationError(
+                        preview.issues[0]?.message ?? 'Revisá los datos de la compra.'
+                    )
+                    return
+                }
+
+                setOrientationBusy(true)
+                try {
+                    const result = await apiJson<{
+                        transaction?: { _id?: unknown }
+                    }>('/api/installments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            description,
+                            totalAmount: amount,
+                            currency: fields.currency ?? resolvedDraft.currency,
+                            installmentCount: 1,
+                            accountId: cardAccountId,
+                            categoryId: fields.categoryId ?? resolvedDraft.categoryId,
+                            purchaseDate:
+                                fields.date ?? resolvedDraft.date.toISOString(),
+                            firstClosingMonth,
+                            merchant: fields.merchant ?? resolvedDraft.merchant,
+                            quickCapture: true,
+                            allowPotentialDuplicate: duplicateConfirmed,
+                            quickCaptureLearning: {
+                                sessionId: learningSessionIdRef.current,
+                                durationMs:
+                                    Date.now() - learningOpenedAtRef.current,
+                            },
+                        }),
+                    })
+                    const transactionId = result.transaction?._id
+                        ? String(result.transaction._id)
+                        : undefined
+                    queueLearningEvent({
+                        type: 'intent_completed',
+                        method: 'submit',
+                        suggestionId: suggestion.intent,
+                        transactionId,
+                        durationMs: Date.now() - learningOpenedAtRef.current,
+                    })
+                    learningCompletedRef.current = true
+                    await flushLearningEvents()
+                    invalidateData([
+                        ...TRANSACTION_INVALIDATION_TAGS,
+                        'credit-card-expenses',
+                        'projection',
+                    ])
+                    onOpenChange(false)
+                    reset()
+                    toast.success('Compra con tarjeta registrada', {
+                        duration: 8_000,
+                        description: `${description} · ${formatMoney(
+                            amount,
+                            fields.currency ?? resolvedDraft.currency
+                        )}`,
+                        action: transactionId
+                            ? {
+                                label: 'Deshacer',
+                                onClick: async () => {
+                                    try {
+                                        await apiJson(
+                                            `/api/transactions/${transactionId}?reason=quick_capture_undo`,
+                                            { method: 'DELETE' }
+                                        )
+                                        invalidateData([
+                                            ...TRANSACTION_INVALIDATION_TAGS,
+                                            'credit-card-expenses',
+                                            'projection',
+                                        ])
+                                        toast.success('Compra deshecha')
+                                    } catch (error) {
+                                        toast.error(
+                                            error instanceof Error
+                                                ? error.message
+                                                : 'No se pudo deshacer la compra'
+                                        )
+                                    }
+                                },
+                            }
+                            : undefined,
+                    })
+                } catch (error) {
+                    setOrientationError(
+                        error instanceof Error
+                            ? error.message
+                            : 'No se pudo registrar la compra.'
+                    )
+                } finally {
+                    setOrientationBusy(false)
+                }
+                return
+            }
+        }
+
         if (suggestion.intent === 'create_commitment') {
             // El sobre viaja por sessionStorage; en la URL sólo va su id.
+            const commitmentDraft =
+                suggestion.draft?.kind === 'commitment'
+                    ? suggestion.draft
+                    : undefined
             const envelope = buildCaptureDraft<CommitmentDraftFields>({
                 intent: 'create_commitment',
                 sessionId: learningSessionIdRef.current,
-                fields: suggestion.draftFields ?? {},
-                provenance: suggestion.draftProvenance ?? {},
+                fields: commitmentDraft?.fields ?? suggestion.draftFields ?? {},
+                provenance:
+                    commitmentDraft?.provenance ??
+                    suggestion.draftProvenance ??
+                    {},
                 confidence: suggestion.confidence,
             })
             putCaptureDraft(envelope)
@@ -1415,6 +1762,10 @@ export function QuickCaptureDialog({
                 applySuggestion(activeSuggestions[0], { method: 'enter' })
                 return
             }
+            if (orientation?.card) {
+                void handleOrientationAction('primary')
+                return
+            }
             void submit()
         }
     }
@@ -1490,7 +1841,7 @@ export function QuickCaptureDialog({
                         <div className="min-w-0 flex-1">
                             <p className="text-xs font-semibold">Escribí como hablás</p>
                             <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                                Finp puede registrar un movimiento o guiarte hacia compromisos.
+                                Finp puede registrar un movimiento o guiarte hacia compromisos y tarjetas.
                                 Probá con <em>Café 1500 ayer mp</em> o{' '}
                                 <em>Alquiler 650000 el 5 de cada mes</em>.
                             </p>
@@ -1686,19 +2037,80 @@ export function QuickCaptureDialog({
                             ) : null}
 
                             {orientation ? (
-                                <CaptureOrientationCard
-                                    suggestion={orientation}
-                                    busy={orientationBusy}
-                                    error={orientationError}
-                                    effectiveAmount={
-                                        resolvedDraft.amount ??
-                                        orientation.commitment?.resolvedAmount
-                                    }
-                                    accountName={selectedAccount?.name}
-                                    onAction={(actionId) => {
-                                        void handleOrientationAction(actionId)
-                                    }}
-                                />
+                                <div className="space-y-2">
+                                    {orientation.card &&
+                                    orientation.card.operation !== 'existing_installment' ? (
+                                        <div
+                                            data-testid="quick-capture-card-fields"
+                                            className="grid gap-3 rounded-xl border border-violet-500/20 bg-background p-3 sm:grid-cols-2"
+                                        >
+                                            <div className="space-y-1.5">
+                                                <span className="text-xs font-medium text-muted-foreground">
+                                                    Tarjeta
+                                                </span>
+                                                <Select
+                                                    value={effectiveCardAccountId}
+                                                    onValueChange={(accountId) => {
+                                                        setSelectedCardAccountId(accountId)
+                                                        setOrientationError(null)
+                                                    }}
+                                                >
+                                                    <SelectTrigger
+                                                        aria-label="Tarjeta"
+                                                        data-testid="quick-capture-card-select"
+                                                    >
+                                                        <SelectValue placeholder="Elegí una tarjeta" />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="popper">
+                                                        {orientationCardAccounts.map((account) => (
+                                                            <SelectItem
+                                                                key={resolveEntityId(account._id)}
+                                                                value={resolveEntityId(account._id)}
+                                                            >
+                                                                {account.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            {orientation.card.operation === 'purchase' ? (
+                                                <div className="space-y-1.5">
+                                                    <label
+                                                        htmlFor="quick-capture-first-closing-month"
+                                                        className="text-xs font-medium text-muted-foreground"
+                                                    >
+                                                        Primera cuota
+                                                    </label>
+                                                    <Input
+                                                        id="quick-capture-first-closing-month"
+                                                        data-testid="quick-capture-first-closing-month"
+                                                        type="month"
+                                                        value={effectiveFirstClosingMonth ?? ''}
+                                                        onChange={(event) => {
+                                                            setCardFirstClosingMonth(
+                                                                event.target.value || undefined
+                                                            )
+                                                            setOrientationError(null)
+                                                        }}
+                                                    />
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    ) : null}
+                                    <CaptureOrientationCard
+                                        suggestion={orientation}
+                                        busy={orientationBusy}
+                                        error={orientationError}
+                                        effectiveAmount={
+                                            resolvedDraft.amount ??
+                                            orientation.commitment?.resolvedAmount
+                                        }
+                                        accountName={selectedAccount?.name}
+                                        onAction={(actionId) => {
+                                            void handleOrientationAction(actionId)
+                                        }}
+                                    />
+                                </div>
                             ) : null}
 
                             {text.trim() ? (
@@ -2156,11 +2568,17 @@ export function QuickCaptureDialog({
                     <Button
                         type="button"
                         variant="ghost"
-                        onClick={completeDetails}
+                        onClick={() => {
+                            if (orientation?.card) {
+                                void handleOrientationAction('primary')
+                                return
+                            }
+                            completeDetails()
+                        }}
                         className="min-w-0"
                     >
                         <Tag className="hidden sm:block" />
-                        Completar detalles
+                        {orientation?.card ? 'Continuar con tarjeta' : 'Completar detalles'}
                     </Button>
                     <Button
                         type="button"

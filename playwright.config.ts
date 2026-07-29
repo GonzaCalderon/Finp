@@ -5,6 +5,10 @@ import { resolveE2EEnvironment } from './tests/e2e/helpers/environment'
 const E2E_PORT = 3001
 const e2eEnvironment = resolveE2EEnvironment()
 const testEnv = e2eEnvironment.variables
+const useProductionBuild =
+    process.env.CI === 'true' ||
+    process.env.CI === '1' ||
+    process.env.E2E_USE_PRODUCTION_BUILD === 'true'
 const BASE_URL = process.env.CI
     ? testEnv.PLAYWRIGHT_BASE_URL ?? `http://localhost:${E2E_PORT}`
     : `http://localhost:${E2E_PORT}`
@@ -49,7 +53,7 @@ export default defineConfig({
     // De esta forma los tests siempre apuntan a la DB de test sin importar
     // qué DB tenga configurada el dev server que pueda estar corriendo en 3000.
     webServer: {
-        command: process.env.CI
+        command: useProductionBuild
             ? `npm run start -- --port ${E2E_PORT}`
             : `npm run dev -- --port ${E2E_PORT}`,
         url: BASE_URL,

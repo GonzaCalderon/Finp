@@ -103,7 +103,7 @@ Los principios de producto y de trabajo viven en
 
 ### FINP-P2-001 — Candidatos mensuales explicables
 
-- Estado: `validación`.
+- Estado: `cerrado`.
 - Alcance: detectar recurrencia desde historial vigente.
 - Criterio:
   - evidencia por cantidad, período y variación;
@@ -113,13 +113,13 @@ Los principios de producto y de trabajo viven en
   - sin creación automática;
   - descartes persistentes;
   - coordinación entre Captura rápida y Compromisos.
-- Evidencia: motor puro, endpoint autenticado sin cache, borrador guiado,
-  descarte persistente, pruebas unitarias/API y recorrido E2E de orientación.
-  Falta contrastar la sugerencia contra historial remoto representativo.
+- Evidencia: motor puro y umbrales de la decisión 0002, endpoint autenticado sin
+  cache, carga diferida en Captura rápida, `subjectKey` y descarte compartidos,
+  borrador guiado y recorrido E2E aislado en ambas superficies, desktop y mobile.
 
 ### FINP-P2-002 — Captura rápida con tarjeta y orientación a cuotas
 
-- Estado: `pendiente`.
+- Estado: `cerrado`.
 - Dependencias: contrato de borradores vigente. La cascada de `InstallmentPlan`
   ya está cerrada.
 - Alcance:
@@ -132,6 +132,9 @@ Los principios de producto y de trabajo viven en
 - Criterio: reglas y validaciones compartidas con Tarjetas, selección clara de
   tarjeta, impacto anticipado, aprendizaje prudente, mobile/desktop, errores,
   deshacer y finalización medidos.
+- Evidencia: detector determinista, selector ante ambigüedad, preview de compra
+  en un pago, handoffs tipados para cuotas y pagos, revisión sin duplicar planes,
+  procedencia `quick_capture`, rollback y E2E aislado desktop/mobile.
 
 ### FINP-P2-003 — Orientación a reglas
 

@@ -367,16 +367,19 @@ Una versión puede promoverse cuando:
 
 Verificado 2026-07-28:
 
-- 44 de 44 escenarios E2E aprobados en Chromium desktop y Pixel 7;
+- 52 de 52 escenarios E2E aprobados en Chromium desktop y Pixel 7;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
   conectar; con la credencial ejecuta preflight, seed, build y Playwright;
 - preflight de aislamiento aprobado contra `finp-e2e`;
 - seed ejecutado dos veces sin duplicar usuarios, categorías, cuentas ni el
-  dataset financiero;
+  dataset financiero; restaura las relaciones del usuario general y mantiene
+  separado el usuario del smoke;
 - cobertura no bloqueante;
 - smoke financiero aprobado en mobile y desktop sobre datos representativos de
   dos períodos, con evidencia de Dashboard, Transacciones, Cuentas y Deudas.
+- recorridos P2 aprobados para candidato recurrente, compra en un pago con
+  Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

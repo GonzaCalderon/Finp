@@ -350,6 +350,13 @@ Separar:
 
 El aprendizaje no escribe operaciones por sí mismo. Las sugerencias funcionales transportan intención al módulo responsable.
 
+Captura rápida clasifica las intenciones financieras especializadas de forma
+determinista antes de habilitar una escritura simple. Los contratos
+discriminados separan compromiso, compra con tarjeta, pago y revisión de cuota.
+Sólo la compra en un pago se confirma localmente; cuotas y pagos atraviesan el
+formulario de Transacciones y los servicios existentes. La creación de planes
+devuelve plan y transacción padre para permitir trazabilidad y rollback.
+
 Todo nuevo destino de orientación necesita:
 
 - tipo de intención;
@@ -357,7 +364,7 @@ Todo nuevo destino de orientación necesita:
 - procedencia por campo;
 - validación en destino;
 - evento de aceptación y finalización;
-- descarte;
+- descarte cuando el dominio admita una alternativa segura;
 - tests mobile/desktop.
 
 ## 15. Rendimiento

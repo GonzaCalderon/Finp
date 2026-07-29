@@ -30,8 +30,9 @@ const formatAmount = (amount: number, currency: string) =>
  * Propuesta de orientación: explica qué entendió Finp, por qué recomienda una
  * función y qué datos va a llevar.
  *
- * Nunca ejecuta nada por sí sola y siempre ofrece continuar como movimiento
- * simple, para que una interpretación equivocada no bloquee la captura.
+ * Nunca ejecuta nada por sí sola. Las recomendaciones ofrecen una salida simple;
+ * las clasificaciones financieras (por ejemplo, tarjeta) no pueden degradarse a
+ * un tipo incorrecto ni silenciarse de forma persistente.
  */
 export function CaptureOrientationCard({
     suggestion,
@@ -109,16 +110,18 @@ export function CaptureOrientationCard({
                                 {busy && action.id === 'primary' ? <Spinner /> : action.label}
                             </Button>
                         ))}
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={busy}
-                            className="text-muted-foreground"
-                            onClick={() => onAction('never')}
-                        >
-                            No volver a sugerir
-                        </Button>
+                        {suggestion.canPersistDismissal !== false ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={busy}
+                                className="text-muted-foreground"
+                                onClick={() => onAction('never')}
+                            >
+                                No volver a sugerir
+                            </Button>
+                        ) : null}
                     </div>
                 </div>
             </div>

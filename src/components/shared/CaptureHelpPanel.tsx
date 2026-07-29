@@ -6,14 +6,22 @@ import { X } from 'lucide-react'
 /**
  * Galería de ejemplos por objetivo, recuperable desde `¿Qué puedo escribir?`.
  *
- * Sólo anuncia capacidades realmente disponibles: hoy movimientos simples y
- * compromisos. Cuando se sumen cuotas, Deudas o Espacios, se agregan acá.
+ * Sólo anuncia capacidades realmente disponibles.
  */
 const EXAMPLE_GROUPS: Array<{ goal: string; hint: string; examples: string[] }> = [
     {
         goal: 'Registrar un gasto o ingreso',
         hint: 'Escribí monto y descripción en cualquier orden. La fecha, la cuenta y la categoría se completan solas.',
-        examples: ['Café 1500 ayer mp', 'Supermercado 38500 visa', 'Cobré 800000 sueldo galicia'],
+        examples: ['Café 1500 ayer mp', 'Supermercado 38500 mp', 'Cobré 800000 sueldo galicia'],
+    },
+    {
+        goal: 'Registrar compras y pagos de tarjeta',
+        hint: 'Nombrá la tarjeta. Una compra simple se confirma acá; las cuotas y el pago del resumen conservan los datos y abren el flujo completo.',
+        examples: [
+            'Supermercado 38500 Visa',
+            'Notebook 120000 Visa en 6 cuotas',
+            'Pagué el resumen Visa 50000',
+        ],
     },
     {
         goal: 'Preparar un compromiso mensual',
