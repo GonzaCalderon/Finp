@@ -40,8 +40,7 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-07-28 sobre una rama corta nacida de `dev`
-(`e64a821`):
+Verificado localmente el 2026-07-28 sobre `dev` (`d8ae0e6`):
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -67,8 +66,8 @@ Ramas:
 
 - `main`: producción;
 - `dev`: desarrollo;
-- `dev` coincide con `origin/dev` en `e64a821`;
-- `origin/main` es ancestro de `origin/dev` y está 15 commits detrás;
+- `dev` coincide con `origin/dev` en `d8ae0e6`;
+- `origin/main` es ancestro de `origin/dev` y está 17 commits detrás;
 - la rama local `main` está 87 commits detrás de `origin/main` y no se usa para
   trabajo hasta actualizarla de forma autorizada.
 
