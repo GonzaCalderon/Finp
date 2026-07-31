@@ -141,9 +141,11 @@ test.describe('Captura rápida', () => {
         await expect(orientation).toContainText('compra con tarjeta')
         await expect(dialog.getByTestId('quick-capture-card-select'))
             .toContainText('Tarjeta E2E')
-        await expect(
-            dialog.getByTestId('quick-capture-first-closing-month')
-        ).not.toHaveValue('')
+        const firstClosingMonth = dialog.getByTestId(
+            'quick-capture-first-closing-month'
+        )
+        await expect(firstClosingMonth).toHaveRole('combobox')
+        await expect(firstClosingMonth).not.toContainText('Seleccioná un mes')
 
         await orientation.getByRole('button', { name: 'Registrar compra' }).click()
         await expect(page.getByText('Compra con tarjeta registrada')).toBeVisible({

@@ -76,12 +76,18 @@ describe('MonthPickerField', () => {
     it('muestra meses localizados en español', () => {
         render(
             <MonthPickerField
+                id="first-installment-month"
+                testId="first-installment-month"
+                label="Primera cuota"
                 value="2026-01"
                 onValueChange={() => undefined}
                 options={[{ value: '2026-01', label: 'enero de 2026' }]}
             />
         )
 
-        expect(screen.getByRole('combobox')).toHaveTextContent('enero de 2026')
+        const trigger = screen.getByRole('combobox', { name: 'Primera cuota' })
+        expect(trigger).toHaveTextContent('enero de 2026')
+        expect(trigger).toHaveAttribute('id', 'first-installment-month')
+        expect(trigger).toHaveAttribute('data-testid', 'first-installment-month')
     })
 })

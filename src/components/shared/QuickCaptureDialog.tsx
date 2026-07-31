@@ -30,6 +30,7 @@ import { useRouter } from 'next/navigation'
 import { apiJson } from '@/lib/client/auth-client'
 import { CaptureHelpPanel } from '@/components/shared/CaptureHelpPanel'
 import { CaptureOrientationCard } from '@/components/shared/CaptureOrientationCard'
+import { MonthPickerField } from '@/components/shared/MonthPickerField'
 import { buildCaptureDraft, putCaptureDraft } from '@/lib/client/capture-draft'
 import { detectCaptureIntents } from '@/lib/utils/capture-intents'
 import type {
@@ -2074,26 +2075,16 @@ export function QuickCaptureDialog({
                                                 </Select>
                                             </div>
                                             {orientation.card.operation === 'purchase' ? (
-                                                <div className="space-y-1.5">
-                                                    <label
-                                                        htmlFor="quick-capture-first-closing-month"
-                                                        className="text-xs font-medium text-muted-foreground"
-                                                    >
-                                                        Primera cuota
-                                                    </label>
-                                                    <Input
-                                                        id="quick-capture-first-closing-month"
-                                                        data-testid="quick-capture-first-closing-month"
-                                                        type="month"
-                                                        value={effectiveFirstClosingMonth ?? ''}
-                                                        onChange={(event) => {
-                                                            setCardFirstClosingMonth(
-                                                                event.target.value || undefined
-                                                            )
-                                                            setOrientationError(null)
-                                                        }}
-                                                    />
-                                                </div>
+                                                <MonthPickerField
+                                                    id="quick-capture-first-closing-month"
+                                                    testId="quick-capture-first-closing-month"
+                                                    label="Primera cuota"
+                                                    value={effectiveFirstClosingMonth}
+                                                    onValueChange={(value) => {
+                                                        setCardFirstClosingMonth(value)
+                                                        setOrientationError(null)
+                                                    }}
+                                                />
                                             ) : null}
                                         </div>
                                     ) : null}
