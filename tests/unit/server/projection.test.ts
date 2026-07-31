@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { countOccurrencesInPeriod } from '@/lib/server/projection'
+import { buildProjectionTotals, countOccurrencesInPeriod } from '@/lib/server/projection'
+import type { ProjectionItem } from '@/types/projection'
 
 const julio = { start: new Date(2026, 6, 1), end: new Date(2026, 7, 1) }
 
@@ -86,5 +87,43 @@ describe('countOccurrencesInPeriod', () => {
         // El 1/8 pertenece a agosto, no a julio.
         const commitment = { recurrence: 'once', startDate: new Date(2026, 7, 1) }
         expect(countOccurrencesInPeriod(commitment, julio.start, julio.end)).toBe(0)
+    })
+})
+
+describe('buildProjectionTotals', () => {
+    const base = {
+        sourceId: 'source',
+        source: { type: 'scheduled_commitment' as const, id: 'source' },
+        description: 'Gasto',
+        certainty: 'confirmed' as const,
+        isRegistered: true,
+        link: { href: '/transactions', label: 'Ver' },
+    }
+
+    it('separa fuentes y monedas sin convertir ni sumar ARS con USD', () => {
+        const items: ProjectionItem[] = [
+            { ...base, id: 'commitment', kind: 'commitment', amount: 1000, currency: 'ARS' },
+            { ...base, id: 'single', kind: 'card_single', amount: 40, currency: 'USD' },
+            { ...base, id: 'installment', kind: 'card_installment', amount: 300, currency: 'ARS', certainty: 'calculated' },
+        ]
+
+        expect(buildProjectionTotals(items)).toMatchObject({
+            commitments: { ars: 1000, usd: 0 },
+            cardSingle: { ars: 0, usd: 40 },
+            cardInstallments: { ars: 300, usd: 0 },
+            total: { ars: 1300, usd: 40 },
+            pendingAmountCount: 0,
+        })
+    })
+
+    it('advierte estimaciones y pendientes sin presentar el pendiente como un total util', () => {
+        const items: ProjectionItem[] = [
+            { ...base, id: 'estimated', kind: 'commitment', amount: 900, currency: 'ARS', certainty: 'estimated' },
+            { ...base, id: 'pending', kind: 'commitment', amount: 0, currency: 'USD', certainty: 'pending_amount' },
+        ]
+
+        const totals = buildProjectionTotals(items)
+        expect(totals.estimated).toEqual({ ars: 900, usd: 0 })
+        expect(totals.pendingAmountCount).toBe(1)
     })
 })

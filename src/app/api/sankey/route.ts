@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Transaction, InstallmentPlan, User } from '@/lib/models'
-import { buildMonthlyCardPaymentSummary, getRefId } from '@/lib/utils/credit-card'
+import { buildMonthlyCardPaymentSummary } from '@/lib/utils/credit-card'
 import { getOperationalExpenseAmount, getOperationalIncomeAmount } from '@/lib/utils/operational-amount'
 import { getCurrentFinancialPeriod, parseFinancialPeriod } from '@/lib/utils/period'
 import { clampRangeStartToOperationalStart } from '@/lib/utils/operational-start'
@@ -129,19 +129,10 @@ export async function GET(request: Request) {
                 totalExpenses: card.items
                     .filter((item) => item.currency === currency)
                     .reduce((sum, item) => sum + item.amount, 0),
-                totalPaid: transactions
-                    .filter((transaction) =>
-                        getRefId(transaction.destinationAccountId) === card.cardId &&
-                        transaction.currency === currency &&
-                        ['credit_card_payment', 'debt_payment'].includes(transaction.type)
-                    )
-                    .reduce((sum, transaction) => sum + transaction.amount, 0),
-                netOwed: 0,
+                totalPaid: currency === 'USD' ? card.paid.usd : card.paid.ars,
+                netOwed: currency === 'USD' ? card.pending.usd : card.pending.ars,
             }
-        }).map((card) => ({
-            ...card,
-            netOwed: Math.max(0, card.totalExpenses - card.totalPaid),
-        })).filter((cc) => cc.totalExpenses > 0)
+        }).filter((cc) => cc.totalExpenses > 0)
 
         const income = Object.values(incomeMap).sort((a, b) => b.amount - a.amount)
         const expenses = Object.values(expenseMap).sort((a, b) => b.amount - a.amount)

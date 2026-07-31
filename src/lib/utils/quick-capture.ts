@@ -152,7 +152,9 @@ export function resolveQuickCapturePreviewDraft(
     const normalized = preview.normalized
     const normalizedDate = new Date(normalized.date)
     return {
-        type: normalized.type,
+        // El borrador de Captura rápida sigue siendo simple. La clasificación
+        // especial de tarjeta vive en la orientación y no debe contaminar el parser.
+        type: normalized.type === 'income' ? 'income' : 'expense',
         amount: normalized.amount,
         currency: normalized.currency,
         date: Number.isNaN(normalizedDate.getTime()) ? draft.date : normalizedDate,

@@ -56,10 +56,12 @@ export const TRANSACTION_INVALIDATION_TAGS: DataTag[] = [
     'account-detail',
     'credit-card-expenses',
     'nav-insights',
+    'projection',
 ]
 
 export const INSTALLMENT_INVALIDATION_TAGS: DataTag[] = [
     'credit-card-expenses',
+    'transactions',
     'dashboard',
     'projection',
     'accounts',
@@ -85,6 +87,7 @@ export const ACCOUNT_INVALIDATION_TAGS: DataTag[] = [
     'credit-card-expenses',
     'commitments',
     'preferences',
+    'projection',
 ]
 
 export const CATEGORY_INVALIDATION_TAGS: DataTag[] = [
@@ -94,6 +97,7 @@ export const CATEGORY_INVALIDATION_TAGS: DataTag[] = [
     'credit-card-expenses',
     'rules',
     'settings',
+    'projection',
 ]
 
 // Incluye 'transactions' porque cada movimiento muestra la regla que lo completó:

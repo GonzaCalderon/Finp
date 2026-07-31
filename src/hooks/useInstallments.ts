@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { IInstallmentPlan } from '@/types'
+import type { IInstallmentPlan, ITransaction } from '@/types'
 import type { InstallmentFormData } from '@/lib/validations'
 import { apiJson } from '@/lib/client/auth-client'
 import {
@@ -14,6 +14,16 @@ interface InstallmentsResponse {
 
 interface CreatePlanResponse {
     plan: IInstallmentPlan
+    transaction?: ITransaction
+}
+
+export type CreateInstallmentPlanOptions = {
+    quickCapture?: boolean
+    allowPotentialDuplicate?: boolean
+    quickCaptureLearning?: {
+        sessionId: string
+        durationMs?: number
+    }
 }
 
 export function useInstallments() {
@@ -39,14 +49,17 @@ export function useInstallments() {
         }
     }
 
-    const createPlan = async (body: InstallmentFormData) => {
+    const createPlan = async (
+        body: InstallmentFormData,
+        options?: CreateInstallmentPlanOptions
+    ) => {
         const data = await apiJson<CreatePlanResponse>('/api/installments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ ...body, ...options }),
         })
         invalidateData(INSTALLMENT_INVALIDATION_TAGS)
-        return data.plan
+        return data
     }
 
     const updatePlan = async (id: string, body: InstallmentFormData) => {

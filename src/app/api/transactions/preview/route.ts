@@ -19,7 +19,11 @@ export async function POST(request: Request) {
             includePreviewSignals: true,
         })
 
-        if (prepared.data.type !== 'expense' && prepared.data.type !== 'income') {
+        if (
+            prepared.data.type !== 'expense' &&
+            prepared.data.type !== 'income' &&
+            prepared.data.type !== 'credit_card_expense'
+        ) {
             return NextResponse.json(
                 {
                     valid: false,

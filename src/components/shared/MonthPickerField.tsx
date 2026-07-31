@@ -18,6 +18,8 @@ export type MonthOption = {
 }
 
 type MonthPickerFieldProps = {
+    id?: string
+    testId?: string
     value?: string
     onValueChange: (value: string) => void
     options?: readonly MonthOption[]
@@ -43,6 +45,8 @@ function buildDefaultOptions() {
 }
 
 export function MonthPickerField({
+    id,
+    testId,
     value,
     onValueChange,
     options,
@@ -61,6 +65,7 @@ export function MonthPickerField({
 
     return (
         <FieldShell
+            id={id}
             label={label}
             error={showErrors ? error : undefined}
             helperText={helperText}
@@ -68,6 +73,9 @@ export function MonthPickerField({
         >
             <Select value={value} onValueChange={onValueChange} disabled={disabled}>
                 <SelectTrigger
+                    id={id}
+                    data-testid={testId}
+                    aria-label={typeof label === 'string' ? label : undefined}
                     size={compact ? 'sm' : 'default'}
                     aria-invalid={Boolean(error)}
                     className={cn('w-full rounded-[1rem] bg-background/80', error && 'border-destructive')}

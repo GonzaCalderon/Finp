@@ -1,9 +1,9 @@
-# Compromisos variables y Captura rápida como orientador — implementación
+# Compromisos variables, orientación y Proyección — implementación
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
-> Fuente de verdad: implementación del bloque de compromisos variables y orientación
+> Última actualización: 2026-07-31
+> Fuente de verdad: implementación de compromisos, orientación y Proyección
 
 ## Índice
 
@@ -16,7 +16,7 @@
 7. [Deuda y extensión](#7-deuda-conocida-y-extensión)
 8. [Verificación y backfill](#8-verificación)
 
-Documentación técnica del bloque implementado el 2026-07-25. El diseño funcional vive en
+Documentación técnica de Compromisos, Proyección y los destinos de orientación implementados. El diseño funcional vive en
 `docs/producto/compromisos_espacios_y_proyeccion.md` y
 `docs/producto/captura_rapida_como_orientador.md`; este documento explica **cómo quedó
 construido**, qué decisiones se tomaron y dónde extenderlo.
@@ -119,7 +119,9 @@ de entrada.
 | `findApplicableCommitments` | `src/lib/server/commitment-matching.ts` | Matching texto ↔ pendiente. Puro. |
 | `getApplicableCommitmentsForUser` | `src/lib/server/commitment-context.ts` | Candidatos para el contexto de Captura rápida. |
 | `detectCaptureIntents` | `src/lib/utils/capture-intents.ts` | Detección determinista de intención. Puro. |
-| `getProjectionForUser` | `src/lib/server/projection.ts` | Proyección (extraída de la route). |
+| `buildMonthlyCardPaymentSummary` | `src/lib/utils/credit-card.ts` | Clasificación y resumen por período compartidos por Tarjetas, Dashboard y Proyección. |
+| `getProjectionForUser` | `src/lib/server/projection.ts` | Consulta acotada por usuario, normalización de ítems y totales de Proyección. |
+| `buildProjectionGroups` | `src/lib/utils/projection.ts` | Agrupaciones de presentación sobre la lista canónica. Puro. |
 | `resolveRuleTraceForEdit` | `src/lib/server/transactions.ts` | Recalcula la traza de regla al editar. |
 
 ### Precedencia del monto
@@ -138,6 +140,30 @@ período abarca dos meses calendario, así que la utilidad central prueba ambos.
 `startDate` se excluye; `nextDueDate` busca la primera válida y
 `nextReminderDate` puede caer en el mes anterior. Sólo el primer recordatorio se
 limita a la fecha de inicio.
+
+### Contrato de Proyección
+
+`src/types/projection.ts` define el contrato serializable. Los tipos de ítem son
+`commitment`, `card_single` y `card_installment`; cada período expone totales por
+fuente, estimados, total por moneda y cantidad de montos pendientes.
+
+`getProjectionForUser` resuelve meses y ejecuta en paralelo una consulta por
+colección, siempre con `userId`: compromisos, planes, aplicaciones acotadas a
+los períodos relevantes y consumos históricos sin plan dentro del rango. No
+consulta una vez por período. `monthStartDay`, `operationalStartDate` y los
+rangos semiabiertos se aplican antes de armar los ítems.
+
+La matriz de tarjetas es:
+
+| Representación | Tipo | Período | Certeza |
+|---|---|---|---|
+| Plan `1/1` | `card_single` | `firstClosingMonth` | `confirmed` |
+| Transacción sin plan | `card_single` | período de `date` | `confirmed` |
+| Plan `N > 1` | `card_installment` | índice desde `firstClosingMonth` | `calculated` |
+
+La query histórica excluye `installmentPlanId`; la utilidad vuelve a proteger
+esa condición y omite pagos. Los vencimientos de tarjeta son contexto, no
+cashflow. Los enlaces sólo incluyen filtros no sensibles.
 
 ### Reutilización deliberada
 
@@ -181,9 +207,14 @@ aviso del diálogo de Compromisos no anuncia la moneda cuando vino como `default
 
 ### Jerarquía de detección
 
-1. **Intención explícita** en el texto (`el 5 de cada mes`) → propone crear el compromiso.
+Las compras, cuotas, pagos y referencias a cuotas se clasifican primero para
+impedir que una operación de Tarjetas se escriba como gasto simple. Dentro de
+recurrencias:
+
+1. **Intención explícita** (`el 5 de cada mes`) → propone crear el compromiso.
 2. **Coincidencia con un pendiente** → propone aplicarlo.
-3. Nada → no interrumpe.
+3. **Candidato mensual aprendido** → reutiliza el candidato de Compromisos.
+4. Nada → no interrumpe.
 
 Una intención explícita **nunca** se reemplaza por evidencia histórica. Devuelve como máximo
 una propuesta por frase.
@@ -194,8 +225,19 @@ una propuesta por frase.
 `derive` y `never`.
 
 `intent_accepted` e `intent_completed` son distintos a propósito: **tocar el CTA no equivale a
-completar la función**. Para `create_commitment`, `intent_completed` todavía **no se emite** —
-haría falta emitirlo desde Compromisos cuando la plantilla se crea de verdad (ver §7).
+completar la función**. Para `create_commitment`, Compromisos emite `intent_completed` mediante
+`reportCaptureIntentCompleted` (`src/lib/client/capture-intent-events.ts`) cuando la plantilla se
+crea de verdad.
+
+El `eventId` deriva del `draftId` (`intent_completed:<intent>:<draftId>`) y el endpoint inserta con
+`$setOnInsert`: un reintento, un doble submit o dos pestañas dejan **un solo** evento. La
+atribución se abandona si el diálogo se cierra sin crear o si se edita otro
+compromiso. Un segundo alta en la misma visita tampoco vuelve a contar la
+derivación.
+
+El evento no lleva monto, descripción ni comercio: para el embudo sólo importa que la derivación
+terminó. Captura rápida conserva su cola con debounce porque emite muchos eventos por sesión; un
+destino emite uno solo y le alcanza un POST best-effort.
 
 > ⚠️ **Triplicación de enums.** Cada tipo de evento y método vive en tres archivos:
 > `src/types/quick-capture.ts`, el enum de Mongoose en
@@ -211,13 +253,15 @@ haría falta emitirlo desde Compromisos cuando la plantilla se crea de verdad (v
 | `GET /api/commitments` | Devuelve período, monto y fecha efectivos, `resolvedDueDate`, `nextDueDate`, `nextReminderDate`, `occursThisPeriod`, aplicación actual, ciclo de vida y recordatorio derivado. Los campos nuevos son opcionales para preservar compatibilidad. |
 | `POST` / `PATCH /api/commitments` | **zod en el servidor** (antes no había). Errores de datos dan 400 con detalle, no 500. El PATCH sólo escribe los campos enviados. |
 | `GET /api/commitments/suggestions` | Calcula candidatos mensuales sin escribir datos; respuesta privada y sin cache. |
+| `POST /api/installments` | Acepta procedencia de Captura rápida, confirmación de duplicados y telemetría estructurada; valida tarjeta, moneda y categoría, y devuelve plan y transacción padre. |
 | `POST` / `DELETE /api/commitments/[id]/amounts` | Alta y baja de tramos futuros. Acepta aumentos y disminuciones; rechaza editar o eliminar historia vigente/pasada con `IMMUTABLE_COMMITMENT_AMOUNT_HISTORY`. |
 | `POST /api/commitments/[id]/apply` | Acepta `origin`; escribe snapshot y procedencia; reutiliza filas `reverted`. |
-| `GET /api/projection` | Delega en `getProjectionForUser`. Devuelve `certainty` y `occurrences`. |
+| `GET /api/projection` | Valida estrictamente `mode`, `months` y `year`; delega en `getProjectionForUser`; devuelve ítems y totales serializables con `private, no-store`. |
+| `GET` / `PATCH /api/preferences` | Lee y persiste las cuatro preferencias de presentación de Proyección con defaults seguros y `private, no-store`. |
 | `GET /api/quick-capture/context` | Suma `commitments`, `currentPeriod` y `dismissedSuggestions`, con `.catch` tolerante. |
 | `POST` / `DELETE /api/quick-capture/suggestions/dismiss` | Descarte persistente, idempotente. |
 | `PATCH /api/quick-capture/learning/profile` | Acepta `markCaptureIntroSeen`. |
-| `DELETE /api/transactions/[id]` | Llama `unlinkTransactionDependents` **antes** de borrar y devuelve qué revirtió. |
+| `DELETE /api/transactions/[id]` | Llama `unlinkTransactionDependents` **antes** de borrar y devuelve qué revirtió, incluida la baja del plan de cuotas. |
 | `PATCH /api/transactions/[id]` | Sincroniza el snapshot, recalcula la traza de regla, devuelve `commitmentTemplateUpdateAvailable`. |
 
 ### Atomicidad del apply
@@ -267,12 +311,17 @@ explícito y no figure como aplicada.
   prioriza el compromiso dentro de la ventana o después del vencimiento.
 - **Candidatos mensuales**: aplican el criterio híbrido del ADR 0002 y umbral
   0,82; muestran meses, cobertura, variación, día y categoría. Aceptar precarga
-  el alta; `No es un compromiso` persiste el rechazo.
+  el alta; `No es un compromiso` persiste el rechazo. Captura rápida los pide
+  una vez por apertura cuando existe texto útil y comparte `subjectKey`.
 
-- **Tarjeta de orientación** (`CaptureOrientationCard`): título, motivo, evidencia, y siempre
-  cuatro acciones — la principal, `Registrar sólo este gasto` / `Registrar aparte`, `Ahora no` y
-  `No volver a sugerir`. Anuncia el **importe que se va a aplicar**, no el previsto por la
-  plantilla, y aclara la diferencia cuando existe.
+- **Tarjeta de orientación** (`CaptureOrientationCard`): título, motivo,
+  evidencia y acciones permitidas por dominio. Compromisos admite registrar
+  aparte y descarte persistente. Tarjetas sólo admite la acción segura:
+  confirmar, completar en el flujo responsable o revisar el plan.
+- **Tarjetas**: selector inline para coincidencias múltiples; compra en un pago
+  con preview `credit_card_expense`; cuotas y pagos con borrador discriminado.
+  El primer mes es el próximo mes calendario editable. Un pago preserva monto,
+  moneda y fecha, pero nunca preselecciona la cuenta de origen.
 - Se silencia mientras haya bloqueos locales: primero se arregla el movimiento, después se orienta.
 - **Ayuda** (`CaptureHelpPanel`): galería por objetivo, con ejemplos accionables. Sólo anuncia
   capacidades **realmente disponibles**.
@@ -284,6 +333,19 @@ explícito y no figure como aplicada.
 - **`Actualizar próximos períodos`**: se ofrece como `confirm` posterior a la edición y, al
   aceptar, **agrega un tramo a la agenda** con la fecha efectiva del período editado. Propaga
   hacia adelante sin reescribir historia.
+- **Proyección**: próximos seis períodos y Por tipo de forma predeterminada;
+  Año calendario secundario; resumen y gráfico por tres fuentes; detalle
+  expandible por tipo, tarjeta o categoría sobre la misma lista.
+- **Estados**: carga, vacío global, período vacío, error con reintento y
+  recuperación. Un `AbortController` evita aplicar respuestas obsoletas y una
+  carga exitosa limpia el error anterior.
+- **Privacidad y preferencias**: el ocultamiento global llega a resumen,
+  gráfico y detalle. Agrupación, modo, meses y moneda se guardan en el usuario y
+  localStorage; el primer render usa defaults estables para no romper la
+  hidratación y luego recupera el fallback local.
+- **Accesibilidad**: expansión con botón, foco, teclado, `aria-expanded` y
+  `aria-controls`; contenido largo sin overflow; dark mode y movimiento
+  reducido verificados en desktop y Pixel 7.
 
 ---
 
@@ -291,8 +353,6 @@ explícito y no figure como aplicada.
 
 La deuda detectada durante este bloque se administra en el roadmap único:
 
-- `FINP-P1-001`: cascada de `InstallmentPlan`;
-- `FINP-P1-002`: evento `intent_completed`;
 - `FINP-P1-003`: integración de NavInsights;
 - `FINP-P1-004`: política para pagos duales;
 - `FINP-P4-002`: scheduler de `auto_month_start`.
@@ -301,14 +361,16 @@ Este documento conserva el contexto de implementación; [`../producto/roadmap_fi
 
 ### Cómo agregar el próximo destino de orientación
 
-El camino está preparado. Para sumar, por ejemplo, cuotas:
+El camino está preparado. Para sumar otro dominio:
 
 1. Agregar el `CaptureIntent` y sus `DraftFields` en `src/types/capture-intent.ts`.
 2. Detectar la intención en `src/lib/utils/capture-intents.ts` (determinista, sin red).
-3. Aceptar `initialDraft` en el diálogo destino y leer `?draft=` en su página.
+3. Aceptar el borrador discriminado en el lanzador o diálogo destino.
 4. Si el destino resuelve inline, agregar la rama en `handleOrientationAction`.
-5. Sumar el ejemplo a `CaptureHelpPanel` — **sólo cuando ya funcione**.
-6. E2E: interpretación, transporte del borrador, validación final y retorno ante error.
+5. Cerrar el embudo: llamar a `reportCaptureIntentCompleted` cuando el destino
+   complete la función de verdad, no cuando abra su formulario.
+6. Sumar el ejemplo a `CaptureHelpPanel` — **sólo cuando ya funcione**.
+7. E2E: interpretación, transporte del borrador, validación final y retorno ante error.
 
 ### Trampas del entorno que costaron bugs reales
 
@@ -331,16 +393,17 @@ Vale dejarlas escritas porque van a volver:
 
 | | |
 |---|---|
-| Unit | 621 tests aprobados y 5 `todo`, 74 archivos. Incluye fechas, agenda inmutable, sugerencias híbridas, APIs y componentes del flujo. |
-| E2E | 40 tests registrados para desktop y Pixel 7. Incluye alta con fechas entre meses, recuperación de errores, categorías y las tres vigencias de monto. |
+| Unit | 785 tests aprobados, sin `todo`, en 99 archivos. Incluye recurrencias, matriz de tarjetas, Proyección, APIs y componentes del flujo. |
+| E2E | 56 de 56 tests aprobados para desktop y Pixel 7 contra `finp-e2e`. Incluye Proyección, candidato compartido, compra y Deshacer, cuotas, pago, revisión de plan y recorridos previos. |
 | Typecheck | `npx tsc --noEmit` limpio. Se agregó el script `npm run typecheck`, que no existía. |
-| Build | limpio. |
+| Lint y docs | limpios; 28 documentos activos validados. |
+| Build | producción limpio con Next.js 16.2.6. |
 
 ### Para correr los E2E hace falta `.env.test.local`
 
-No está en el repo. Playwright levanta su propio server en el 3001 con las variables de ese
-archivo, deliberadamente separado de la base de desarrollo del 3000. Copiar `.env.test.example`
-y apuntarlo a una base de test.
+El procedimiento canónico está en
+[`../../tests/e2e/helpers/README.md`](../../tests/e2e/helpers/README.md). Antes de
+seed o Playwright, `npm run test:e2e:check` debe confirmar una base exclusiva.
 
 ### Backfill
 
@@ -354,5 +417,7 @@ Idempotente. Completa `amountPolicy`, `estimationMode`, `createdFrom`, `aliases`
 aplicaciones existentes; y escribe la procedencia en sus transacciones.
 
 Reporta —sin tocarlas— las anomalías: aplicaciones sin transacción y aplicaciones cuya
-transacción fue borrada. En la base de desarrollo apareció **una** de estas últimas, que es
-exactamente el agujero que este bloque cierra.
+transacción fue borrada. El 2026-07-28 se verificó un respaldo lógico completo y se aplicó
+el backfill sobre `finm`: actualizó un compromiso, no modificó aplicaciones ni transacciones
+y el dry-run posterior quedó en cero cambios. Persiste documentada una aplicación cuya
+transacción ya había sido eliminada; el script la omite y conserva la referencia histórica.

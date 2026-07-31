@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-28
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -226,6 +226,8 @@ Un flujo no está cerrado si sólo funciona en desktop.
 
 - `.env.test.local` no versionado;
 - base exclusiva;
+- nombre de base confirmado por `E2E_DATABASE_NAME`;
+- preflight `npm run test:e2e:check` sin conexión ni escrituras;
 - usuario de prueba;
 - servidor dedicado en puerto 3001;
 - seed idempotente;
@@ -363,17 +365,21 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Verificado 2026-07-25:
+Verificado 2026-07-28:
 
-- 621 unit tests aprobados;
-- 74 archivos de unit tests;
-- 5 `todo`;
-- 40 escenarios E2E registrados;
-- typecheck, lint y build limpios;
+- 52 de 52 escenarios E2E aprobados en Chromium desktop y Pixel 7;
 - CI con lint, build y unit;
-- E2E desactivado;
+- job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
+  conectar; con la credencial ejecuta preflight, seed, build y Playwright;
+- preflight de aislamiento aprobado contra `finp-e2e`;
+- seed ejecutado dos veces sin duplicar usuarios, categorías, cuentas ni el
+  dataset financiero; restaura las relaciones del usuario general y mantiene
+  separado el usuario del smoke;
 - cobertura no bloqueante;
-- smoke financiero real pendiente.
+- smoke financiero aprobado en mobile y desktop sobre datos representativos de
+  dos períodos, con evidencia de Dashboard, Transacciones, Cuentas y Deudas.
+- recorridos P2 aprobados para candidato recurrente, compra en un pago con
+  Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

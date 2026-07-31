@@ -4,7 +4,13 @@ const mocks = vi.hoisted(() => ({
     revertApplicationForTransaction: vi.fn(),
     SpaceEntryPersonalImpact: { findOneAndUpdate: vi.fn() },
     Notification: { updateMany: vi.fn() },
-    Transaction: { findOne: vi.fn() },
+    Transaction: {
+        findOne: vi.fn(),
+        find: vi.fn(),
+        exists: vi.fn(),
+        updateMany: vi.fn(),
+    },
+    InstallmentPlan: { findOneAndDelete: vi.fn() },
 }))
 
 vi.mock('@/lib/server/commitments', () => ({
@@ -15,9 +21,13 @@ vi.mock('@/lib/models', () => ({
     SpaceEntryPersonalImpact: mocks.SpaceEntryPersonalImpact,
     Notification: mocks.Notification,
     Transaction: mocks.Transaction,
+    InstallmentPlan: mocks.InstallmentPlan,
 }))
 
-const { unlinkTransactionDependents } = await import('@/lib/server/transaction-teardown')
+const {
+    normalizePaymentGroup,
+    unlinkTransactionDependents,
+} = await import('@/lib/server/transaction-teardown')
 
 const transaction = { _id: { toString: () => 'transaction-1' } }
 
@@ -32,6 +42,10 @@ describe('unlinkTransactionDependents', () => {
         mocks.SpaceEntryPersonalImpact.findOneAndUpdate.mockResolvedValue(null)
         mocks.Notification.updateMany.mockResolvedValue({ modifiedCount: 0 })
         mocks.Transaction.findOne.mockReturnValue(selectChain(null))
+        mocks.Transaction.find.mockReturnValue(selectChain([]))
+        mocks.Transaction.exists.mockResolvedValue(null)
+        mocks.Transaction.updateMany.mockResolvedValue({ modifiedCount: 0 })
+        mocks.InstallmentPlan.findOneAndDelete.mockResolvedValue(null)
     })
 
     it('revierte la aplicación del compromiso y la reporta', async () => {
@@ -44,6 +58,78 @@ describe('unlinkTransactionDependents', () => {
 
         expect(mocks.revertApplicationForTransaction).toHaveBeenCalledWith('user-1', 'transaction-1')
         expect(result.revertedCommitment).toEqual({ commitmentId: 'commitment-1', period: '2026-07' })
+    })
+
+    it('elimina el plan de cuotas de la compra y lo reporta', async () => {
+        mocks.InstallmentPlan.findOneAndDelete.mockResolvedValue({ installmentCount: 6 })
+
+        const result = await unlinkTransactionDependents('user-1', {
+            ...transaction,
+            installmentPlanId: { toString: () => 'plan-1' },
+        })
+
+        expect(result.deletedInstallmentPlan).toEqual({ planId: 'plan-1', installmentCount: 6 })
+        expect(mocks.InstallmentPlan.findOneAndDelete).toHaveBeenCalledWith({
+            _id: 'plan-1',
+            userId: 'user-1',
+        })
+    })
+
+    it('resuelve el plan tanto poblado como en string', async () => {
+        mocks.InstallmentPlan.findOneAndDelete.mockResolvedValue({ installmentCount: 3 })
+
+        await unlinkTransactionDependents('user-1', {
+            ...transaction,
+            installmentPlanId: { _id: { toString: () => 'plan-poblado' } },
+        })
+        await unlinkTransactionDependents('user-1', {
+            ...transaction,
+            installmentPlanId: 'plan-string',
+        })
+
+        expect(mocks.InstallmentPlan.findOneAndDelete.mock.calls.map(([filter]) => filter._id)).toEqual([
+            'plan-poblado',
+            'plan-string',
+        ])
+    })
+
+    it('conserva el plan si otra compra sigue apuntándolo', async () => {
+        mocks.Transaction.exists.mockResolvedValue({ _id: 'transaction-9' })
+
+        const result = await unlinkTransactionDependents('user-1', {
+            ...transaction,
+            installmentPlanId: 'plan-1',
+        })
+
+        expect(mocks.InstallmentPlan.findOneAndDelete).not.toHaveBeenCalled()
+        expect(result.deletedInstallmentPlan).toBeUndefined()
+        // La compra que se está borrando no cuenta como dueño del plan.
+        expect(mocks.Transaction.exists).toHaveBeenCalledWith({
+            userId: 'user-1',
+            installmentPlanId: 'plan-1',
+            _id: { $ne: transaction._id },
+        })
+    })
+
+    it('no toca planes cuando la transacción no nació de cuotas', async () => {
+        const result = await unlinkTransactionDependents('user-1', transaction)
+
+        expect(mocks.Transaction.exists).not.toHaveBeenCalled()
+        expect(mocks.InstallmentPlan.findOneAndDelete).not.toHaveBeenCalled()
+        expect(result.deletedInstallmentPlan).toBeUndefined()
+    })
+
+    it('un fallo al eliminar el plan no impide el resto', async () => {
+        mocks.InstallmentPlan.findOneAndDelete.mockRejectedValue(new Error('mongo caído'))
+        mocks.Notification.updateMany.mockResolvedValue({ modifiedCount: 1 })
+
+        const result = await unlinkTransactionDependents('user-1', {
+            ...transaction,
+            installmentPlanId: 'plan-1',
+        })
+
+        expect(result.deletedInstallmentPlan).toBeUndefined()
+        expect(result.resolvedNotifications).toBe(1)
     })
 
     it('desvincula el impacto personal de Espacios soltando el transactionId', async () => {
@@ -118,5 +204,38 @@ describe('unlinkTransactionDependents', () => {
 
         expect(result.unlinkedPersonalImpact).toBe(false)
         expect(result.resolvedNotifications).toBe(1)
+    })
+
+    it('limpia el group id cuando queda una sola parte', async () => {
+        mocks.Transaction.find.mockReturnValue(
+            selectChain([{ _id: { toString: () => 'transaction-2' } }])
+        )
+
+        const result = await normalizePaymentGroup('user-1', 'group-1')
+
+        expect(result).toEqual({
+            groupId: 'group-1',
+            clearedMemberIds: ['transaction-2'],
+        })
+        expect(mocks.Transaction.updateMany).toHaveBeenCalledWith(
+            {
+                userId: 'user-1',
+                paymentGroupId: 'group-1',
+                _id: { $in: ['transaction-2'] },
+            },
+            { $unset: { paymentGroupId: 1 } }
+        )
+    })
+
+    it('conserva un grupo válido de dos partes', async () => {
+        mocks.Transaction.find.mockReturnValue(
+            selectChain([
+                { _id: { toString: () => 'transaction-1' } },
+                { _id: { toString: () => 'transaction-2' } },
+            ])
+        )
+
+        expect(await normalizePaymentGroup('user-1', 'group-1')).toBeNull()
+        expect(mocks.Transaction.updateMany).not.toHaveBeenCalled()
     })
 })

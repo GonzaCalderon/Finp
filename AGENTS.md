@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: agentes de IA y personas que desarrollan Finp
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: reglas obligatorias de trabajo para todo el repositorio
 
 ## Índice
@@ -227,6 +227,7 @@ Los E2E requieren un entorno y una base de prueba aislados.
 - Mantener el índice general y el índice interno del documento.
 - Marcar como reemplazado o archivar contenido obsoleto; no dejar dos fuentes vigentes.
 - Las fuentes externas apoyan una decisión, no reemplazan el análisis de Finp.
+- Toda entrega deja la documentación al menos tan barata de leer como estaba, y corrige en el momento la fricción documental que encontró.
 - Seguir [`docs/estandares/documentacion.md`](docs/estandares/documentacion.md).
 
 ## 14. Git y ramas
@@ -245,6 +246,7 @@ Los E2E requieren un entorno y una base de prueba aislados.
 ## 15. Uso eficiente del contexto
 
 - Empezar por `docs/README.md`; no cargar todos los documentos.
+- Este archivo, `docs/README.md` y el roadmap se leen en toda tarea: agregar texto ahí se paga en cada sesión y hay que compensarlo recortando.
 - Leer sólo el dominio y las guías relacionadas con la tarea.
 - Preferir índices, resúmenes y enlaces canónicos a repetir contenido.
 - No leer archivos archivados salvo necesidad histórica.

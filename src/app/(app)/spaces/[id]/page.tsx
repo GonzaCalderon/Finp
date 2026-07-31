@@ -702,6 +702,10 @@ function SpaceDetailPageInner() {
                             }}
                             onVoid={handleQuickVoid}
                             onSyncImpact={handleSyncImpact}
+                            onPersonalImpact={(entry) => {
+                                setFocusedEntryId(null)
+                                setDetailEntry(entry)
+                            }}
                         />
                     </div>
                 ) : null}

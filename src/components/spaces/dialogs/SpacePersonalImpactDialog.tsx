@@ -55,6 +55,25 @@ function getImpactCopy(kind?: SpacePersonalImpactKind) {
     return 'Vas a registrar el gasto completo en tu Finp.'
 }
 
+function getTransactionAccountName(transaction: ITransaction) {
+    const account = (
+        transaction.type === 'income'
+            ? transaction.destinationAccountId
+            : transaction.sourceAccountId
+    ) as unknown
+
+    if (
+        account &&
+        typeof account === 'object' &&
+        'name' in account &&
+        typeof account.name === 'string'
+    ) {
+        return account.name
+    }
+
+    return 'Cuenta sin identificar'
+}
+
 export function SpacePersonalImpactDialog({
     open,
     onOpenChange,
@@ -341,7 +360,16 @@ export function SpacePersonalImpactDialog({
                                                                         key={extractId(transaction._id)}
                                                                         value={extractId(transaction._id) ?? ''}
                                                                     >
-                                                                        {transaction.description}
+                                                                        <span className="flex min-w-0 flex-col">
+                                                                            <span className="truncate">
+                                                                                {transaction.description}
+                                                                            </span>
+                                                                            <span className="text-xs text-muted-foreground">
+                                                                                {new Date(transaction.date).toLocaleDateString('es-AR')}
+                                                                                {' · '}
+                                                                                {getTransactionAccountName(transaction)}
+                                                                            </span>
+                                                                        </span>
                                                                     </SelectItem>
                                                                 ))}
                                                             </SelectContent>

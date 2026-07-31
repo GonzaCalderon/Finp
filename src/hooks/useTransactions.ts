@@ -161,15 +161,25 @@ export function useTransactions(filters: TransactionFilters = {}) {
         }
     }
 
-    const deleteTransaction = async (id: string) => {
-        // La respuesta informa qué se revirtió (aplicación de compromiso, impacto
-        // de Espacios) para poder explicarle el efecto colateral al usuario.
+    const deleteTransaction = async (
+        id: string,
+        options?: { scope?: 'single' | 'group' }
+    ) => {
+        // La respuesta informa qué se revirtió (aplicación de compromiso, plan de
+        // cuotas, impacto de Espacios) para poder explicarle el efecto colateral
+        // al usuario.
         const result = await apiJson<{
             reverted?: {
                 commitment: { commitmentId: string; period: string } | null
+                installmentPlan: { planId: string; installmentCount: number } | null
                 personalImpact: boolean
+                notifications: number
+                orphanPaymentSiblingId: string | null
             }
-        }>(`/api/transactions/${id}`, { method: 'DELETE' })
+        }>(
+            `/api/transactions/${id}?scope=${options?.scope ?? 'single'}`,
+            { method: 'DELETE' }
+        )
         invalidateData(TRANSACTION_INVALIDATION_TAGS)
         return result?.reverted ?? null
     }

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: reglas funcionales de Espacios
 
 ## Índice
@@ -210,6 +210,26 @@ Estados relevantes del impacto personal:
 - `cancelled`;
 - `removed`;
 - `needs_review`.
+
+La acción `Quitar de Mi Finp` elimina la transacción personal vinculada y marca
+el impacto privado como `removed`. No borra ni edita el movimiento compartido.
+Es idempotente: repetirla sobre un impacto ya quitado no crea otro efecto. La
+confirmación muestra cuenta, dirección, monto y moneda para que el usuario pueda
+anticipar el cambio.
+
+Cuando una edicion cambia el reparto de manera material, los pendientes se
+reconcilian contra el reparto nuevo:
+
+- a quien le cambio el monto se le actualiza su pendiente y se refresca el aviso,
+  porque sigue teniendo la misma decision por tomar con otras cifras;
+- a quien salio del reparto se le cancela el pendiente y se resuelve su
+  notificacion: ya no le corresponde registrar nada;
+- a quien entro al reparto se le crea un pendiente nuevo, sin duplicar si ya tenia
+  uno ni crearlo si ya registro el movimiento.
+
+Un pendiente todavia no es historia financiera, asi que actualizarlo no reescribe
+nada. Quien ya registro su impacto sigue el camino de revision, que si supone
+historia y por eso nunca se resuelve solo.
 
 ## 8. Configuracion global vs configuracion personal
 

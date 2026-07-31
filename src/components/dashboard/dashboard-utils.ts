@@ -90,13 +90,9 @@ export function getTopExpenseCategories(categories: DashboardExpenseCategory[], 
 
 export function getDashboardLeadCard(cards: DashboardCreditCard[]) {
     return [...cards].sort((left, right) => {
-        const pendingDiff = getCurrencyTotalsMagnitude(right.monthlyPending) - getCurrencyTotalsMagnitude(left.monthlyPending)
-        if (pendingDiff !== 0) return pendingDiff
-
-        const dueDiff = getCurrencyTotalsMagnitude(right.monthlyDue) - getCurrencyTotalsMagnitude(left.monthlyDue)
-        if (dueDiff !== 0) return dueDiff
-
-        return right.activeInstallments - left.activeInstallments
+        return right.monthlyDue.ars - left.monthlyDue.ars ||
+            right.monthlyDue.usd - left.monthlyDue.usd ||
+            left.name.localeCompare(right.name, 'es')
     })[0] ?? null
 }
 

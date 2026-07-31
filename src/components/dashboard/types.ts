@@ -79,6 +79,8 @@ export interface DashboardCreditCard {
     monthlyDue: DashboardCurrencyTotals
     monthlyPaid: DashboardCurrencyTotals
     monthlyPending: DashboardCurrencyTotals
+    monthlyCredit: DashboardCurrencyTotals
+    paymentState: 'no_charges' | 'unpaid' | 'partial' | 'paid' | 'overpaid'
     activeInstallments: number
     activeCharges: number
     latestPurchaseDate?: string

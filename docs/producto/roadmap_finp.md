@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-31
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -11,11 +11,11 @@
 2. [Dirección de desarrollo](#2-dirección-de-desarrollo)
 3. [Prioridad P0 — confianza financiera y cierre operativo](#3-prioridad-p0-confianza-financiera-y-cierre-operativo)
 4. [Prioridad P1 — deuda técnica y UX bloqueante](#4-prioridad-p1-deuda-técnica-y-ux-bloqueante)
-5. [Prioridad P2 — recurrencia y orientación](#5-prioridad-p2-recurrencia-y-orientación)
-6. [Prioridad P3 — colaboración y proyección](#6-prioridad-p3-colaboración-y-proyección)
-7. [Prioridad P4 — plataforma y escalabilidad](#7-prioridad-p4-plataforma-y-escalabilidad)
+5. [Prioridad P2 — recurrencia, proyección y análisis](#5-prioridad-p2-recurrencia-proyección-y-análisis)
+6. [Prioridad P3 — colaboración](#6-prioridad-p3-colaboración)
+7. [Prioridad P4 — plataforma, orientación diferida y escalabilidad](#7-prioridad-p4-plataforma-orientación-diferida-y-escalabilidad)
 8. [Discovery futuro](#8-discovery-futuro)
-9. [Deuda de calidad transversal](#9-deuda-de-calidad-transversal)
+9. [Prácticas de calidad permanentes](#9-prácticas-de-calidad-permanentes)
 10. [Cerrado recientemente](#10-cerrado-recientemente)
 11. [Cómo actualizar este archivo](#11-cómo-actualizar-este-archivo)
 
@@ -40,6 +40,17 @@ Prioridades:
 - `P3`: expansión posterior;
 - `P4`: plataforma o largo plazo.
 
+Un ítem `validación` o `pendiente` que no puede avanzar declara `Bloqueado por:` y
+el ID que lo condiciona. Sin esa línea, el tope de la lista promete trabajo que no
+se puede tomar.
+
+Por omisión un ítem lo ejecuta un agente sin intervención; la ausencia de
+`Requiere:` significa "tomable ahora". Sólo se declara la excepción:
+
+- `Requiere: decisión del prompter`: hay alternativas que el agente no elige;
+- `Requiere: entorno o datos reales`: necesita secretos, base aislada, backup o
+  producción. `en discovery` ya implica decisión pendiente y no lo repite.
+
 Un documento de dominio puede describir una posibilidad, pero sólo este archivo decide prioridad.
 
 ## 2. Dirección de desarrollo
@@ -50,114 +61,50 @@ Orden:
 2. eliminar deuda técnica inmediata del último bloque;
 3. resolver UX mobile bloqueante;
 4. aprender recurrencia sin crear automatismos;
-5. ampliar orientación un destino por vez;
-6. profundizar colaboración y proyección;
-7. estudiar mobile/offline cuando el producto web esté estable.
+5. profundizar Proyección y explicar el impacto financiero futuro;
+6. profundizar colaboración;
+7. retomar la orientación por dominio después de Proyección;
+8. estudiar mobile/offline cuando el producto web esté estable.
 
-Principios:
+Los principios de producto y de trabajo viven en
+[`../../AGENTS.md`](../../AGENTS.md) §4 y §6. Acá sólo rigen los de priorización:
 
-- bloques verticales y verificables;
-- mobile primero;
-- una fuente de verdad por regla;
-- automatización explicable y reversible;
-- no aumentar costo operativo sin presentar alternativas;
-- no iniciar una expansión grande con P0 abiertos evitables.
+- no iniciar una expansión grande con P0 abiertos evitables;
+- una prioridad nueva no desplaza P0/P1 sin una decisión explícita.
 
 ## 3. Prioridad P0 — confianza financiera y cierre operativo
 
-### FINP-P0-001 — Smoke financiero con datos reales
-
-- Estado: `validación`.
-- Alcance: saldo acumulado, saldos negativos, histórico, ARS/USD, préstamos, pago parcial/total de deuda y cuotas.
-- Criterio: Dashboard, Transacciones, Cuentas y Deudas coinciden para períodos actuales e históricos.
-- Evidencia: casos documentados, capturas mobile/desktop y ausencia de escrituras fuera de la base de prueba.
-
-### FINP-P0-002 — Ejecutar y validar backfill de compromisos
-
-- Estado: `pendiente`.
-- Alcance: ejecutar `npm run backfill:commitments` en `dry-run`, revisar anomalías y aplicar sólo con aprobación.
-- Criterio: datos existentes tienen política, agenda, estado, snapshot y procedencia; las anomalías quedan resueltas o documentadas.
-- Riesgo: modifica datos; requiere backup y ambiente identificado.
-
-### FINP-P0-003 — Entorno y suite E2E reproducibles
-
-- Estado: `pendiente`.
-- Alcance: crear guía y `.env.test.local` fuera de Git, sembrar base aislada y ejecutar los 40 escenarios.
-- Criterio: E2E mobile y desktop reproducibles sin tocar desarrollo ni producción.
-
 ### FINP-P0-004 — Activar E2E crítico en CI
 
-- Estado: `pendiente`.
-- Dependencia: FINP-P0-003.
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P1-011.
+- Requiere: entorno o datos reales.
+- Disponible: workflow activo con preflight, seed, build, Playwright
+  mobile/desktop, secretos de aplicación efímeros y artefactos ante fallos. Sin
+  `MONGODB_URI_TEST` informa el bloqueo y no conecta.
+- Pendiente externo: rotar la credencial, limitarla a `finp-e2e`, cargar la URI
+  nueva en GitHub y obtener la primera ejecución verde.
 - Criterio: flujos críticos ejecutan en CI con secretos y base aislada; reportes se conservan ante fallos.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
 
-### FINP-P1-001 — Cascada de `InstallmentPlan`
+### FINP-P1-011 — Rotar credenciales remotas expuestas
 
 - Estado: `pendiente`.
-- Problema: eliminar una transacción originaria no limpia el plan.
-- Criterio: eliminación y reversión conservan saldos, cuotas y trazabilidad; cubierto por unit/integration.
+- Prioridad operativa: no bloquea desarrollo local ni documentación.
+- Alcance: rotar la credencial del usuario de MongoDB, revocar la anterior y
+  actualizar los entornos locales autorizados y `MONGODB_URI_TEST` en GitHub.
+- Restricción: la credencial actual no se copia a CI ni a otros servicios; la
+  rotación debe completarse antes de configurar los secretos de FINP-P0-004.
+- Criterio: credencial anterior inválida, aplicación conectando con la nueva y
+  ausencia de secretos en logs, commits y artefactos.
 
-### FINP-P1-002 — Cierre de métricas de orientación
 
-- Estado: `pendiente`.
-- Problema: falta `intent_completed` cuando se crea un compromiso desde borrador.
-- Criterio: aceptar y completar siguen siendo estados distintos y la derivación completada queda registrada una sola vez.
-
-### FINP-P1-003 — Integración de NavInsights
-
-- Estado: `pendiente`.
-- Criterio: `getNavInsightsForUser` tiene cobertura de período, aislamiento y señales.
-
-### FINP-P1-004 — Política para pagos duales
-
-- Estado: `en discovery`.
-- Problema: al eliminar una parte, el hermano con `paymentGroupId` sólo se reporta.
-- Decisión requerida: conservar, ofrecer eliminar, o tratar el grupo como unidad.
-- Criterio: decisión registrada y comportamiento cubierto sin inferencia riesgosa.
-
-### FINP-P1-005 — Deudas mobile
-
-- Estado: `pendiente`.
-- Criterio: abrir detalle, comprender origen y resolver pendientes sin paneles inaccesibles ni saltos.
-
-### FINP-P1-006 — Estado de tarjetas
-
-- Estado: `pendiente`.
-- Criterio: cada tarjeta muestra período, total, pendiente y estado pagada/parcial/impaga; pagos parciales no aparecen como totales.
-
-### FINP-P1-007 — Registrar o quitar de Mi Finp
-
-- Estado: `pendiente`.
-- Criterio: CTA claro, impacto previo, monedas y formato correctos, acción de quitar visible en mobile.
-
-### FINP-P1-008 — Pendientes de cambios en splits
-
-- Estado: `pendiente`.
-- Alcance: completar los tres unit tests `todo` sobre cambio de monto, usuario removido y usuario agregado.
-- Criterio: pendientes y notificaciones se crean, actualizan o cancelan con regla explícita.
-
-### FINP-P1-009 — Swipe de notificaciones
-
-- Estado: `pendiente`.
-- Alcance: completar dos unit tests `todo`.
-- Criterio: archivar/restaurar y descartar no resuelven por accidente una acción pendiente.
-
-### FINP-P1-010 — Normalizar historia de `main` y `dev`
-
-- Estado: `validación`.
-- Hallazgo: las referencias locales de `origin/main...origin/dev` muestran 13 commits exclusivos de `main` y 12 de `dev`.
-- Contexto: los commits exclusivos de `main` son principalmente merges de releases, pero rompen la relación de ancestro esperada.
-- Próximo análisis: fetch, comparación de árboles y revisión de PR pendientes.
-- Criterio: `origin/main` es ancestro de `origin/dev`, o ambas ramas quedan iguales después de una promoción; ningún cambio productivo queda ausente en `dev`.
-- Restricción: no reescribir historia ni resolver con reset destructivo.
-
-## 5. Prioridad P2 — recurrencia y orientación
+## 5. Prioridad P2 — recurrencia, proyección y análisis
 
 ### FINP-P2-001 — Candidatos mensuales explicables
 
-- Estado: `validación`.
+- Estado: `cerrado`.
 - Alcance: detectar recurrencia desde historial vigente.
 - Criterio:
   - evidencia por cantidad, período y variación;
@@ -167,53 +114,95 @@ Principios:
   - sin creación automática;
   - descartes persistentes;
   - coordinación entre Captura rápida y Compromisos.
-- Evidencia: motor puro, endpoint autenticado sin cache, borrador guiado,
-  descarte persistente y pruebas unitarias/API. Falta smoke E2E con base aislada.
+- Evidencia: motor puro y umbrales de la decisión 0002, endpoint autenticado sin
+  cache, carga diferida en Captura rápida, `subjectKey` y descarte compartidos,
+  borrador guiado y recorrido E2E aislado en ambas superficies, desktop y mobile.
 
-### FINP-P2-002 — Orientación a cuotas
+### FINP-P2-002 — Captura rápida con tarjeta y orientación a cuotas
 
-- Estado: `pendiente`.
-- Dependencias: FINP-P1-001 y contrato de borradores vigente.
-- Criterio: interpretación, traslado, validación final, mobile/desktop, error y finalización medidos.
+- Estado: `cerrado`.
+- Dependencias: contrato de borradores vigente. La cascada de `InstallmentPlan`
+  ya está cerrada.
+- Alcance:
+  - reconocer un consumo con tarjeta desde texto explícito y contexto;
+  - completar directamente un consumo en un pago cuando tarjeta, monto,
+    moneda, fecha y categoría sean válidos;
+  - trasladar un consumo en varias cuotas al flujo especializado con los datos
+    interpretados y su procedencia;
+  - distinguir consumo, cuota y pago del resumen.
+- Criterio: reglas y validaciones compartidas con Tarjetas, selección clara de
+  tarjeta, impacto anticipado, aprendizaje prudente, mobile/desktop, errores,
+  deshacer y finalización medidos.
+- Evidencia: detector determinista, selector ante ambigüedad, preview de compra
+  en un pago, handoffs tipados para cuotas y pagos, revisión sin duplicar planes,
+  procedencia `quick_capture`, rollback y E2E aislado desktop/mobile.
 
-### FINP-P2-003 — Orientación a reglas
+### FINP-P2-011 — Cierre operativo de Proyección
 
-- Estado: `pendiente`.
-- Criterio: propuesta precompleta una regla simulable; no activa automatización sin confirmar.
+- Estado: `cerrado`.
+- Alcance: compromisos personales, compras `1/1`, consumos históricos sin plan
+  y cuotas, con período, certeza, ARS/USD, contexto y navegación correctos.
+- Criterio cumplido: agrupaciones por tipo, tarjeta y categoría usan una lista
+  canónica; preferencias sólo personalizan presentación; pagos y transacciones
+  padre no duplican gastos.
+- Evidencia: contrato compartido, servicio aislado por usuario sin consulta por
+  período, query estricta y privada, clasificación compartida con Tarjetas y
+  Dashboard, componentes responsive, unit/API y cuatro E2E aislados en Chromium
+  desktop y Pixel 7.
+- Decisión: [`0006 — Período, clasificación y lectura de Proyección`](../decisiones/0006-periodo-clasificacion-y-lectura-de-proyeccion.md).
 
-### FINP-P2-004 — Orientación a Deudas
+### FINP-P2-012 — Escenarios de Proyección
 
-- Estado: `pendiente`.
-- Criterio: distinguir préstamo, pago/cobro y transacción independiente sin duplicar deuda.
+- Estado: `en discovery`.
+- Alcance: comparar una base con cambios hipotéticos sin alterar compromisos,
+  planes ni transacciones persistidos.
+- Criterio a definir: variables permitidas, monedas, vigencia, explicación,
+  guardado, descarte y costo de cálculo.
 
-### FINP-P2-005 — Orientación a Espacios
+### FINP-P2-013 — Cashflow proyectado por cuenta
 
-- Estado: `pendiente`.
-- Criterio: elegir contexto, participantes y reparto en el módulo responsable; no exponer información privada.
-
-### FINP-P2-006 — Orientación a Importación
-
-- Estado: `pendiente`.
-- Criterio: conservar intención y llevar al flujo de archivo/revisión sin prometer una importación desde texto.
+- Estado: `en discovery`.
+- Alcance: estimar entradas y salidas por cuenta sin confundir tarjeta con
+  cuenta futura de pago.
+- Criterio a definir: cuenta probable, transferencias, pagos de resumen,
+  multi-moneda, saldos, incertidumbre y ausencia de cuenta.
 
 ### FINP-P2-007 — Bandeja diaria de revisión
 
 - Estado: `en discovery`.
 - Alcance: borradores, imports, movimientos incompletos y sugerencias de confianza media.
-- Restricción: complemento opcional; no bloquea el registro.
+- Restricción: complemento opcional; no bloquea el registro ni adelanta los
+  destinos de orientación diferidos a P4.
 
-### FINP-P2-008 — Categorías accionables
+### FINP-P2-008 — Centro de análisis por categorías
 
 - Estado: `en discovery`.
-- Alcance: evolución, comercios, recurrentes, gastos grandes, proyección y límites.
+- Alcance: análisis histórico por categoría según
+  [`especificacion_funcional.md`](especificacion_funcional.md) §14.
 - Dependencias: calidad de ingreso, normalización y procedencia.
+- Criterio a definir: período, monedas, conversiones, datos incompletos,
+  categorías modificadas, rendimiento de agregaciones y experiencia
+  mobile-first.
 
-### FINP-P2-009 — Gastos grandes y atípicos
+### FINP-P2-009 — Patrones y gastos atípicos
 
 - Estado: `en discovery`.
-- Criterio a definir: relevancia por historial, ingreso, límite e impacto en proyección; permitir marcar extraordinarios.
+- Alcance: patrones por categoría, comercio, cuenta, tarjeta y método de pago.
+- Criterio a definir: relevancia por historial, estacionalidad, ingreso, límite
+  e impacto en proyección; explicar la comparación y permitir marcar un gasto
+  como extraordinario.
 
-## 6. Prioridad P3 — colaboración y proyección
+### FINP-P2-010 — Objetivos y límites por categoría
+
+- Estado: `en discovery`.
+- Alcance: objetivo o límite por período, avance, desvío, alertas y efecto
+  esperado sobre la planificación.
+- Restricción: un límite informa y orienta; no bloquea ni reclasifica
+  transacciones automáticamente.
+- Criterio a definir: arrastre entre períodos, multi-moneda, edición histórica,
+  categorías sin datos y relación con ingresos y Proyección.
+
+## 6. Prioridad P3 — colaboración
 
 ### FINP-P3-001 — Compromisos en Espacios
 
@@ -230,16 +219,6 @@ Principios:
 
 - Estado: `en discovery`.
 - Criterio: fuentes, rezagos, snapshot, trazabilidad y fallback manual.
-
-### FINP-P3-004 — Proyección avanzada
-
-- Estado: `pendiente`.
-- Alcance:
-  - cuotas vs. consumos de un pago;
-  - certeza de monto;
-  - parte propia;
-  - salida de cuenta;
-  - escenarios.
 
 ### FINP-P3-005 — Parte propia igual a cero
 
@@ -272,7 +251,14 @@ Principios:
 - Estado: `pendiente`.
 - Criterio: URLs legibles sin comprometer autorización ni estabilidad de enlaces.
 
-## 7. Prioridad P4 — plataforma y escalabilidad
+### FINP-P3-011 — Compromisos compartidos dentro de Proyección
+
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P3-001.
+- Alcance: total compartido, parte propia, adelanto, recuperable y contexto
+  privado por participante sin mezclar contabilidad personal y compartida.
+
+## 7. Prioridad P4 — plataforma, orientación diferida y escalabilidad
 
 ### FINP-P4-001 — Limpieza de compatibilidad legacy
 
@@ -304,6 +290,29 @@ Principios:
 - Alcance: bundle, consultas, polling, render y almacenamiento.
 - Criterio: métricas base y umbrales antes de optimizaciones mayores.
 
+Los siguientes destinos de Orientación se difirieron desde P2 el 2026-07-31
+para priorizar Proyección. Siguen aceptados y no fueron descartados.
+
+### FINP-P4-006 — Orientación a reglas
+
+- Estado: `pendiente`.
+- Criterio: propuesta precompleta una regla simulable; no activa automatización sin confirmar.
+
+### FINP-P4-007 — Orientación a Deudas
+
+- Estado: `pendiente`.
+- Criterio: distinguir préstamo, pago/cobro y transacción independiente sin duplicar deuda.
+
+### FINP-P4-008 — Orientación a Espacios
+
+- Estado: `pendiente`.
+- Criterio: elegir contexto, participantes y reparto en el módulo responsable; no exponer información privada.
+
+### FINP-P4-009 — Orientación a Importación
+
+- Estado: `pendiente`.
+- Criterio: conservar intención y llevar al flujo de archivo/revisión sin prometer una importación desde texto.
+
 ## 8. Discovery futuro
 
 ### Aplicación Android/iOS
@@ -325,54 +334,106 @@ Principios:
 - Estado: `pendiente`.
 - Objetivo: relacionar obligación, resumen y pago sin duplicar contabilidad.
 
-## 9. Deuda de calidad transversal
+## 9. Prácticas de calidad permanentes
+
+Esto **no es backlog**: son prácticas que toda entrega debe considerar y que por
+definición nunca se cierran. Cuando una se prioriza como trabajo concreto, deja de
+vivir acá y se convierte en un ítem con ID, criterio y estado.
 
 - aumentar integration/API tests;
-- activar E2E;
 - formalizar smoke visual mobile/desktop;
 - incorporar accesibilidad básica;
 - definir cobertura objetivo sin usarla como única medida;
 - revisar seguridad con OWASP;
 - evaluar dependencias con mantenimiento, licencia, bundle y vulnerabilidades;
-- automatizar validación de documentación y enlaces;
 - proteger `main` y `dev` con checks;
 - medir rendimiento antes de adoptar procesos costosos.
 
+Ya priorizadas como ítem: activar E2E es FINP-P0-004. Ya resueltas: la validación
+documental corre con `npm run docs:check`.
+
 ## 10. Cerrado recientemente
+
+### 2026-07-31
+
+- FINP-P2-011: Proyección integra compromisos, compras `1/1`, consumos
+  históricos sin plan y cuotas sin doble conteo; separa ARS/USD y certeza,
+  permite agrupar la misma lista por tipo, tarjeta o categoría, recuerda
+  presentación por usuario y ofrece detalle navegable, privacidad y recuperación;
+- la clasificación `1/1` se comparte con Tarjetas y Dashboard, y el período de
+  cada representación queda registrado en la decisión 0006;
+- cuatro recorridos E2E pasan contra `finp-e2e` en Chromium desktop y Pixel 7,
+  incluidos persistencia, ocultamiento, dark mode y movimiento reducido;
+- escenarios, cashflow por cuenta y Proyección de compromisos compartidos quedan
+  separados como FINP-P2-012, FINP-P2-013 y FINP-P3-011.
+
+### 2026-07-28
+
+- FINP-P0-001: un usuario independiente y un seed determinista cubren dos
+  períodos, saldo acumulado y negativo, ARS/USD, una compra en tres cuotas y
+  préstamos pagados parcial y totalmente. Dashboard, Transacciones, Cuentas y
+  Deudas coinciden; las capturas mobile/desktop quedan adjuntas a Playwright y la
+  suite completa pasa 44 de 44 escenarios;
+- FINP-P0-002: después de verificar fuera de Git un respaldo lógico completo de
+  `finm`, el backfill actualizó un compromiso y no necesitó modificar aplicaciones
+  ni transacciones; el dry-run posterior quedó en cero cambios. Se conserva
+  documentada y sin tocar una aplicación cuya transacción ya había sido eliminada;
+- FINP-P0-003: Atlas usa la base exclusiva `finp-e2e`, distinta de `finm`; el
+  preflight confirma nombre y destino antes de conectar, el seed crea o repara el
+  usuario, 20 categorías, Efectivo y Tarjeta E2E sin duplicarlos en una segunda
+  ejecución, y los 44 escenarios Playwright pasan en Chromium desktop y Pixel 7;
+- las pruebas E2E se alinearon con el formulario vigente y con el contrato privado
+  de borradores; además, una compra en cuotas ahora invalida Transacciones y
+  aparece en la lista sin recargar;
+- una redirección HTML al login ya no puede interpretarse como respuesta JSON:
+  se informa sesión expirada sin romper el dashboard.
+
+### 2026-07-26
+
+- FINP-P1-004: un pago dual se elimina con alcance explícito: una sola parte o
+  el grupo ARS + USD. El borrado parcial normaliza grupos huérfanos y existe un
+  reparador idempotente en modo `dry-run`;
+- FINP-P1-005: Deudas usa detalle inferior en mobile, lateral en desktop,
+  navegación de regreso entre relación y deuda, y formularios de pago, cobro y
+  alta con encabezado y acciones siempre accesibles;
+- FINP-P1-006: Dashboard y Tarjetas comparten un resumen bimonetario por período
+  con total, pagado, pendiente, crédito y estado por tarjeta, sin sumar ARS y USD;
+- FINP-P1-007: movimientos de Espacios permiten registrar y quitar el impacto
+  privado desde mobile. Quitar elimina la transacción personal vinculada y no
+  modifica el movimiento compartido;
+- FINP-P1-008: editar el reparto de un movimiento reconcilia los pendientes. A
+  quien le cambió el monto se le actualiza el pendiente y se refresca su aviso;
+  quien salió del split lo ve cancelado y su notificación resuelta; quien entró
+  recibe uno nuevo. La regla de quién debe decidir se comparte entre el alta y la
+  edición. Los `linked` siguen yendo a revisión, que es otro camino;
+- FINP-P1-009: swipe cubierto en ambos sentidos, con umbral por distancia y por
+  velocidad; leer, archivar, restaurar y descartar no escriben `actionStatus`, así
+  que ninguno resuelve por accidente la acción pendiente;
+- FINP-P1-003: `getNavInsightsForUser` queda cubierto en período, aislamiento y
+  señales. El aislamiento se verifica sobre las catorce consultas del servicio y
+  el conteo falla si se agrega una sin dueño declarado;
+- FINP-P1-002: Compromisos emite `intent_completed` al crear la plantilla desde
+  un borrador derivado; el `eventId` deriva del borrador, así la derivación queda
+  registrada una sola vez y aceptar el CTA sigue siendo un estado distinto;
+- FINP-P1-001: eliminar la compra originaria da de baja su `InstallmentPlan`, el
+  plan sólo cae si ninguna otra compra lo referencia, borrar el plan pasa por el
+  teardown compartido y la confirmación anticipa la baja de las cuotas;
+- ramas `main` y `dev` sincronizadas en `1c3ee40` después de la promoción, sin
+  diferencias de árbol ni reescritura de historia;
+- prueba de privacidad de borradores de Captura rápida convertida en
+  determinista y CI nuevamente verde.
 
 ### 2026-07-25
 
-- rediseño mobile-first de Compromisos en tres pasos;
-- stepper mobile compacto, categorías reutilizadas y validación accionable;
-- monto vigente unificado, fecha efectiva e historial accesible;
-- cambio de monto con tres vigencias e historia pasada inmutable;
-- recordatorios in-app y estados de fin de vigencia;
-- fechas mensuales y recordatorios derivados desde una única fuente;
-- candidatos mensuales con criterio híbrido y caso de control Pizza;
-- retiro de la automatización inerte de la interfaz;
-- compromisos personales variables;
-- agenda de montos y snapshots;
-- Captura rápida como orientador hacia Compromisos;
-- onboarding y ayuda contextual;
-- reevaluación de reglas al editar;
-- cascada parcial al eliminar transacciones;
-- unificación de `monthStartDay`.
+Promoción `1c3ee40`: Compromisos mobile-first en tres pasos, montos variables con
+agenda y vigencias, candidatos mensuales con criterio híbrido, y Captura rápida
+orientando hacia Compromisos. El detalle de lo entregado vive en
+[`estado_actual_finp.md`](estado_actual_finp.md) §12.
 
-### 2026-07-24
-
-- motor unificado de reglas;
-- simulación, conflictos y sugerencias;
-- Captura rápida con aprendizaje administrable.
-
-### 2026-07-23
-
-- saldo disponible acumulado;
-- exactitud de pagos de deuda y cuotas;
-- compra/venta de USD;
-- sugerencias inteligentes de transacción;
-- mejoras de calendario y categorías.
-
-El historial detallado vive en Git y en `docs/archivados/`.
+Se conservan sólo los bloques que todavía explican por qué el trabajo actual está
+donde está. Lo anterior al 2026-07-25 —motor de reglas, aprendizaje administrable,
+saldo acumulado, exactitud de deuda y cuotas, compra/venta de USD— vive en Git y en
+[`../archivados/`](../archivados/), que es donde hay que buscar historia.
 
 ## 11. Cómo actualizar este archivo
 
@@ -385,6 +446,10 @@ Al cerrar:
 
 - verificar el criterio;
 - actualizar estado actual y documentación de dominio;
+- **barrer las referencias entrantes**: buscar el ID en el repositorio y corregir
+  cada `Bloqueado por:`, `Desbloquea:` o `Dependencias:` que lo nombre, incluidas
+  las de documentos técnicos. Un ítem cerrado que sigue figurando como bloqueante
+  detiene trabajo que ya se puede tomar;
 - mover un resumen a “Cerrado recientemente”;
 - eliminar detalles que ya no ayuden a priorizar.
 
@@ -393,6 +458,10 @@ Al descubrir trabajo:
 - comprobar que no exista;
 - asignar ID y prioridad;
 - explicar problema y criterio de cierre;
+- declarar `Alcance:` cuando el borde no sea obvio; sin esa línea el ejecutor
+  decide solo qué entra, y eso puede ser una decisión de producto;
+- verificar que el criterio se pueda cumplir con lo que el repositorio ya puede
+  correr, o incluir en el alcance construir esa capacidad;
 - no crear otro backlog.
 
 Una prioridad nueva que desplace P0/P1 requiere explicar el motivo.

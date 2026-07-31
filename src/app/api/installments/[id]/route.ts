@@ -3,6 +3,10 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { InstallmentPlan, Transaction } from '@/lib/models'
 import { installmentSchema } from '@/lib/validations'
+import {
+    unlinkTransactionDependents,
+    type TransactionTeardownResult,
+} from '@/lib/server/transaction-teardown'
 
 export async function PATCH(
     request: Request,
@@ -106,19 +110,45 @@ export async function DELETE(
 
         await connectDB()
 
-        const plan = await InstallmentPlan.findOneAndDelete({
+        const plan = await InstallmentPlan.findOne({
             _id: id,
             userId: session.user.id,
-        })
+        }).select({ _id: 1 })
 
         if (!plan) {
             return NextResponse.json({ error: 'Plan no encontrado' }, { status: 404 })
         }
 
-        // Eliminar transacción madre asociada
-        await Transaction.deleteOne({ installmentPlanId: id, userId: session.user.id })
+        // Borrar el plan arrastra su compra originaria, y esa compra puede tener
+        // dependientes (aplicación de compromiso, impacto personal de Espacios,
+        // notificaciones pendientes). Se reutiliza el teardown del DELETE de
+        // transacciones en vez de mantener una versión paralela más pobre.
+        const parentTransaction = await Transaction.findOne({
+            installmentPlanId: id,
+            userId: session.user.id,
+        })
 
-        return NextResponse.json({ message: 'Plan eliminado correctamente' })
+        let teardown: TransactionTeardownResult | null = null
+        if (parentTransaction) {
+            teardown = await unlinkTransactionDependents(session.user.id, parentTransaction)
+            await Transaction.deleteOne({
+                _id: parentTransaction._id,
+                userId: session.user.id,
+            })
+        }
+
+        // El teardown ya elimina el plan cuando la compra lo apuntaba; esto cubre
+        // el plan sin compra asociada y es idempotente.
+        await InstallmentPlan.deleteOne({ _id: id, userId: session.user.id })
+
+        return NextResponse.json({
+            message: 'Plan eliminado correctamente',
+            reverted: {
+                commitment: teardown?.revertedCommitment ?? null,
+                personalImpact: teardown?.unlinkedPersonalImpact ?? false,
+                notifications: teardown?.resolvedNotifications ?? 0,
+            },
+        })
     } catch (error) {
         console.error('Error al eliminar plan:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

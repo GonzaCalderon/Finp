@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-28
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -39,7 +39,7 @@ flowchart LR
     web --> mongo["MongoDB"]
     web --> blob["Vercel Blob"]
     web --> rates["Proveedor de cotizaciones"]
-    ci["GitHub Actions"] --> checks["Lint · Build · Unit"]
+    ci["GitHub Actions"] --> checks["Lint · Build · Unit · E2E"]
 ```
 
 Finp es actualmente un monolito modular:
@@ -171,7 +171,9 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Usuario/preferencias | `User` | Aislamiento por identidad autenticada. |
 | Saldo de cuentas | transacciones + saldos iniciales | No guardar un saldo derivado como autoridad paralela. |
 | Movimiento personal | `Transaction` | Tipo y vínculos determinan efecto. |
-| Cuotas | `InstallmentPlan` + transacciones relacionadas | Evitar doble impacto. |
+| Resumen de tarjeta | transacciones del período + `credit-card.ts` | Total, pagado, pendiente y crédito se derivan por tarjeta y moneda; nunca se suman ARS y USD. |
+| Grupo de pago dual | `Transaction.paymentGroupId` | Vincula una intención de pago; el usuario elige el alcance del borrado y un grupo con menos de dos miembros se normaliza. |
+| Cuotas | `InstallmentPlan` + transacciones relacionadas | Evitar doble impacto. El plan vive mientras exista su compra originaria: eliminar una arrastra la otra. |
 | Compromiso | `ScheduledCommitment` | Plantilla, política y agenda. |
 | Aplicación | subdocumento/relación de compromiso | Snapshot por período y transacción. |
 | Regla | `TransactionRule` | Servicio compartido resuelve coincidencia y acciones. |
@@ -189,7 +191,7 @@ Servicios relevantes en `src/lib/server/`:
 | Grupo | Responsabilidad |
 |---|---|
 | `transactions.ts` | creación y edición de movimientos con reglas comunes |
-| `transaction-teardown.ts` | limpieza de relaciones antes de eliminar |
+| `transaction-teardown.ts` | limpieza de relaciones antes de eliminar, incluida la cascada del plan de cuotas y normalización de grupos de pago |
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
@@ -251,7 +253,10 @@ Los efectos derivados deben:
 - detectar entidades existentes;
 - resolver o reportar inconsistencias.
 
-No borrar por inferencia relaciones ambiguas que también muevan dinero. Reportar y pedir una decisión.
+No borrar por inferencia relaciones ambiguas que también muevan dinero. Cuando
+la relación es conocida, la API expone alcances explícitos y el usuario elige.
+El pago dual admite `single` y `group`; el primer alcance conserva la otra parte
+y elimina su identificador de grupo huérfano.
 
 ## 11. Autenticación, autorización y privacidad
 
@@ -345,6 +350,13 @@ Separar:
 
 El aprendizaje no escribe operaciones por sí mismo. Las sugerencias funcionales transportan intención al módulo responsable.
 
+Captura rápida clasifica las intenciones financieras especializadas de forma
+determinista antes de habilitar una escritura simple. Los contratos
+discriminados separan compromiso, compra con tarjeta, pago y revisión de cuota.
+Sólo la compra en un pago se confirma localmente; cuotas y pagos atraviesan el
+formulario de Transacciones y los servicios existentes. La creación de planes
+devuelve plan y transacción padre para permitir trazabilidad y rollback.
+
 Todo nuevo destino de orientación necesita:
 
 - tipo de intención;
@@ -352,7 +364,7 @@ Todo nuevo destino de orientación necesita:
 - procedencia por campo;
 - validación en destino;
 - evento de aceptación y finalización;
-- descarte;
+- descarte cuando el dominio admita una alternativa segura;
 - tests mobile/desktop.
 
 ## 15. Rendimiento

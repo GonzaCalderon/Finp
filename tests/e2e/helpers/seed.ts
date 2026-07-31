@@ -1,151 +1,848 @@
 /**
- * Script de seed para E2E — crea el usuario de test con sus datos iniciales.
+ * Seed idempotente para E2E.
  *
- * Uso:
- *   npm run test:seed
- *
- * Lee las variables de .env.test.local y crea en finm-test:
- *   - usuario test@finp.dev / TestPass123!
- *   - categorías predeterminadas
- *   - cuenta "Efectivo" predeterminada
- *
- * Es idempotente: si el usuario ya existe, no hace nada.
+ * Antes de conectarse exige una base exclusiva, confirmada mediante
+ * E2E_DATABASE_NAME y distinta de la configurada en .env.local.
  */
 
-import 'dotenv/config'
-import { config } from 'dotenv'
-import { resolve } from 'path'
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 
-// Cargar .env.test.local antes que cualquier otra cosa
-config({ path: resolve(process.cwd(), '.env.test.local'), override: true })
+import { DEFAULT_CATEGORIES } from '../../../src/lib/constants/defaultCategories'
+import { Account } from '../../../src/lib/models/account.model'
+import { Category } from '../../../src/lib/models/category.model'
+import { User } from '../../../src/lib/models/user.model'
+import { FunctionalSuggestionDismissal } from '../../../src/lib/models/functional-suggestion-dismissal.model'
+import { ScheduledCommitment } from '../../../src/lib/models/scheduled-commitment.model'
+import { resolveE2EEnvironment } from './environment'
+import {
+    buildFinancialSmokePeriods,
+    deriveFinancialSmokeEmail,
+    FINANCIAL_SMOKE_IDS,
+    FINANCIAL_SMOKE_NAMES,
+    FINANCIAL_SMOKE_TAG,
+    FINANCIAL_SMOKE_USER_NAME,
+} from './financial-smoke'
+import {
+    buildProjectionSmokePeriod,
+    deriveProjectionSmokeEmail,
+    PROJECTION_SMOKE_IDS,
+    PROJECTION_SMOKE_NAMES,
+    PROJECTION_SMOKE_USER_NAME,
+} from './projection-smoke'
 
-const MONGODB_URI = process.env.MONGODB_URI
-if (!MONGODB_URI) {
-    console.error('❌  MONGODB_URI no definido en .env.test.local')
-    process.exit(1)
+const TEST_NAME = 'Test User'
+const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
+const P2_CANDIDATE_SUBJECT_KEY = 'create_commitment|ARS|cobertura p2'
+const P2_HISTORY_ACCOUNT_NAME = 'Historial P2'
+
+async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no está conectado para reiniciar el usuario E2E.')
+
+    await Promise.all([
+        db.collection('transactions').deleteMany({ userId }),
+        db.collection('installmentplans').deleteMany({ userId }),
+        ScheduledCommitment.deleteMany({ userId }),
+        FunctionalSuggestionDismissal.deleteMany({ userId }),
+    ])
 }
 
-const TEST_EMAIL = process.env.TEST_USER_EMAIL ?? 'test@finp.dev'
-const TEST_PASSWORD = process.env.TEST_USER_PASSWORD ?? 'TestPass123!'
-const TEST_NAME = 'Test User'
+async function ensureTestUser(
+    email: string,
+    password: string,
+    displayName = TEST_NAME
+) {
+    const normalizedEmail = email.toLowerCase().trim()
+    const existing = await User.findOne({ email: normalizedEmail })
 
-// ── Schemas inline (evita importar código que depende de Next.js) ──────────────
-
-const UserSchema = new mongoose.Schema(
-    {
-        email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-        passwordHash: { type: String, required: true },
-        displayName: { type: String, required: true, trim: true },
-        baseCurrency: { type: String, enum: ['ARS', 'USD'], required: true },
-        timezone: { type: String, required: true },
-    },
-    { timestamps: true }
-)
-
-const CategorySchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, required: true },
-    name: { type: String, required: true },
-    type: { type: String, enum: ['income', 'expense'], required: true },
-    color: { type: String },
-    sortOrder: { type: Number },
-    isDefault: { type: Boolean, default: false },
-    isArchived: { type: Boolean, default: false },
-})
-
-const AccountSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, required: true },
-    name: { type: String, required: true },
-    type: { type: String, required: true },
-    currency: { type: String, required: true },
-    initialBalance: { type: Number, default: 0 },
-    color: { type: String },
-    isActive: { type: Boolean, default: true },
-    includeInNetWorth: { type: Boolean, default: true },
-    allowNegativeBalance: { type: Boolean, default: false },
-})
-
-const DEFAULT_CATEGORIES = [
-    { name: 'Supermercado', type: 'expense', color: '#22c55e', sortOrder: 0 },
-    { name: 'Restaurantes y delivery', type: 'expense', color: '#f97316', sortOrder: 1 },
-    { name: 'Transporte', type: 'expense', color: '#3b82f6', sortOrder: 2 },
-    { name: 'Salud y farmacia', type: 'expense', color: '#ec4899', sortOrder: 3 },
-    { name: 'Indumentaria', type: 'expense', color: '#8b5cf6', sortOrder: 4 },
-    { name: 'Entretenimiento', type: 'expense', color: '#eab308', sortOrder: 5 },
-    { name: 'Suscripciones', type: 'expense', color: '#14b8a6', sortOrder: 6 },
-    { name: 'Servicios', type: 'expense', color: '#6b7280', sortOrder: 7 },
-    { name: 'Educación', type: 'expense', color: '#0ea5e9', sortOrder: 8 },
-    { name: 'Hogar', type: 'expense', color: '#a16207', sortOrder: 9 },
-    { name: 'Viajes', type: 'expense', color: '#06b6d4', sortOrder: 10 },
-    { name: 'Impuestos', type: 'expense', color: '#dc2626', sortOrder: 11 },
-    { name: 'Pago de préstamos', type: 'expense', color: '#8B5CF6' },
-    { name: 'Otros gastos', type: 'expense', color: '#9ca3af', sortOrder: 12 },
-    { name: 'Sueldo', type: 'income', color: '#16a34a', sortOrder: 0 },
-    { name: 'Bonos (Sueldo)', type: 'income', color: '#15803d', sortOrder: 1 },
-    { name: 'Freelance', type: 'income', color: '#2563eb', sortOrder: 2 },
-    { name: 'Alquileres', type: 'income', color: '#7c3aed', sortOrder: 3 },
-    { name: 'Préstamos', type: 'income', color: '#8B5CF6' },
-    { name: 'Otros ingresos', type: 'income', color: '#9ca3af', sortOrder: 4 },
-]
-
-async function seed() {
-    console.log('🌱  Conectando a la DB de test...')
-    await mongoose.connect(MONGODB_URI!)
-
-    const User = mongoose.models.User || mongoose.model('User', UserSchema)
-    const Category = mongoose.models.Category || mongoose.model('Category', CategorySchema)
-    const Account = mongoose.models.Account || mongoose.model('Account', AccountSchema)
-
-    const existing = await User.findOne({ email: TEST_EMAIL })
-    if (existing) {
-        console.log(`✅  El usuario ${TEST_EMAIL} ya existe en la DB de test. Nada que hacer.`)
-        await mongoose.disconnect()
-        return
+    if (!existing) {
+        const passwordHash = await bcrypt.hash(password, 12)
+        const user = await User.create({
+            email: normalizedEmail,
+            passwordHash,
+            displayName,
+            baseCurrency: 'ARS',
+            timezone: 'America/Argentina/Buenos_Aires',
+        })
+        return { user, created: true }
     }
 
-    console.log(`👤  Creando usuario ${TEST_EMAIL}...`)
-    const passwordHash = await bcrypt.hash(TEST_PASSWORD, 12)
-    const user = await User.create({
-        email: TEST_EMAIL,
-        passwordHash,
-        displayName: TEST_NAME,
-        baseCurrency: 'ARS',
-        timezone: 'America/Argentina/Buenos_Aires',
-    })
+    existing.displayName = displayName
+    existing.baseCurrency = 'ARS'
+    existing.timezone = 'America/Argentina/Buenos_Aires'
+    if (!(await bcrypt.compare(password, existing.passwordHash))) {
+        existing.passwordHash = await bcrypt.hash(password, 12)
+    }
+    await existing.save()
 
-    console.log('🏷️   Creando categorías predeterminadas...')
-    await Category.insertMany(
-        DEFAULT_CATEGORIES.map((cat) => ({
-            ...cat,
-            userId: user._id,
-            isDefault: true,
-            isArchived: false,
+    return { user: existing, created: false }
+}
+
+async function ensureDefaultCategories(userId: mongoose.Types.ObjectId) {
+    const result = await Category.bulkWrite(
+        DEFAULT_CATEGORIES.map((category) => ({
+            updateOne: {
+                filter: {
+                    userId,
+                    name: category.name,
+                    type: category.type,
+                },
+                update: {
+                    $set: {
+                        ...category,
+                        userId,
+                        isDefault: true,
+                        isArchived: false,
+                    },
+                },
+                upsert: true,
+            },
         }))
     )
 
-    console.log('🏦  Creando cuenta Efectivo...')
-    await Account.create({
-        userId: user._id,
-        name: 'Efectivo',
-        type: 'cash',
-        currency: 'ARS',
-        initialBalance: 0,
-        color: '#10B981',
-        isActive: true,
-        includeInNetWorth: true,
-        allowNegativeBalance: false,
-    })
-
-    console.log('✅  Seed completado:')
-    console.log(`    email:    ${TEST_EMAIL}`)
-    console.log(`    password: ${TEST_PASSWORD}`)
-    console.log(`    DB:       ${MONGODB_URI!.split('@')[1]?.split('?')[0] ?? 'configurada'}`)
-
-    await mongoose.disconnect()
+    return {
+        created: result.upsertedCount,
+        updated: result.modifiedCount,
+    }
 }
 
-seed().catch((e) => {
-    console.error('❌  Error en el seed:', e)
+async function ensureAccount(
+    userId: mongoose.Types.ObjectId,
+    name: string,
+    values: Record<string, unknown>
+) {
+    const account = await Account.findOne({ userId, name })
+    if (account) {
+        Object.assign(account, values)
+        await account.save()
+        return false
+    }
+
+    await Account.create({ userId, name, ...values })
+    return true
+}
+
+async function seedP2RecurringCandidate(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no está conectado para sembrar P2.')
+
+    const [account, category] = await Promise.all([
+        Account.findOne({ userId, name: P2_HISTORY_ACCOUNT_NAME }),
+        Category.findOne({
+            userId,
+            type: 'expense',
+            name: 'Servicios',
+            isArchived: false,
+        }),
+    ])
+    if (!account || !category) {
+        throw new Error('No se pudo resolver cuenta o categoría para el candidato P2.')
+    }
+
+    const now = new Date()
+    const transactions = db.collection('transactions')
+    const rows = Array.from({ length: 4 }, (_, index) => {
+        const date = new Date(now.getFullYear(), now.getMonth() - 3 + index, 12, 12)
+        return {
+            _id: new mongoose.Types.ObjectId(
+                `72${String(index + 1).padStart(22, '0')}`
+            ),
+            userId,
+            type: 'expense',
+            amount: 16_000,
+            currency: 'ARS',
+            date,
+            description: P2_CANDIDATE_DESCRIPTION,
+            categoryId: category._id,
+            sourceAccountId: account._id,
+            status: 'confirmed',
+            createdFrom: 'system',
+            tags: ['e2e-p2-recurring-candidate'],
+            createdAt: date,
+            updatedAt: date,
+        }
+    })
+
+    await Promise.all(rows.map((row) =>
+        transactions.replaceOne({ _id: row._id }, row, { upsert: true })
+    ))
+    await Promise.all([
+        FunctionalSuggestionDismissal.deleteMany({
+            userId,
+            subjectKey: P2_CANDIDATE_SUBJECT_KEY,
+        }),
+        ScheduledCommitment.deleteMany({
+            userId,
+            description: P2_CANDIDATE_DESCRIPTION,
+        }),
+    ])
+}
+
+async function seedFinancialSmokeData(email: string, password: string) {
+    const { user, created } = await ensureTestUser(
+        deriveFinancialSmokeEmail(email),
+        password,
+        FINANCIAL_SMOKE_USER_NAME
+    )
+    user.set('preferences.monthStartDay', 1)
+    user.set('preferences.consolidatedCurrency', 'ARS')
+    user.set('preferences.operationalStartDate', undefined)
+    await user.save()
+
+    await ensureDefaultCategories(user._id)
+    const [incomeCategory, expenseCategory] = await Promise.all([
+        Category.findOne({ userId: user._id, type: 'income', isArchived: false }),
+        Category.findOne({ userId: user._id, type: 'expense', isArchived: false }),
+    ])
+    if (!incomeCategory || !expenseCategory) {
+        throw new Error('No se pudieron resolver las categorías del smoke financiero.')
+    }
+
+    const db = mongoose.connection.db
+    if (!db) throw new Error('No se pudo obtener la base E2E.')
+
+    const id = (value: string) => new mongoose.Types.ObjectId(value)
+    const ids = Object.fromEntries(
+        Object.entries(FINANCIAL_SMOKE_IDS).map(([key, value]) => [
+            key,
+            id(value),
+        ])
+    ) as Record<keyof typeof FINANCIAL_SMOKE_IDS, mongoose.Types.ObjectId>
+    const { current, historical, dates } = buildFinancialSmokePeriods()
+    const now = new Date()
+    const timestamps = { createdAt: now, updatedAt: now }
+
+    const accounts = db.collection('accounts')
+    await Promise.all([
+        accounts.replaceOne(
+            { _id: ids.bankAccount },
+            {
+                _id: ids.bankAccount,
+                userId: user._id,
+                name: FINANCIAL_SMOKE_NAMES.bankAccount,
+                type: 'bank',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS', 'USD'],
+                defaultPaymentMethods: ['debit'],
+                initialBalance: 100_000,
+                initialBalances: { ARS: 100_000, USD: 1_000 },
+                color: '#0EA5E9',
+                isActive: true,
+                includeInNetWorth: true,
+                allowNegativeBalance: true,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        accounts.replaceOne(
+            { _id: ids.negativeAccount },
+            {
+                _id: ids.negativeAccount,
+                userId: user._id,
+                name: FINANCIAL_SMOKE_NAMES.negativeAccount,
+                type: 'cash',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS'],
+                defaultPaymentMethods: ['cash'],
+                initialBalance: 10_000,
+                initialBalances: { ARS: 10_000, USD: 0 },
+                color: '#F97316',
+                isActive: true,
+                includeInNetWorth: true,
+                allowNegativeBalance: true,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        accounts.replaceOne(
+            { _id: ids.creditCard },
+            {
+                _id: ids.creditCard,
+                userId: user._id,
+                name: FINANCIAL_SMOKE_NAMES.creditCard,
+                type: 'credit_card',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS', 'USD'],
+                defaultPaymentMethods: ['credit_card'],
+                initialBalance: 0,
+                initialBalances: { ARS: 0, USD: 0 },
+                color: '#6366F1',
+                isActive: true,
+                includeInNetWorth: true,
+                allowNegativeBalance: true,
+                creditCardConfig: {
+                    closingDay: 20,
+                    dueDay: 5,
+                    creditLimit: 500_000,
+                },
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    await db.collection('installmentplans').replaceOne(
+        { _id: ids.installmentPlan },
+        {
+            _id: ids.installmentPlan,
+            userId: user._id,
+            accountId: ids.creditCard,
+            categoryId: expenseCategory._id,
+            description: FINANCIAL_SMOKE_NAMES.installment,
+            merchant: 'E2E Store',
+            currency: 'ARS',
+            totalAmount: 120_000,
+            installmentCount: 3,
+            installmentAmount: 40_000,
+            purchaseDate: dates.installmentPurchase,
+            firstClosingMonth: current,
+            ...timestamps,
+        },
+        { upsert: true }
+    )
+
+    const baseTransaction = {
+        userId: user._id,
+        status: 'confirmed',
+        createdFrom: 'system',
+        tags: [FINANCIAL_SMOKE_TAG],
+        ...timestamps,
+    }
+    const transactions = db.collection('transactions')
+    const fixtureTransactions = [
+        {
+            _id: ids.historicalIncome,
+            ...baseTransaction,
+            type: 'income',
+            amount: 50_000,
+            currency: 'ARS',
+            date: dates.historicalIncome,
+            description: FINANCIAL_SMOKE_NAMES.historicalIncome,
+            categoryId: incomeCategory._id,
+            destinationAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.historicalExpenseArs,
+            ...baseTransaction,
+            type: 'expense',
+            amount: 20_000,
+            currency: 'ARS',
+            date: dates.historicalExpenseArs,
+            description: FINANCIAL_SMOKE_NAMES.historicalExpenseArs,
+            categoryId: expenseCategory._id,
+            sourceAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.historicalExpenseUsd,
+            ...baseTransaction,
+            type: 'expense',
+            amount: 100,
+            currency: 'USD',
+            date: dates.historicalExpenseUsd,
+            description: FINANCIAL_SMOKE_NAMES.historicalExpenseUsd,
+            categoryId: expenseCategory._id,
+            sourceAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.currentIncome,
+            ...baseTransaction,
+            type: 'income',
+            amount: 200_000,
+            currency: 'ARS',
+            date: dates.currentIncome,
+            description: FINANCIAL_SMOKE_NAMES.currentIncome,
+            categoryId: incomeCategory._id,
+            destinationAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.currentExpenseArs,
+            ...baseTransaction,
+            type: 'expense',
+            amount: 50_000,
+            currency: 'ARS',
+            date: dates.currentExpenseArs,
+            description: FINANCIAL_SMOKE_NAMES.currentExpenseArs,
+            categoryId: expenseCategory._id,
+            sourceAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.currentExpenseUsd,
+            ...baseTransaction,
+            type: 'expense',
+            amount: 300,
+            currency: 'USD',
+            date: dates.currentExpenseUsd,
+            description: FINANCIAL_SMOKE_NAMES.currentExpenseUsd,
+            categoryId: expenseCategory._id,
+            sourceAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.currentExchange,
+            ...baseTransaction,
+            type: 'exchange',
+            amount: 10_000,
+            currency: 'ARS',
+            destinationAmount: 10,
+            destinationCurrency: 'USD',
+            exchangeRate: 1_000,
+            date: dates.currentExchange,
+            description: FINANCIAL_SMOKE_NAMES.currentExchange,
+            sourceAccountId: ids.bankAccount,
+            destinationAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.negativeExpense,
+            ...baseTransaction,
+            type: 'expense',
+            amount: 25_000,
+            currency: 'ARS',
+            date: dates.negativeExpense,
+            description: FINANCIAL_SMOKE_NAMES.negativeExpense,
+            categoryId: expenseCategory._id,
+            sourceAccountId: ids.negativeAccount,
+        },
+        {
+            _id: ids.partialDebtPayment,
+            ...baseTransaction,
+            type: 'personal_debt_payment',
+            amount: 20_000,
+            currency: 'ARS',
+            date: dates.partialDebtPayment,
+            description: FINANCIAL_SMOKE_NAMES.partialDebtPayment,
+            sourceAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.paidDebtCollect,
+            ...baseTransaction,
+            type: 'personal_debt_collect',
+            amount: 150,
+            currency: 'USD',
+            date: dates.paidDebtCollect,
+            description: FINANCIAL_SMOKE_NAMES.paidDebtCollect,
+            destinationAccountId: ids.bankAccount,
+        },
+        {
+            _id: ids.installmentPurchase,
+            ...baseTransaction,
+            type: 'credit_card_expense',
+            amount: 120_000,
+            currency: 'ARS',
+            date: dates.installmentPurchase,
+            description: FINANCIAL_SMOKE_NAMES.installment,
+            categoryId: expenseCategory._id,
+            sourceAccountId: ids.creditCard,
+            installmentPlanId: ids.installmentPlan,
+        },
+    ]
+    await Promise.all(
+        fixtureTransactions.map((transaction) =>
+            transactions.replaceOne(
+                { _id: transaction._id },
+                transaction,
+                { upsert: true }
+            )
+        )
+    )
+
+    const debts = db.collection('debts')
+    await Promise.all([
+        debts.replaceOne(
+            { _id: ids.partialDebt },
+            {
+                _id: ids.partialDebt,
+                userId: user._id,
+                direction: 'payable',
+                sourceType: 'manual',
+                counterpartyNameSnapshot: FINANCIAL_SMOKE_NAMES.partialDebt,
+                amount: 100_000,
+                remainingAmount: 80_000,
+                currency: 'ARS',
+                status: 'partially_paid',
+                notes: FINANCIAL_SMOKE_TAG,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        debts.replaceOne(
+            { _id: ids.paidDebt },
+            {
+                _id: ids.paidDebt,
+                userId: user._id,
+                direction: 'receivable',
+                sourceType: 'manual',
+                counterpartyNameSnapshot: FINANCIAL_SMOKE_NAMES.paidDebt,
+                amount: 150,
+                remainingAmount: 0,
+                currency: 'USD',
+                status: 'paid',
+                notes: FINANCIAL_SMOKE_TAG,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    const movements = db.collection('debtmovements')
+    const fixtureMovements = [
+        {
+            _id: ids.partialDebtCreation,
+            userId: user._id,
+            debtId: ids.partialDebt,
+            type: 'creation',
+            amount: 100_000,
+            currency: 'ARS',
+            date: dates.historicalIncome,
+            notes: FINANCIAL_SMOKE_TAG,
+            createdAt: now,
+        },
+        {
+            _id: ids.partialDebtMovement,
+            userId: user._id,
+            debtId: ids.partialDebt,
+            type: 'payment',
+            amount: 20_000,
+            currency: 'ARS',
+            accountId: ids.bankAccount,
+            transactionId: ids.partialDebtPayment,
+            date: dates.partialDebtPayment,
+            notes: FINANCIAL_SMOKE_TAG,
+            createdAt: now,
+        },
+        {
+            _id: ids.paidDebtCreation,
+            userId: user._id,
+            debtId: ids.paidDebt,
+            type: 'creation',
+            amount: 150,
+            currency: 'USD',
+            date: dates.historicalExpenseUsd,
+            notes: FINANCIAL_SMOKE_TAG,
+            createdAt: now,
+        },
+        {
+            _id: ids.paidDebtMovement,
+            userId: user._id,
+            debtId: ids.paidDebt,
+            type: 'collect',
+            amount: 150,
+            currency: 'USD',
+            accountId: ids.bankAccount,
+            transactionId: ids.paidDebtCollect,
+            date: dates.paidDebtCollect,
+            notes: FINANCIAL_SMOKE_TAG,
+            createdAt: now,
+        },
+    ]
+    await Promise.all(
+        fixtureMovements.map((movement) =>
+            movements.replaceOne(
+                { _id: movement._id },
+                movement,
+                { upsert: true }
+            )
+        )
+    )
+
+    return { created, current, historical }
+}
+
+async function seedProjectionSmokeData(email: string, password: string) {
+    const { user, created } = await ensureTestUser(
+        deriveProjectionSmokeEmail(email),
+        password,
+        PROJECTION_SMOKE_USER_NAME
+    )
+    user.set('preferences.monthStartDay', 1)
+    user.set('preferences.consolidatedCurrency', 'ARS')
+    user.set('preferences.operationalStartDate', undefined)
+    user.set('preferences.projectionGrouping', 'type')
+    user.set('preferences.projectionMode', 'monthly')
+    user.set('preferences.projectionMonths', 6)
+    user.set('preferences.projectionChartCurrency', 'ARS')
+    await user.save()
+
+    await ensureDefaultCategories(user._id)
+    const expenseCategory = await Category.findOne({
+        userId: user._id,
+        type: 'expense',
+        isArchived: false,
+    })
+    if (!expenseCategory) throw new Error('No se pudo resolver la categoria para Proyeccion E2E.')
+
+    const db = mongoose.connection.db
+    if (!db) throw new Error('No se pudo obtener la base E2E para Proyeccion.')
+
+    await Promise.all([
+        db.collection('transactions').deleteMany({ userId: user._id }),
+        db.collection('installmentplans').deleteMany({ userId: user._id }),
+        db.collection('scheduledcommitments').deleteMany({ userId: user._id }),
+        db.collection('commitmentapplications').deleteMany({ userId: user._id }),
+    ])
+
+    const id = (value: string) => new mongoose.Types.ObjectId(value)
+    const ids = Object.fromEntries(
+        Object.entries(PROJECTION_SMOKE_IDS).map(([key, value]) => [key, id(value)])
+    ) as Record<keyof typeof PROJECTION_SMOKE_IDS, mongoose.Types.ObjectId>
+    const { current, dates } = buildProjectionSmokePeriod()
+    const now = new Date()
+    const timestamps = { createdAt: now, updatedAt: now }
+
+    await Promise.all([
+        db.collection('accounts').replaceOne(
+            { _id: ids.bankAccount },
+            {
+                _id: ids.bankAccount,
+                userId: user._id,
+                name: PROJECTION_SMOKE_NAMES.bankAccount,
+                type: 'bank',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS'],
+                initialBalance: 0,
+                initialBalances: { ARS: 0, USD: 0 },
+                color: '#0EA5E9',
+                isActive: true,
+                includeInNetWorth: true,
+                allowNegativeBalance: false,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('accounts').replaceOne(
+            { _id: ids.creditCard },
+            {
+                _id: ids.creditCard,
+                userId: user._id,
+                name: PROJECTION_SMOKE_NAMES.creditCard,
+                type: 'credit_card',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS', 'USD'],
+                initialBalance: 0,
+                initialBalances: { ARS: 0, USD: 0 },
+                color: '#6366F1',
+                isActive: true,
+                includeInNetWorth: false,
+                allowNegativeBalance: true,
+                creditCardConfig: { closingDay: 20, dueDay: 5, creditLimit: 1_000_000 },
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    const plans = db.collection('installmentplans')
+    await Promise.all([
+        plans.replaceOne(
+            { _id: ids.singlePlan },
+            {
+                _id: ids.singlePlan,
+                userId: user._id,
+                accountId: ids.creditCard,
+                categoryId: expenseCategory._id,
+                description: PROJECTION_SMOKE_NAMES.singlePlan,
+                currency: 'ARS',
+                totalAmount: 120_000,
+                installmentCount: 1,
+                installmentAmount: 120_000,
+                purchaseDate: dates.singlePurchase,
+                firstClosingMonth: current,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        plans.replaceOne(
+            { _id: ids.installmentPlan },
+            {
+                _id: ids.installmentPlan,
+                userId: user._id,
+                accountId: ids.creditCard,
+                categoryId: expenseCategory._id,
+                description: PROJECTION_SMOKE_NAMES.installmentPlan,
+                currency: 'USD',
+                totalAmount: 90,
+                installmentCount: 3,
+                installmentAmount: 30,
+                purchaseDate: dates.installmentPurchase,
+                firstClosingMonth: current,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    const transactionBase = {
+        userId: user._id,
+        type: 'credit_card_expense',
+        categoryId: expenseCategory._id,
+        sourceAccountId: ids.creditCard,
+        status: 'confirmed',
+        createdFrom: 'system',
+        ...timestamps,
+    }
+    const transactions = db.collection('transactions')
+    await Promise.all([
+        transactions.replaceOne(
+            { _id: ids.singleParent },
+            {
+                _id: ids.singleParent,
+                ...transactionBase,
+                amount: 120_000,
+                currency: 'ARS',
+                date: dates.singlePurchase,
+                description: PROJECTION_SMOKE_NAMES.singlePlan,
+                installmentPlanId: ids.singlePlan,
+            },
+            { upsert: true }
+        ),
+        transactions.replaceOne(
+            { _id: ids.installmentParent },
+            {
+                _id: ids.installmentParent,
+                ...transactionBase,
+                amount: 90,
+                currency: 'USD',
+                date: dates.installmentPurchase,
+                description: PROJECTION_SMOKE_NAMES.installmentPlan,
+                installmentPlanId: ids.installmentPlan,
+            },
+            { upsert: true }
+        ),
+        transactions.replaceOne(
+            { _id: ids.historicalSingle },
+            {
+                _id: ids.historicalSingle,
+                ...transactionBase,
+                amount: 15,
+                currency: 'USD',
+                date: dates.historicalSingle,
+                description: PROJECTION_SMOKE_NAMES.historicalSingle,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    await db.collection('scheduledcommitments').replaceOne(
+        { _id: ids.commitment },
+        {
+            _id: ids.commitment,
+            userId: user._id,
+            description: PROJECTION_SMOKE_NAMES.commitment,
+            amount: 70_000,
+            currency: 'ARS',
+            categoryId: expenseCategory._id,
+            accountId: ids.bankAccount,
+            recurrence: 'monthly',
+            dayOfMonth: 10,
+            applyMode: 'manual',
+            isActive: true,
+            lifecycleStatus: 'active',
+            startDate: dates.commitmentStart,
+            amountPolicy: 'fixed',
+            amountSchedule: [],
+            estimationMode: 'template',
+            aliases: [],
+            createdFrom: 'system',
+            ...timestamps,
+        },
+        { upsert: true }
+    )
+
+    return { created, current }
+}
+
+async function seed() {
+    const environment = resolveE2EEnvironment()
+    const {
+        MONGODB_URI,
+        TEST_USER_EMAIL,
+        TEST_USER_PASSWORD,
+    } = environment.variables
+
+    console.log(`🌱 Conectando a la base E2E ${environment.databaseName}...`)
+    await mongoose.connect(MONGODB_URI)
+
+    try {
+        const { user, created: userCreated } = await ensureTestUser(
+            TEST_USER_EMAIL,
+            TEST_USER_PASSWORD
+        )
+        await resetGeneralE2EFinancialData(user._id)
+        const categories = await ensureDefaultCategories(user._id)
+        const cashCreated = await ensureAccount(user._id, 'Efectivo', {
+            type: 'cash',
+            currency: 'ARS',
+            supportedCurrencies: ['ARS'],
+            defaultPaymentMethods: ['cash'],
+            initialBalance: 0,
+            initialBalances: { ARS: 0, USD: 0 },
+            color: '#10B981',
+            isActive: true,
+            includeInNetWorth: true,
+            allowNegativeBalance: false,
+        })
+        const cardCreated = await ensureAccount(user._id, 'Tarjeta E2E', {
+            type: 'credit_card',
+            currency: 'ARS',
+            supportedCurrencies: ['ARS', 'USD'],
+            defaultPaymentMethods: ['credit_card'],
+            initialBalance: 0,
+            initialBalances: { ARS: 0, USD: 0 },
+            color: '#6366F1',
+            isActive: true,
+            includeInNetWorth: false,
+            allowNegativeBalance: true,
+            creditCardConfig: {
+                closingDay: 20,
+                dueDay: 5,
+                creditLimit: 1_000_000,
+            },
+        })
+        const p2HistoryCreated = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
+            type: 'cash',
+            currency: 'ARS',
+            supportedCurrencies: ['ARS'],
+            defaultPaymentMethods: ['cash'],
+            initialBalance: 100_000,
+            initialBalances: { ARS: 100_000, USD: 0 },
+            color: '#14B8A6',
+            isActive: true,
+            includeInNetWorth: false,
+            allowNegativeBalance: false,
+        })
+        await seedP2RecurringCandidate(user._id)
+        const financialSmoke = await seedFinancialSmokeData(
+            TEST_USER_EMAIL,
+            TEST_USER_PASSWORD
+        )
+        const projectionSmoke = await seedProjectionSmokeData(
+            TEST_USER_EMAIL,
+            TEST_USER_PASSWORD
+        )
+
+        console.log('✅ Seed E2E verificado:')
+        console.log(`   Usuario: ${userCreated ? 'creado' : 'actualizado'}`)
+        console.log(
+            `   Categorías: ${categories.created} creadas, ${categories.updated} actualizadas`
+        )
+        console.log(
+            `   Cuentas base: ${Number(cashCreated) + Number(cardCreated) + Number(p2HistoryCreated)} creadas`
+        )
+        console.log('   P2: candidato mensual explicable verificado')
+        console.log(
+            `   Smoke financiero: usuario ${financialSmoke.created ? 'creado' : 'actualizado'}, ` +
+            `períodos ${financialSmoke.historical} y ${financialSmoke.current}`
+        )
+        console.log(
+            `   Proyección: usuario ${projectionSmoke.created ? 'creado' : 'actualizado'}, ` +
+            `período ${projectionSmoke.current}`
+        )
+    } finally {
+        await mongoose.disconnect()
+    }
+}
+
+seed().catch((error) => {
+    const message = error instanceof Error ? error.message : 'Error desconocido'
+    console.error(`❌ Seed E2E fallido: ${message}`)
     process.exit(1)
 })

@@ -11,9 +11,28 @@ import { normalizeManualExchange } from '@/lib/utils/exchange'
 import { resolveTransactionDescription } from '@/lib/utils/transaction-description'
 import { getBalanceBeforeReplacingTransaction } from '@/lib/utils/transaction-account-impact'
 import { recordTransactionLearningEvent } from '@/lib/server/quick-capture-learning'
-import { unlinkTransactionDependents } from '@/lib/server/transaction-teardown'
+import {
+    normalizePaymentGroup,
+    unlinkTransactionDependents,
+} from '@/lib/server/transaction-teardown'
 import { resolveRuleTraceForEdit } from '@/lib/server/transactions'
 import { syncApplicationSnapshotFromTransaction } from '@/lib/server/commitments'
+
+type DeleteTransaction = {
+    _id: { toString(): string }
+    type: string
+    amount?: number
+    currency?: string
+    date?: Date
+    description?: string
+    merchant?: string
+    sourceAccountId?: unknown
+    destinationAccountId?: unknown
+    categoryId?: unknown
+    paymentGroupId?: string | null
+    installmentPlanId?: unknown
+    updatedAt?: Date
+}
 
 export async function GET(
     request: Request,
@@ -43,7 +62,26 @@ export async function GET(
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
         }
 
-        return NextResponse.json({ transaction })
+        const paymentGroupMembers = transaction.paymentGroupId
+            ? await Transaction.find({
+                userId: session.user.id,
+                paymentGroupId: transaction.paymentGroupId,
+            }).select('_id amount currency')
+            : []
+
+        return NextResponse.json({
+            transaction,
+            paymentGroup: transaction.paymentGroupId
+                ? {
+                    id: transaction.paymentGroupId,
+                    members: paymentGroupMembers.map((member) => ({
+                        id: member._id.toString(),
+                        amount: member.amount,
+                        currency: member.currency,
+                    })),
+                }
+                : null,
+        })
     } catch (error) {
         console.error('Error al obtener transacción:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -380,30 +418,35 @@ export async function DELETE(
         }
 
         const { id } = await params
+        const searchParams = new URL(request.url).searchParams
+        const scope = searchParams.get('scope') ?? 'single'
+        if (scope !== 'single' && scope !== 'group') {
+            return NextResponse.json(
+                { error: 'El alcance de borrado debe ser single o group.' },
+                { status: 400 }
+            )
+        }
 
         await connectDB()
 
         const existing = await Transaction.findOne({
             _id: id,
             userId: session.user.id,
-        }).lean<{
-            _id: { toString(): string }
-            type: string
-            currency?: string
-            description?: string
-            merchant?: string
-            sourceAccountId?: unknown
-            destinationAccountId?: unknown
-            categoryId?: unknown
-            paymentGroupId?: string | null
-            updatedAt?: Date
-        } | null>()
+        }).lean<DeleteTransaction | null>()
 
         if (!existing) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
         }
 
-        if (isNonOperationalTransactionType(existing.type)) {
+        const targets: DeleteTransaction[] =
+            scope === 'group' && existing.paymentGroupId
+                ? await Transaction.find({
+                    userId: session.user.id,
+                    paymentGroupId: existing.paymentGroupId,
+                }).lean<DeleteTransaction[]>()
+                : [existing]
+
+        if (targets.some((target) => isNonOperationalTransactionType(target.type))) {
             return NextResponse.json(
                 {
                     error: 'Esta transacción es parte de un pago/cobro de deuda. Gestionala desde Deudas.',
@@ -416,27 +459,45 @@ export async function DELETE(
         // Se desvincula antes de borrar: si el borrado falla, no queda una
         // aplicación revertida apuntando a una transacción que sigue viva... y si
         // se hiciera después, un fallo dejaría los huérfanos que había hasta ahora.
-        const teardown = await unlinkTransactionDependents(session.user.id, existing)
+        const teardowns = []
+        for (const target of targets) {
+            teardowns.push(await unlinkTransactionDependents(session.user.id, target))
+        }
 
-        const transaction = await Transaction.findOneAndDelete({
-            _id: id,
-            userId: session.user.id,
-        })
+        let deletedTransactions: DeleteTransaction[]
+        if (scope === 'group' && existing.paymentGroupId) {
+            await Transaction.deleteMany({
+                userId: session.user.id,
+                _id: { $in: targets.map((target) => target._id) },
+            })
+            deletedTransactions = targets
+        } else {
+            const transaction = await Transaction.findOneAndDelete({
+                _id: id,
+                userId: session.user.id,
+            })
+            deletedTransactions = transaction ? [transaction as DeleteTransaction] : []
+        }
 
-        if (!transaction) {
+        if (deletedTransactions.length === 0) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
         }
 
+        const normalizedGroup = await normalizePaymentGroup(
+            session.user.id,
+            existing.paymentGroupId
+        )
+
         try {
-            const isUndo =
-                new URL(request.url).searchParams.get('reason') ===
-                'quick_capture_undo'
-            await recordTransactionLearningEvent({
-                userId: session.user.id,
-                type: isUndo ? 'transaction_undone' : 'transaction_deleted',
-                transaction,
-                eventId: `${isUndo ? 'transaction_undone' : 'transaction_deleted'}:${transaction._id.toString()}`,
-            })
+            const isUndo = searchParams.get('reason') === 'quick_capture_undo'
+            for (const transaction of deletedTransactions) {
+                await recordTransactionLearningEvent({
+                    userId: session.user.id,
+                    type: isUndo ? 'transaction_undone' : 'transaction_deleted',
+                    transaction,
+                    eventId: `${isUndo ? 'transaction_undone' : 'transaction_deleted'}:${transaction._id.toString()}`,
+                })
+            }
         } catch (learningError) {
             console.error(
                 'No se pudo registrar el aprendizaje del borrado:',
@@ -446,13 +507,25 @@ export async function DELETE(
 
         // Se devuelve qué se revirtió para que el toast pueda explicarlo en vez
         // de que el usuario descubra el efecto colateral por su cuenta.
+        const primaryTeardown = teardowns[0]
         return NextResponse.json({
-            message: 'Transacción eliminada correctamente',
+            message: scope === 'group' && deletedTransactions.length > 1
+                ? 'Pago completo eliminado correctamente'
+                : 'Transacción eliminada correctamente',
+            deletedCount: deletedTransactions.length,
+            scope,
             reverted: {
-                commitment: teardown.revertedCommitment ?? null,
-                personalImpact: teardown.unlinkedPersonalImpact,
-                notifications: teardown.resolvedNotifications,
-                orphanPaymentSiblingId: teardown.orphanPaymentSiblingId ?? null,
+                commitment: primaryTeardown?.revertedCommitment ?? null,
+                installmentPlan: primaryTeardown?.deletedInstallmentPlan ?? null,
+                personalImpact: teardowns.some((teardown) => teardown.unlinkedPersonalImpact),
+                notifications: teardowns.reduce(
+                    (total, teardown) => total + teardown.resolvedNotifications,
+                    0
+                ),
+                orphanPaymentSiblingId:
+                    normalizedGroup?.clearedMemberIds[0] ??
+                    primaryTeardown?.orphanPaymentSiblingId ??
+                    null,
             },
         })
     } catch (error) {

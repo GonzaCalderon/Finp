@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-31
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -31,13 +31,16 @@ Estado general:
 - Espacios y Deudas operativos;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- falta cerrar E2E, validación con datos reales y algunos flujos mobile antes de una liberación más amplia.
+- E2E local reproducible en una base aislada;
+- smoke financiero real aprobado;
+- falta rotar la credencial de pruebas para que el job E2E ya configurado pueda
+  ejecutarse en CI.
 
 La especificación completa está en [`especificacion_funcional.md`](especificacion_funcional.md). Las prioridades viven sólo en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-07-25 sobre `dev`:
+Verificado localmente el 2026-07-28 sobre `dev` (`d8ae0e6`):
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -46,21 +49,27 @@ Verificado localmente el 2026-07-25 sobre `dev`:
 - typecheck limpio;
 - ESLint limpio;
 - build de producción limpio, con 63 páginas generadas;
-- 621 unit tests aprobados en 74 archivos;
-- 5 tests declarados como `todo`;
-- 40 escenarios E2E registrados para desktop y mobile;
-- E2E no ejecutados en esta revisión porque falta `.env.test.local`;
+- 745 unit tests aprobados en 92 archivos, sin tests en `todo`;
+- 52 de 52 escenarios E2E aprobados para desktop y mobile;
+- preflight E2E sin conexión y seed repetible implementados; ambos rechazan
+  bases sin marcador explícito o iguales a desarrollo;
+- `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
+  desarrollo conserva `finm`;
+- el seed se ejecutó dos veces: reparó los usuarios general y financiero, sus
+  categorías, cuentas y datos representativos sin duplicados; el usuario general
+  se restaura sin tocar el usuario independiente del smoke financiero;
 - CI activo para lint, build y unit tests;
-- job E2E preparado, pero desactivado.
+- job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
+  la rotación.
 
 Ramas:
 
 - `main`: producción;
 - `dev`: desarrollo;
-- al momento de la revisión, `dev` coincide con su referencia local `origin/dev`.
-- las referencias remotas disponibles muestran historia divergente: 13 commits exclusivos de `origin/main` y 12 de `origin/dev`;
-- la mayoría de los commits exclusivos de `main` son merges de releases, pero `main` no es ancestro de `dev`;
-- se debe ejecutar un fetch y auditar contenido antes de normalizar la historia.
+- `dev` coincide con `origin/dev` en `d8ae0e6`;
+- `origin/main` es ancestro de `origin/dev` y está 17 commits detrás;
+- la rama local `main` está 87 commits detrás de `origin/main` y no se usa para
+  trabajo hasta actualizarla de forma autorizada.
 
 ## 3. Finanzas personales
 
@@ -74,6 +83,10 @@ Ramas:
 - saldo disponible acumulado separado del resultado del período;
 - cashflow y visualizaciones;
 - tarjetas y planes de cuotas;
+- resumen de tarjeta por período y moneda con total, pagado, pendiente, crédito
+  y estado `sin consumos`, `impaga`, `parcial`, `pagada` o `saldo a favor`;
+- pagos de tarjeta duales vinculados como una misma intención, con borrado
+  explícito de una parte o del grupo completo;
 - importación Excel con revisión;
 - fecha de inicio operativo;
 - ocultamiento global de montos;
@@ -84,20 +97,19 @@ Ramas:
 - arrastre de saldos negativos entre períodos;
 - pagos y cobros de deuda sin impacto operacional;
 - corrección del doble descuento de compras en cuotas;
+- baja del plan de cuotas junto con su compra originaria, sin cuotas
+  proyectadas de una compra eliminada;
 - patrimonio con tarjetas y deudas personales;
 - consistencia de préstamos entre Dashboard y Transacciones;
 - compra/venta de USD con cuentas, montos y cotización coherentes.
 
-### Validación pendiente
+### Validación real
 
-El código y los tests cubren las reglas principales, pero falta smoke con datos reales para:
-
-- saldo acumulado e histórico;
-- pago total y parcial de deuda;
-- cuotas;
-- períodos con inicio personalizado;
-- ARS/USD;
-- saldos negativos.
+El smoke sobre `finp-e2e` compara Dashboard, Transacciones, Cuentas y Deudas para
+el período actual y el anterior. Cubre saldo acumulado, saldo negativo, ARS/USD,
+cuotas y pagos total y parcial de deuda, con capturas mobile y desktop adjuntas al
+reporte de Playwright. El inicio de período personalizado mantiene cobertura
+unitaria, pero no forma parte de este fixture remoto.
 
 ## 4. Captura, reglas y aprendizaje
 
@@ -105,6 +117,13 @@ El código y los tests cubren las reglas principales, pero falta smoke con datos
 
 - acceso desde FAB y tecla `Q`;
 - parser de gasto/ingreso, monto, moneda, fecha, descripción, cuenta, categoría y comercio;
+- candidatos mensuales compartidos con Compromisos, cargados de forma diferida,
+  con la misma evidencia, identidad y descarte;
+- clasificación determinista de compra con tarjeta, compra en cuotas, pago de
+  resumen y referencia a una cuota existente;
+- compra en un pago confirmable con impacto y primer mes editable;
+- selector compacto cuando la tarjeta es ambigua;
+- handoff tipado de cuotas y pagos, sin perder borrador ni procedencia;
 - autocompletado y resumen vivo;
 - preview sin escritura;
 - impacto de saldo;
@@ -141,9 +160,21 @@ Captura rápida distingue:
 
 - transacción independiente;
 - aplicación de compromiso pendiente;
-- preparación de un compromiso nuevo.
+- preparación de un compromiso nuevo, incluido un candidato mensual aprendido;
+- compra con tarjeta en un pago o en cuotas;
+- pago de resumen;
+- revisión de una cuota existente.
 
-Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrador tipado, versionado y con procedencia.
+Puede aplicar el pendiente dentro del diálogo o abrir Compromisos y Tarjetas con
+un borrador tipado, versionado y con procedencia. Una intención de tarjeta nunca
+se ofrece como gasto simple.
+
+El embudo cierra: aceptar el CTA y completar la función se registran como estados
+distintos, y Compromisos anota la derivación completada una sola vez por borrador.
+
+Los consumos en un pago se registran dentro del diálogo. Las cuotas y los pagos
+se confirman en el flujo completo; la cuenta de origen de un pago siempre la
+elige el usuario.
 
 ## 5. Compromisos y proyección
 
@@ -175,8 +206,25 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - estados derivados;
 - procedencia visible;
 - proyección con monto correcto por período;
+- proyección de compras `1/1`, consumos históricos sin plan y cuotas múltiples,
+  sin doble conteo y con ARS/USD separados;
+- clasificación compartida con Tarjetas y Dashboard: `1/1` es un pago y sólo
+  los planes mayores a una cuota se presentan como cuotas;
+- vista inicial por tipo y próximos seis períodos, con Año calendario como modo
+  secundario;
+- agrupación por tipo, tarjeta o categoría sobre la misma lista canónica;
+- resumen y gráfico apilado por Compromisos, `TC · un pago` y `TC · cuotas`;
+- certeza visible, estimaciones advertidas y montos pendientes sin `$0`;
+- cuenta habitual o vencimiento como contexto y enlaces filtrados sin montos;
+- preferencias por usuario para agrupación, modo, horizonte y moneda del
+  gráfico, con fallback local e hidratación estable;
+- ocultamiento global de montos, error recuperable, reintento, cancelación de
+  respuestas obsoletas e invalidación desde datos dependientes;
+- componentes compartidos mobile/desktop, expansión accesible y soporte de
+  dark mode y movimiento reducido;
 - actualización opcional de períodos futuros sin reescribir historia;
-- backfill idempotente con modo `dry-run`.
+- backfill idempotente con modo `dry-run`, aplicado y verificado sobre `finm` el
+  2026-07-28.
 
 ### No disponible todavía
 
@@ -185,7 +233,12 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - índices oficiales;
 - scheduler para `auto_month_start`;
 - notificaciones push o recordatorios fuera de la aplicación;
-- escenarios avanzados de proyección.
+- centro de análisis histórico por categoría, cuenta, tarjeta y método de pago;
+- objetivos y límites por categoría;
+- escenarios avanzados de proyección;
+- cashflow proyectado por cuenta;
+- compromisos compartidos, parte propia, adelantos y recuperables dentro de
+  Proyección.
 
 ## 6. Espacios
 
@@ -207,7 +260,11 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - configuración General y Mi Finp;
 - impacto personal privado;
 - categoría automática, fija o mapeada;
-- revisión cuando cambia el origen.
+- alta y baja del impacto personal desde el movimiento del Espacio; quitarlo
+  elimina la transacción personal vinculada sin alterar el origen compartido;
+- revisión cuando cambia el origen;
+- reconciliación de pendientes al cambiar el reparto: se actualizan, cancelan o
+  crean según quién deba decidir con el reparto nuevo.
 
 ### No disponible todavía
 
@@ -231,11 +288,13 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - consolidación por relación;
 - timeline;
 - sincronización idempotente desde Espacios;
-- operación atómica entre cuenta, deuda y movimiento.
+- operación atómica entre cuenta, deuda y movimiento;
+- detalle inferior en mobile y lateral en desktop, con continuidad al volver a
+  la relación;
+- alta, pago y cobro responsive con encabezado y acciones fuera del scroll.
 
 ### Experiencia por cerrar
 
-- detalle y resolución de pendientes en mobile;
 - integración más profunda con tarjetas;
 - registrar un préstamo en Finp desde Deudas.
 
@@ -255,15 +314,11 @@ Puede aplicar el pendiente dentro del diálogo o abrir Compromisos con un borrad
 - deduplicación y resolución de estados obsoletos;
 - polling, foco y visibilidad.
 
-### Cobertura pendiente
+### Cobertura
 
-Cinco unit tests permanecen como `todo`:
-
-- archivar/restaurar por swipe;
-- descartar por swipe sin resolver la acción;
-- cambios de monto en pendientes de Espacios;
-- usuario removido de un split;
-- usuario agregado a un split.
+No quedan unit tests en `todo`. Están cubiertos el swipe en ambos sentidos, que
+leer, archivar, restaurar y descartar no resuelvan la acción pendiente, y la
+reconciliación de pendientes cuando cambia el reparto de un movimiento.
 
 ## 9. Experiencia y plataformas
 
@@ -295,14 +350,19 @@ Mobile web sigue siendo la superficie prioritaria.
 - cobertura unitaria amplia de dominio;
 - servicios compartidos para reglas financieras;
 - tests de privacidad, aislamiento e idempotencia;
+- orquestación de NavInsights cubierta en período, aislamiento y señales;
 - Playwright preparado para Chromium desktop y mobile;
-- CI para verificaciones principales;
+- preflight E2E compartido por configuración, seed y Playwright;
+- seed repetible que repara los usuarios general, financiero y de Proyección,
+  categorías, cuentas y datasets representativos;
+- suite completa aprobada contra `finp-e2e` sin escrituras en desarrollo;
+- CI para verificaciones principales y job E2E listo para ejecutarse apenas
+  reciba la credencial rotada;
 - build de producción reproducible.
 
 ### Brechas
 
-- E2E fuera del CI;
-- falta `.env.test.local` estándar para ejecución local;
+- primera ejecución remota de E2E bloqueada por la rotación de credenciales;
 - cobertura de integración/API desigual;
 - validación visual y accesibilidad no sistematizadas;
 - cobertura no bloquea CI;
@@ -310,32 +370,32 @@ Mobile web sigue siendo la superficie prioritaria.
 
 ## 11. Limitaciones conocidas
 
-- `InstallmentPlan` no se limpia al eliminar la transacción que lo originó.
-- El hermano de un pago dual con `paymentGroupId` se reporta, pero no se elimina por inferencia.
-- `intent_completed` no se emite al crear un compromiso desde un borrador.
-- `getNavInsightsForUser` no tiene test de integración.
+- Los grupos históricos de pagos duales se reparan sólo con
+  `npm run repair:payment-groups`; el comando es `dry-run` por defecto y no debe
+  aplicarse sin identificar la base y revisar el resultado.
 - `auto_month_start` no tiene scheduler.
-- La detección híbrida de candidatos a compromiso está implementada, incluye el
-  caso de control Pizza y sigue pendiente de validación E2E con datos reales
-  representativos.
-- La orientación aún no cubre reglas, cuotas, Deudas, Espacios e Importación.
-- La proyección no distingue completamente cuotas de consumos de un pago.
+- La orientación aún no cubre reglas, Deudas, Espacios e Importación.
+- La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
+  elegir.
+- Proyección no calcula cashflow por cuenta ni escenarios y todavía no incluye
+  compromisos compartidos, parte propia, adelantos o recuperables.
+- No existe una superficie dedicada para análisis histórico, patrones,
+  anomalías, objetivos y límites por categoría.
 - No hay realtime ni offline.
 
 Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Commit `429352a`, 2026-07-24:
+Cierre operativo de Proyección, 2026-07-31:
 
-- compromisos personales variables;
-- agenda y snapshots;
-- orientación desde Captura rápida;
-- borradores con procedencia;
-- onboarding y ayuda contextual;
-- descartes funcionales;
-- reevaluación de reglas al editar;
-- cascada de limpieza de compromisos, impactos y notificaciones;
-- período financiero unificado en lista, Dashboard, Proyección e insights.
-
-Documentación técnica: [`../tecnico/compromisos_variables_y_orientacion.md`](../tecnico/compromisos_variables_y_orientacion.md).
+- contrato compartido y serializable con fuente, certeza, contexto, enlaces y
+  totales separados;
+- compras `1/1`, históricos sin plan y cuotas incluidos en el período correcto,
+  sin contar la transacción padre ni pagos de tarjeta;
+- agrupaciones por tipo, tarjeta y categoría con los mismos ítems y totales;
+- seis meses por defecto, Año calendario, resumen, gráfico y detalle expandible;
+- preferencias privadas, fallback local, hidratación estable e invalidaciones;
+- carga, vacío, período vacío, error, reintento, privacidad, accesibilidad,
+  contenido largo, dark mode y movimiento reducido;
+- verificación unitaria, API/servicio y E2E aislada en desktop y Pixel 7.

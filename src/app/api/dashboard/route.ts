@@ -10,8 +10,8 @@ import {
     getRefColor,
     getRefId,
     getRefName,
-    isCreditCardPaymentType,
     normalizeLegacyTransactionType,
+    type CardPaymentState,
 } from '@/lib/utils/credit-card'
 import { getInitialBalancesByCurrency, getPrimaryCurrency, normalizeSupportedCurrencies } from '@/lib/utils/accounts'
 import { getTransactionAccountImpact } from '@/lib/utils/transaction-account-impact'
@@ -26,16 +26,18 @@ import { COMMITMENT_APPLICATION_STATUSES, DEBT_STATUSES } from '@/lib/constants'
 import { countOccurrencesInPeriod } from '@/lib/server/projection'
 import { resolveCommitmentAmountForPeriod } from '@/lib/server/commitment-amounts'
 import { resolveCommitmentOccurrenceForPeriod } from '@/lib/utils/commitment-dates'
+import {
+    addCurrencyAmount,
+    addCurrencyTotals,
+    emptyCurrencyTotals,
+    subtractCurrencyTotals,
+    type CurrencyTotals,
+} from '@/lib/utils/currency-totals'
 
 type PopulatedCategoryRef = {
     _id: { toString: () => string }
     name: string
     color?: string
-}
-
-type CurrencyTotals = {
-    ars: number
-    usd: number
 }
 
 type CreditCardOverview = {
@@ -50,36 +52,11 @@ type CreditCardOverview = {
     monthlyDue: CurrencyTotals
     monthlyPaid: CurrencyTotals
     monthlyPending: CurrencyTotals
+    monthlyCredit: CurrencyTotals
+    paymentState: CardPaymentState
     activeInstallments: number
     activeCharges: number
     latestPurchaseDate?: string
-}
-
-function emptyCurrencyTotals(): CurrencyTotals {
-    return { ars: 0, usd: 0 }
-}
-
-function addCurrencyAmount(totals: CurrencyTotals, currency: string, amount: number) {
-    if (currency === 'USD') totals.usd += amount
-    else totals.ars += amount
-}
-
-function subtractCurrencyTotals(income: CurrencyTotals, expense: CurrencyTotals): CurrencyTotals {
-    return {
-        ars: income.ars - expense.ars,
-        usd: income.usd - expense.usd,
-    }
-}
-
-function addCurrencyTotals(left: CurrencyTotals, right: CurrencyTotals): CurrencyTotals {
-    return {
-        ars: left.ars + right.ars,
-        usd: left.usd + right.usd,
-    }
-}
-
-function compareCurrencyTotals(left: CurrencyTotals, right: CurrencyTotals): number {
-    return right.ars + right.usd - (left.ars + left.usd)
 }
 
 function getExchangeNet(
@@ -311,18 +288,20 @@ export async function GET(request: Request) {
         })
 
         const totalCreditCardExpense = currentCardSummary.reduce((totals, item) => {
-            item.items.forEach((charge) => addCurrencyAmount(totals, charge.currency, charge.amount))
+            totals.ars += item.due.ars
+            totals.usd += item.due.usd
             return totals
         }, emptyCurrencyTotals())
         const prevTotalCreditCardExpense = prevCardSummary.reduce((totals, item) => {
-            item.items.forEach((charge) => addCurrencyAmount(totals, charge.currency, charge.amount))
+            totals.ars += item.due.ars
+            totals.usd += item.due.usd
             return totals
         }, emptyCurrencyTotals())
 
-        const totalCardPayments = transactions
-            .filter((transaction) => isCreditCardPaymentType(transaction.type))
-            .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+        const totalCardPayments = currentCardSummary
+            .reduce((totals, summary) => {
+                totals.ars += summary.paid.ars
+                totals.usd += summary.paid.usd
                 return totals
             }, emptyCurrencyTotals())
 
@@ -384,10 +363,10 @@ export async function GET(request: Request) {
                 addCurrencyAmount(totals, transaction.currency, getOperationalExpenseAmount(transaction))
                 return totals
             }, emptyCurrencyTotals())
-        const prevCardPayments = prevTransactions
-            .filter((transaction) => isCreditCardPaymentType(transaction.type))
-            .reduce((totals, transaction) => {
-                addCurrencyAmount(totals, transaction.currency, transaction.amount)
+        const prevCardPayments = prevCardSummary
+            .reduce((totals, summary) => {
+                totals.ars += summary.paid.ars
+                totals.usd += summary.paid.usd
                 return totals
             }, emptyCurrencyTotals())
         const prevExpense = {
@@ -709,25 +688,10 @@ export async function GET(request: Request) {
             .filter((account) => account.type === 'credit_card')
             .map<CreditCardOverview>((account) => {
                 const summary = currentCardSummary.find((item) => item.cardId === account._id.toString())
-                const monthlyDue = (summary?.items ?? []).reduce((totals, item) => {
-                    addCurrencyAmount(totals, item.currency, item.amount)
-                    return totals
-                }, emptyCurrencyTotals())
-                const monthlyPaid = transactions
-                    .filter(
-                        (transaction) =>
-                            isCreditCardPaymentType(transaction.type) &&
-                            getRefId(transaction.destinationAccountId) === account._id.toString()
-                    )
-                    .reduce((totals, transaction) => {
-                        addCurrencyAmount(totals, transaction.currency, transaction.amount)
-                        return totals
-                    }, emptyCurrencyTotals())
-
-                const monthlyPending = {
-                    ars: Math.max(0, monthlyDue.ars - monthlyPaid.ars),
-                    usd: Math.max(0, monthlyDue.usd - monthlyPaid.usd),
-                }
+                const monthlyDue = summary?.due ?? emptyCurrencyTotals()
+                const monthlyPaid = summary?.paid ?? emptyCurrencyTotals()
+                const monthlyPending = summary?.pending ?? emptyCurrencyTotals()
+                const monthlyCredit = summary?.credit ?? emptyCurrencyTotals()
 
                 const latestTransactionDate = transactions.reduce<string | undefined>((latest, transaction) => {
                     const normalizedType = normalizeLegacyTransactionType(transaction.type)
@@ -765,6 +729,8 @@ export async function GET(request: Request) {
                     monthlyDue,
                     monthlyPaid,
                     monthlyPending,
+                    monthlyCredit,
+                    paymentState: summary?.state ?? 'no_charges',
                     activeInstallments:
                         summary?.items.filter((item) => item.kind === 'installment').length ?? 0,
                     activeCharges: summary?.items.length ?? 0,
@@ -772,11 +738,9 @@ export async function GET(request: Request) {
                 }
             })
             .sort((a, b) => {
-                const pendingDiff = compareCurrencyTotals(a.monthlyPending, b.monthlyPending)
-                if (pendingDiff !== 0) return pendingDiff
-                const dueDiff = compareCurrencyTotals(a.monthlyDue, b.monthlyDue)
-                if (dueDiff !== 0) return dueDiff
-                return b.activeInstallments - a.activeInstallments
+                return b.monthlyDue.ars - a.monthlyDue.ars ||
+                    b.monthlyDue.usd - a.monthlyDue.usd ||
+                    a.name.localeCompare(b.name, 'es')
             })
 
         const recentTransactions = [...transactions]

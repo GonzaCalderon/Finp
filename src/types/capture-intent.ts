@@ -1,4 +1,5 @@
 import type { Currency } from '@/lib/constants'
+import type { TransactionFormInput } from '@/lib/validations'
 
 /**
  * Contrato de las sugerencias funcionales de Captura rápida.
@@ -47,6 +48,60 @@ export type DraftFieldSource =
     | 'learned'
     | 'default'
     | 'commitment'
+
+export interface CardPurchaseDraftFields {
+    type: 'credit_card_expense'
+    amount: number
+    currency: Currency
+    date: string
+    description: string
+    categoryId: string
+    merchant: string
+    cardAccountId: string
+    installmentCount: number
+    firstClosingMonth: string
+}
+
+export interface CardPaymentDraftFields {
+    type: 'credit_card_payment'
+    amount: number
+    currency: Currency
+    date: string
+    description: string
+    destinationAccountId: string
+}
+
+export type FunctionalSuggestionDraft =
+    | {
+        kind: 'commitment'
+        fields: Partial<CommitmentDraftFields>
+        provenance: Partial<Record<keyof CommitmentDraftFields, DraftFieldSource>>
+    }
+    | {
+        kind: 'card_purchase'
+        fields: Partial<CardPurchaseDraftFields>
+        provenance: Partial<Record<keyof CardPurchaseDraftFields, DraftFieldSource>>
+    }
+    | {
+        kind: 'card_payment'
+        fields: Partial<CardPaymentDraftFields>
+        provenance: Partial<Record<keyof CardPaymentDraftFields, DraftFieldSource>>
+    }
+    | {
+        kind: 'card_review'
+        fields: { href: string }
+        provenance: Record<string, never>
+    }
+
+export type CaptureTransactionLaunchDraft = Partial<TransactionFormInput> & {
+    installmentCount?: number
+    firstClosingMonth?: string
+    origin?: 'quick_capture'
+    captureIntent?: CaptureIntent
+    captureSessionId?: string
+    allowPotentialDuplicate?: boolean
+    requireSourceAccountSelection?: boolean
+}
 
 export interface CaptureDraftEnvelope<TFields> {
     version: number
@@ -104,12 +159,15 @@ export interface FunctionalSuggestion {
      * responsable llevando el borrador.
      */
     destination: { kind: 'inline' } | { kind: 'route'; href: string }
+    draft?: FunctionalSuggestionDraft
     /**
      * Campos y procedencia listos para transportar. El sobre lo arma el cliente,
      * que es quien conoce el `sessionId` de la captura en curso.
      */
     draftFields?: Partial<CommitmentDraftFields>
     draftProvenance?: Partial<Record<keyof CommitmentDraftFields, DraftFieldSource>>
+    /** Las clasificaciones financieras obligatorias no se pueden silenciar. */
+    canPersistDismissal?: boolean
     actions: FunctionalSuggestionAction[]
     state: FunctionalSuggestionState
     /** Datos de la aplicación pendiente, cuando la intención es aplicarla. */
@@ -122,5 +180,12 @@ export interface FunctionalSuggestion {
         amountPolicy: 'fixed' | 'variable'
         accountId?: string
         categoryId?: string
+    }
+    card?: {
+        operation: 'purchase' | 'payment' | 'existing_installment'
+        candidateAccountIds: string[]
+        accountId?: string
+        installmentCount?: number
+        firstClosingMonth?: string
     }
 }

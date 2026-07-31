@@ -6,6 +6,8 @@ import type { UserPreferences } from '@/types'
 import type { Currency } from '@/lib/constants'
 import { normalizeOperationalStartDate } from '@/lib/utils/operational-start'
 
+const PRIVATE_NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
+
 export async function GET() {
     try {
         const session = await auth()
@@ -31,9 +33,16 @@ export async function GET() {
             consolidatedCurrency: (user.preferences?.consolidatedCurrency as Currency | undefined) ?? 'ARS',
             referenceArsPerUsdRate: user.preferences?.referenceArsPerUsdRate,
             operationalStartDate: user.preferences?.operationalStartDate,
+            projectionGrouping: user.preferences?.projectionGrouping ?? 'type',
+            projectionMode: user.preferences?.projectionMode ?? 'monthly',
+            projectionMonths: user.preferences?.projectionMonths ?? 6,
+            projectionChartCurrency:
+                user.preferences?.projectionChartCurrency ??
+                (user.preferences?.consolidatedCurrency as Currency | undefined) ??
+                'ARS',
         }
 
-        return NextResponse.json({ preferences })
+        return NextResponse.json({ preferences }, { headers: PRIVATE_NO_STORE_HEADERS })
     } catch (error) {
         console.error('Error al obtener preferencias:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -107,6 +116,35 @@ export async function PATCH(request: Request) {
             }
         }
 
+        if (body.projectionGrouping !== undefined) {
+            if (!['type', 'card', 'category'].includes(body.projectionGrouping)) {
+                return NextResponse.json({ error: 'Agrupación de proyección inválida' }, { status: 400 })
+            }
+            update['preferences.projectionGrouping'] = body.projectionGrouping
+        }
+
+        if (body.projectionMode !== undefined) {
+            if (!['monthly', 'annual'].includes(body.projectionMode)) {
+                return NextResponse.json({ error: 'Modo de proyección inválido' }, { status: 400 })
+            }
+            update['preferences.projectionMode'] = body.projectionMode
+        }
+
+        if (body.projectionMonths !== undefined) {
+            const months = Number(body.projectionMonths)
+            if (![1, 3, 6, 9, 12].includes(months)) {
+                return NextResponse.json({ error: 'Horizonte de proyección inválido' }, { status: 400 })
+            }
+            update['preferences.projectionMonths'] = months
+        }
+
+        if (body.projectionChartCurrency !== undefined) {
+            if (!['ARS', 'USD'].includes(body.projectionChartCurrency)) {
+                return NextResponse.json({ error: 'Moneda de proyección inválida' }, { status: 400 })
+            }
+            update['preferences.projectionChartCurrency'] = body.projectionChartCurrency
+        }
+
         if (Object.keys(update).length === 0) {
             return NextResponse.json({ error: 'No hay campos válidos para actualizar' }, { status: 400 })
         }
@@ -130,9 +168,16 @@ export async function PATCH(request: Request) {
             consolidatedCurrency: (user.preferences?.consolidatedCurrency as Currency | undefined) ?? 'ARS',
             referenceArsPerUsdRate: user.preferences?.referenceArsPerUsdRate,
             operationalStartDate: user.preferences?.operationalStartDate,
+            projectionGrouping: user.preferences?.projectionGrouping ?? 'type',
+            projectionMode: user.preferences?.projectionMode ?? 'monthly',
+            projectionMonths: user.preferences?.projectionMonths ?? 6,
+            projectionChartCurrency:
+                user.preferences?.projectionChartCurrency ??
+                (user.preferences?.consolidatedCurrency as Currency | undefined) ??
+                'ARS',
         }
 
-        return NextResponse.json({ preferences })
+        return NextResponse.json({ preferences }, { headers: PRIVATE_NO_STORE_HEADERS })
     } catch (error) {
         console.error('Error al actualizar preferencias:', error)
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

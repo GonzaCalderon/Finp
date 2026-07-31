@@ -270,4 +270,203 @@ describe('detectCaptureIntents', () => {
         expect(suggestion.intent).toBe('create_commitment')
         expect(suggestion.reason).toContain('monto a confirmar')
     })
+
+    it('clasifica una compra con tarjeta y no ofrece salida simple ni descarte persistente', () => {
+        const [suggestion] = detectCaptureIntents({
+            text: 'Supermercado 38500 Visa',
+            draft: draft({
+                amount: 38_500,
+                description: 'Supermercado Visa',
+            }),
+            currentPeriod,
+            creditCards: [{
+                id: 'visa-galicia',
+                name: 'Visa Galicia',
+                currencies: ['ARS'],
+            }],
+        })
+
+        expect(suggestion.intent).toBe('use_installments')
+        expect(suggestion.destination).toEqual({ kind: 'inline' })
+        expect(suggestion.card).toMatchObject({
+            operation: 'purchase',
+            accountId: 'visa-galicia',
+            installmentCount: 1,
+            firstClosingMonth: '2026-08',
+        })
+        expect(suggestion.actions.map((action) => action.id)).toEqual(['primary'])
+        expect(suggestion.canPersistDismissal).toBe(false)
+        expect(suggestion.draft).toMatchObject({
+            kind: 'card_purchase',
+            fields: {
+                description: 'Supermercado',
+                cardAccountId: 'visa-galicia',
+            },
+        })
+    })
+
+    it('transporta una compra en varias cuotas al flujo completo', () => {
+        const [suggestion] = detectCaptureIntents({
+            text: 'Notebook 120000 Visa en 6 cuotas',
+            draft: draft({
+                amount: 120_000,
+                description: 'Notebook Visa en 6 cuotas',
+            }),
+            currentPeriod,
+            creditCards: [{
+                id: 'visa',
+                name: 'Visa',
+                currencies: ['ARS'],
+            }],
+        })
+
+        expect(suggestion.destination).toEqual({ kind: 'route', href: '/transactions' })
+        expect(suggestion.card?.installmentCount).toBe(6)
+        expect(suggestion.draft).toMatchObject({
+            kind: 'card_purchase',
+            fields: {
+                installmentCount: 6,
+                description: 'Notebook',
+            },
+        })
+    })
+
+    it('un pago de resumen nunca se convierte en consumo', () => {
+        const [suggestion] = detectCaptureIntents({
+            text: 'Pagué el resumen Visa 50000',
+            draft: draft({
+                amount: 50_000,
+                description: 'Pagué el resumen Visa',
+            }),
+            currentPeriod,
+            creditCards: [{
+                id: 'visa',
+                name: 'Visa',
+                currencies: ['ARS'],
+            }],
+        })
+
+        expect(suggestion.intent).toBe('record_transaction')
+        expect(suggestion.card?.operation).toBe('payment')
+        expect(suggestion.draft).toMatchObject({
+            kind: 'card_payment',
+            fields: {
+                type: 'credit_card_payment',
+                destinationAccountId: 'visa',
+            },
+        })
+    })
+
+    it('no confunde un gasto pagado con Visa con el pago del resumen', () => {
+        const [suggestion] = detectCaptureIntents({
+            text: 'Pagué supermercado con Visa 50000',
+            draft: draft({
+                amount: 50_000,
+                description: 'Pagué supermercado con Visa',
+            }),
+            currentPeriod,
+            creditCards: [{
+                id: 'visa',
+                name: 'Visa',
+                currencies: ['ARS'],
+            }],
+        })
+
+        expect(suggestion.card?.operation).toBe('purchase')
+    })
+
+    it('pide seleccionar tarjeta ante una referencia genérica o ambigua', () => {
+        const generic = detectCaptureIntents({
+            text: 'Supermercado 38500 tarjeta',
+            draft: draft({ amount: 38_500, description: 'Supermercado tarjeta' }),
+            currentPeriod,
+            creditCards: [{
+                id: 'visa',
+                name: 'Visa',
+                currencies: ['ARS'],
+            }],
+        })[0]
+        const ambiguous = detectCaptureIntents({
+            text: 'Supermercado 38500 Visa',
+            draft: draft({ amount: 38_500, description: 'Supermercado Visa' }),
+            currentPeriod,
+            creditCards: [
+                { id: 'visa-1', name: 'Visa Galicia', currencies: ['ARS'] },
+                { id: 'visa-2', name: 'Visa BBVA', currencies: ['ARS'] },
+            ],
+        })[0]
+
+        expect(generic.card?.accountId).toBeUndefined()
+        expect(ambiguous.card?.accountId).toBeUndefined()
+        expect(ambiguous.card?.candidateAccountIds).toEqual(['visa-1', 'visa-2'])
+    })
+
+    it('no ofrece una tarjeta que no soporta la moneda', () => {
+        const [suggestion] = detectCaptureIntents({
+            text: 'Supermercado 100 USD Visa',
+            draft: draft({
+                amount: 100,
+                currency: 'USD',
+                description: 'Supermercado Visa',
+            }),
+            currentPeriod,
+            creditCards: [{
+                id: 'visa-ars',
+                name: 'Visa',
+                currencies: ['ARS'],
+            }],
+        })
+
+        expect(suggestion.card?.accountId).toBeUndefined()
+        expect(suggestion.card?.candidateAccountIds).toEqual([])
+    })
+
+    it('una cuota indexada abre revisión y no crea otro plan', () => {
+        const [suggestion] = detectCaptureIntents({
+            text: 'Notebook cuota 2 de 6',
+            draft: draft({ description: 'Notebook cuota 2 de 6' }),
+            currentPeriod,
+        })
+
+        expect(suggestion.card?.operation).toBe('existing_installment')
+        expect(suggestion.destination).toEqual({
+            kind: 'route',
+            href: '/transactions/credit-card',
+        })
+    })
+
+    it('propone el candidato mensual aprendido con la misma clave persistente', () => {
+        const [suggestion] = detectCaptureIntents({
+            text: 'Netflix 15000',
+            draft: draft({ amount: 15_000, description: 'Netflix' }),
+            currentPeriod,
+            learnedCommitmentCandidates: [{
+                subjectKey: 'create_commitment|ARS|netflix',
+                description: 'Netflix',
+                amount: 15_000,
+                currency: 'ARS',
+                amountPolicy: 'fixed',
+                estimationMode: 'template',
+                dayOfMonth: 12,
+                categoryId: 'subscriptions',
+                accountId: 'account-1',
+                occurrences: 4,
+                months: ['2026-04', '2026-05', '2026-06', '2026-07'],
+                variationPercent: 0,
+                confidence: 0.94,
+                evidence: ['4 meses'],
+            }],
+        })
+
+        expect(suggestion.intent).toBe('create_commitment')
+        expect(suggestion.subjectKey).toBe('create_commitment|ARS|netflix')
+        expect(suggestion.draft).toMatchObject({
+            kind: 'commitment',
+            fields: {
+                recurrence: 'monthly',
+                dayOfMonth: 12,
+                amount: 15_000,
+            },
+        })
+    })
 })

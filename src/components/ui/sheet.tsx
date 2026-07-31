@@ -48,6 +48,13 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  const sideStyles = {
+    bottom: "inset-x-0 bottom-0 max-h-[90dvh] overflow-hidden border-t",
+    left: "inset-y-0 left-0 h-full w-full border-r sm:w-3/4 sm:max-w-sm",
+    right: "inset-y-0 right-0 h-full w-full border-l sm:w-3/4 sm:max-w-sm",
+    top: "inset-x-0 top-0 max-h-[90dvh] overflow-hidden border-b",
+  } satisfies Record<NonNullable<typeof side>, string>
+
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -58,12 +65,7 @@ function SheetContent({
           "fixed z-50 flex flex-col gap-4 bg-background/95 backdrop-blur-sm bg-clip-padding text-sm",
           "border-foreground/[0.07] shadow-2xl shadow-black/[0.15] dark:shadow-black/[0.45]",
           "transition ease-in-out",
-          // Side positioning
-          "data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t",
-          "data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r",
-          "data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l",
-          "data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b",
-          "data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
+          sideStyles[side],
           // Open animations — small offset for a subtle, premium slide-in
           "data-[state=open]:animate-in data-[state=open]:fade-in-0",
           "data-[side=bottom]:data-[state=open]:slide-in-from-bottom-3",

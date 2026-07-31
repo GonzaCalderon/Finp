@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-26
 > Fuente de verdad: reglas funcionales de Deudas
 
 ## Índice
@@ -13,7 +13,11 @@
 4. [Pagos y cobros](#4-pagos-y-cobros)
 5. [Consolidación](#5-consolidacion-y-estado)
 6. [Relaciones](#6-relacion-con-cuentas)
-7. [Decisiones](#10-decisiones-consolidadas)
+7. [Reporting](#7-relacion-con-reporting)
+8. [Espacios](#8-relacion-con-espacios)
+9. [Experiencia responsive](#9-experiencia-responsive)
+10. [Tarjetas](#10-relacion-futura-con-tarjeta-de-credito)
+11. [Decisiones](#11-decisiones-consolidadas)
 
 Las posibilidades futuras descritas aquí no establecen prioridad. El backlog único es [`roadmap_finp.md`](roadmap_finp.md).
 
@@ -147,7 +151,16 @@ Cuando la deuda nace en un espacio:
 - pagos y cobros desde Deudas y desde Espacios tienen que mantenerse coherentes;
 - ignorar una deuda derivada no borra el movimiento del espacio ni altera su historial.
 
-## 9. Relacion futura con tarjeta de credito
+## 9. Experiencia responsive
+
+- En mobile, la relación y el detalle usan sheets inferiores de hasta `90dvh`.
+- En desktop, el detalle se abre como panel lateral y la lista permanece visible.
+- Abrir una deuda desde una relación conserva un regreso explícito a esa relación.
+- Alta, pago y cobro mantienen encabezado y acciones fijos; sólo el formulario
+  desplaza contenido.
+- Las acciones inferiores respetan safe areas y un área táctil mínima.
+
+## 10. Relacion futura con tarjeta de credito
 
 La integracion profunda con TC sigue diferida.
 
@@ -157,7 +170,7 @@ Decision actual:
 - no reescribir la logica de tarjeta para encajarla artificialmente en Deudas;
 - resolverla cuando haya suficiente uso real y despues de cuotas en espacios.
 
-## 10. Decisiones consolidadas
+## 11. Decisiones consolidadas
 
 - una deuda no es una cuenta;
 - pagar deuda no es gasto;

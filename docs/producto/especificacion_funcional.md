@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-31
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -44,15 +44,9 @@ Las aplicaciones de gestión financiera dependen de datos actualizados. Cuando n
 - la pérdida de confianza desmotiva el uso;
 - registrar deja de sentirse útil.
 
-Finp responde con:
-
-- captura rápida;
-- múltiples caminos de ingreso;
-- importación asistida;
-- reglas;
-- aprendizaje personal;
-- revisión y sugerencias;
-- recompensa inmediata mediante saldos, contexto, proyección e insights.
+Finp responde bajando el costo de registrar —captura rápida, varios caminos de
+ingreso, importación asistida, reglas y aprendizaje personal— y devolviendo algo
+útil de inmediato: saldos, contexto, proyección e insights.
 
 La automatización debe reducir trabajo, no ocultar decisiones financieras.
 
@@ -67,7 +61,7 @@ Finp busca ser un compañero financiero:
 - colaborativo, sin exponer la contabilidad privada;
 - útil en mobile y profundo en web.
 
-La web es el producto principal. Una aplicación mobile nativa o multiplataforma es una evolución posible que requiere discovery técnico y madurez funcional previa.
+La dirección de plataformas está en [Mobile y evolución de plataformas](#16-mobile-y-evolución-de-plataformas).
 
 ## 4. Principios funcionales
 
@@ -268,7 +262,10 @@ El flujo distingue qué se entrega y qué se recibe, cuentas compatibles, cotiza
 - resumen por período;
 - deuda pendiente;
 - pagos de tarjeta;
-- distinción futura más clara entre pago total, parcial e impago.
+- estado del período por tarjeta y moneda: sin consumos, pagada, parcial, impaga
+  o con saldo a favor, sin presentar un pago parcial como total ni sumar ARS y
+  USD;
+- alcance explícito al eliminar un pago dual: una parte o el grupo completo.
 
 Una cuota no debe duplicar el impacto de la compra que la originó.
 
@@ -312,6 +309,27 @@ Antes de escribir:
 - anticipa impacto;
 - detecta duplicados y fechas especiales.
 
+Captura rápida también debe admitir consumos con tarjeta de crédito, porque son
+una operación cotidiana de alta frecuencia:
+
+- un consumo en un pago puede resolverse dentro del diálogo cuando tarjeta,
+  monto, moneda, fecha y categoría son válidos; debe anticipar la deuda y el mes
+  de impacto;
+- un consumo en varias cuotas conserva lo interpretado y abre el flujo
+  especializado para confirmar tarjeta, cantidad de cuotas, primer cierre y
+  demás datos propios del plan;
+- si la tarjeta no puede identificarse con suficiente confianza, Finp pregunta
+  o deriva sin convertir el consumo en un gasto de cuenta común;
+- un consumo con tarjeta y el pago del resumen son operaciones distintas y no
+  se infieren una de otra;
+- el pago del resumen transporta tarjeta, monto, moneda y fecha, pero exige que
+  la persona elija la cuenta de origen;
+- una referencia `cuota N de M` abre la revisión del plan existente y no crea
+  otro;
+- el primer mes propuesto es el próximo mes calendario y puede editarse antes de
+  confirmar;
+- una intención clasificada como tarjeta no ofrece salida como gasto simple.
+
 ### Orientación
 
 Captura rápida distingue:
@@ -321,6 +339,11 @@ Captura rápida distingue:
 3. preparación de una función nueva.
 
 Una intención explícita tiene prioridad. Las funciones complejas reciben un borrador tipado y versionado, con procedencia por campo.
+
+Para recurrencias, el orden es: recurrencia explícita, compromiso pendiente,
+candidato mensual aprendido y transacción simple. Captura rápida y Compromisos
+comparten identidad, evidencia y descarte del candidato; crear la plantilla o
+registrar sólo el gasto actual siempre requiere una elección.
 
 ### Importación
 
@@ -333,7 +356,7 @@ Una intención explícita tiene prioridad. Las funciones complejas reciben un bo
 
 Una importación no debe saltar validaciones disponibles en el ingreso manual.
 
-### Revisión futura
+### Bandeja de revisión
 
 Una bandeja diaria puede agrupar borradores, imports, movimientos incompletos y sugerencias. Debe ser un complemento, no un requisito para registrar.
 
@@ -384,18 +407,17 @@ El historial puede sugerir:
 
 Crear una entidad o automatización siempre requiere confirmación.
 
-Un candidato de compromiso usa un criterio híbrido. Un monto estable, con
-variación de hasta 10 %, requiere al menos tres meses; un monto variable,
-al menos cinco. Además exige 75 % de cobertura temporal, como máximo una
-coincidencia mensual y confianza mínima de 0,82. La confianza combina
-recurrencia, estabilidad y afinidad de categoría.
+Un candidato de compromiso exige evidencia híbrida —duración, cobertura,
+estabilidad del monto y afinidad de categoría— y es más estricto con montos
+variables que con montos estables. La confianza es un umbral de presentación: no
+se muestra como certeza ni autoriza una escritura.
 
-Servicios, Suscripciones, Educación, Hogar, Impuestos y Préstamos bonifican la
-señal. Restaurantes y delivery, Supermercado, Indumentaria, Viajes y Otros
-gastos la penalizan; seis o más repeticiones pueden compensar esa penalización.
 El candidato explica período, cobertura, estabilidad, día y categoría, descarta
 movimientos ya vinculados y recuerda rechazos. Abre el alta guiada con un
 borrador; nunca crea la plantilla automáticamente.
+
+Los umbrales exactos y las categorías que bonifican o penalizan la señal viven en
+[`../decisiones/0002-criterio-hibrido-sugerencias-de-compromisos.md`](../decisiones/0002-criterio-hibrido-sugerencias-de-compromisos.md).
 
 ## 11. Espacios
 
@@ -426,6 +448,8 @@ Cada participante decide si y cómo registrar su impacto en Finp:
 - vínculo con una transacción existente.
 
 Si el movimiento compartido cambia materialmente, el impacto personal pasa a revisión.
+Quitar el movimiento de Mi Finp elimina su transacción personal vinculada y
+marca el impacto privado como removido; no modifica el movimiento compartido.
 
 ### Configuración personal
 
@@ -448,7 +472,9 @@ Deudas permite:
 - pagar o cobrar total o parcialmente;
 - ignorar o restaurar deudas derivadas;
 - consolidar por persona;
-- consultar timeline.
+- consultar timeline;
+- abrir una relación, profundizar en una deuda y volver sin perder contexto;
+- completar alta, pago y cobro en mobile con acciones siempre visibles.
 
 Pagar o cobrar:
 
@@ -479,12 +505,15 @@ El sistema deduplica señales y resuelve estados obsoletos cuando la acción ya 
 
 ## 14. Proyección y anticipación
 
+### Proyección
+
 La proyección combina:
 
 - compromisos;
-- cuotas;
+- consumos con tarjeta en un pago;
+- consumos con tarjeta en cuotas;
 - aplicaciones y montos por período;
-- saldos o cashflow esperado.
+- contexto habitual de cuenta o vencimiento cuando existe.
 
 Debe distinguir:
 
@@ -500,6 +529,70 @@ Las fechas de compromiso se derivan desde una única regla de dominio. Los días
 29–31 se ajustan al último día real del mes, la primera ocurrencia nunca precede
 la fecha de inicio y el recordatorio puede cruzar al mes anterior. Una ocurrencia
 anterior al inicio no es pendiente ni forma parte de la proyección.
+
+La lectura de tarjetas separa `TC · un pago` de `TC · cuotas`. Un plan `1/1`
+usa su primer cierre, se presenta como un pago y queda confirmado. Un consumo
+histórico sin plan usa el período financiero de su fecha y también queda
+confirmado. Un plan mayor a una cuota deriva sus períodos y queda calculado. La
+transacción padre de un plan y los pagos de tarjeta no se suman como consumos.
+
+La vista inicial usa próximos seis períodos y agrupación por tipo. Año
+calendario es secundario y permite elegir año. Los períodos pasados distinguen
+lo registrado de lo esperado. La moneda del gráfico parte de la moneda
+consolidada del usuario, pero ARS y USD se leen y totalizan siempre por separado.
+
+Las agrupaciones disponibles recorren:
+
+- por tipo: fuente → tarjeta cuando corresponde → categoría → consumo;
+- por tarjeta: Compromisos separados y tarjeta → tipo → categoría → consumo;
+- por categoría: categoría → tipo → tarjeta cuando corresponde → consumo.
+
+Cada consumo expone certeza, contexto de cuenta o vencimiento y un enlace a la
+superficie responsable. Los enlaces pueden transportar período, tarjeta,
+categoría y tipo, pero nunca montos. Una cuenta habitual de compromiso es
+contexto; Finp no inventa la cuenta futura de pago de una tarjeta ni calcula
+cashflow por cuenta en este cierre.
+
+Los montos pendientes muestran “Monto a confirmar”, no `$0`. El resumen
+advierte estimaciones y datos incompletos. Dentro de cada grupo, el recorrido
+esperado conserva:
+
+1. período;
+2. tipo de proyección;
+3. tarjeta;
+4. categoría, con monto y porcentaje sobre esa tarjeta y ese tipo;
+5. consumos individuales.
+
+La agregación no modifica la contabilidad ni duplica consumos. Debe contemplar
+tanto la representación vigente como datos históricos compatibles y conservar
+una única fuente para período, moneda, categoría y monto.
+
+La persona puede elegir vistas útiles —por tipo, tarjeta o categoría— y Finp
+recuerda agrupación, modo, horizonte y moneda del gráfico por usuario. Esa
+personalización cambia la presentación, no la inclusión de movimientos ni las
+reglas financieras. Su nivel de aprendizaje es `personalizar`; ningún cálculo
+financiero se aprende ni automatiza.
+
+Escenarios, cashflow proyectado por cuenta y la parte propia o recuperable de
+compromisos compartidos pertenecen a ítems separados del roadmap.
+
+### Análisis y planificación
+
+Proyección responde principalmente cómo pueden evolucionar los próximos
+períodos. El análisis histórico y la administración de hábitos forman una
+superficie relacionada, pero distinta, que debe permitir:
+
+- consultar gastos por categoría y período;
+- profundizar desde categoría a cuentas, tarjetas y movimientos;
+- comparar categorías y métodos de pago;
+- detectar patrones y montos fuera de lo habitual con evidencia explicable;
+- definir objetivos y límites por categoría;
+- revisar avance, desvíos y efecto esperado sobre la proyección.
+
+Proyección y análisis pueden compartir agregaciones y ofrecer navegación entre
+sí, pero no deben concentrar todos los recorridos en una sola pantalla. Un
+límite u objetivo informa y orienta; no bloquea ni altera una transacción por
+sí mismo.
 
 ## 15. Integraciones entre funciones
 
@@ -531,7 +624,9 @@ Eliminar una transacción debe identificar y resolver compromisos, impactos, not
 
 ## 16. Mobile y evolución de plataformas
 
-Finp es hoy una aplicación web responsive.
+Finp es hoy una aplicación web responsive y la web es el producto principal. Una
+aplicación mobile nativa o multiplataforma es una evolución posible que requiere
+discovery técnico y madurez funcional previa.
 
 Dirección:
 

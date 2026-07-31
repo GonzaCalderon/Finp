@@ -84,7 +84,7 @@ export function NotificationSheet({ onClose, isOpen, defaultTab = 'all' }: Notif
 
     return (
         <SheetContent
-            className="!w-full sm:!w-[28rem] flex flex-col gap-0 p-0 overflow-hidden"
+            className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:w-[28rem]"
             showCloseButton
         >
             <SheetHeader

@@ -70,16 +70,23 @@ test.describe('Logout', () => {
         expect(page.url()).toContain('/login')
     })
 
-    test('usuario sin sesión es redirigido al login al intentar acceder al dashboard', async ({ page }) => {
-        // Abrimos nueva página sin sesión
-        const context = page.context()
+    test('usuario sin sesión es redirigido al login al intentar acceder al dashboard', async ({
+        browser,
+        page,
+    }) => {
+        // Un contexto nuevo representa un navegador realmente sin sesión y no
+        // invalida en paralelo la página autenticada del beforeEach.
+        const context = await browser.newContext({
+            baseURL: new URL(page.url()).origin,
+        })
         const newPage = await context.newPage()
-        await newPage.context().clearCookies()
 
-        await newPage.goto('/dashboard')
-        await newPage.waitForURL('**/login', { timeout: 8_000 })
-        expect(newPage.url()).toContain('/login')
-
-        await newPage.close()
+        try {
+            await newPage.goto('/dashboard')
+            await newPage.waitForURL(/\/login(?:\?|$)/, { timeout: 8_000 })
+            expect(newPage.url()).toContain('/login')
+        } finally {
+            await context.close()
+        }
     })
 })

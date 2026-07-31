@@ -45,12 +45,23 @@ test.describe('Compromisos', () => {
         })
 
         await loginAsTestUser(page)
-        await page.clock.setFixedTime(new Date(2026, 6, 25, 12))
     })
 
     test('crea un compromiso con fechas claras y categoría buscable', async ({
         page,
-    }) => {
+    }, testInfo) => {
+        const dueDate = new Date()
+        dueDate.setHours(12, 0, 0, 0)
+        dueDate.setDate(dueDate.getDate() + 8)
+        const dueDay = dueDate.getDate()
+        const reminderDate = new Date(dueDate)
+        reminderDate.setDate(reminderDate.getDate() - 5)
+        const formatDate = (value: Date) =>
+            value.toLocaleDateString('es-AR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            })
         let submittedBody: Record<string, unknown> | null = null
         await page.route('**/api/commitments', async (route) => {
             if (route.request().method() === 'POST') {
@@ -67,7 +78,7 @@ test.describe('Compromisos', () => {
         })
 
         await page.goto('/commitments')
-        await page.getByRole('button', { name: 'Nuevo compromiso' }).click()
+        await page.getByRole('button', { name: 'Nuevo compromiso' }).first().click()
         const dialog = page
             .getByRole('dialog')
             .filter({ hasText: 'Nuevo compromiso' })
@@ -81,20 +92,26 @@ test.describe('Compromisos', () => {
         await dialog.locator('#amount').fill('5000')
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
-        await expect(dialog.getByText('Paso 2 de 3 · Frecuencia')).toBeVisible()
+        await expect(dialog.getByRole('button', { name: 'Elegí un día' })).toBeVisible()
         await dialog.getByRole('button', { name: 'Elegí un día' }).click()
-        await page.getByRole('button', { name: 'Día 3 del mes' }).click()
+        await page
+            .getByRole('button', { name: `Día ${dueDay} del mes` })
+            .click()
         await dialog.getByLabel('Recordatorio').click()
         await page.getByRole('option', { name: '5 días antes' }).click()
-        await expect(dialog.getByText('03/08/2026')).toBeVisible()
-        await expect(dialog.getByText('29/07/2026')).toBeVisible()
+        await expect(dialog.getByText(formatDate(dueDate))).toBeVisible()
+        await expect(dialog.getByText(formatDate(reminderDate))).toBeVisible()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         await dialog.getByLabel('Buscar categoría').fill('Rest')
-        await dialog
+        const categoryButton = dialog
             .getByRole('button', { name: 'Restaurantes y delivery' })
-            .click()
-        await expect(dialog.getByText('Paso 3 de 3 · Aplicación')).toBeVisible()
+        if (testInfo.project.name === 'mobile-chromium') {
+            await categoryButton.click()
+        } else {
+            await categoryButton.focus()
+            await page.keyboard.press('Enter')
+        }
         await expect(dialog.getByRole('button', { name: 'Crear compromiso' })).toBeVisible()
 
         const hasHorizontalOverflow = await page.evaluate(
@@ -102,11 +119,19 @@ test.describe('Compromisos', () => {
         )
         expect(hasHorizontalOverflow).toBe(false)
 
-        await dialog.getByRole('button', { name: 'Crear compromiso' }).click()
+        const createButton = dialog.getByRole('button', {
+            name: 'Crear compromiso',
+        })
+        if (testInfo.project.name === 'mobile-chromium') {
+            await createButton.click()
+        } else {
+            await createButton.focus()
+            await page.keyboard.press('Enter')
+        }
         await expect.poll(() => submittedBody).not.toBeNull()
         expect(submittedBody).toMatchObject({
             description: 'Clases de piano',
-            dayOfMonth: 3,
+            dayOfMonth: dueDay,
             reminderLeadDays: 5,
             categoryId: category._id,
         })

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-31
 > Fuente de verdad: contrato funcional de orientación
 
 ## Índice
@@ -18,7 +18,9 @@
 
 Documentación técnica de la implementación: `docs/tecnico/compromisos_variables_y_orientacion.md`.
 
-Las Etapas 1 y 2 están implementadas. Las siguientes etapas describen el contrato de evolución; su prioridad vive únicamente en [`roadmap_finp.md`](roadmap_finp.md).
+Las Etapas 1 a 4 para Compromisos y Tarjetas están implementadas. Los destinos
+restantes describen el contrato de evolución; su prioridad vive únicamente en
+[`roadmap_finp.md`](roadmap_finp.md).
 
 ## 1. Visión
 
@@ -42,6 +44,8 @@ Las sugerencias de funciones son también una forma de descubrimiento progresivo
 Captura rápida puede resolver directamente:
 
 - gastos e ingresos simples;
+- consumos con tarjeta en un pago cuando la tarjeta y los datos obligatorios
+  son explícitos o pueden confirmarse dentro del diálogo;
 - aplicación de un compromiso existente cuando la coincidencia es clara;
 - correcciones mínimas de monto, fecha, cuenta, categoría o comercio;
 - confirmación o descarte de una sugerencia.
@@ -49,7 +53,9 @@ Captura rápida puede resolver directamente:
 Captura rápida debe derivar con un borrador:
 
 - creación o configuración avanzada de compromisos;
-- tarjetas y cuotas;
+- consumos con tarjeta en varias cuotas;
+- consumos con tarjeta cuya tarjeta, moneda o configuración necesaria siga
+  siendo ambigua;
 - transferencias y cambios de moneda;
 - deudas, préstamos y cobros;
 - movimientos compartidos de Espacios;
@@ -58,13 +64,19 @@ Captura rápida debe derivar con un borrador:
 
 La derivación no se considera un fallo de interpretación. Es el resultado correcto cuando la intención pertenece a un dominio con decisiones adicionales.
 
+Captura rápida debe distinguir un consumo con tarjeta del pago del resumen. No
+puede registrar el primero como gasto de una cuenta común ni convertir el
+segundo en un nuevo consumo. En ambos casos reutiliza las validaciones y reglas
+del dominio de Tarjetas.
+
 ## 3. Ciclo común de orientación
 
 Toda orientación debe seguir el mismo ciclo:
 
 1. **Detectar intención:** interpretar texto explícito, contexto actual y evidencia histórica.
 2. **Explicar:** mostrar qué entendió Finp y por qué propone una función.
-3. **Ofrecer alternativas:** acción recomendada, registrar como movimiento simple o descartar.
+3. **Ofrecer alternativas:** acción recomendada y, sólo cuando el dominio lo
+   permite, registrar como movimiento simple o descartar.
 4. **Transportar contexto:** abrir el destino con los campos confiables ya completados.
 5. **Confirmar en el módulo responsable:** ninguna sugerencia crea por sí sola una regla, deuda, compromiso o movimiento compartido.
 6. **Conservar procedencia:** la entidad creada debe saber que nació desde Captura rápida y la captura debe poder explicar el resultado.
@@ -92,6 +104,9 @@ Tipos iniciales:
 
 - `apply_commitment`;
 - `create_commitment`;
+- `card_purchase`;
+- `card_payment`;
+- `card_review`;
 - `create_rule`;
 - `use_space`;
 - `record_debt`;
@@ -126,6 +141,12 @@ Resguardos:
 - conservar el texto y el borrador si la derivación falla;
 - validar nuevamente propiedad, permisos, moneda, cuenta y fondos en el módulo final;
 - distinguir claramente sugerencia, plantilla y movimiento real.
+
+Una clasificación de tarjeta es un resguardo financiero: se evalúa antes de una
+escritura simple, no admite `Registrar aparte` ni descarte persistente y exige
+resolver una tarjeta inequívoca o seleccionarla. Entre intenciones recurrentes
+se aplica recurrencia explícita → compromiso pendiente → candidato aprendido →
+transacción simple.
 
 ## 6. Experiencia propuesta
 
@@ -167,6 +188,8 @@ Acciones:
 
 - `Cena 60000 con Ana y Juan` puede sugerir un movimiento en un Espacio.
 - `Le presté 50000 a Pedro` puede derivar a Deudas.
+- `Supermercado 45000 con Visa` puede resolverse como consumo con tarjeta en un
+  pago si la tarjeta queda identificada.
 - `Notebook 1200 USD en 6 cuotas` debe abrir el flujo de tarjeta y cuotas.
 - `Siempre que diga Uber ponelo en Transporte` puede abrir una regla precargada.
 - texto tabular o varias líneas estructuradas puede sugerir Importación.
@@ -240,7 +263,11 @@ La estabilidad del monto orienta la política propuesta:
 - monto variable: sugerir monto a confirmar;
 - evolución con fechas claras: ofrecer revisar un historial, sin inferir automáticamente una política contractual.
 
-La propuesta explica cantidad de coincidencias, período observado y variación de montos. Crear el compromiso siempre requiere confirmación en su página dedicada.
+La propuesta explica cantidad de coincidencias, período observado y variación de
+montos. Captura rápida la carga una vez por apertura al existir texto útil y
+reutiliza el mismo `subjectKey`, evidencia, procedencia y descarte que
+Compromisos. Un fallo de carga no bloquea el registro manual. La persona puede
+crear el compromiso precompletado o registrar sólo el gasto actual.
 
 ## 9. Adopción gradual
 
@@ -258,25 +285,37 @@ La propuesta explica cantidad de coincidencias, período observado y variación 
 - las tres intenciones se distinguen; una intención explícita nunca se reemplaza por evidencia histórica;
 - aplicación desde el diálogo reutilizando las validaciones del servicio de Compromisos, con `origin: quick_capture`;
 - derivación de altas con borrador precargado hacia `/commitments?draft=<id>`;
+- cierre del embudo: Compromisos emite `intent_completed` al crear la plantilla,
+  una sola vez por borrador derivado;
 - procedencia visible en Transacciones (`Compromiso: <nombre> · <período>`);
 - descarte persistente mediante `FunctionalSuggestionDismissal`.
 
-### Etapa 3: recurrencia aprendida
+### Etapa 3: recurrencia aprendida — implementada el 2026-07-28
 
-- construir candidatos mensuales desde historial vigente;
-- mostrar propuestas en Captura rápida y Compromisos sin duplicarlas;
-- recordar descartes y correcciones;
-- diferenciar monto fijo y variable.
+- candidatos mensuales del mismo motor y umbral de la decisión 0002;
+- propuestas coordinadas en Captura rápida y Compromisos;
+- identidad, evidencia y descartes persistentes compartidos;
+- monto fijo o variable preservado en el borrador.
 
-### Etapa 4: otros módulos
+### Etapa 4: Tarjetas — implementada el 2026-07-28
+
+- detector determinista para compra, cuotas, pago y referencia a cuota;
+- selector ante nombre genérico o coincidencias múltiples;
+- compra en un pago con preview, confirmación y Deshacer dentro del diálogo;
+- cuotas y pagos derivados al formulario completo con borrador discriminado;
+- primer mes próximo editable y cuenta de origen de pagos siempre explícita;
+- estados de detección, aceptación y finalización separados;
+- sin aprendizaje automático de tarjetas.
+
+### Etapa 5: otros módulos — diferida
 
 - reglas;
-- cuotas;
 - Deudas;
 - Espacios;
 - Importación.
 
 Cada integración se entrega de punta a punta antes de incorporar el siguiente destino.
+Su reanudación y orden dependen del roadmap vigente.
 
 ## 10. Métricas de éxito
 

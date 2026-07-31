@@ -7,6 +7,10 @@ import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { getPersonalImpactForEntries, markLinkedImpactsAsNeedsReview } from '@/lib/server/space-personal-impact'
 import { detectSpaceEntryMaterialChanges } from '@/lib/server/space-entry-changes'
+import {
+    buildEntryPendingTargets,
+    syncPendingActionsForEntryChange,
+} from '@/lib/server/personal-sync-events'
 import { buildReviewNotification, safeUpsertNotificationByDedupeKey } from '@/lib/server/notifications'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryEditSchema } from '@/lib/validations'
@@ -292,6 +296,29 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
 
         // Notificar a usuarios con impactos vinculados si hubo cambios materiales
         const { isMaterial, changedLabels } = detectSpaceEntryMaterialChanges(entry, data)
+
+        // Los pendientes se reconcilian con el reparto nuevo: quien salió del split
+        // deja de tener una decisión que tomar, quien entró la recibe y a quien le
+        // cambió el monto se le actualiza. Se hace antes de mover los `linked` a
+        // revisión porque son conjuntos disjuntos y así el usuario no ve un pedido
+        // con cifras viejas.
+        if (isMaterial && updatedEntry) {
+            try {
+                await syncPendingActionsForEntryChange({
+                    actorUserId: session.user.id,
+                    spaceId: id,
+                    entryId,
+                    sourceType: 'space_entry',
+                    pendingTargets: buildEntryPendingTargets({
+                        entry: updatedEntry,
+                        participants: context.participants,
+                    }),
+                })
+            } catch (err) {
+                console.error('[personal-sync] edit pending actions:', err)
+            }
+        }
+
         if (isMaterial && updatedEntry) {
             try {
                 const affectedImpacts = await markLinkedImpactsAsNeedsReview(entryId, 'entry_edited', changedLabels)

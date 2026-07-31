@@ -108,6 +108,7 @@ function MovementCard({
     onEdit,
     onVoid,
     onSyncImpact,
+    onPersonalImpact,
 }: {
     entry: ISpaceEntry
     reportingCurrency: string
@@ -122,6 +123,7 @@ function MovementCard({
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
     onSyncImpact?: (entry: ISpaceEntry) => void
+    onPersonalImpact?: (entry: ISpaceEntry) => void
 }) {
     const payer = participants.find(
         (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
@@ -288,6 +290,19 @@ function MovementCard({
                 ) : null}
                 {/* Badges + desktop quick actions + mobile tap affordance — single row */}
                 <div className="flex items-center gap-1.5">
+                    {!isVoided && !impactsCurrentUser && currentParticipant && onPersonalImpact ? (
+                        <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation()
+                                onPersonalImpact(entry)
+                            }}
+                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/8 px-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Registrar en Mi Finp
+                        </button>
+                    ) : null}
                     {isVoided ? (
                         <Badge variant="destructive" className="gap-1 text-[10px]">
                             <Ban className="h-2.5 w-2.5" />
@@ -380,6 +395,7 @@ export function SpaceMovementsPanel({
     onEdit,
     onVoid,
     onSyncImpact,
+    onPersonalImpact,
 }: {
     entries: ISpaceEntry[]
     participants: ISpaceParticipant[]
@@ -396,6 +412,7 @@ export function SpaceMovementsPanel({
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
     onSyncImpact?: (entry: ISpaceEntry) => void
+    onPersonalImpact?: (entry: ISpaceEntry) => void
 }) {
     const [sort, setSort] = useState<SpaceEntrySort>('recent')
     const filters: SpaceEntryFilter[] = ['all', 'expense', 'settlement']
@@ -495,8 +512,9 @@ export function SpaceMovementsPanel({
                             highlighted={Boolean(focusEntryId && extractId(entry._id) === focusEntryId)}
                             onEntryClick={onEntryClick}
                             onEdit={onEdit}
-                            onVoid={onVoid}
-                            onSyncImpact={onSyncImpact}
+                                onVoid={onVoid}
+                                onSyncImpact={onSyncImpact}
+                                onPersonalImpact={onPersonalImpact}
                         />
                     ))
                 )}

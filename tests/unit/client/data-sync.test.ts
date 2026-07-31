@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+    ACCOUNT_INVALIDATION_TAGS,
+    CATEGORY_INVALIDATION_TAGS,
     COMMITMENT_INVALIDATION_TAGS,
     DEBT_INVALIDATION_TAGS,
+    INSTALLMENT_INVALIDATION_TAGS,
     NOTIFICATION_INVALIDATION_TAGS,
     PERSONAL_PENDING_ACTIONS_INVALIDATION_TAGS,
+    PREFERENCE_INVALIDATION_TAGS,
     SPACE_INVALIDATION_TAGS,
+    TRANSACTION_INVALIDATION_TAGS,
     invalidateData,
     matchesInvalidation,
     subscribeToInvalidation,
@@ -22,6 +27,25 @@ describe('commitment invalidation tags', () => {
                 'account-detail',
             ])
         )
+    })
+})
+
+describe('installment invalidation tags', () => {
+    it('refreshes the transaction list after creating an installment plan', () => {
+        expect(INSTALLMENT_INVALIDATION_TAGS).toContain('transactions')
+    })
+})
+
+describe('projection invalidation tags', () => {
+    it.each([
+        ['transactions', TRANSACTION_INVALIDATION_TAGS],
+        ['installments', INSTALLMENT_INVALIDATION_TAGS],
+        ['commitments', COMMITMENT_INVALIDATION_TAGS],
+        ['accounts', ACCOUNT_INVALIDATION_TAGS],
+        ['categories', CATEGORY_INVALIDATION_TAGS],
+        ['preferences', PREFERENCE_INVALIDATION_TAGS],
+    ])('refresca proyeccion al cambiar %s', (_source, tags) => {
+        expect(tags).toContain('projection')
     })
 })
 
