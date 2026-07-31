@@ -4,6 +4,7 @@ import {
     getInstallmentStatusForMonth,
     getRemainingDebtForMonth,
     getSingleCreditCardExpenseStatusForMonth,
+    getCreditCardChargeKind,
     type MonthlyCardPaymentSummary,
 } from '@/lib/utils/credit-card'
 import { apiJson } from '@/lib/client/auth-client'
@@ -112,9 +113,24 @@ export function useCreditCardExpenses(selectedMonth: string, monthStartDay = 1) 
         void fetchPaymentSummaries()
     })
 
+    // Un plan 1/1 conserva su plan por trazabilidad, pero funcionalmente es una
+    // compra en un pago. Su transacción padre permite reutilizar el mismo detalle
+    // y la misma cascada de borrado que los consumos históricos sin plan.
+    const plannedSingleTransactions = plans
+        .filter((plan) => getCreditCardChargeKind(plan.installmentCount) === 'single')
+        .map((plan) => plan.parentTransaction)
+        .filter((transaction): transaction is ITransaction => Boolean(transaction))
+
+    const installmentPlans = plans.filter(
+        (plan) =>
+            getCreditCardChargeKind(plan.installmentCount) === 'installment' ||
+            !plan.parentTransaction
+    )
+
     // Build unified list
     const allItems: CCExpenseItem[] = [
-        ...plans.map((plan): CreditCardExpenseItem => ({ kind: 'plan', plan })),
+        ...installmentPlans.map((plan): CreditCardExpenseItem => ({ kind: 'plan', plan })),
+        ...plannedSingleTransactions.map((transaction): SingleCCExpenseItem => ({ kind: 'single', transaction })),
         ...singleExpenses.map((tx): SingleCCExpenseItem => ({ kind: 'single', transaction: tx })),
     ].sort((a, b) => {
         const aDate = a.kind === 'plan' ? new Date(a.plan.purchaseDate).getTime() : new Date(a.transaction.date).getTime()

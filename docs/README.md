@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-31
 > Fuente de verdad: índice canónico de documentación
 
 ## Índice
@@ -96,7 +96,7 @@ No crear otro backlog.
 | [`producto/captura_rapida_como_orientador.md`](producto/captura_rapida_como_orientador.md) | Interpretación, orientación y transporte de intención. | Vigente. |
 | [`producto/compromisos_espacios_y_proyeccion.md`](producto/compromisos_espacios_y_proyeccion.md) | Compromisos variables, Espacios, ajustes e impacto en proyección. | Vigente; contiene evolución futura. |
 | [`producto/criterio_entrega_motores_y_automatizaciones.md`](producto/criterio_entrega_motores_y_automatizaciones.md) | Condiciones de entrega para motores y sugerencias. | Vigente. |
-| [`tecnico/compromisos_variables_y_orientacion.md`](tecnico/compromisos_variables_y_orientacion.md) | Implementación del bloque de compromisos variables y orientación. | Referencia técnica vigente. |
+| [`tecnico/compromisos_variables_y_orientacion.md`](tecnico/compromisos_variables_y_orientacion.md) | Implementación de compromisos variables, orientación y Proyección. | Referencia técnica vigente. |
 
 Los estados futuros de estos documentos no constituyen backlog. Toda prioridad debe registrarse en el roadmap.
 
@@ -111,6 +111,7 @@ Decisiones vigentes:
 - [`0003 — Borrado explícito de pagos duales`](decisiones/0003-borrado-explicito-de-pagos-duales.md).
 - [`0004 — Resumen bimonetario de tarjetas`](decisiones/0004-resumen-bimonetario-de-tarjetas.md).
 - [`0005 — Captura rápida, tarjetas y handoffs tipados`](decisiones/0005-captura-rapida-tarjetas-y-handoffs.md).
+- [`0006 — Período, clasificación y lectura de Proyección`](decisiones/0006-periodo-clasificacion-y-lectura-de-proyeccion.md).
 
 Una decisión se documenta cuando:
 

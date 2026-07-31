@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { Currency } from '@/lib/constants'
+import type { ProjectionGrouping, ProjectionMode } from '@/types/projection'
 import { apiJson } from '@/lib/client/auth-client'
 import {
     invalidateData,
@@ -12,13 +13,17 @@ import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 export type DefaultView = 'dashboard' | 'transactions' | 'accounts' | 'projection'
 export type MonthStartDay = number // 1-28
 
-interface Preferences {
+export interface Preferences {
     defaultView: DefaultView
     monthStartDay: MonthStartDay
     defaultAccountId?: string
     consolidatedCurrency: Currency
     referenceArsPerUsdRate?: number
     operationalStartDate?: string
+    projectionGrouping: ProjectionGrouping
+    projectionMode: ProjectionMode
+    projectionMonths: number
+    projectionChartCurrency: Currency
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -28,6 +33,10 @@ const DEFAULT_PREFERENCES: Preferences = {
     consolidatedCurrency: 'ARS',
     referenceArsPerUsdRate: undefined,
     operationalStartDate: undefined,
+    projectionGrouping: 'type',
+    projectionMode: 'monthly',
+    projectionMonths: 6,
+    projectionChartCurrency: 'ARS',
 }
 
 const STORAGE_KEYS = {
@@ -37,6 +46,10 @@ const STORAGE_KEYS = {
     consolidatedCurrency: 'finp-consolidated-currency',
     referenceArsPerUsdRate: 'finp-reference-ars-per-usd-rate',
     operationalStartDate: 'finp-operational-start-date',
+    projectionGrouping: 'finp-projection-grouping',
+    projectionMode: 'finp-projection-mode',
+    projectionMonths: 'finp-projection-months',
+    projectionChartCurrency: 'finp-projection-chart-currency',
 } as const
 
 function readFromStorage(): Preferences {
@@ -50,6 +63,20 @@ function readFromStorage(): Preferences {
         const consolidatedCurrency: Currency = consolidatedCurrencyRaw === 'USD' ? 'USD' : DEFAULT_PREFERENCES.consolidatedCurrency
         const referenceArsPerUsdRateRaw = localStorage.getItem(STORAGE_KEYS.referenceArsPerUsdRate)
         const operationalStartDate = localStorage.getItem(STORAGE_KEYS.operationalStartDate) ?? undefined
+        const projectionGroupingRaw = localStorage.getItem(STORAGE_KEYS.projectionGrouping)
+        const projectionGrouping: ProjectionGrouping = ['type', 'card', 'category'].includes(projectionGroupingRaw ?? '')
+            ? projectionGroupingRaw as ProjectionGrouping
+            : DEFAULT_PREFERENCES.projectionGrouping
+        const projectionMode: ProjectionMode = localStorage.getItem(STORAGE_KEYS.projectionMode) === 'annual'
+            ? 'annual'
+            : DEFAULT_PREFERENCES.projectionMode
+        const projectionMonthsRaw = Number.parseInt(localStorage.getItem(STORAGE_KEYS.projectionMonths) ?? '', 10)
+        const projectionMonths = [1, 3, 6, 9, 12].includes(projectionMonthsRaw)
+            ? projectionMonthsRaw
+            : DEFAULT_PREFERENCES.projectionMonths
+        const projectionChartCurrency: Currency = localStorage.getItem(STORAGE_KEYS.projectionChartCurrency) === 'USD'
+            ? 'USD'
+            : DEFAULT_PREFERENCES.projectionChartCurrency
         const parsedRate = referenceArsPerUsdRateRaw ? Number.parseFloat(referenceArsPerUsdRateRaw) : undefined
         return {
             defaultView,
@@ -61,6 +88,10 @@ function readFromStorage(): Preferences {
                     ? parsedRate
                     : undefined,
             operationalStartDate: operationalStartDate || undefined,
+            projectionGrouping,
+            projectionMode,
+            projectionMonths,
+            projectionChartCurrency,
         }
     } catch {
         return DEFAULT_PREFERENCES
@@ -87,6 +118,10 @@ function writeToStorage(prefs: Preferences) {
         } else {
             localStorage.removeItem(STORAGE_KEYS.operationalStartDate)
         }
+        localStorage.setItem(STORAGE_KEYS.projectionGrouping, prefs.projectionGrouping)
+        localStorage.setItem(STORAGE_KEYS.projectionMode, prefs.projectionMode)
+        localStorage.setItem(STORAGE_KEYS.projectionMonths, String(prefs.projectionMonths))
+        localStorage.setItem(STORAGE_KEYS.projectionChartCurrency, prefs.projectionChartCurrency)
     } catch {
         // ignore
     }
@@ -96,6 +131,10 @@ function isDefaultPreferences(prefs: Preferences): boolean {
     return prefs.defaultView === DEFAULT_PREFERENCES.defaultView &&
         prefs.monthStartDay === DEFAULT_PREFERENCES.monthStartDay &&
         prefs.consolidatedCurrency === DEFAULT_PREFERENCES.consolidatedCurrency &&
+        prefs.projectionGrouping === DEFAULT_PREFERENCES.projectionGrouping &&
+        prefs.projectionMode === DEFAULT_PREFERENCES.projectionMode &&
+        prefs.projectionMonths === DEFAULT_PREFERENCES.projectionMonths &&
+        prefs.projectionChartCurrency === DEFAULT_PREFERENCES.projectionChartCurrency &&
         !prefs.referenceArsPerUsdRate &&
         !prefs.operationalStartDate
 }
@@ -109,12 +148,16 @@ async function patchPreferences(patch: Partial<Preferences>): Promise<void> {
 }
 
 export function usePreferences() {
-    // Initialize from localStorage immediately to avoid flash of defaults
-    const [preferences, setPreferences] = useState<Preferences>(() => readFromStorage())
+    // El primer render debe coincidir con el prerender del servidor. Leer
+    // localStorage en el inicializador rompe la hidrataciÃ³n y puede dejar los
+    // controles con defaults aunque API y almacenamiento tengan otro valor.
+    const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES)
 
     const fetchPreferences = useCallback(async () => {
         try {
-            const data = await apiJson<{ preferences: Preferences }>('/api/preferences')
+            const data = await apiJson<{ preferences: Preferences }>('/api/preferences', {
+                cache: 'no-store',
+            })
             if (!data?.preferences) return
 
             const apiPrefs = data.preferences
@@ -141,6 +184,7 @@ export function usePreferences() {
 
     useEffect(() => {
         const timeoutId = window.setTimeout(() => {
+            setPreferences(readFromStorage())
             void fetchPreferences()
         }, 0)
 
@@ -201,6 +245,18 @@ export function usePreferences() {
             .catch(() => {})
     }, [])
 
+    const setProjectionPreferences = useCallback((patch: Partial<Pick<
+        Preferences,
+        'projectionGrouping' | 'projectionMode' | 'projectionMonths' | 'projectionChartCurrency'
+    >>) => {
+        const next = { ...readFromStorage(), ...patch }
+        setPreferences((previous) => ({ ...previous, ...patch }))
+        writeToStorage(next)
+        patchPreferences(patch)
+            .then(() => invalidateData(['preferences']))
+            .catch(() => {})
+    }, [])
+
     return {
         preferences,
         setDefaultView,
@@ -209,5 +265,6 @@ export function usePreferences() {
         setConsolidatedCurrency,
         setReferenceArsPerUsdRate,
         setOperationalStartDate,
+        setProjectionPreferences,
     }
 }

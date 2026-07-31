@@ -21,6 +21,7 @@ export interface MonthlyCardChargeItem {
     cardId: string
     cardName?: string
     cardColor?: string
+    cardDueDay?: number
     amount: number
     currency: string
     description: string
@@ -31,6 +32,7 @@ export interface MonthlyCardChargeItem {
     installmentNumber: number
     installmentCount: number
     sourceId: string
+    sourceType: 'installment_plan' | 'transaction'
 }
 
 export type CardPaymentState = 'no_charges' | 'unpaid' | 'partial' | 'paid' | 'overpaid'
@@ -54,6 +56,7 @@ export interface MonthlyCardPaymentSummary {
     cardId: string
     cardName?: string
     cardColor?: string
+    cardDueDay?: number
     period: string
     byCurrency: {
         ars: CardCurrencyPaymentBreakdown
@@ -74,6 +77,9 @@ type RefLike = string | {
     color?: string
     currency?: string
     type?: string
+    creditCardConfig?: {
+        dueDay?: number
+    }
 } | null | undefined
 
 export const CREDIT_CARD_PAYMENT_TYPES = ['credit_card_payment', 'debt_payment'] as const
@@ -116,6 +122,15 @@ export function getRefCurrency(value: RefLike): string | undefined {
 export function getRefType(value: RefLike): string | undefined {
     if (!value || typeof value === 'string') return undefined
     return value.type
+}
+
+export function getRefDueDay(value: RefLike): number | undefined {
+    if (!value || typeof value === 'string') return undefined
+    return value.creditCardConfig?.dueDay
+}
+
+export function getCreditCardChargeKind(installmentCount?: number | null): 'single' | 'installment' {
+    return (installmentCount ?? 1) > 1 ? 'installment' : 'single'
 }
 
 export function deriveCardPaymentState(
@@ -268,6 +283,7 @@ export function buildMonthlyCardPaymentSummary(params: {
         cardId: string
         cardName?: string
         cardColor?: string
+        cardDueDay?: number
     }) => {
         if (!args.cardId) return null
         const existing = summaryByCard.get(args.cardId)
@@ -277,6 +293,7 @@ export function buildMonthlyCardPaymentSummary(params: {
             cardId: args.cardId,
             cardName: args.cardName,
             cardColor: args.cardColor,
+            cardDueDay: args.cardDueDay,
             period: month,
             byCurrency: {
                 ars: buildCurrencyBreakdown(0, 0),
@@ -309,16 +326,18 @@ export function buildMonthlyCardPaymentSummary(params: {
             cardId,
             cardName: getRefName(plan.accountId),
             cardColor: getRefColor(plan.accountId),
+            cardDueDay: getRefDueDay(plan.accountId),
         })
 
         if (!summary) continue
 
         addCurrencyAmount(summary.due, plan.currency, plan.installmentAmount)
         summary.items.push({
-            kind: 'installment',
+            kind: getCreditCardChargeKind(plan.installmentCount),
             cardId,
             cardName: summary.cardName,
             cardColor: summary.cardColor,
+            cardDueDay: summary.cardDueDay,
             amount: plan.installmentAmount,
             currency: plan.currency,
             description: plan.description,
@@ -329,6 +348,7 @@ export function buildMonthlyCardPaymentSummary(params: {
             installmentNumber: status.current ?? 1,
             installmentCount: plan.installmentCount,
             sourceId: plan._id.toString(),
+            sourceType: 'installment_plan',
         })
     }
 
@@ -343,6 +363,7 @@ export function buildMonthlyCardPaymentSummary(params: {
                 cardId,
                 cardName: getRefName(transaction.sourceAccountId),
                 cardColor: getRefColor(transaction.sourceAccountId),
+                cardDueDay: getRefDueDay(transaction.sourceAccountId),
             })
 
             if (!summary) continue
@@ -353,6 +374,7 @@ export function buildMonthlyCardPaymentSummary(params: {
                 cardId,
                 cardName: summary.cardName,
                 cardColor: summary.cardColor,
+                cardDueDay: summary.cardDueDay,
                 amount: transaction.amount,
                 currency: transaction.currency,
                 description: transaction.description,
@@ -363,6 +385,7 @@ export function buildMonthlyCardPaymentSummary(params: {
                 installmentNumber: 1,
                 installmentCount: 1,
                 sourceId: transaction._id.toString(),
+                sourceType: 'transaction',
             })
         }
 

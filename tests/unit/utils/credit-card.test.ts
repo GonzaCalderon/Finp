@@ -4,6 +4,7 @@ import {
     buildMonthlyCardPaymentSummary,
     deriveAggregateCardPaymentState,
     deriveCardPaymentState,
+    getCreditCardChargeKind,
     isCreditCardPaymentType,
 } from '@/lib/utils/credit-card'
 import type { IInstallmentPlan, ITransaction } from '@/types'
@@ -13,6 +14,7 @@ const card = (id: string, name: string) => ({
     name,
     type: 'credit_card',
     color: '#334155',
+    creditCardConfig: { dueDay: 18 },
 })
 
 const account = (id: string) => ({
@@ -44,7 +46,8 @@ function plan(
     id: string,
     cardRef: ReturnType<typeof card>,
     currency: 'ARS' | 'USD',
-    amount: number
+    amount: number,
+    installmentCount = 3
 ): IInstallmentPlan {
     return {
         _id: { toString: () => id },
@@ -53,8 +56,8 @@ function plan(
         categoryId: { _id: { toString: () => 'category-1' }, name: 'Servicios' },
         description: id,
         currency,
-        totalAmount: amount * 3,
-        installmentCount: 3,
+        totalAmount: amount * installmentCount,
+        installmentCount,
         installmentAmount: amount,
         purchaseDate: new Date(2026, 5, 10),
         firstClosingMonth: '2026-07',
@@ -118,6 +121,95 @@ describe('resumen mensual de tarjetas', () => {
             },
         })
         expect(summaries[0].payments).toHaveLength(2)
+        expect(summaries[0].cardDueDay).toBe(18)
+    })
+
+    it('clasifica un plan 1/1 como consumo de un pago en su primer cierre', () => {
+        const visa = card('visa', 'Visa')
+        const [summary] = buildMonthlyCardPaymentSummary({
+            month: '2026-07',
+            plans: [plan('one-pay', visa, 'ARS', 125_000, 1)],
+            transactions: [],
+        })
+
+        expect(getCreditCardChargeKind(1)).toBe('single')
+        expect(summary.items).toEqual([
+            expect.objectContaining({
+                kind: 'single',
+                sourceId: 'one-pay',
+                installmentNumber: 1,
+                installmentCount: 1,
+            }),
+        ])
+        expect(buildMonthlyCardPaymentSummary({
+            month: '2026-08',
+            plans: [plan('one-pay', visa, 'ARS', 125_000, 1)],
+            transactions: [],
+        })).toEqual([])
+    })
+
+    it('ubica un consumo historico sin plan en el periodo financiero de su fecha', () => {
+        const visa = card('visa', 'Visa')
+        const historical = transaction('historical', {
+            type: 'credit_card_expense',
+            amount: 20_000,
+            date: new Date(2026, 6, 10),
+            sourceAccountId: visa,
+        })
+
+        const [summary] = buildMonthlyCardPaymentSummary({
+            month: '2026-06',
+            monthStartDay: 20,
+            plans: [],
+            transactions: [historical],
+        })
+
+        expect(summary.items[0]).toMatchObject({
+            kind: 'single',
+            sourceId: 'historical',
+            installmentCount: 1,
+        })
+        expect(buildMonthlyCardPaymentSummary({
+            month: '2026-07',
+            monthStartDay: 20,
+            plans: [],
+            transactions: [historical],
+        })).toEqual([])
+    })
+
+    it('no vuelve a contar la transaccion padre de un plan', () => {
+        const visa = card('visa', 'Visa')
+        const parent = transaction('parent', {
+            type: 'credit_card_expense',
+            amount: 3000,
+            sourceAccountId: visa,
+            installmentPlanId: { toString: () => 'plan' },
+        })
+        const [summary] = buildMonthlyCardPaymentSummary({
+            month: '2026-07',
+            plans: [plan('plan', visa, 'ARS', 1000)],
+            transactions: [parent],
+        })
+
+        expect(summary.due.ars).toBe(1000)
+        expect(summary.items).toHaveLength(1)
+        expect(summary.items[0]).toMatchObject({ kind: 'installment', sourceId: 'plan' })
+    })
+
+    it('respeta el inicio operativo al incluir cargos', () => {
+        const visa = card('visa', 'Visa')
+        const expense = transaction('before-start', {
+            type: 'credit_card_expense',
+            date: new Date(2026, 6, 10),
+            sourceAccountId: visa,
+        })
+
+        expect(buildMonthlyCardPaymentSummary({
+            month: '2026-07',
+            plans: [],
+            transactions: [expense],
+            operationalStartDate: new Date(2026, 6, 15),
+        })).toEqual([])
     })
 
     it('ignora pagos cuyo destino no es una tarjeta', () => {

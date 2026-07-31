@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-07-31
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -206,7 +206,22 @@ elige el usuario.
 - estados derivados;
 - procedencia visible;
 - proyección con monto correcto por período;
-- proyección de cuotas múltiples agrupada por tarjeta y detallada por consumo;
+- proyección de compras `1/1`, consumos históricos sin plan y cuotas múltiples,
+  sin doble conteo y con ARS/USD separados;
+- clasificación compartida con Tarjetas y Dashboard: `1/1` es un pago y sólo
+  los planes mayores a una cuota se presentan como cuotas;
+- vista inicial por tipo y próximos seis períodos, con Año calendario como modo
+  secundario;
+- agrupación por tipo, tarjeta o categoría sobre la misma lista canónica;
+- resumen y gráfico apilado por Compromisos, `TC · un pago` y `TC · cuotas`;
+- certeza visible, estimaciones advertidas y montos pendientes sin `$0`;
+- cuenta habitual o vencimiento como contexto y enlaces filtrados sin montos;
+- preferencias por usuario para agrupación, modo, horizonte y moneda del
+  gráfico, con fallback local e hidratación estable;
+- ocultamiento global de montos, error recuperable, reintento, cancelación de
+  respuestas obsoletas e invalidación desde datos dependientes;
+- componentes compartidos mobile/desktop, expansión accesible y soporte de
+  dark mode y movimiento reducido;
 - actualización opcional de períodos futuros sin reescribir historia;
 - backfill idempotente con modo `dry-run`, aplicado y verificado sobre `finm` el
   2026-07-28.
@@ -218,13 +233,12 @@ elige el usuario.
 - índices oficiales;
 - scheduler para `auto_month_start`;
 - notificaciones push o recordatorios fuera de la aplicación;
-- consumos con tarjeta en un pago dentro de Proyección;
-- separación visible entre `TC · un pago` y `TC · cuotas`;
-- agrupación de Proyección por categoría con porcentaje y detalle;
-- vistas de Proyección personalizables;
 - centro de análisis histórico por categoría, cuenta, tarjeta y método de pago;
 - objetivos y límites por categoría;
-- escenarios avanzados de proyección.
+- escenarios avanzados de proyección;
+- cashflow proyectado por cuenta;
+- compromisos compartidos, parte propia, adelantos y recuperables dentro de
+  Proyección.
 
 ## 6. Espacios
 
@@ -339,8 +353,8 @@ Mobile web sigue siendo la superficie prioritaria.
 - orquestación de NavInsights cubierta en período, aislamiento y señales;
 - Playwright preparado para Chromium desktop y mobile;
 - preflight E2E compartido por configuración, seed y Playwright;
-- seed repetible que repara los usuarios general y financiero, categorías,
-  cuentas y dataset representativo;
+- seed repetible que repara los usuarios general, financiero y de Proyección,
+  categorías, cuentas y datasets representativos;
 - suite completa aprobada contra `finp-e2e` sin escrituras en desarrollo;
 - CI para verificaciones principales y job E2E listo para ejecutarse apenas
   reciba la credencial rotada;
@@ -363,8 +377,8 @@ Mobile web sigue siendo la superficie prioritaria.
 - La orientación aún no cubre reglas, Deudas, Espacios e Importación.
 - La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
   elegir.
-- La proyección omite consumos con tarjeta en un pago y no ofrece todavía el
-  recorrido tarjeta → categoría → movimiento.
+- Proyección no calcula cashflow por cuenta ni escenarios y todavía no incluye
+  compromisos compartidos, parte propia, adelantos o recuperables.
 - No existe una superficie dedicada para análisis histórico, patrones,
   anomalías, objetivos y límites por categoría.
 - No hay realtime ni offline.
@@ -373,13 +387,15 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Recurrencias aprendidas y tarjetas desde Captura rápida, 2026-07-28:
+Cierre operativo de Proyección, 2026-07-31:
 
-- candidatos mensuales visibles y descartables desde Captura rápida y
-  Compromisos sin cambiar los umbrales vigentes;
-- compras con tarjeta en un pago confirmables y reversibles dentro del diálogo;
-- cuotas y pagos derivados con borradores tipados y datos preservados;
-- referencias a cuotas existentes abiertas en revisión sin duplicar planes;
-- clasificación, propiedad y moneda validadas con recorridos desktop y mobile;
-- detección, aceptación y finalización registradas por separado sin persistir el
-  texto financiero.
+- contrato compartido y serializable con fuente, certeza, contexto, enlaces y
+  totales separados;
+- compras `1/1`, históricos sin plan y cuotas incluidos en el período correcto,
+  sin contar la transacción padre ni pagos de tarjeta;
+- agrupaciones por tipo, tarjeta y categoría con los mismos ítems y totales;
+- seis meses por defecto, Año calendario, resumen, gráfico y detalle expandible;
+- preferencias privadas, fallback local, hidratación estable e invalidaciones;
+- carga, vacío, período vacío, error, reintento, privacidad, accesibilidad,
+  contenido largo, dark mode y movimiento reducido;
+- verificación unitaria, API/servicio y E2E aislada en desktop y Pixel 7.

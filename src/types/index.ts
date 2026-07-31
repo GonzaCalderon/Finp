@@ -1,4 +1,5 @@
 import type { Types } from 'mongoose'
+import type { ProjectionGrouping, ProjectionMode } from './projection'
 import type {
     AccountType,
     ApplyMode,
@@ -55,6 +56,10 @@ export interface UserPreferences {
     consolidatedCurrency?: Currency
     referenceArsPerUsdRate?: number
     operationalStartDate?: string
+    projectionGrouping?: ProjectionGrouping
+    projectionMode?: ProjectionMode
+    projectionMonths?: number
+    projectionChartCurrency?: Currency
 }
 
 export interface IUser {

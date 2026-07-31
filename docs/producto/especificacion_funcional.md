@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-07-31
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -513,7 +513,7 @@ La proyección combina:
 - consumos con tarjeta en un pago;
 - consumos con tarjeta en cuotas;
 - aplicaciones y montos por período;
-- saldos o cashflow esperado.
+- contexto habitual de cuenta o vencimiento cuando existe.
 
 Debe distinguir:
 
@@ -530,9 +530,32 @@ Las fechas de compromiso se derivan desde una única regla de dominio. Los días
 la fecha de inicio y el recordatorio puede cruzar al mes anterior. Una ocurrencia
 anterior al inicio no es pendiente ni forma parte de la proyección.
 
-La lectura de tarjetas debe separar `TC · un pago` de `TC · cuotas`; una compra
-en un pago no desaparece ni se presenta como cuota múltiple. Dentro de cada
-grupo, el recorrido esperado es:
+La lectura de tarjetas separa `TC · un pago` de `TC · cuotas`. Un plan `1/1`
+usa su primer cierre, se presenta como un pago y queda confirmado. Un consumo
+histórico sin plan usa el período financiero de su fecha y también queda
+confirmado. Un plan mayor a una cuota deriva sus períodos y queda calculado. La
+transacción padre de un plan y los pagos de tarjeta no se suman como consumos.
+
+La vista inicial usa próximos seis períodos y agrupación por tipo. Año
+calendario es secundario y permite elegir año. Los períodos pasados distinguen
+lo registrado de lo esperado. La moneda del gráfico parte de la moneda
+consolidada del usuario, pero ARS y USD se leen y totalizan siempre por separado.
+
+Las agrupaciones disponibles recorren:
+
+- por tipo: fuente → tarjeta cuando corresponde → categoría → consumo;
+- por tarjeta: Compromisos separados y tarjeta → tipo → categoría → consumo;
+- por categoría: categoría → tipo → tarjeta cuando corresponde → consumo.
+
+Cada consumo expone certeza, contexto de cuenta o vencimiento y un enlace a la
+superficie responsable. Los enlaces pueden transportar período, tarjeta,
+categoría y tipo, pero nunca montos. Una cuenta habitual de compromiso es
+contexto; Finp no inventa la cuenta futura de pago de una tarjeta ni calcula
+cashflow por cuenta en este cierre.
+
+Los montos pendientes muestran “Monto a confirmar”, no `$0`. El resumen
+advierte estimaciones y datos incompletos. Dentro de cada grupo, el recorrido
+esperado conserva:
 
 1. período;
 2. tipo de proyección;
@@ -545,8 +568,13 @@ tanto la representación vigente como datos históricos compatibles y conservar
 una única fuente para período, moneda, categoría y monto.
 
 La persona puede elegir vistas útiles —por tipo, tarjeta o categoría— y Finp
-puede recordar su preferencia. Esa personalización cambia la presentación, no
-la inclusión de movimientos ni las reglas financieras.
+recuerda agrupación, modo, horizonte y moneda del gráfico por usuario. Esa
+personalización cambia la presentación, no la inclusión de movimientos ni las
+reglas financieras. Su nivel de aprendizaje es `personalizar`; ningún cálculo
+financiero se aprende ni automatiza.
+
+Escenarios, cashflow proyectado por cuenta y la parte propia o recuperable de
+compromisos compartidos pertenecen a ítems separados del roadmap.
 
 ### Análisis y planificación
 

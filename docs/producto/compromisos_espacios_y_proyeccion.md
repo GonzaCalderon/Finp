@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-07-31
 > Fuente de verdad: diseño funcional de compromisos y su evolución
 
 ## Índice
@@ -34,7 +34,7 @@ Sin estas capacidades:
 - cada participante puede proyectar información distinta sobre una misma obligación compartida;
 - se desperdicia información contractual conocida de antemano.
 
-### Estado real al 2026-07-25
+### Estado real al 2026-07-31
 
 Documentación técnica de la implementación: `docs/tecnico/compromisos_variables_y_orientacion.md`.
 
@@ -47,7 +47,12 @@ Implementado (Fases 1 y 2):
 - Procedencia bidireccional: la transacción guarda `commitmentId`, `commitmentApplicationId`, `commitmentPeriod` y `commitmentNameSnapshot`, y la lista la muestra.
 - Editar la transacción actualiza el snapshot pero **no** la plantilla; propagar a próximos períodos es una acción explícita que agrega un tramo a la agenda.
 - Eliminar la transacción deja la aplicación en `reverted`, reabre el período y conserva el compromiso.
-- Proyección extraída a `src/lib/server/projection.ts`: incluye `weekly` y `once`, honra `monthStartDay`, usa el monto correcto por período y filtra compras en un pago.
+- Proyección extraída a `src/lib/server/projection.ts`: incluye `weekly` y
+  `once`, honra `monthStartDay` e inicio operativo, usa el monto correcto por
+  período e integra compras `1/1`, históricos sin plan y cuotas sin doble
+  conteo.
+- Contrato compartido con certeza, contexto, enlace y totales separados; las
+  agrupaciones por tipo, tarjeta y categoría reutilizan una lista canónica.
 - Cuenta habitual (`accountId`) y validación zod en el servidor de las rutas de compromisos.
 - UX mobile-first en tres pasos, agenda separada e historial colapsable.
 - Monto vigente, fecha efectiva y aplicación actual visibles en la lista.
@@ -282,25 +287,42 @@ El compromiso compartido usa una categoría interna del Espacio. Cada participan
 
 ## 7. Proyección
 
-La proyección futura debería combinar:
+La proyección operativa combina hoy:
 
-- compromisos personales;
+- compromisos personales registrados, calculados, estimados o con monto a
+  confirmar;
+- compras modernas `1/1` en su primer cierre;
+- consumos históricos sin plan en el período financiero de su fecha;
+- planes mayores a una cuota en los períodos derivados del plan.
+
+El plan es la fuente de verdad cuando existe: su transacción padre no se vuelve
+a sumar. Los pagos de tarjeta no reducen el consumo proyectado. ARS y USD se
+mantienen separados. La cuenta habitual y el vencimiento sólo aportan contexto;
+no se infiere una cuenta de pago para tarjetas.
+
+La vista parte de próximos seis períodos agrupados por tipo, ofrece Año
+calendario y permite agrupar por tarjeta o categoría sin modificar ítems ni
+totales. Cada detalle conserva certeza y enlace navegable. Las preferencias
+recordadas personalizan la presentación; ningún cálculo se aprende.
+
+La evolución futura puede combinar además:
+
 - parte propia de compromisos de Espacios;
-- cuotas de tarjetas;
-- consumos de tarjeta en un pago;
-- ajustes de monto programados;
-- estimaciones variables;
-- obligaciones pendientes de confirmación.
+- ajustes porcentuales e índices oficiales;
+- adelantos y montos recuperables;
+- escenarios y cashflow por cuenta cuando sus reglas estén definidas.
 
-Cada monto proyectado necesita un nivel de certeza:
+Los niveles vigentes son:
 
 - confirmado;
 - calculado por regla;
 - estimado;
-- pendiente de índice;
 - pendiente de monto real.
 
-La interfaz debe permitir distinguir:
+Un índice futuro debe agregar su estado pendiente sin degradar los niveles ya
+implementados.
+
+La evolución compartida debe permitir distinguir:
 
 - total del compromiso;
 - parte propia;

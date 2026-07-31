@@ -50,13 +50,13 @@ export async function GET(request: Request) {
                 userId: session.user.id,
                 ...(cardId ? { accountId: cardId } : {}),
             })
-                .populate('accountId', 'name type currency color')
+                .populate('accountId', 'name type currency color creditCardConfig.dueDay')
                 .populate('categoryId', 'name color type'),
             Account.find({
                 userId: session.user.id,
                 type: 'credit_card',
                 ...(cardId ? { _id: cardId } : {}),
-            }, 'name currency supportedCurrencies color'),
+            }, 'name currency supportedCurrencies color creditCardConfig.dueDay'),
         ])
 
         const rawSummaries = buildMonthlyCardPaymentSummary({
@@ -81,6 +81,7 @@ export async function GET(request: Request) {
                 cardId: card._id.toString(),
                 cardName: card.name,
                 cardColor: card.color,
+                cardDueDay: card.creditCardConfig?.dueDay,
                 period: month,
                 byCurrency: {
                     ars: emptyBreakdown(),

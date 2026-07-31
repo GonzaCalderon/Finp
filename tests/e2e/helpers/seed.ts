@@ -23,6 +23,13 @@ import {
     FINANCIAL_SMOKE_TAG,
     FINANCIAL_SMOKE_USER_NAME,
 } from './financial-smoke'
+import {
+    buildProjectionSmokePeriod,
+    deriveProjectionSmokeEmail,
+    PROJECTION_SMOKE_IDS,
+    PROJECTION_SMOKE_NAMES,
+    PROJECTION_SMOKE_USER_NAME,
+} from './projection-smoke'
 
 const TEST_NAME = 'Test User'
 const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
@@ -540,6 +547,209 @@ async function seedFinancialSmokeData(email: string, password: string) {
     return { created, current, historical }
 }
 
+async function seedProjectionSmokeData(email: string, password: string) {
+    const { user, created } = await ensureTestUser(
+        deriveProjectionSmokeEmail(email),
+        password,
+        PROJECTION_SMOKE_USER_NAME
+    )
+    user.set('preferences.monthStartDay', 1)
+    user.set('preferences.consolidatedCurrency', 'ARS')
+    user.set('preferences.operationalStartDate', undefined)
+    user.set('preferences.projectionGrouping', 'type')
+    user.set('preferences.projectionMode', 'monthly')
+    user.set('preferences.projectionMonths', 6)
+    user.set('preferences.projectionChartCurrency', 'ARS')
+    await user.save()
+
+    await ensureDefaultCategories(user._id)
+    const expenseCategory = await Category.findOne({
+        userId: user._id,
+        type: 'expense',
+        isArchived: false,
+    })
+    if (!expenseCategory) throw new Error('No se pudo resolver la categoria para Proyeccion E2E.')
+
+    const db = mongoose.connection.db
+    if (!db) throw new Error('No se pudo obtener la base E2E para Proyeccion.')
+
+    await Promise.all([
+        db.collection('transactions').deleteMany({ userId: user._id }),
+        db.collection('installmentplans').deleteMany({ userId: user._id }),
+        db.collection('scheduledcommitments').deleteMany({ userId: user._id }),
+        db.collection('commitmentapplications').deleteMany({ userId: user._id }),
+    ])
+
+    const id = (value: string) => new mongoose.Types.ObjectId(value)
+    const ids = Object.fromEntries(
+        Object.entries(PROJECTION_SMOKE_IDS).map(([key, value]) => [key, id(value)])
+    ) as Record<keyof typeof PROJECTION_SMOKE_IDS, mongoose.Types.ObjectId>
+    const { current, dates } = buildProjectionSmokePeriod()
+    const now = new Date()
+    const timestamps = { createdAt: now, updatedAt: now }
+
+    await Promise.all([
+        db.collection('accounts').replaceOne(
+            { _id: ids.bankAccount },
+            {
+                _id: ids.bankAccount,
+                userId: user._id,
+                name: PROJECTION_SMOKE_NAMES.bankAccount,
+                type: 'bank',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS'],
+                initialBalance: 0,
+                initialBalances: { ARS: 0, USD: 0 },
+                color: '#0EA5E9',
+                isActive: true,
+                includeInNetWorth: true,
+                allowNegativeBalance: false,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('accounts').replaceOne(
+            { _id: ids.creditCard },
+            {
+                _id: ids.creditCard,
+                userId: user._id,
+                name: PROJECTION_SMOKE_NAMES.creditCard,
+                type: 'credit_card',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS', 'USD'],
+                initialBalance: 0,
+                initialBalances: { ARS: 0, USD: 0 },
+                color: '#6366F1',
+                isActive: true,
+                includeInNetWorth: false,
+                allowNegativeBalance: true,
+                creditCardConfig: { closingDay: 20, dueDay: 5, creditLimit: 1_000_000 },
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    const plans = db.collection('installmentplans')
+    await Promise.all([
+        plans.replaceOne(
+            { _id: ids.singlePlan },
+            {
+                _id: ids.singlePlan,
+                userId: user._id,
+                accountId: ids.creditCard,
+                categoryId: expenseCategory._id,
+                description: PROJECTION_SMOKE_NAMES.singlePlan,
+                currency: 'ARS',
+                totalAmount: 120_000,
+                installmentCount: 1,
+                installmentAmount: 120_000,
+                purchaseDate: dates.singlePurchase,
+                firstClosingMonth: current,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        plans.replaceOne(
+            { _id: ids.installmentPlan },
+            {
+                _id: ids.installmentPlan,
+                userId: user._id,
+                accountId: ids.creditCard,
+                categoryId: expenseCategory._id,
+                description: PROJECTION_SMOKE_NAMES.installmentPlan,
+                currency: 'USD',
+                totalAmount: 90,
+                installmentCount: 3,
+                installmentAmount: 30,
+                purchaseDate: dates.installmentPurchase,
+                firstClosingMonth: current,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    const transactionBase = {
+        userId: user._id,
+        type: 'credit_card_expense',
+        categoryId: expenseCategory._id,
+        sourceAccountId: ids.creditCard,
+        status: 'confirmed',
+        createdFrom: 'system',
+        ...timestamps,
+    }
+    const transactions = db.collection('transactions')
+    await Promise.all([
+        transactions.replaceOne(
+            { _id: ids.singleParent },
+            {
+                _id: ids.singleParent,
+                ...transactionBase,
+                amount: 120_000,
+                currency: 'ARS',
+                date: dates.singlePurchase,
+                description: PROJECTION_SMOKE_NAMES.singlePlan,
+                installmentPlanId: ids.singlePlan,
+            },
+            { upsert: true }
+        ),
+        transactions.replaceOne(
+            { _id: ids.installmentParent },
+            {
+                _id: ids.installmentParent,
+                ...transactionBase,
+                amount: 90,
+                currency: 'USD',
+                date: dates.installmentPurchase,
+                description: PROJECTION_SMOKE_NAMES.installmentPlan,
+                installmentPlanId: ids.installmentPlan,
+            },
+            { upsert: true }
+        ),
+        transactions.replaceOne(
+            { _id: ids.historicalSingle },
+            {
+                _id: ids.historicalSingle,
+                ...transactionBase,
+                amount: 15,
+                currency: 'USD',
+                date: dates.historicalSingle,
+                description: PROJECTION_SMOKE_NAMES.historicalSingle,
+            },
+            { upsert: true }
+        ),
+    ])
+
+    await db.collection('scheduledcommitments').replaceOne(
+        { _id: ids.commitment },
+        {
+            _id: ids.commitment,
+            userId: user._id,
+            description: PROJECTION_SMOKE_NAMES.commitment,
+            amount: 70_000,
+            currency: 'ARS',
+            categoryId: expenseCategory._id,
+            accountId: ids.bankAccount,
+            recurrence: 'monthly',
+            dayOfMonth: 10,
+            applyMode: 'manual',
+            isActive: true,
+            lifecycleStatus: 'active',
+            startDate: dates.commitmentStart,
+            amountPolicy: 'fixed',
+            amountSchedule: [],
+            estimationMode: 'template',
+            aliases: [],
+            createdFrom: 'system',
+            ...timestamps,
+        },
+        { upsert: true }
+    )
+
+    return { created, current }
+}
+
 async function seed() {
     const environment = resolveE2EEnvironment()
     const {
@@ -604,6 +814,10 @@ async function seed() {
             TEST_USER_EMAIL,
             TEST_USER_PASSWORD
         )
+        const projectionSmoke = await seedProjectionSmokeData(
+            TEST_USER_EMAIL,
+            TEST_USER_PASSWORD
+        )
 
         console.log('✅ Seed E2E verificado:')
         console.log(`   Usuario: ${userCreated ? 'creado' : 'actualizado'}`)
@@ -617,6 +831,10 @@ async function seed() {
         console.log(
             `   Smoke financiero: usuario ${financialSmoke.created ? 'creado' : 'actualizado'}, ` +
             `períodos ${financialSmoke.historical} y ${financialSmoke.current}`
+        )
+        console.log(
+            `   Proyección: usuario ${projectionSmoke.created ? 'creado' : 'actualizado'}, ` +
+            `período ${projectionSmoke.current}`
         )
     } finally {
         await mongoose.disconnect()

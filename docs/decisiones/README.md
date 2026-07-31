@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-07-28
+> Última actualización: 2026-07-31
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -88,3 +88,6 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0005 — Captura rápida, tarjetas y handoffs tipados`](0005-captura-rapida-tarjetas-y-handoffs.md):
   clasificación financiera determinista, contratos discriminados, límites de
   resolución local y transporte a superficies especializadas.
+- [`0006 — Período, clasificación y lectura de Proyección`](0006-periodo-clasificacion-y-lectura-de-proyeccion.md):
+  período de tarjetas, compra `1/1`, certeza, agrupaciones invariantes y límites
+  del cierre operativo.

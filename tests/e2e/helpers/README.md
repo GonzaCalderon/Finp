@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-07-31
 > Fuente de verdad: procedimiento local para preparar y ejecutar Playwright
 
 ## Índice
@@ -75,8 +75,11 @@ El seed es idempotente y acotado al usuario configurado. Crea o repara:
 - tarjeta bimonetaria Tarjeta E2E;
 - cuenta histórica no patrimonial y candidato recurrente P2;
 - usuario financiero independiente derivado del email de test;
+- usuario independiente de Proyección derivado del email de test;
 - dos períodos representativos con ARS/USD, saldo acumulado y negativo;
 - compra en tres cuotas;
+- Proyección con compromiso, compra `1/1`, consumo histórico sin plan y cuotas
+  en ARS/USD;
 - préstamo parcialmente pagado y préstamo saldado.
 
 Antes de recrear los fixtures, restaura transacciones, cuotas, compromisos y
@@ -102,6 +105,10 @@ npm run test:e2e
 
 El smoke financiero adjunta capturas de Dashboard, Transacciones, Cuentas y
 Deudas al reporte de Playwright en ambos proyectos.
+
+`projection.spec.ts` valida el contrato y el recorrido real en desktop y Pixel
+7: seis meses, ARS/USD, expansión, navegación, persistencia, privacidad, dark
+mode y movimiento reducido.
 
 ## 6. CI
 

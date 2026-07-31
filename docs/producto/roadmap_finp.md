@@ -137,21 +137,35 @@ Los principios de producto y de trabajo viven en
   en un pago, handoffs tipados para cuotas y pagos, revisión sin duplicar planes,
   procedencia `quick_capture`, rollback y E2E aislado desktop/mobile.
 
-### FINP-P2-011 — Proyección avanzada
+### FINP-P2-011 — Cierre operativo de Proyección
 
-- Estado: `pendiente`.
-- Prioridad operativa: siguiente bloque.
-- Alcance inicial: auditar y cerrar la inclusión de compras con tarjeta en un
-  pago y consumos históricos sin plan, sin omisiones ni doble conteo, con ARS y
-  USD separados.
-- Alcance completo: la lectura por tipo, tarjeta y categoría descripta en
-  [`especificacion_funcional.md`](especificacion_funcional.md) §14, más certeza de
-  monto, parte propia, salida de cuenta y escenarios.
-- Criterio: la vista predeterminada y la personalización se definen después de
-  asegurar la exactitud; cambiar de vista no cambia reglas, totales ni inclusión
-  de datos.
-- Relación: comparte agregaciones y navegación con FINP-P2-008/009/010, pero
-  Proyección conserva foco futuro y no absorbe toda la administración histórica.
+- Estado: `cerrado`.
+- Alcance: compromisos personales, compras `1/1`, consumos históricos sin plan
+  y cuotas, con período, certeza, ARS/USD, contexto y navegación correctos.
+- Criterio cumplido: agrupaciones por tipo, tarjeta y categoría usan una lista
+  canónica; preferencias sólo personalizan presentación; pagos y transacciones
+  padre no duplican gastos.
+- Evidencia: contrato compartido, servicio aislado por usuario sin consulta por
+  período, query estricta y privada, clasificación compartida con Tarjetas y
+  Dashboard, componentes responsive, unit/API y cuatro E2E aislados en Chromium
+  desktop y Pixel 7.
+- Decisión: [`0006 — Período, clasificación y lectura de Proyección`](../decisiones/0006-periodo-clasificacion-y-lectura-de-proyeccion.md).
+
+### FINP-P2-012 — Escenarios de Proyección
+
+- Estado: `en discovery`.
+- Alcance: comparar una base con cambios hipotéticos sin alterar compromisos,
+  planes ni transacciones persistidos.
+- Criterio a definir: variables permitidas, monedas, vigencia, explicación,
+  guardado, descarte y costo de cálculo.
+
+### FINP-P2-013 — Cashflow proyectado por cuenta
+
+- Estado: `en discovery`.
+- Alcance: estimar entradas y salidas por cuenta sin confundir tarjeta con
+  cuenta futura de pago.
+- Criterio a definir: cuenta probable, transferencias, pagos de resumen,
+  multi-moneda, saldos, incertidumbre y ausencia de cuenta.
 
 ### FINP-P2-007 — Bandeja diaria de revisión
 
@@ -236,6 +250,13 @@ Los principios de producto y de trabajo viven en
 
 - Estado: `pendiente`.
 - Criterio: URLs legibles sin comprometer autorización ni estabilidad de enlaces.
+
+### FINP-P3-011 — Compromisos compartidos dentro de Proyección
+
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P3-001.
+- Alcance: total compartido, parte propia, adelanto, recuperable y contexto
+  privado por participante sin mezclar contabilidad personal y compartida.
 
 ## 7. Prioridad P4 — plataforma, orientación diferida y escalabilidad
 
@@ -332,6 +353,19 @@ Ya priorizadas como ítem: activar E2E es FINP-P0-004. Ya resueltas: la validaci
 documental corre con `npm run docs:check`.
 
 ## 10. Cerrado recientemente
+
+### 2026-07-31
+
+- FINP-P2-011: Proyección integra compromisos, compras `1/1`, consumos
+  históricos sin plan y cuotas sin doble conteo; separa ARS/USD y certeza,
+  permite agrupar la misma lista por tipo, tarjeta o categoría, recuerda
+  presentación por usuario y ofrece detalle navegable, privacidad y recuperación;
+- la clasificación `1/1` se comparte con Tarjetas y Dashboard, y el período de
+  cada representación queda registrado en la decisión 0006;
+- cuatro recorridos E2E pasan contra `finp-e2e` en Chromium desktop y Pixel 7,
+  incluidos persistencia, ocultamiento, dark mode y movimiento reducido;
+- escenarios, cashflow por cuenta y Proyección de compromisos compartidos quedan
+  separados como FINP-P2-012, FINP-P2-013 y FINP-P3-011.
 
 ### 2026-07-28
 
