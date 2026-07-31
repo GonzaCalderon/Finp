@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-07-31
 > Fuente de verdad: contrato funcional de orientación
 
 ## Índice
@@ -307,7 +307,7 @@ crear el compromiso precompletado o registrar sólo el gasto actual.
 - estados de detección, aceptación y finalización separados;
 - sin aprendizaje automático de tarjetas.
 
-### Etapa 5: otros módulos
+### Etapa 5: otros módulos — diferida
 
 - reglas;
 - Deudas;
@@ -315,6 +315,7 @@ crear el compromiso precompletado o registrar sólo el gasto actual.
 - Importación.
 
 Cada integración se entrega de punta a punta antes de incorporar el siguiente destino.
+Su reanudación y orden dependen del roadmap vigente.
 
 ## 10. Métricas de éxito
 

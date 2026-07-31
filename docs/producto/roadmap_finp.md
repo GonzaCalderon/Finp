@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-07-31
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -11,9 +11,9 @@
 2. [Dirección de desarrollo](#2-dirección-de-desarrollo)
 3. [Prioridad P0 — confianza financiera y cierre operativo](#3-prioridad-p0-confianza-financiera-y-cierre-operativo)
 4. [Prioridad P1 — deuda técnica y UX bloqueante](#4-prioridad-p1-deuda-técnica-y-ux-bloqueante)
-5. [Prioridad P2 — recurrencia y orientación](#5-prioridad-p2-recurrencia-y-orientación)
-6. [Prioridad P3 — colaboración y proyección](#6-prioridad-p3-colaboración-y-proyección)
-7. [Prioridad P4 — plataforma y escalabilidad](#7-prioridad-p4-plataforma-y-escalabilidad)
+5. [Prioridad P2 — recurrencia, proyección y análisis](#5-prioridad-p2-recurrencia-proyección-y-análisis)
+6. [Prioridad P3 — colaboración](#6-prioridad-p3-colaboración)
+7. [Prioridad P4 — plataforma, orientación diferida y escalabilidad](#7-prioridad-p4-plataforma-orientación-diferida-y-escalabilidad)
 8. [Discovery futuro](#8-discovery-futuro)
 9. [Prácticas de calidad permanentes](#9-prácticas-de-calidad-permanentes)
 10. [Cerrado recientemente](#10-cerrado-recientemente)
@@ -61,9 +61,10 @@ Orden:
 2. eliminar deuda técnica inmediata del último bloque;
 3. resolver UX mobile bloqueante;
 4. aprender recurrencia sin crear automatismos;
-5. ampliar orientación un destino por vez;
-6. profundizar colaboración y proyección;
-7. estudiar mobile/offline cuando el producto web esté estable.
+5. profundizar Proyección y explicar el impacto financiero futuro;
+6. profundizar colaboración;
+7. retomar la orientación por dominio después de Proyección;
+8. estudiar mobile/offline cuando el producto web esté estable.
 
 Los principios de producto y de trabajo viven en
 [`../../AGENTS.md`](../../AGENTS.md) §4 y §6. Acá sólo rigen los de priorización:
@@ -99,7 +100,7 @@ Los principios de producto y de trabajo viven en
   ausencia de secretos en logs, commits y artefactos.
 
 
-## 5. Prioridad P2 — recurrencia y orientación
+## 5. Prioridad P2 — recurrencia, proyección y análisis
 
 ### FINP-P2-001 — Candidatos mensuales explicables
 
@@ -136,31 +137,28 @@ Los principios de producto y de trabajo viven en
   en un pago, handoffs tipados para cuotas y pagos, revisión sin duplicar planes,
   procedencia `quick_capture`, rollback y E2E aislado desktop/mobile.
 
-### FINP-P2-003 — Orientación a reglas
+### FINP-P2-011 — Proyección avanzada
 
 - Estado: `pendiente`.
-- Criterio: propuesta precompleta una regla simulable; no activa automatización sin confirmar.
-
-### FINP-P2-004 — Orientación a Deudas
-
-- Estado: `pendiente`.
-- Criterio: distinguir préstamo, pago/cobro y transacción independiente sin duplicar deuda.
-
-### FINP-P2-005 — Orientación a Espacios
-
-- Estado: `pendiente`.
-- Criterio: elegir contexto, participantes y reparto en el módulo responsable; no exponer información privada.
-
-### FINP-P2-006 — Orientación a Importación
-
-- Estado: `pendiente`.
-- Criterio: conservar intención y llevar al flujo de archivo/revisión sin prometer una importación desde texto.
+- Prioridad operativa: siguiente bloque.
+- Alcance inicial: auditar y cerrar la inclusión de compras con tarjeta en un
+  pago y consumos históricos sin plan, sin omisiones ni doble conteo, con ARS y
+  USD separados.
+- Alcance completo: la lectura por tipo, tarjeta y categoría descripta en
+  [`especificacion_funcional.md`](especificacion_funcional.md) §14, más certeza de
+  monto, parte propia, salida de cuenta y escenarios.
+- Criterio: la vista predeterminada y la personalización se definen después de
+  asegurar la exactitud; cambiar de vista no cambia reglas, totales ni inclusión
+  de datos.
+- Relación: comparte agregaciones y navegación con FINP-P2-008/009/010, pero
+  Proyección conserva foco futuro y no absorbe toda la administración histórica.
 
 ### FINP-P2-007 — Bandeja diaria de revisión
 
 - Estado: `en discovery`.
 - Alcance: borradores, imports, movimientos incompletos y sugerencias de confianza media.
-- Restricción: complemento opcional; no bloquea el registro.
+- Restricción: complemento opcional; no bloquea el registro ni adelanta los
+  destinos de orientación diferidos a P4.
 
 ### FINP-P2-008 — Centro de análisis por categorías
 
@@ -190,7 +188,7 @@ Los principios de producto y de trabajo viven en
 - Criterio a definir: arrastre entre períodos, multi-moneda, edición histórica,
   categorías sin datos y relación con ingresos y Proyección.
 
-## 6. Prioridad P3 — colaboración y proyección
+## 6. Prioridad P3 — colaboración
 
 ### FINP-P3-001 — Compromisos en Espacios
 
@@ -207,18 +205,6 @@ Los principios de producto y de trabajo viven en
 
 - Estado: `en discovery`.
 - Criterio: fuentes, rezagos, snapshot, trazabilidad y fallback manual.
-
-### FINP-P3-004 — Proyección avanzada
-
-- Estado: `pendiente`.
-- Alcance: la lectura por tipo, tarjeta y categoría descripta en
-  [`especificacion_funcional.md`](especificacion_funcional.md) §14, más certeza de
-  monto, parte propia, salida de cuenta y escenarios. Incluye planes de una cuota y
-  consumos históricos sin plan, sin omisiones ni doble conteo.
-- Criterio: la vista predeterminada y la personalización deben definirse en
-  discovery; cambiar de vista no cambia reglas, totales ni inclusión de datos.
-- Relación: comparte agregaciones y navegación con FINP-P2-008/009/010, pero
-  Proyección conserva foco futuro y no absorbe toda la administración histórica.
 
 ### FINP-P3-005 — Parte propia igual a cero
 
@@ -251,7 +237,7 @@ Los principios de producto y de trabajo viven en
 - Estado: `pendiente`.
 - Criterio: URLs legibles sin comprometer autorización ni estabilidad de enlaces.
 
-## 7. Prioridad P4 — plataforma y escalabilidad
+## 7. Prioridad P4 — plataforma, orientación diferida y escalabilidad
 
 ### FINP-P4-001 — Limpieza de compatibilidad legacy
 
@@ -282,6 +268,29 @@ Los principios de producto y de trabajo viven en
 - Estado: `pendiente`.
 - Alcance: bundle, consultas, polling, render y almacenamiento.
 - Criterio: métricas base y umbrales antes de optimizaciones mayores.
+
+Los siguientes destinos de Orientación se difirieron desde P2 el 2026-07-31
+para priorizar Proyección. Siguen aceptados y no fueron descartados.
+
+### FINP-P4-006 — Orientación a reglas
+
+- Estado: `pendiente`.
+- Criterio: propuesta precompleta una regla simulable; no activa automatización sin confirmar.
+
+### FINP-P4-007 — Orientación a Deudas
+
+- Estado: `pendiente`.
+- Criterio: distinguir préstamo, pago/cobro y transacción independiente sin duplicar deuda.
+
+### FINP-P4-008 — Orientación a Espacios
+
+- Estado: `pendiente`.
+- Criterio: elegir contexto, participantes y reparto en el módulo responsable; no exponer información privada.
+
+### FINP-P4-009 — Orientación a Importación
+
+- Estado: `pendiente`.
+- Criterio: conservar intención y llevar al flujo de archivo/revisión sin prometer una importación desde texto.
 
 ## 8. Discovery futuro
 
