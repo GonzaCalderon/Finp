@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-08-04
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -365,19 +365,23 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Verificado 2026-07-28:
+Verificado 2026-08-04:
 
-- 52 de 52 escenarios E2E aprobados en Chromium desktop y Pixel 7;
+- 804 pruebas unitarias aprobadas en 100 archivos;
+- build, typecheck, lint y validación documental aprobados;
+- 4 de 4 E2E focales de Espacios aprobados en Chromium desktop y Pixel 7;
+- la corrida global adicional cerró 52 de 60: queda pendiente aislar cuentas
+  residuales del smoke financiero y estabilizar el servidor largo de `next dev`,
+  que devolvió 404 para rutas dinámicas y afectó otras dos altas;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
   conectar; con la credencial ejecuta preflight, seed, build y Playwright;
 - preflight de aislamiento aprobado contra `finp-e2e`;
-- seed ejecutado dos veces sin duplicar usuarios, categorías, cuentas ni el
-  dataset financiero; restaura las relaciones del usuario general y mantiene
-  separado el usuario del smoke;
+- seed focal de Espacios repetible y aislado del usuario del smoke; la limpieza
+  global del dataset financiero queda asociada a FINP-P0-004;
 - cobertura no bloqueante;
-- smoke financiero aprobado en mobile y desktop sobre datos representativos de
-  dos períodos, con evidencia de Dashboard, Transacciones, Cuentas y Deudas.
+- el smoke financiero conserva datos representativos de dos períodos, pero su
+  próxima corrida verde depende de limpiar todas las cuentas residuales;
 - recorridos P2 aprobados para candidato recurrente, compra en un pago con
   Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
 

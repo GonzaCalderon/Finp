@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-31
+> Última actualización: 2026-08-04
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -84,6 +84,9 @@ Los principios de producto y de trabajo viven en
   `MONGODB_URI_TEST` informa el bloqueo y no conecta.
 - Pendiente externo: rotar la credencial, limitarla a `finp-e2e`, cargar la URI
   nueva en GitHub y obtener la primera ejecución verde.
+- Pendiente técnico local: limpiar todas las cuentas residuales del usuario del
+  smoke y estabilizar la corrida larga de `next dev`; el 2026-08-04 la suite
+  focal pasó 4 de 4 y la global terminó 52 de 60.
 - Criterio: flujos críticos ejecutan en CI con secretos y base aislada; reportes se conservan ante fallos.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
@@ -353,6 +356,14 @@ Ya priorizadas como ítem: activar E2E es FINP-P0-004. Ya resueltas: la validaci
 documental corre con `npm run docs:check`.
 
 ## 10. Cerrado recientemente
+
+### 2026-08-04
+
+- Corrección de FINP-P1-007: `Quitar de mi Finp` transporta la transacción
+  seleccionada, elimina impactos normales u huérfanos con alcance exacto y
+  teardown transaccional, conserva el movimiento compartido y compensa el alta
+  personal si falla después de crear la transacción. Nivel de aprendizaje:
+  `no aplica`.
 
 ### 2026-07-31
 

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-07-31
+> Última actualización: 2026-08-04
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -40,7 +40,8 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-07-28 sobre `dev` (`d8ae0e6`):
+Verificado localmente el 2026-08-04 sobre
+`codex/fix-orphan-space-transactions`:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -48,16 +49,20 @@ Verificado localmente el 2026-07-28 sobre `dev` (`d8ae0e6`):
 - 98 rutas API;
 - typecheck limpio;
 - ESLint limpio;
-- build de producción limpio, con 63 páginas generadas;
-- 745 unit tests aprobados en 92 archivos, sin tests en `todo`;
-- 52 de 52 escenarios E2E aprobados para desktop y mobile;
+- build de producción limpio, con 62 páginas generadas;
+- 804 unit tests aprobados en 100 archivos, sin tests en `todo`;
+- 4 de 4 escenarios E2E focales de impactos personales de Espacios aprobados
+  para desktop y mobile;
+- la corrida E2E global adicional completó 52 de 60: el smoke financiero leyó
+  cuentas residuales y, después de varios minutos de `next dev`, rutas dinámicas
+  devolvieron 404 y dos altas de transacciones no cerraron el diálogo;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
 - `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
   desarrollo conserva `finm`;
-- el seed se ejecutó dos veces: reparó los usuarios general y financiero, sus
-  categorías, cuentas y datos representativos sin duplicados; el usuario general
-  se restaura sin tocar el usuario independiente del smoke financiero;
+- el seed acotado de Espacios es repetible y restaura el usuario general; la
+  limpieza completa del usuario independiente del smoke financiero requiere
+  estabilización antes de considerar verde la suite global;
 - CI activo para lint, build y unit tests;
 - job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
   la rotación.
@@ -262,6 +267,10 @@ elige el usuario.
 - categoría automática, fija o mapeada;
 - alta y baja del impacto personal desde el movimiento del Espacio; quitarlo
   elimina la transacción personal vinculada sin alterar el origen compartido;
+- baja individual de transacciones personales huérfanas mediante identidad
+  exacta y privada, con respuesta idempotente;
+- prevención de nuevos huérfanos: ids poblados normalizados y compensación de
+  la transacción recién creada si falla el alta del impacto;
 - revisión cuando cambia el origen;
 - reconciliación de pendientes al cambiar el reparto: se actualizan, cancelan o
   crean según quién deba decidir con el reparto nuevo.

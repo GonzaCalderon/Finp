@@ -73,6 +73,10 @@ import { apiJson } from '@/lib/client/auth-client'
 import { cn } from '@/lib/utils'
 import { COMMITMENT_INVALIDATION_TAGS, invalidateData, NOTIFICATION_INVALIDATION_TAGS, TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/data-sync'
 import {
+    PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS,
+    removePersonalSpaceTransaction,
+} from '@/lib/client/space-personal-impact'
+import {
     describePaymentGroupChoice,
     type PaymentGroupMember,
 } from '@/lib/utils/payment-group'
@@ -931,6 +935,7 @@ function TransactionsPageInner() {
         createTransaction,
         updateTransaction,
         deleteTransaction,
+        removeTransactionFromList,
     } = useTransactions({
         month,
         type: appliedFilters.type || undefined,
@@ -1091,21 +1096,25 @@ function TransactionsPageInner() {
         if (!removeFromFinpTarget) return
         setRemovingFromFinp(true)
         try {
-            const { spaceId, spaceEntryId } = removeFromFinpTarget
+            const { transactionId, spaceId, spaceEntryId } = removeFromFinpTarget
             if (!spaceEntryId) {
                 throw new Error('El movimiento no conserva la referencia al espacio.')
             }
-            await apiJson(
-                `/api/spaces/${spaceId}/entries/${spaceEntryId}/personal-impact`,
-                { method: 'DELETE' }
+            const response = await removePersonalSpaceTransaction({
+                transactionId,
+                spaceId,
+                spaceEntryId,
+            })
+            removeTransactionFromList(transactionId)
+            invalidateData(PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS)
+            success(
+                response.orphanTransactionDeleted
+                    ? 'Transacción huérfana eliminada de tu Finp'
+                    : 'Movimiento quitado de tu Finp'
             )
-            await Promise.all([
-                invalidateData(TRANSACTION_INVALIDATION_TAGS),
-                invalidateData(NOTIFICATION_INVALIDATION_TAGS),
-            ])
-            success('Movimiento quitado de tu Finp')
             setRemoveFromFinpTarget(null)
         } catch (err) {
+            invalidateData(PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS)
             toastError(err instanceof Error ? err.message : 'Error al quitar de tu Finp')
         } finally {
             setRemovingFromFinp(false)

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
         Transaction: { findOne: vi.fn() },
         SpaceEntryPersonalImpact,
         createTransactionFromSpaceEntry: vi.fn(),
+        deleteAuthorizedPersonalTransactions: vi.fn(),
         resolveNotificationsForTarget: vi.fn().mockResolvedValue(undefined),
     }
 })
@@ -31,11 +32,16 @@ vi.mock('@/lib/server/space-transactions', () => ({
     createTransactionFromSpaceEntry: mocks.createTransactionFromSpaceEntry,
 }))
 
+vi.mock('@/lib/server/transaction-teardown', () => ({
+    deleteAuthorizedPersonalTransactions: mocks.deleteAuthorizedPersonalTransactions,
+}))
+
 vi.mock('@/lib/server/notifications', () => ({
     resolveNotificationsForTarget: mocks.resolveNotificationsForTarget,
 }))
 
 const {
+    createPersonalImpactFromSpaceEntry,
     getPersonalImpactForEntries,
     markLinkedImpactsAsNeedsReview,
     resolveCurrentUserEntryShare,
@@ -109,6 +115,12 @@ beforeEach(() => {
         _id: new Types.ObjectId(),
         ...(data as object),
     }))
+    mocks.Category.findOne.mockReturnValue(mocks.makeLean({ _id: new Types.ObjectId() }))
+    mocks.deleteAuthorizedPersonalTransactions.mockResolvedValue({
+        deletedTransactions: [{ _id: new Types.ObjectId() }],
+        teardowns: [],
+        normalizedGroups: [],
+    })
 })
 
 describe('space personal impact helpers', () => {
@@ -341,5 +353,95 @@ describe('markLinkedImpactsAsNeedsReview', () => {
         const [findFilter] = mocks.SpaceEntryPersonalImpact.find.mock.calls[0]
         expect(findFilter).toEqual({ entryId, status: 'linked' })
         expect(mocks.SpaceEntryPersonalImpact.updateMany).not.toHaveBeenCalled()
+    })
+})
+
+describe('createPersonalImpactFromSpaceEntry', () => {
+    const userId = new Types.ObjectId()
+    const participantId = new Types.ObjectId()
+    const accountId = new Types.ObjectId()
+    const categoryId = new Types.ObjectId()
+    const spaceId = new Types.ObjectId()
+    const entryId = new Types.ObjectId()
+    const currentParticipant = participant({
+        _id: participantId,
+        userId,
+        displayName: 'Yo',
+    })
+    const currentEntry = entry({
+        _id: entryId,
+        spaceId,
+        paidByParticipantId: participantId,
+        sharedWithParticipantIds: [participantId],
+    })
+
+    function input() {
+        return {
+            spaceId: spaceId.toString(),
+            entry: currentEntry,
+            participants: [currentParticipant],
+            userId: userId.toString(),
+            participantId: participantId.toString(),
+            mode: 'create_transaction' as const,
+            accountId: accountId.toString(),
+            categoryId: categoryId.toString(),
+            currentParticipant,
+        }
+    }
+
+    it('extrae la cuenta desde un documento poblado sin convertir el documento completo a ObjectId', async () => {
+        const transactionId = new Types.ObjectId()
+        mocks.createTransactionFromSpaceEntry.mockResolvedValue({
+            _id: transactionId,
+            sourceAccountId: {
+                _id: accountId,
+                toString: () => 'Documento de cuenta poblado',
+            },
+        })
+
+        const result = await createPersonalImpactFromSpaceEntry(input())
+
+        expect(result.transactionId?.toString()).toBe(transactionId.toString())
+        expect(result.accountId?.toString()).toBe(accountId.toString())
+    })
+
+    it('revierte exclusivamente la transaccion recien creada si falla el alta del impacto', async () => {
+        const transactionId = new Types.ObjectId()
+        mocks.createTransactionFromSpaceEntry.mockResolvedValue({
+            _id: transactionId,
+            sourceAccountId: accountId,
+        })
+        mocks.SpaceEntryPersonalImpact.create.mockRejectedValue(new Error('impacto caido'))
+        mocks.deleteAuthorizedPersonalTransactions.mockResolvedValue({
+            deletedTransactions: [{ _id: transactionId }],
+            teardowns: [],
+            normalizedGroups: [],
+        })
+
+        await expect(createPersonalImpactFromSpaceEntry(input()))
+            .rejects.toThrow('impacto caido')
+        expect(mocks.deleteAuthorizedPersonalTransactions).toHaveBeenCalledWith(
+            userId.toString(),
+            [{
+                transactionId: transactionId.toString(),
+                spaceId: spaceId.toString(),
+                spaceEntryId: entryId.toString(),
+            }]
+        )
+    })
+
+    it('hace observable un fallo de compensacion', async () => {
+        const transactionId = new Types.ObjectId()
+        mocks.createTransactionFromSpaceEntry.mockResolvedValue({
+            _id: transactionId,
+            sourceAccountId: accountId,
+        })
+        mocks.SpaceEntryPersonalImpact.create.mockRejectedValue(new Error('impacto caido'))
+        mocks.deleteAuthorizedPersonalTransactions.mockRejectedValue(new Error('rollback caido'))
+
+        await expect(createPersonalImpactFromSpaceEntry(input())).rejects.toMatchObject({
+            code: 'PERSONAL_IMPACT_ROLLBACK_FAILED',
+            status: 500,
+        })
     })
 })

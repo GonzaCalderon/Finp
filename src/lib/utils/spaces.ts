@@ -92,17 +92,23 @@ export function extractId(value: unknown): string | undefined {
     if (!value) return undefined
 
     if (typeof value === 'string') {
-        return value
+        const resolved = value.trim()
+        return resolved || undefined
     }
 
     if (typeof value === 'object' && value !== null) {
-        if ('toString' in value && typeof value.toString === 'function') {
-            const resolved = value.toString()
-            if (resolved && resolved !== '[object Object]') return resolved
+        if ('toHexString' in value && typeof value.toHexString === 'function') {
+            const resolved = value.toHexString()
+            return typeof resolved === 'string' && /^[a-f\d]{24}$/i.test(resolved)
+                ? resolved
+                : undefined
         }
 
+        // Un documento poblado puede implementar toString() con una
+        // representación completa. Su _id es la única identidad autorizada.
         if ('_id' in value) {
-            return extractId((value as { _id?: unknown })._id)
+            const nested = (value as { _id?: unknown })._id
+            return nested === value ? undefined : extractId(nested)
         }
     }
 

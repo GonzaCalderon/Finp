@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-08-04
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -191,7 +191,7 @@ Servicios relevantes en `src/lib/server/`:
 | Grupo | Responsabilidad |
 |---|---|
 | `transactions.ts` | creación y edición de movimientos con reglas comunes |
-| `transaction-teardown.ts` | limpieza de relaciones antes de eliminar, incluida la cascada del plan de cuotas y normalización de grupos de pago |
+| `transaction-teardown.ts` | operación transaccional de borrado autorizado: lee con alcance de usuario, limpia relaciones, elimina y normaliza grupos; incluye cascada de cuotas e impactos de Espacios |
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
@@ -257,6 +257,13 @@ No borrar por inferencia relaciones ambiguas que también muevan dinero. Cuando
 la relación es conocida, la API expone alcances explícitos y el usuario elige.
 El pago dual admite `single` y `group`; el primer alcance conserva la otra parte
 y elimina su identificador de grupo huérfano.
+
+`DELETE /api/transactions/:id` y la baja del impacto personal de Espacios usan
+la misma operación. Sus selectores siempre incluyen `userId`; el segundo agrega
+`spaceId` y `spaceEntryId`, de modo que una transacción huérfana sólo se resuelve
+por identidad exacta. Lectura, teardown, borrado y normalización se ejecutan en
+una sesión MongoDB. Un fallo revierte la unidad completa y se informa sin
+registrar contenido financiero.
 
 ## 11. Autenticación, autorización y privacidad
 

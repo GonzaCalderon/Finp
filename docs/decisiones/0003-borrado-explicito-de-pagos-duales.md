@@ -74,9 +74,10 @@ Se adopta la opción C:
 ### Costos y límites
 
 - La confirmación requiere una lectura adicional del grupo.
-- El borrado grupal actual coordina varias escrituras sin una sesión MongoDB
-  transaccional; cada teardown es idempotente, pero un fallo intermedio debe ser
-  observable y reintentable.
+- El borrado grupal y el individual usan la operación compartida de teardown y
+  una sesión MongoDB. Esto evita confirmar una parte si falla otra, a cambio de
+  depender de un despliegue compatible con transacciones, requisito que Finp ya
+  comparte con los pagos y cobros de Deudas.
 
 ## 6. Compatibilidad y reparación
 
@@ -90,5 +91,7 @@ identificada, revisión del resultado y autorización.
 - Tests del copy y composición de miembros.
 - Tests de normalización con cero, uno y dos miembros.
 - Pruebas del teardown de relaciones derivadas.
+- Pruebas de rollback ante fallo de teardown y reutilización desde ambos
+  endpoints de borrado.
 - Typecheck, lint, suite unitaria y build.
 

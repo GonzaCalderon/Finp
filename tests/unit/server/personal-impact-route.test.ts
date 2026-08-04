@@ -1,36 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ServiceError } from '@/lib/server/errors'
 
 const mocks = vi.hoisted(() => ({
     auth: vi.fn(),
     connectDB: vi.fn().mockResolvedValue(undefined),
     getAccessibleSpaceContext: vi.fn(),
+    spaceEntryFindOne: vi.fn(),
     impactFindOne: vi.fn(),
-    impactUpdateOne: vi.fn(),
-    transactionFindOneAndDelete: vi.fn(),
-    unlinkTransactionDependents: vi.fn(),
-    resolveNotificationsForTarget: vi.fn(),
+    deleteAuthorizedPersonalTransactions: vi.fn(),
+    removePersonalImpactWithoutTransaction: vi.fn(),
 }))
 
 vi.mock('@/lib/auth', () => ({ auth: mocks.auth }))
 vi.mock('@/lib/db', () => ({ connectDB: mocks.connectDB }))
 vi.mock('@/lib/models', () => ({
-    SpaceEntry: { findOne: vi.fn() },
-    SpaceEntryPersonalImpact: {
-        findOne: mocks.impactFindOne,
-        updateOne: mocks.impactUpdateOne,
-    },
-    Transaction: {
-        findOneAndDelete: mocks.transactionFindOneAndDelete,
-    },
+    SpaceEntry: { findOne: mocks.spaceEntryFindOne },
+    SpaceEntryPersonalImpact: { findOne: mocks.impactFindOne },
 }))
 vi.mock('@/lib/server/spaces', () => ({
     getAccessibleSpaceContext: mocks.getAccessibleSpaceContext,
 }))
 vi.mock('@/lib/server/transaction-teardown', () => ({
-    unlinkTransactionDependents: mocks.unlinkTransactionDependents,
-}))
-vi.mock('@/lib/server/notifications', () => ({
-    resolveNotificationsForTarget: mocks.resolveNotificationsForTarget,
+    deleteAuthorizedPersonalTransactions: mocks.deleteAuthorizedPersonalTransactions,
+    removePersonalImpactWithoutTransaction: mocks.removePersonalImpactWithoutTransaction,
 }))
 vi.mock('@/lib/server/space-personal-impact', () => ({
     createPersonalImpactFromSpaceEntry: vi.fn(),
@@ -54,6 +46,17 @@ function leanResult<T>(value: T) {
     return { lean: vi.fn().mockResolvedValue(value) }
 }
 
+function request(selectedTransactionId = transactionId) {
+    return new Request(
+        `https://finp.test/api/spaces/${spaceId}/entries/${entryId}/personal-impact?transactionId=${selectedTransactionId}`,
+        { method: 'DELETE' }
+    )
+}
+
+function params(overrides: Partial<{ id: string; entryId: string }> = {}) {
+    return { params: Promise.resolve({ id: spaceId, entryId, ...overrides }) }
+}
+
 describe('DELETE personal-impact', () => {
     beforeEach(() => {
         vi.clearAllMocks()
@@ -62,75 +65,144 @@ describe('DELETE personal-impact', () => {
         mocks.impactFindOne.mockReturnValue(leanResult({
             _id: { toString: () => impactId },
             transactionId,
+            status: 'linked',
         }))
-        mocks.transactionFindOneAndDelete.mockResolvedValue({
-            _id: { toString: () => transactionId },
+        mocks.deleteAuthorizedPersonalTransactions.mockResolvedValue({
+            deletedTransactions: [{ _id: transactionId }],
+            teardowns: [],
+            normalizedGroups: [],
         })
-        mocks.unlinkTransactionDependents.mockResolvedValue({
-            unlinkedPersonalImpact: true,
-            resolvedNotifications: 0,
-        })
-        mocks.resolveNotificationsForTarget.mockResolvedValue(undefined)
-        mocks.impactUpdateOne.mockResolvedValue({ modifiedCount: 1 })
+        mocks.removePersonalImpactWithoutTransaction.mockResolvedValue(true)
     })
 
-    it('borra la transacción, deja que el teardown marque REMOVED y resuelve avisos', async () => {
-        const response = await DELETE(
-            new Request(`https://finp.test/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
-                method: 'DELETE',
-            }),
-            { params: Promise.resolve({ id: spaceId, entryId }) }
-        )
-        const body = await response.json()
+    it('requiere autenticacion', async () => {
+        mocks.auth.mockResolvedValue(null)
+
+        const response = await DELETE(request(), params())
+
+        expect(response.status).toBe(401)
+        expect(mocks.connectDB).not.toHaveBeenCalled()
+    })
+
+    it('valida los tres identificadores antes de consultar la base', async () => {
+        const invalidSpace = await DELETE(request(), params({ id: 'invalido' }))
+        const invalidEntry = await DELETE(request(), params({ entryId: 'invalido' }))
+        const invalidTransaction = await DELETE(request('invalido'), params())
+
+        expect(invalidSpace.status).toBe(404)
+        expect(invalidEntry.status).toBe(404)
+        expect(invalidTransaction.status).toBe(400)
+        expect(mocks.connectDB).not.toHaveBeenCalled()
+    })
+
+    it.each(['linked', 'needs_review'])('elimina un impacto %s sin tocar el movimiento compartido', async (status) => {
+        mocks.impactFindOne.mockReturnValue(leanResult({
+            _id: { toString: () => impactId },
+            transactionId,
+            status,
+        }))
+
+        const response = await DELETE(request(), params())
 
         expect(response.status).toBe(200)
-        expect(body).toEqual({ ok: true, deletedTransaction: true })
-        expect(mocks.transactionFindOneAndDelete).toHaveBeenCalledWith({
-            _id: transactionId,
-            userId: 'user-1',
+        await expect(response.json()).resolves.toEqual({
+            ok: true,
+            deletedTransaction: true,
+            orphanTransactionDeleted: false,
         })
-        expect(mocks.unlinkTransactionDependents).toHaveBeenCalledWith(
+        expect(mocks.deleteAuthorizedPersonalTransactions).toHaveBeenCalledWith(
             'user-1',
-            expect.objectContaining({ _id: expect.anything() })
+            [{ transactionId, spaceId, spaceEntryId: entryId }]
         )
-        expect(mocks.impactUpdateOne).not.toHaveBeenCalled()
-        expect(mocks.resolveNotificationsForTarget).toHaveBeenCalledWith({
-            personalImpactId: impactId,
-            actionStatus: 'completed',
+        expect(mocks.impactFindOne).toHaveBeenCalledWith({
+            spaceId,
+            entryId,
+            userId: 'user-1',
+            status: { $in: ['linked', 'needs_review'] },
         })
+        expect(mocks.spaceEntryFindOne).not.toHaveBeenCalled()
+        expect(mocks.removePersonalImpactWithoutTransaction).not.toHaveBeenCalled()
     })
 
-    it('es idempotente cuando el impacto ya no está vigente', async () => {
+    it('elimina exclusivamente la transaccion huerfana indicada aunque no exista el SpaceEntry', async () => {
         mocks.impactFindOne.mockReturnValue(leanResult(null))
 
-        const response = await DELETE(
-            new Request(`https://finp.test/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
-                method: 'DELETE',
-            }),
-            { params: Promise.resolve({ id: spaceId, entryId }) }
-        )
+        const response = await DELETE(request(), params())
 
-        expect(await response.json()).toEqual({ ok: true, deletedTransaction: false })
-        expect(mocks.transactionFindOneAndDelete).not.toHaveBeenCalled()
-        expect(mocks.resolveNotificationsForTarget).not.toHaveBeenCalled()
+        await expect(response.json()).resolves.toEqual({
+            ok: true,
+            deletedTransaction: true,
+            orphanTransactionDeleted: true,
+        })
+        expect(mocks.deleteAuthorizedPersonalTransactions).toHaveBeenCalledWith(
+            'user-1',
+            [{ transactionId, spaceId, spaceEntryId: entryId }]
+        )
     })
 
-    it('marca REMOVED si la transacción personal ya no existe', async () => {
-        mocks.transactionFindOneAndDelete.mockResolvedValue(null)
+    it('no enumera una transaccion ajena o asociada a otro contexto', async () => {
+        mocks.impactFindOne.mockReturnValue(leanResult(null))
+        mocks.deleteAuthorizedPersonalTransactions.mockResolvedValue({
+            deletedTransactions: [],
+            teardowns: [],
+            normalizedGroups: [],
+        })
 
-        await DELETE(
-            new Request(`https://finp.test/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
-                method: 'DELETE',
-            }),
-            { params: Promise.resolve({ id: spaceId, entryId }) }
+        const response = await DELETE(request(), params())
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({
+            ok: true,
+            deletedTransaction: false,
+            orphanTransactionDeleted: false,
+        })
+    })
+
+    it('rechaza un transactionId distinto del asociado sin eliminar ninguna transaccion', async () => {
+        const otherTransactionId = '64b000000000000000000099'
+
+        const response = await DELETE(request(otherTransactionId), params())
+
+        expect(response.status).toBe(409)
+        expect(mocks.deleteAuthorizedPersonalTransactions).not.toHaveBeenCalled()
+        expect(mocks.removePersonalImpactWithoutTransaction).not.toHaveBeenCalled()
+    })
+
+    it('cierra un impacto vigente si su transaccion ya no existe', async () => {
+        mocks.deleteAuthorizedPersonalTransactions.mockResolvedValue({
+            deletedTransactions: [],
+            teardowns: [],
+            normalizedGroups: [],
+        })
+
+        const response = await DELETE(request(), params())
+
+        await expect(response.json()).resolves.toEqual({
+            ok: true,
+            deletedTransaction: false,
+            orphanTransactionDeleted: false,
+        })
+        expect(mocks.removePersonalImpactWithoutTransaction).toHaveBeenCalledWith(
+            'user-1',
+            impactId
+        )
+    })
+
+    it('no informa exito si falla el teardown', async () => {
+        mocks.deleteAuthorizedPersonalTransactions.mockRejectedValue(
+            new ServiceError(
+                500,
+                'TRANSACTION_TEARDOWN_FAILED',
+                'No se pudo eliminar la transaccion. No se confirmaron cambios.'
+            )
         )
 
-        expect(mocks.impactUpdateOne).toHaveBeenCalledWith(
-            { _id: expect.anything(), userId: 'user-1' },
-            expect.objectContaining({
-                $set: expect.objectContaining({ status: 'removed' }),
-                $unset: { transactionId: 1, accountId: 1 },
-            })
-        )
+        const response = await DELETE(request(), params())
+
+        expect(response.status).toBe(500)
+        await expect(response.json()).resolves.toMatchObject({
+            code: 'TRANSACTION_TEARDOWN_FAILED',
+        })
+        expect(mocks.removePersonalImpactWithoutTransaction).not.toHaveBeenCalled()
     })
 })
