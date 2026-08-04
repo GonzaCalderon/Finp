@@ -153,11 +153,21 @@ Los principios de producto y de trabajo viven en
 
 ### FINP-P2-012 — Escenarios de Proyección
 
-- Estado: `en discovery`.
-- Alcance: comparar una base con cambios hipotéticos sin alterar compromisos,
-  planes ni transacciones persistidos.
-- Criterio a definir: variables permitidas, monedas, vigencia, explicación,
-  guardado, descarte y costo de cálculo.
+- Estado: `cerrado`.
+- Alcance: comparar una base viva con un único escenario efímero de gastos,
+  separado por ARS/USD y sin alterar compromisos, planes ni transacciones.
+- Criterio de cierre: edición, omisión y movimiento de ocurrencias; compromisos
+  simulados únicos, semanales y mensuales; compras con tarjeta en un pago y
+  cuotas sobre cuentas compatibles; recuperación de sesión por hasta 24 horas;
+  preview autenticada y sin escrituras; estados y accesibilidad mobile/desktop;
+  pruebas unitarias, API, componentes y E2E con documentación vigente.
+- Evidencia: motor, API, storage y UI implementados; 820 unit tests en 104
+  archivos, typecheck, lint, build y documentación aprobados. El seed aislado
+  sobre `finp-e2e` terminó correctamente y los seis E2E focales pasaron en
+  Chromium desktop y Pixel 7. El recorrido comprueba persistencia, rebase y
+  descarte, y verifica que preview y borrador no alteran compromisos, planes ni
+  transacciones.
+- Decisión: [`0007 — Escenarios efímeros sobre una base viva`](../decisiones/0007-escenarios-efimeros-sobre-base-viva.md).
 
 ### FINP-P2-013 — Cashflow proyectado por cuenta
 
@@ -356,6 +366,11 @@ documental corre con `npm run docs:check`.
 
 ### 2026-07-31
 
+- FINP-P2-012: Escenarios compara una base viva con un borrador efímero, permite
+  modificar, omitir y mover ocurrencias y simular compromisos o compras con
+  tarjeta en un pago y cuotas, siempre con ARS/USD separados y sin convertir la
+  simulación en datos reales. Se verificó con 820 unit tests y seis E2E focales mobile/desktop contra
+  `finp-e2e`;
 - FINP-P2-011: Proyección integra compromisos, compras `1/1`, consumos
   históricos sin plan y cuotas sin doble conteo; separa ARS/USD y certeza,
   permite agrupar la misma lista por tipo, tarjeta o categoría, recuerda

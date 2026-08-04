@@ -23,10 +23,7 @@ import {
     buildMonthlyCardPaymentSummary,
     type MonthlyCardChargeItem,
 } from '@/lib/utils/credit-card'
-import {
-    addCurrencyAmount,
-    emptyCurrencyTotals,
-} from '@/lib/utils/currency-totals'
+import { buildProjectionTotals } from '@/lib/utils/projection-totals'
 import { clampRangeStartToOperationalStart, hasOperationalCoverage } from '@/lib/utils/operational-start'
 import type {
     ProjectionItem,
@@ -34,7 +31,6 @@ import type {
     ProjectionPeriod,
     ProjectionReference,
     ProjectionResponse,
-    ProjectionTotals,
 } from '@/types/projection'
 
 type RefLike = string | {
@@ -88,31 +84,7 @@ function buildCardLink(item: MonthlyCardChargeItem, month: string): string {
     return `/transactions/credit-card?${params.toString()}`
 }
 
-function emptyProjectionTotals(): ProjectionTotals {
-    return {
-        commitments: emptyCurrencyTotals(),
-        cardSingle: emptyCurrencyTotals(),
-        cardInstallments: emptyCurrencyTotals(),
-        estimated: emptyCurrencyTotals(),
-        total: emptyCurrencyTotals(),
-        pendingAmountCount: 0,
-    }
-}
-
-export function buildProjectionTotals(items: ProjectionItem[]): ProjectionTotals {
-    const totals = emptyProjectionTotals()
-
-    for (const item of items) {
-        addCurrencyAmount(totals.total, item.currency, item.amount)
-        if (item.kind === 'commitment') addCurrencyAmount(totals.commitments, item.currency, item.amount)
-        if (item.kind === 'card_single') addCurrencyAmount(totals.cardSingle, item.currency, item.amount)
-        if (item.kind === 'card_installment') addCurrencyAmount(totals.cardInstallments, item.currency, item.amount)
-        if (item.certainty === 'estimated') addCurrencyAmount(totals.estimated, item.currency, item.amount)
-        if (item.certainty === 'pending_amount') totals.pendingAmountCount += 1
-    }
-
-    return totals
-}
+export { buildProjectionTotals } from '@/lib/utils/projection-totals'
 
 /** Cuántas veces cae el compromiso dentro del período semiabierto. */
 export function countOccurrencesInPeriod(

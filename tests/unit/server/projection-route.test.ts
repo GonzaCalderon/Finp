@@ -28,6 +28,7 @@ describe('GET /api/projection', () => {
                     commitments: { ars: 0, usd: 0 },
                     cardSingle: { ars: 0, usd: 0 },
                     cardInstallments: { ars: 0, usd: 0 },
+                    hypothetical: { ars: 0, usd: 0 },
                     estimated: { ars: 0, usd: 0 },
                     total: { ars: 0, usd: 0 },
                     pendingAmountCount: 0,
@@ -73,6 +74,7 @@ describe('GET /api/projection', () => {
             year: undefined,
         })
         expect(JSON.parse(JSON.stringify(data))).toEqual(data)
+        expect(data.ownerId).toBe('user-1')
         expect(data.projection[0].totals).toHaveProperty('cardSingle')
     })
 

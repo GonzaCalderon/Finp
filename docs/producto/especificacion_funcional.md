@@ -573,8 +573,53 @@ personalización cambia la presentación, no la inclusión de movimientos ni las
 reglas financieras. Su nivel de aprendizaje es `personalizar`; ningún cálculo
 financiero se aprende ni automatiza.
 
-Escenarios, cashflow proyectado por cuenta y la parte propia o recuperable de
-compromisos compartidos pertenecen a ítems separados del roadmap.
+Cashflow proyectado por cuenta y la parte propia o recuperable de compromisos
+compartidos pertenecen a ítems separados del roadmap.
+
+### Simulación de gastos
+
+Proyección permite probar una única comparación `Base real ↔ Con gastos`. La
+base se recalcula desde compromisos, planes y transacciones reales cada vez que
+se pide un preview; la simulación aplica sólo cambios efímeros y nunca escribe
+esas fuentes.
+
+Sobre un gasto actual o futuro se puede:
+
+- cambiar el monto sólo para esa ocurrencia o desde ese período;
+- omitirlo sólo para esa ocurrencia o desde ese período;
+- mover una ocurrencia a otro período visible.
+
+Un cambio puntual prevalece sobre uno hacia adelante. Entre cambios hacia
+adelante prevalece el que comienza más recientemente. Si el origen desaparece o
+sale del horizonte, Finp deja el cambio sin efecto, lo explica y permite
+restaurarlo.
+
+`¿Qué pasa si gasto…?` abre directamente un editor con modelos conocidos de
+Finp en vez de exponer el concepto técnico de hipótesis:
+
+- Compromiso: una vez, semanal o mensual, con monto por ocurrencia. Finp cuenta
+  las ocurrencias de cada período y ajusta los días 29–31 al último día real;
+- `TC · un pago`: monto total, fecha de compra, período de impacto y una tarjeta
+  activa compatible con la moneda;
+- `TC · cuotas`: los mismos datos, cantidad de cuotas y primer período. El monto
+  ingresado es el total y Finp distribuye una cuota por período.
+
+Los tres admiten descripción, monto positivo, ARS o USD y categoría opcional.
+Los períodos pasados permanecen visibles y de sólo lectura. Fechas, meses, día
+mensual, monto, moneda y categoría usan los controles compartidos definidos en
+`design.md`; una fecha financiera no usa el selector nativo del navegador.
+
+La comparación expone Base real, Con gastos, Diferencia y cantidad de gastos
+simulados, siempre con ARS/USD separados. El gráfico usa una base neutral y un
+resultado apilado por fuente, con tooltip y alternativa textual accesible. Cada
+período e ítem explica si fue modificado, omitido, movido o agregado como gasto
+simulado.
+
+El borrador vive por usuario en `sessionStorage`, con versión y vencimiento fijo
+de 24 horas o hasta cerrar la pestaña. Si el almacenamiento está bloqueado,
+continúa en memoria con una advertencia. No hay URL financiera, escenario
+permanente, conversión a datos reales, telemetría ni aprendizaje; su nivel es
+`no aplica`.
 
 ### Análisis y planificación
 

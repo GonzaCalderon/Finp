@@ -68,4 +68,20 @@ describe('agrupaciones de proyeccion', () => {
             'TC · un pago',
         ])
     })
+
+    it('agrupa el fallback simulado sin inventar una tarjeta ni un enlace real', () => {
+        const hypothetical = item({
+            id: 'hypothesis',
+            kind: 'hypothetical',
+            source: { type: 'hypothetical', id: 'hypothesis' },
+            link: undefined,
+        })
+
+        const byType = buildProjectionGroups([hypothetical], 'type')
+        const byCard = buildProjectionGroups([hypothetical], 'card')
+
+        expect(byType[0].label).toBe('Otros simulados')
+        expect(byType[0].children.map((group) => group.label)).toEqual(['Comida'])
+        expect(byCard.map((group) => group.label)).toEqual(['Otros simulados'])
+    })
 })

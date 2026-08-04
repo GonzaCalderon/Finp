@@ -215,7 +215,12 @@ npm run test:unit
 npm run build
 ```
 
-Los E2E requieren un entorno y una base de prueba aislados.
+Los E2E requieren un entorno y una base de prueba aislados. Cuando el preflight
+canónico identifica una base de prueba aislada —actualmente `finp-e2e`—, el
+prompter autoriza expresamente cualquier alta, edición, eliminación, limpieza,
+reseed o restauración necesaria dentro de esa base. Esta autorización no alcanza
+desarrollo ni producción. El procedimiento y los controles viven en
+[`tests/e2e/helpers/README.md`](tests/e2e/helpers/README.md).
 
 ## 13. Documentación obligatoria
 

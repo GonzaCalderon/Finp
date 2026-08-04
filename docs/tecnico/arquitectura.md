@@ -183,6 +183,7 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Deuda | `Debt` + `DebtMovement` | Manual o derivada; pagos sin impacto operacional. |
 | Notificación | `Notification` | Información y presentación. |
 | Pendiente | entidad de acción correspondiente | No se resuelve por leer notificación. |
+| Simulación de Proyección | base real + borrador efímero del usuario | La base se vuelve a consultar; los gastos simulados viven sólo en la sesión, referencian categorías o tarjetas autorizadas cuando corresponde y nunca adquieren autoridad financiera. |
 
 ## 8. Servicios de servidor
 
@@ -194,6 +195,7 @@ Servicios relevantes en `src/lib/server/`:
 | `transaction-teardown.ts` | limpieza de relaciones antes de eliminar, incluida la cascada del plan de cuotas y normalización de grupos de pago |
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
+| `projection-scenario.ts` | orquestación autenticada del preview, categorías agrupadas y rebase sobre la Proyección viva |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
 | `spaces.ts` y `space-*.ts` | permisos, movimientos, actividad, invitaciones e impacto |
 | `debt-sync.ts` | materialización idempotente desde Espacios |
@@ -297,6 +299,13 @@ Reglas:
 - no guardar datos financieros sensibles en URLs.
 
 Los borradores entre funciones usan `sessionStorage`, versión y un ID opaco en la URL.
+
+El escenario de Proyección es una excepción deliberada sin handoff: su sobre
+completo permanece en `sessionStorage` bajo una clave versionada por usuario,
+con vencimiento fijo de 24 horas. No viaja ningún ID ni dato del escenario en la
+URL. Si el storage falla, el cliente usa memoria y muestra la pérdida de
+recuperación tras recarga. La precedencia y el cálculo viven en
+`src/lib/utils/projection-scenario.ts`; API y pruebas consumen ese motor puro.
 
 ## 13. Errores y observabilidad
 

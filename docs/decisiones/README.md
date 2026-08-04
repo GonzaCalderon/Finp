@@ -91,3 +91,6 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0006 — Período, clasificación y lectura de Proyección`](0006-periodo-clasificacion-y-lectura-de-proyeccion.md):
   período de tarjetas, compra `1/1`, certeza, agrupaciones invariantes y límites
   del cierre operativo.
+- [`0007 — Escenarios efímeros sobre una base viva`](0007-escenarios-efimeros-sobre-base-viva.md):
+  borrador de sesión, rebase sobre datos reales, precedencia de cambios y
+  ausencia de persistencia financiera.

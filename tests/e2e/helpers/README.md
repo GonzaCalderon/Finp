@@ -28,6 +28,22 @@ E2E necesita:
 `appName` identifica una conexión, pero no selecciona ni aísla la base. La URL
 de Playwright también debe usar el servidor dedicado `http://localhost:3001`.
 
+### Autorización de escritura
+
+El 2026-07-31 el prompter autorizó expresamente todo movimiento de datos dentro
+de una base de pruebas que haya aprobado el preflight canónico. Esto incluye
+altas, ediciones, eliminaciones individuales o masivas, limpieza, reseed,
+restauración y cualquier mutación realizada por los E2E. La base remota vigente
+es `finp-e2e`.
+
+La autorización sólo aplica cuando `E2E_DATABASE_NAME` y la base seleccionada
+por `MONGODB_URI` coinciden, el nombre contiene un marcador de prueba y el
+destino está aislado de la base configurada en `.env.local`. No autoriza ninguna
+escritura en desarrollo o producción ni otras acciones destructivas fuera de la
+base verificada. Con esos controles aprobados, agentes y personas pueden
+ejecutar `npm run test:seed` y Playwright sin solicitar una autorización nueva
+para las mutaciones del dataset de prueba.
+
 ## 2. Configurar el entorno
 
 Copiar `.env.test.example` a `.env.test.local` y completar los valores. El nombre
@@ -108,7 +124,9 @@ Deudas al reporte de Playwright en ambos proyectos.
 
 `projection.spec.ts` valida el contrato y el recorrido real en desktop y Pixel
 7: seis meses, ARS/USD, expansión, navegación, persistencia, privacidad, dark
-mode y movimiento reducido.
+mode y movimiento reducido. También prueba una simulación con modificación hacia
+adelante, movimiento, omisión, compromiso semanal, compra con tarjeta en cuotas,
+recarga, rebase y descarte sin escrituras propias del preview.
 
 ## 6. CI
 

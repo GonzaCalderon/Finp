@@ -14,6 +14,7 @@ const TYPE_LABELS: Record<ProjectionItemKind, string> = {
     commitment: 'Compromisos',
     card_single: 'TC · un pago',
     card_installment: 'TC · cuotas',
+    hypothetical: 'Otros simulados',
 }
 
 type GroupDescriptor = {
@@ -70,7 +71,7 @@ function cardDescriptor(item: ProjectionItem): GroupDescriptor {
         ? {
             key: `card:${item.card.id}`,
             label: item.card.name,
-            href: item.link.href,
+            href: item.link?.href,
             linkLabel: 'Ver en Tarjetas',
         }
         : { key: 'card:unknown', label: 'Sin tarjeta' }
@@ -82,7 +83,7 @@ function typeDescriptor(item: ProjectionItem): GroupDescriptor {
 
 function buildTypeGroups(items: ProjectionItem[]): ProjectionGroup[] {
     return groupByDescriptor(items, typeDescriptor).map(({ descriptor, items: typeItems }) => {
-        const children = typeItems[0]?.kind === 'commitment'
+        const children = typeItems[0]?.kind === 'commitment' || typeItems[0]?.kind === 'hypothetical'
             ? leafGroups(typeItems, categoryDescriptor)
             : groupByDescriptor(typeItems, cardDescriptor).map(({ descriptor: card, items: cardItems }) => ({
                 ...card,
@@ -104,7 +105,8 @@ function buildTypeGroups(items: ProjectionItem[]): ProjectionGroup[] {
 
 function buildCardGroups(items: ProjectionItem[]): ProjectionGroup[] {
     const commitments = items.filter((item) => item.kind === 'commitment')
-    const cardItems = items.filter((item) => item.kind !== 'commitment')
+    const cardItems = items.filter((item) => item.kind === 'card_single' || item.kind === 'card_installment')
+    const hypotheticalItems = items.filter((item) => item.kind === 'hypothetical')
     const result: ProjectionGroup[] = []
 
     if (commitments.length > 0) {
@@ -115,6 +117,16 @@ function buildCardGroups(items: ProjectionItem[]): ProjectionGroup[] {
             href: '/commitments',
             linkLabel: 'Ver Compromisos',
             children: leafGroups(commitments, categoryDescriptor),
+            items: [],
+        })
+    }
+
+    if (hypotheticalItems.length > 0) {
+        result.push({
+            key: 'card:hypothetical',
+            label: 'Otros simulados',
+            totals: totalsForItems(hypotheticalItems),
+            children: leafGroups(hypotheticalItems, categoryDescriptor),
             items: [],
         })
     }
@@ -143,8 +155,12 @@ function buildCategoryGroups(items: ProjectionItem[]): ProjectionGroup[] {
         children: groupByDescriptor(categoryItems, typeDescriptor).map(({ descriptor: type, items: typeItems }) => ({
             ...type,
             totals: totalsForItems(typeItems),
-            children: typeItems[0]?.kind === 'commitment' ? [] : leafGroups(typeItems, cardDescriptor),
-            items: typeItems[0]?.kind === 'commitment' ? typeItems : [],
+            children: typeItems[0]?.kind === 'commitment' || typeItems[0]?.kind === 'hypothetical'
+                ? []
+                : leafGroups(typeItems, cardDescriptor),
+            items: typeItems[0]?.kind === 'commitment' || typeItems[0]?.kind === 'hypothetical'
+                ? typeItems
+                : [],
         })),
         items: [],
     }))

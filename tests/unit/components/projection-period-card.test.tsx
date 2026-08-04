@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ProjectionPeriodCard } from '@/components/projection/ProjectionPeriodCard'
 import type { ProjectionPeriod } from '@/types/projection'
 
@@ -42,6 +42,7 @@ const period: ProjectionPeriod = {
         commitments: { ars: 120_000, usd: 0 },
         cardSingle: { ars: 0, usd: 0 },
         cardInstallments: { ars: 0, usd: 0 },
+        hypothetical: { ars: 0, usd: 0 },
         estimated: { ars: 120_000, usd: 0 },
         total: { ars: 120_000, usd: 0 },
         pendingAmountCount: 1,
@@ -77,5 +78,49 @@ describe('ProjectionPeriodCard', () => {
 
         expect(screen.getAllByText('••••').length).toBeGreaterThan(1)
         expect(screen.queryByText(/120[.\s]?000/)).not.toBeInTheDocument()
+    })
+
+    it('muestra estado simulado, comparación y acción sólo en períodos editables', async () => {
+        const user = userEvent.setup()
+        const onSimulate = vi.fn()
+        const scenarioPeriod: ProjectionPeriod = {
+            ...period,
+            items: [{
+                ...period.items[0],
+                amount: 150_000,
+                simulation: {
+                    state: 'modified',
+                    changeId: 'change-1',
+                    originalAmount: 120_000,
+                    originalMonth: period.month,
+                },
+            }],
+            totals: {
+                ...period.totals,
+                commitments: { ars: 150_000, usd: 0 },
+                estimated: { ars: 150_000, usd: 0 },
+                total: { ars: 150_000, usd: 0 },
+                pendingAmountCount: 0,
+            },
+        }
+        render(
+            <ProjectionPeriodCard
+                period={scenarioPeriod}
+                basePeriod={period}
+                scenario
+                grouping="type"
+                hidden={false}
+                includeYear
+                onSimulate={onSimulate}
+            />
+        )
+
+        expect(screen.getByText('Base real')).toBeInTheDocument()
+        expect(screen.getByText('Con gastos')).toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: /Compromisos/i }))
+        await user.click(screen.getByRole('button', { name: /Vivienda/i }))
+        expect(screen.getByText('Modificado')).toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: /Simular este gasto/i }))
+        expect(onSimulate).toHaveBeenCalledWith(scenarioPeriod.items[0], '2026-07')
     })
 })

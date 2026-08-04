@@ -2,7 +2,8 @@
 
 import { useId, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ExternalLink } from 'lucide-react'
+import { ChevronRight, CircleDollarSign, ExternalLink } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { CurrencyBreakdownAmount } from '@/components/shared/CurrencyBreakdownAmount'
 import { ResponsiveAmount } from '@/components/shared/ResponsiveAmount'
 import { cn } from '@/lib/utils'
@@ -44,6 +45,13 @@ function certaintyClass(item: ProjectionItem, isPast: boolean) {
     return 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
 }
 
+const SIMULATION_LABELS = {
+    modified: 'Modificado',
+    omitted: 'Omitido',
+    moved: 'Movido',
+    hypothetical: 'Simulado',
+} as const
+
 function itemMeta(item: ProjectionItem) {
     const values: string[] = []
     if (item.installment) values.push(`${item.installment.current}/${item.installment.count}`)
@@ -54,11 +62,14 @@ function itemMeta(item: ProjectionItem) {
     return values.filter(Boolean).join(' · ')
 }
 
-function ProjectionItemRow({ item, hidden, isPast, level }: {
+function ProjectionItemRow({ item, hidden, isPast, level, scenario, period, onSimulate }: {
     item: ProjectionItem
     hidden: boolean
     isPast: boolean
     level: number
+    scenario: boolean
+    period: string
+    onSimulate?: (item: ProjectionItem, period: string) => void
 }) {
     const meta = itemMeta(item)
     return (
@@ -72,18 +83,50 @@ function ProjectionItemRow({ item, hidden, isPast, level }: {
                     <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', certaintyClass(item, isPast))}>
                         {certaintyLabel(item, isPast)}
                     </span>
+                    {item.simulation && (
+                        <span className="rounded-full bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                            {SIMULATION_LABELS[item.simulation.state]}
+                        </span>
+                    )}
                 </div>
                 {meta && <p className="mt-1 text-xs text-muted-foreground">{meta}</p>}
-                <Link
-                    href={item.link.href}
-                    className="mt-1.5 inline-flex min-h-7 items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                    {item.link.label}
-                    <ExternalLink className="size-3" aria-hidden="true" />
-                </Link>
+                {item.simulation?.state === 'moved' && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {item.amount === 0
+                            ? `Movido a ${formatMonth(item.simulation.destinationMonth ?? period, true)}`
+                            : `Movido desde ${formatMonth(item.simulation.originalMonth ?? period, true)}`}
+                    </p>
+                )}
+                {item.link && (
+                    <Link
+                        href={item.link.href}
+                        className="mt-1.5 inline-flex min-h-7 items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                        {item.link.label}
+                        <ExternalLink className="size-3" aria-hidden="true" />
+                    </Link>
+                )}
+                {scenario && !isPast && item.source.type !== 'hypothetical' && onSimulate && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1 min-h-10 px-2"
+                        onClick={() => onSimulate(item, period)}
+                    >
+                        <CircleDollarSign data-icon="inline-start" /> Simular este gasto
+                    </Button>
+                )}
             </div>
             <div className="pt-0.5 text-right font-medium tabular-nums">
-                {item.certainty === 'pending_amount' ? (
+                {item.simulation?.originalAmount !== undefined && item.simulation.state !== 'hypothetical' && (
+                    <div className="mb-1 text-xs font-normal text-muted-foreground line-through">
+                        <ResponsiveAmount amount={item.simulation.originalAmount} currency={item.currency} hidden={hidden} />
+                    </div>
+                )}
+                {item.simulation?.state === 'omitted' || (item.simulation?.state === 'moved' && item.amount === 0) ? (
+                    <span className="text-xs text-muted-foreground">Sin impacto</span>
+                ) : item.certainty === 'pending_amount' ? (
                     <span className="text-xs text-amber-700 dark:text-amber-300">Monto a confirmar</span>
                 ) : (
                     <ResponsiveAmount
@@ -98,11 +141,14 @@ function ProjectionItemRow({ item, hidden, isPast, level }: {
     )
 }
 
-function ProjectionGroupRow({ group, hidden, isPast, level }: {
+function ProjectionGroupRow({ group, hidden, isPast, level, scenario, period, onSimulate }: {
     group: ProjectionGroup
     hidden: boolean
     isPast: boolean
     level: number
+    scenario: boolean
+    period: string
+    onSimulate?: (item: ProjectionItem, period: string) => void
 }) {
     const [open, setOpen] = useState(false)
     const contentId = useId()
@@ -157,6 +203,9 @@ function ProjectionGroupRow({ group, hidden, isPast, level }: {
                             hidden={hidden}
                             isPast={isPast}
                             level={level + 1}
+                            scenario={scenario}
+                            period={period}
+                            onSimulate={onSimulate}
                         />
                     ))}
                     {group.items.map((item) => (
@@ -166,6 +215,9 @@ function ProjectionGroupRow({ group, hidden, isPast, level }: {
                             hidden={hidden}
                             isPast={isPast}
                             level={level + 1}
+                            scenario={scenario}
+                            period={period}
+                            onSimulate={onSimulate}
                         />
                     ))}
                 </div>
@@ -179,11 +231,17 @@ export function ProjectionPeriodCard({
     grouping,
     hidden,
     includeYear,
+    basePeriod,
+    scenario = false,
+    onSimulate,
 }: {
     period: ProjectionPeriod
     grouping: ProjectionGrouping
     hidden: boolean
     includeYear: boolean
+    basePeriod?: ProjectionPeriod
+    scenario?: boolean
+    onSimulate?: (item: ProjectionItem, period: string) => void
 }) {
     const groups = buildProjectionGroups(period.items, grouping)
     const hasEstimates = period.totals.estimated.ars > 0 || period.totals.estimated.usd > 0
@@ -216,16 +274,29 @@ export function ProjectionPeriodCard({
                         </p>
                     )}
                 </div>
-                <div>
-                    <p className="mb-1 text-right text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Total proyectado</p>
-                    <CurrencyBreakdownAmount
-                        totals={period.totals.total}
-                        hidden={hidden}
-                        align="right"
-                        hideZeroSecondary
-                        className="text-sm font-semibold tabular-nums"
-                    />
-                </div>
+                {scenario && basePeriod ? (
+                    <div className="grid grid-cols-2 gap-3 text-right">
+                        <div>
+                            <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Base real</p>
+                            <CurrencyBreakdownAmount totals={basePeriod.totals.total} hidden={hidden} align="right" hideZeroSecondary className="text-xs font-medium tabular-nums" />
+                        </div>
+                        <div>
+                            <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Con gastos</p>
+                            <CurrencyBreakdownAmount totals={period.totals.total} hidden={hidden} align="right" hideZeroSecondary className="text-sm font-semibold tabular-nums" />
+                        </div>
+                    </div>
+                ) : (
+                    <div>
+                        <p className="mb-1 text-right text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Total proyectado</p>
+                        <CurrencyBreakdownAmount
+                            totals={period.totals.total}
+                            hidden={hidden}
+                            align="right"
+                            hideZeroSecondary
+                            className="text-sm font-semibold tabular-nums"
+                        />
+                    </div>
+                )}
             </header>
 
             {groups.length === 0 ? (
@@ -241,6 +312,9 @@ export function ProjectionPeriodCard({
                             hidden={hidden}
                             isPast={period.isPast}
                             level={0}
+                            scenario={scenario}
+                            period={period.month}
+                            onSimulate={onSimulate}
                         />
                     ))}
                 </div>

@@ -305,12 +305,29 @@ calendario y permite agrupar por tarjeta o categoría sin modificar ítems ni
 totales. Cada detalle conserva certeza y enlace navegable. Las preferencias
 recordadas personalizan la presentación; ningún cálculo se aprende.
 
+Proyección también incluye una simulación efímera de gastos sobre una base viva:
+
+- modifica u omite una ocurrencia o una fuente desde un período;
+- mueve una ocurrencia dentro del horizonte visible;
+- suma compromisos simulados únicos, semanales o mensuales por monto de ocurrencia;
+- simula compras con tarjeta en un pago o en cuotas sobre una tarjeta activa,
+  conserva moneda y distribuye el monto total entre sus períodos;
+- compara Base real, Con gastos y Diferencia sin mezclar ARS con USD;
+- conserva sólo el borrador de gastos simulados en la sesión del usuario por hasta 24
+  horas y nunca escribe compromisos, aplicaciones, planes o transacciones.
+
+La regla de precedencia es puntual sobre hacia adelante; entre cambios hacia
+adelante gana el inicio más reciente. Cada preview vuelve a resolver montos
+pautados por fecha y aplicaciones registradas. Un origen eliminado o fuera del
+horizonte queda advertido y sin efecto. La decisión completa vive en
+[`0007 — Escenarios efímeros sobre una base viva`](../decisiones/0007-escenarios-efimeros-sobre-base-viva.md).
+
 La evolución futura puede combinar además:
 
 - parte propia de compromisos de Espacios;
 - ajustes porcentuales e índices oficiales;
 - adelantos y montos recuperables;
-- escenarios y cashflow por cuenta cuando sus reglas estén definidas.
+- cashflow por cuenta cuando sus reglas estén definidas.
 
 Los niveles vigentes son:
 

@@ -365,9 +365,10 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Verificado 2026-07-28:
+Verificado 2026-07-31:
 
-- 52 de 52 escenarios E2E aprobados en Chromium desktop y Pixel 7;
+- 820 unit tests aprobados en 104 archivos;
+- 56 de 56 escenarios E2E previos aprobados en Chromium desktop y Pixel 7;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
   conectar; con la credencial ejecuta preflight, seed, build y Playwright;
@@ -380,6 +381,10 @@ Verificado 2026-07-28:
   dos períodos, con evidencia de Dashboard, Transacciones, Cuentas y Deudas.
 - recorridos P2 aprobados para candidato recurrente, compra en un pago con
   Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
+- seis de seis E2E focales de Proyección aprobados en Chromium desktop y Pixel 7:
+  cubren modificación hacia adelante, movimiento, omisión, hipótesis
+  semanal/mensual, recuperación, rebase y descarte; el cierre verifica que el
+  escenario no modifica compromisos, planes ni transacciones reales.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

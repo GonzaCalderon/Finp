@@ -112,6 +112,7 @@ Decisiones vigentes:
 - [`0004 — Resumen bimonetario de tarjetas`](decisiones/0004-resumen-bimonetario-de-tarjetas.md).
 - [`0005 — Captura rápida, tarjetas y handoffs tipados`](decisiones/0005-captura-rapida-tarjetas-y-handoffs.md).
 - [`0006 — Período, clasificación y lectura de Proyección`](decisiones/0006-periodo-clasificacion-y-lectura-de-proyeccion.md).
+- [`0007 — Escenarios efímeros sobre una base viva`](decisiones/0007-escenarios-efimeros-sobre-base-viva.md).
 
 Una decisión se documenta cuando:
 

@@ -121,6 +121,8 @@ de entrada.
 | `detectCaptureIntents` | `src/lib/utils/capture-intents.ts` | Detección determinista de intención. Puro. |
 | `buildMonthlyCardPaymentSummary` | `src/lib/utils/credit-card.ts` | Clasificación y resumen por período compartidos por Tarjetas, Dashboard y Proyección. |
 | `getProjectionForUser` | `src/lib/server/projection.ts` | Consulta acotada por usuario, normalización de ítems y totales de Proyección. |
+| `getProjectionScenarioPreviewForUser` | `src/lib/server/projection-scenario.ts` | Relee la base, valida categorías de gasto en una consulta agrupada y delega el cálculo sin escribir. |
+| `buildProjectionScenario` | `src/lib/utils/projection-scenario.ts` | Motor puro de precedencia, omisión, movimiento, recurrencias, advertencias y comparación. |
 | `buildProjectionGroups` | `src/lib/utils/projection.ts` | Agrupaciones de presentación sobre la lista canónica. Puro. |
 | `resolveRuleTraceForEdit` | `src/lib/server/transactions.ts` | Recalcula la traza de regla al editar. |
 
@@ -144,8 +146,23 @@ limita a la fecha de inicio.
 ### Contrato de Proyección
 
 `src/types/projection.ts` define el contrato serializable. Los tipos de ítem son
-`commitment`, `card_single` y `card_installment`; cada período expone totales por
-fuente, estimados, total por moneda y cantidad de montos pendientes.
+`commitment`, `card_single`, `card_installment` y el fallback interno
+`hypothetical`; cada período expone totales por fuente, estimados, total por
+moneda y cantidad de montos pendientes. Un gasto simulado adopta el tipo visible
+que eligió la persona y conserva `source.type = hypothetical` para no adquirir
+autoridad financiera.
+
+El contrato de escenario usa una unión discriminada de `adjust`, `omit` e
+`hypothetical`, con máximo 50 cambios. Los objetivos reales llevan tipo de
+fuente, ID y período. La respuesta compara base y escenario por período y
+horizonte, y agrega metadatos `modified`, `omitted`, `moved` o `hypothetical` a
+los ítems afectados.
+
+`hypothetical` permanece como nombre interno y contiene un gasto discriminado:
+`commitment`, `card_single` o `card_installment`. Los compromisos conservan su
+recurrencia; las compras referencian una tarjeta activa del usuario, fecha de
+compra y primer período, y las cuotas dividen el monto total. Categorías y
+tarjetas se autorizan en consultas agrupadas, sin consultas por cambio.
 
 `getProjectionForUser` resuelve meses y ejecuta en paralelo una consulta por
 colección, siempre con `userId`: compromisos, planes, aplicaciones acotadas a
@@ -257,6 +274,7 @@ destino emite uno solo y le alcanza un POST best-effort.
 | `POST` / `DELETE /api/commitments/[id]/amounts` | Alta y baja de tramos futuros. Acepta aumentos y disminuciones; rechaza editar o eliminar historia vigente/pasada con `IMMUTABLE_COMMITMENT_AMOUNT_HISTORY`. |
 | `POST /api/commitments/[id]/apply` | Acepta `origin`; escribe snapshot y procedencia; reutiliza filas `reverted`. |
 | `GET /api/projection` | Valida estrictamente `mode`, `months` y `year`; delega en `getProjectionForUser`; devuelve ítems y totales serializables con `private, no-store`. |
+| `POST /api/projection/scenarios/preview` | Autentica, valida vista y hasta 50 cambios, relee la base, aísla categorías y tarjetas activas por usuario en consultas agrupadas y devuelve comparación y advertencias con `private, no-store`; no contiene operaciones de escritura. |
 | `GET` / `PATCH /api/preferences` | Lee y persiste las cuatro preferencias de presentación de Proyección con defaults seguros y `private, no-store`. |
 | `GET /api/quick-capture/context` | Suma `commitments`, `currentPeriod` y `dismissedSuggestions`, con `.catch` tolerante. |
 | `POST` / `DELETE /api/quick-capture/suggestions/dismiss` | Descarte persistente, idempotente. |
@@ -336,6 +354,14 @@ explícito y no figure como aplicada.
 - **Proyección**: próximos seis períodos y Por tipo de forma predeterminada;
   Año calendario secundario; resumen y gráfico por tres fuentes; detalle
   expandible por tipo, tarjeta o categoría sobre la misma lista.
+- **Simulación**: selector Base real/Con gastos y aviso explicativo persistente;
+  resumen comparativo, base neutral y resultado apilado por las fuentes
+  conocidas; sheets inferiores en mobile y laterales en desktop; gastos
+  simulados editables/restaurables y descarte confirmado. El alta usa los
+  controles compartidos de fecha, mes, día mensual, monto, moneda y categoría.
+- **Sesión**: `src/lib/client/projection-scenario.ts` guarda sólo cambios bajo
+  clave versionada por usuario por hasta 24 horas. Un fallo de storage conserva
+  memoria y se hace visible; un fallo de preview conserva la última comparación.
 - **Estados**: carga, vacío global, período vacío, error con reintento y
   recuperación. Un `AbortController` evita aplicar respuestas obsoletas y una
   carga exitosa limpia el error anterior.
@@ -393,11 +419,17 @@ Vale dejarlas escritas porque van a volver:
 
 | | |
 |---|---|
-| Unit | 785 tests aprobados, sin `todo`, en 99 archivos. Incluye recurrencias, matriz de tarjetas, Proyección, APIs y componentes del flujo. |
-| E2E | 56 de 56 tests aprobados para desktop y Pixel 7 contra `finp-e2e`. Incluye Proyección, candidato compartido, compra y Deshacer, cuotas, pago, revisión de plan y recorridos previos. |
+| Unit | 820 tests aprobados, sin `todo`, en 104 archivos. Incluye motor de escenarios, precedencia, recurrencias, compras con tarjeta, storage, API/servicio y componentes responsive. |
+| E2E | La suite general previa conserva 56 de 56 tests aprobados. La suite focal actual de Proyección pasó 6 de 6 en desktop y Pixel 7 contra `finp-e2e`, incluido el recorrido completo de escenarios. |
 | Typecheck | `npx tsc --noEmit` limpio. Se agregó el script `npm run typecheck`, que no existía. |
-| Lint y docs | limpios; 28 documentos activos validados. |
+| Lint y docs | limpios; 29 documentos activos validados. |
 | Build | producción limpio con Next.js 16.2.6. |
+
+El recorrido E2E de escenarios pasó en Chromium desktop y Pixel 7 después de que
+el preflight confirmara `finp-e2e` y el seed aislado terminara correctamente.
+Comprueba cinco cambios simultáneos, recuperación desde `sessionStorage`, rebase
+sobre una modificación real controlada, restauración y descarte sin persistir
+ninguna simulación ni mutación propia del preview.
 
 ### Para correr los E2E hace falta `.env.test.local`
 

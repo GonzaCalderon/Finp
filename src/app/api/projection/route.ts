@@ -58,7 +58,7 @@ export async function GET(request: Request) {
         })
 
         return NextResponse.json(
-            { projection, currentPeriod },
+            { projection, currentPeriod, ownerId: session.user.id },
             { headers: PRIVATE_NO_STORE_HEADERS }
         )
     } catch (error) {

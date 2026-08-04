@@ -231,6 +231,12 @@ Sólo el contenido del paso hace scroll. Desktop aprovecha el ancho disponible
 con columnas cuando reduce altura o mejora comparación; mobile mantiene una
 columna y ambos CTA visibles sobre la safe area.
 
+Toda fecha financiera reutiliza los controles temporales compartidos de Finp:
+`DatePickerField` para una fecha, `MonthPickerField` para un período mensual y
+`CommitmentDayPicker` para un día recurrente. No se usa `input[type="date"]` ni
+otro selector nativo en una superficie financiera. Una excepción requiere una
+decisión explícita y documentada en este archivo.
+
 La clasificación reutiliza el selector compartido de Nueva transacción:
 búsqueda, chips con nombre y color, y orden por historial. Un módulo no crea un
 segundo patrón de categorías si el comportamiento ya existe.
@@ -347,6 +353,35 @@ Una visualización se usa cuando revela una relación mejor que una lista o un n
 - Evitar gráficos con demasiadas categorías o leyendas difíciles en mobile.
 - El Sankey se reserva para flujo; no sustituye un resumen numérico.
 - Las tendencias no deben convertir correlación en recomendación.
+
+### Escenarios de Proyección
+
+- `¿Qué pasa si gasto…?` vive en el encabezado y abre directamente el editor de
+  un gasto. Al activarlo, `Base real` / `Con gastos` y un aviso que explica que
+  Finp recalcula Proyección sin registrar ni editar datos reales permanecen
+  visibles fuera del contenido desplazable.
+- En mobile, `Gastos simulados` y `Sumar gasto` forman una barra inferior y los
+  editores usan sheet inferior. En desktop, las acciones están en el encabezado
+  y el editor usa sheet lateral.
+- La creación parte de modelos ya familiares: Compromiso, `TC · un pago` y `TC
+  · cuotas`. Fechas, meses, día mensual, moneda, monto y categoría reutilizan
+  los controles compartidos. Una compra con tarjeta sólo ofrece tarjetas
+  activas compatibles con la moneda elegida.
+- La Base real usa una barra neutral; `Con gastos` se apila por las mismas
+  fuentes que Proyección. Tooltip y tabla accesible repiten Base real, Con
+  gastos y Diferencia.
+- El resumen contiene cuatro lecturas: Base real, Con gastos, Diferencia y
+  Gastos simulados. Cada monto conserva desglose ARS/USD y respeta el
+  ocultamiento global.
+- Un ítem simulado muestra texto además de color: `Modificado`, `Omitido`,
+  `Movido` o `Simulado`. El monto anterior permanece como referencia cuando
+  corresponde y una omisión nunca se presenta como gasto real de `$0`.
+- Los períodos pasados siguen visibles, identificados y sin acciones. Editar,
+  restaurar y descartar deben ser accesibles por teclado; descartar cambios
+  requiere confirmación.
+- Un fallo de preview conserva la última comparación válida, explica el error
+  en contexto y ofrece reintento. Un storage bloqueado no impide simular, pero
+  advierte que el borrador no sobrevivirá una recarga.
 
 ## 13. Copy y lenguaje
 

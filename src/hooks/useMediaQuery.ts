@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react'
 
 function subscribe(query: string, onStoreChange: () => void) {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
         return () => undefined
     }
 
@@ -15,7 +15,7 @@ function subscribe(query: string, onStoreChange: () => void) {
 }
 
 function getSnapshot(query: string) {
-    if (typeof window === 'undefined') return false
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
     return window.matchMedia(query).matches
 }
 

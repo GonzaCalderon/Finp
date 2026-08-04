@@ -40,22 +40,22 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-07-28 sobre `dev` (`d8ae0e6`):
+Verificado localmente el 2026-07-31 sobre `codex/p2-012-escenarios`:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
 - autenticación con NextAuth;
-- 98 rutas API;
+- 99 rutas API;
 - typecheck limpio;
 - ESLint limpio;
-- build de producción limpio, con 63 páginas generadas;
-- 745 unit tests aprobados en 92 archivos, sin tests en `todo`;
-- 52 de 52 escenarios E2E aprobados para desktop y mobile;
+- build de producción limpio, con 62 páginas generadas;
+- 820 unit tests aprobados en 104 archivos, sin tests en `todo`;
+- 56 de 56 escenarios E2E previos aprobados para desktop y mobile;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
 - `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
   desarrollo conserva `finm`;
-- el seed se ejecutó dos veces: reparó los usuarios general y financiero, sus
+- el seed repetible se ejecutó correctamente: reparó los usuarios general y financiero, sus
   categorías, cuentas y datos representativos sin duplicados; el usuario general
   se restaura sin tocar el usuario independiente del smoke financiero;
 - CI activo para lint, build y unit tests;
@@ -66,10 +66,9 @@ Ramas:
 
 - `main`: producción;
 - `dev`: desarrollo;
-- `dev` coincide con `origin/dev` en `d8ae0e6`;
-- `origin/main` es ancestro de `origin/dev` y está 17 commits detrás;
-- la rama local `main` está 87 commits detrás de `origin/main` y no se usa para
-  trabajo hasta actualizarla de forma autorizada.
+- `main`, `origin/main`, `dev` y `origin/dev` quedaron alineadas en la promoción
+  `d6e7204` del PR #28 antes de iniciar P2-012;
+- el trabajo actual vive en `codex/p2-012-escenarios`, nacida de `dev`.
 
 ## 3. Finanzas personales
 
@@ -222,6 +221,19 @@ elige el usuario.
   respuestas obsoletas e invalidación desde datos dependientes;
 - componentes compartidos mobile/desktop, expansión accesible y soporte de
   dark mode y movimiento reducido;
+- comparación única `Base real ↔ Con gastos` sobre una base recalculada;
+- modificación u omisión puntual o hacia adelante y movimiento de una
+  ocurrencia dentro del horizonte;
+- compromisos simulados únicos, semanales y mensuales por ocurrencia, y compras
+  con tarjeta en un pago o cuotas sobre tarjetas activas compatibles;
+- controles compartidos Finp para fecha, mes, día mensual, monto, moneda y
+  categoría, sin datepicker nativo;
+- resumen, gráfico comparativo, alternativa textual y estados `Modificado`,
+  `Omitido`, `Movido` y `Simulado`;
+- borrador versionado por usuario en `sessionStorage` por hasta 24 horas, con
+  fallback en memoria, reintento y última comparación válida;
+- preview autenticado, estricto y `private, no-store`, sin modelos, migraciones
+  ni escrituras financieras;
 - actualización opcional de períodos futuros sin reescribir historia;
 - backfill idempotente con modo `dry-run`, aplicado y verificado sobre `finm` el
   2026-07-28.
@@ -235,8 +247,8 @@ elige el usuario.
 - notificaciones push o recordatorios fuera de la aplicación;
 - centro de análisis histórico por categoría, cuenta, tarjeta y método de pago;
 - objetivos y límites por categoría;
-- escenarios avanzados de proyección;
 - cashflow proyectado por cuenta;
+- escenarios permanentes, compartidos o convertibles en datos reales;
 - compromisos compartidos, parte propia, adelantos y recuperables dentro de
   Proyección.
 
@@ -377,8 +389,9 @@ Mobile web sigue siendo la superficie prioritaria.
 - La orientación aún no cubre reglas, Deudas, Espacios e Importación.
 - La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
   elegir.
-- Proyección no calcula cashflow por cuenta ni escenarios y todavía no incluye
-  compromisos compartidos, parte propia, adelantos o recuperables.
+- Proyección no calcula cashflow por cuenta, no guarda escenarios permanentes y
+  todavía no incluye compromisos compartidos, parte propia, adelantos o
+  recuperables.
 - No existe una superficie dedicada para análisis histórico, patrones,
   anomalías, objetivos y límites por categoría.
 - No hay realtime ni offline.
@@ -399,3 +412,16 @@ Cierre operativo de Proyección, 2026-07-31:
 - carga, vacío, período vacío, error, reintento, privacidad, accesibilidad,
   contenido largo, dark mode y movimiento reducido;
 - verificación unitaria, API/servicio y E2E aislada en desktop y Pixel 7.
+
+### FINP-P2-012 cerrado
+
+Escenarios de Proyección está implementado con motor puro,
+API privada, almacenamiento de sesión, UI mobile/desktop y 35 pruebas unitarias
+nuevas dentro de una suite total de 820. Typecheck, lint y build están limpios.
+
+El preflight confirmó la base aislada `finp-e2e`, el seed terminó correctamente
+y los seis E2E focales pasaron en Chromium desktop y Pixel 7. Cubren modificación
+hacia adelante, movimiento, omisión, compromisos simulados, compras con tarjeta,
+recuperación desde sesión, rebase sobre la base viva y descarte. Al finalizar comprueban que
+compromisos, planes y transacciones reales conservan sus valores y que ninguna
+simulación se convirtió en dato financiero.
