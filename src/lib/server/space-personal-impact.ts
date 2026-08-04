@@ -1,6 +1,8 @@
 import { Types } from 'mongoose'
 import { Space, SpaceEntryPersonalImpact, SpaceParticipant, Transaction } from '@/lib/models'
 import { createTransactionFromSpaceEntry } from '@/lib/server/space-transactions'
+import { deleteAuthorizedPersonalTransactions } from '@/lib/server/transaction-teardown'
+import { ServiceError } from '@/lib/server/errors'
 import { resolveNotificationsForTarget } from '@/lib/server/notifications'
 import {
     resolveSuggestedPersonalCategory,
@@ -380,6 +382,7 @@ export async function createPersonalImpactFromSpaceEntry({
 
     let transaction: ITransaction | null = null
     let resolvedAccountId = accountId
+    let createdTransactionId: string | undefined
 
     // For payer_full_amount: the transaction amount = full entry cost (account impact),
     // but operational reporting should use only the payer's personal share.
@@ -396,80 +399,107 @@ export async function createPersonalImpactFromSpaceEntry({
         }
     }
 
-    if (mode === 'create_transaction') {
-        if (!accountId) throw new Error('Selecciona una cuenta para registrar en tu Finp.')
-        transaction = await createTransactionFromSpaceEntry({
-            entry,
-            userId,
-            accountId,
-            description,
-            categoryId: resolvedCategoryId,
-            amountOverride: resolvedAmount,
-            operationalAmountOverride: payerPersonalShare,
-            transactionTypeOverride: resolvedImpactKind === 'settlement_received' ? 'income' : undefined,
-            spaceNameSnapshot,
-        })
-        resolvedAccountId = extractId(transaction.sourceAccountId) ?? extractId(transaction.destinationAccountId)
-    } else {
-        if (!linkedTransactionId) throw new Error('Selecciona una transaccion existente.')
-        transaction = await Transaction.findOne({
-            _id: linkedTransactionId,
-            userId,
-        }).lean<ITransaction | null>()
+    try {
+        if (mode === 'create_transaction') {
+            if (!accountId) throw new Error('Selecciona una cuenta para registrar en tu Finp.')
+            transaction = await createTransactionFromSpaceEntry({
+                entry,
+                userId,
+                accountId,
+                description,
+                categoryId: resolvedCategoryId,
+                amountOverride: resolvedAmount,
+                operationalAmountOverride: payerPersonalShare,
+                transactionTypeOverride: resolvedImpactKind === 'settlement_received' ? 'income' : undefined,
+                spaceNameSnapshot,
+            })
+            createdTransactionId = extractId(transaction._id)
+            resolvedAccountId = extractId(transaction.sourceAccountId) ?? extractId(transaction.destinationAccountId)
+        } else {
+            if (!linkedTransactionId) throw new Error('Selecciona una transaccion existente.')
+            transaction = await Transaction.findOne({
+                _id: linkedTransactionId,
+                userId,
+            }).lean<ITransaction | null>()
 
-        if (!transaction) {
-            throw new Error('La transaccion a vincular no existe o no te pertenece.')
+            if (!transaction) {
+                throw new Error('La transaccion a vincular no existe o no te pertenece.')
+            }
+            resolvedAccountId = extractId(transaction.sourceAccountId) ?? extractId(transaction.destinationAccountId)
         }
-        resolvedAccountId = extractId(transaction.sourceAccountId) ?? extractId(transaction.destinationAccountId)
-    }
 
-    const transactionIdStr = extractId(transaction?._id)
-    if (!transactionIdStr || !resolvedAccountId) {
-        throw new Error('No se pudo resolver la transaccion o cuenta.')
-    }
+        const transactionIdStr = extractId(transaction?._id)
+        if (!transactionIdStr || !resolvedAccountId) {
+            throw new Error('No se pudo resolver la transaccion o cuenta.')
+        }
 
-    // Buscar un pending existente para transicionarlo, o crear linked directo
-    const pendingToResolve = await SpaceEntryPersonalImpact.findOneAndUpdate(
-        {
-            userId,
-            entryId,
-            status: SPACE_PERSONAL_IMPACT_STATUSES.PENDING,
-        },
-        {
-            $set: {
-                status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
-                transactionId: new Types.ObjectId(transactionIdStr),
-                accountId: new Types.ObjectId(resolvedAccountId),
-                ...(categoryId && { categoryId: new Types.ObjectId(categoryId) }),
-                resolvedAt: new Date(),
+        // Buscar un pending existente para transicionarlo, o crear linked directo
+        const pendingToResolve = await SpaceEntryPersonalImpact.findOneAndUpdate(
+            {
+                userId,
+                entryId,
+                status: SPACE_PERSONAL_IMPACT_STATUSES.PENDING,
             },
-        },
-        { new: true }
-    ).lean<ISpaceEntryPersonalImpact | null>()
+            {
+                $set: {
+                    status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
+                    transactionId: new Types.ObjectId(transactionIdStr),
+                    accountId: new Types.ObjectId(resolvedAccountId),
+                    ...(categoryId && { categoryId: new Types.ObjectId(categoryId) }),
+                    resolvedAt: new Date(),
+                },
+            },
+            { new: true }
+        ).lean<ISpaceEntryPersonalImpact | null>()
 
-    if (pendingToResolve) {
-        resolveNotificationsForTarget({
-            recipientUserId: userId,
-            pendingActionId: pendingToResolve._id.toString(),
-            actionStatus: 'completed',
-        }).catch((err) => console.error('[notifications] resolve on linked from createPersonalImpact:', err))
-        return pendingToResolve
+        if (pendingToResolve) {
+            resolveNotificationsForTarget({
+                recipientUserId: userId,
+                pendingActionId: pendingToResolve._id.toString(),
+                actionStatus: 'completed',
+            }).catch((err) => console.error('[notifications] resolve on linked from createPersonalImpact:', err))
+            return pendingToResolve
+        }
+
+        return await SpaceEntryPersonalImpact.create({
+            spaceId,
+            entryId,
+            userId,
+            participantId: resolvedParticipantId,
+            transactionId: new Types.ObjectId(transactionIdStr),
+            accountId: new Types.ObjectId(resolvedAccountId),
+            ...(categoryId && { categoryId: new Types.ObjectId(categoryId) }),
+            impactKind: resolvedImpactKind,
+            amount: resolvedAmount,
+            currency: entry.currency,
+            status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
+            resolvedAt: new Date(),
+        })
+    } catch (error) {
+        if (!createdTransactionId) throw error
+
+        try {
+            const rollback = await deleteAuthorizedPersonalTransactions(
+                userId,
+                [{ transactionId: createdTransactionId, spaceId, spaceEntryId: entryId }]
+            )
+            if (rollback.deletedTransactions.length !== 1) {
+                throw new Error('La transaccion creada no pudo localizarse para rollback.')
+            }
+        } catch (rollbackError) {
+            console.error('[personal-impact] fallo la compensacion', {
+                code: 'PERSONAL_IMPACT_ROLLBACK_FAILED',
+            })
+            throw new ServiceError(
+                500,
+                'PERSONAL_IMPACT_ROLLBACK_FAILED',
+                'No se pudo completar el impacto personal ni revertir la transaccion creada.',
+                { cause: rollbackError instanceof Error ? rollbackError.name : 'unknown' }
+            )
+        }
+
+        throw error
     }
-
-    return SpaceEntryPersonalImpact.create({
-        spaceId,
-        entryId,
-        userId,
-        participantId: resolvedParticipantId,
-        transactionId: new Types.ObjectId(transactionIdStr),
-        accountId: new Types.ObjectId(resolvedAccountId),
-        ...(categoryId && { categoryId: new Types.ObjectId(categoryId) }),
-        impactKind: resolvedImpactKind,
-        amount: resolvedAmount,
-        currency: entry.currency,
-        status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
-        resolvedAt: new Date(),
-    })
 }
 
 /**

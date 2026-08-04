@@ -1,3 +1,4 @@
+import type { ClientSession } from 'mongoose'
 import { CommitmentApplication, ScheduledCommitment, Transaction, User } from '@/lib/models'
 import { createTransactionForUser } from '@/lib/server/transactions'
 import { isDuplicateKeyError, ServiceError } from '@/lib/server/errors'
@@ -313,7 +314,8 @@ export async function applyCommitmentForUser(
 export async function revertApplicationForTransaction(
     userId: string,
     transactionId: string,
-    reason = 'transaction_deleted'
+    reason = 'transaction_deleted',
+    session?: ClientSession
 ): Promise<{ commitmentId: string; period: string } | null> {
     const application = await CommitmentApplication.findOneAndUpdate(
         { userId, transactionId },
@@ -325,7 +327,7 @@ export async function revertApplicationForTransaction(
             },
             $unset: { transactionId: '' },
         },
-        { new: true }
+        { new: true, ...(session ? { session } : {}) }
     )
 
     if (!application) return null

@@ -6,11 +6,8 @@ const mocks = vi.hoisted(() => ({
     Transaction: {
         findOne: vi.fn(),
         find: vi.fn(),
-        findOneAndDelete: vi.fn(),
-        deleteMany: vi.fn(),
     },
-    unlinkTransactionDependents: vi.fn(),
-    normalizePaymentGroup: vi.fn(),
+    deleteAuthorizedPersonalTransactions: vi.fn(),
     recordTransactionLearningEvent: vi.fn(),
 }))
 
@@ -22,8 +19,7 @@ vi.mock('@/lib/models', () => ({
     InstallmentPlan: {},
 }))
 vi.mock('@/lib/server/transaction-teardown', () => ({
-    unlinkTransactionDependents: mocks.unlinkTransactionDependents,
-    normalizePaymentGroup: mocks.normalizePaymentGroup,
+    deleteAuthorizedPersonalTransactions: mocks.deleteAuthorizedPersonalTransactions,
 }))
 vi.mock('@/lib/server/quick-capture-learning', () => ({
     recordTransactionLearningEvent: mocks.recordTransactionLearningEvent,
@@ -76,13 +72,16 @@ describe('contrato de grupos en /api/transactions/[id]', () => {
         vi.clearAllMocks()
         mocks.auth.mockResolvedValue({ user: { id: 'user-1' } })
         mocks.connectDB.mockResolvedValue(undefined)
-        mocks.unlinkTransactionDependents.mockResolvedValue({
-            unlinkedPersonalImpact: false,
-            resolvedNotifications: 0,
-        })
-        mocks.normalizePaymentGroup.mockResolvedValue({
-            normalized: true,
-            clearedMemberIds: [],
+        mocks.deleteAuthorizedPersonalTransactions.mockResolvedValue({
+            deletedTransactions: [baseTransaction],
+            teardowns: [{
+                unlinkedPersonalImpact: false,
+                resolvedNotifications: 0,
+            }],
+            normalizedGroups: [{
+                groupId: 'payment-group-1',
+                clearedMemberIds: ['transaction-usd'],
+            }],
         })
         mocks.recordTransactionLearningEvent.mockResolvedValue(undefined)
     })
@@ -129,7 +128,6 @@ describe('contrato de grupos en /api/transactions/[id]', () => {
 
     it('borra sólo una parte por defecto y normaliza el grupo restante', async () => {
         mocks.Transaction.findOne.mockReturnValue(leanQuery(baseTransaction))
-        mocks.Transaction.findOneAndDelete.mockResolvedValue(baseTransaction)
 
         const response = await DELETE(
             new Request('http://localhost/api/transactions/transaction-ars', {
@@ -143,10 +141,9 @@ describe('contrato de grupos en /api/transactions/[id]', () => {
             deletedCount: 1,
             scope: 'single',
         })
-        expect(mocks.Transaction.deleteMany).not.toHaveBeenCalled()
-        expect(mocks.normalizePaymentGroup).toHaveBeenCalledWith(
+        expect(mocks.deleteAuthorizedPersonalTransactions).toHaveBeenCalledWith(
             'user-1',
-            'payment-group-1'
+            [{ transactionId: 'transaction-ars' }]
         )
     })
 
@@ -155,7 +152,14 @@ describe('contrato de grupos en /api/transactions/[id]', () => {
         mocks.Transaction.find.mockReturnValue(
             leanQuery([baseTransaction, usdTransaction])
         )
-        mocks.Transaction.deleteMany.mockResolvedValue({ deletedCount: 2 })
+        mocks.deleteAuthorizedPersonalTransactions.mockResolvedValue({
+            deletedTransactions: [baseTransaction, usdTransaction],
+            teardowns: [
+                { unlinkedPersonalImpact: false, resolvedNotifications: 0 },
+                { unlinkedPersonalImpact: false, resolvedNotifications: 0 },
+            ],
+            normalizedGroups: [],
+        })
 
         const response = await DELETE(
             new Request(
@@ -170,10 +174,12 @@ describe('contrato de grupos en /api/transactions/[id]', () => {
             deletedCount: 2,
             scope: 'group',
         })
-        expect(mocks.unlinkTransactionDependents).toHaveBeenCalledTimes(2)
-        expect(mocks.Transaction.deleteMany).toHaveBeenCalledWith({
-            userId: 'user-1',
-            _id: { $in: ['transaction-ars', 'transaction-usd'] },
-        })
+        expect(mocks.deleteAuthorizedPersonalTransactions).toHaveBeenCalledWith(
+            'user-1',
+            [
+                { transactionId: 'transaction-ars' },
+                { transactionId: 'transaction-usd' },
+            ]
+        )
     })
 })

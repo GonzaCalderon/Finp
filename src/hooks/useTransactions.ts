@@ -7,6 +7,7 @@ import {
     TRANSACTION_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
+import { withoutSelectedTransaction } from '@/lib/client/space-personal-impact'
 
 interface TransactionFilters {
     month?: string
@@ -184,6 +185,11 @@ export function useTransactions(filters: TransactionFilters = {}) {
         return result?.reverted ?? null
     }
 
+    const removeTransactionFromList = useCallback((transactionId: string) => {
+        setTransactions((current) => withoutSelectedTransaction(current, transactionId))
+        setTotal((current) => Math.max(0, current - 1))
+    }, [])
+
     useEffect(() => {
         isFirstLoad.current = true
         fetchTransactions()
@@ -207,5 +213,6 @@ export function useTransactions(filters: TransactionFilters = {}) {
         createTransaction,
         updateTransaction,
         deleteTransaction,
+        removeTransactionFromList,
     }
 }

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-31
+> Última actualización: 2026-08-04
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -450,6 +450,10 @@ Cada participante decide si y cómo registrar su impacto en Finp:
 Si el movimiento compartido cambia materialmente, el impacto personal pasa a revisión.
 Quitar el movimiento de Mi Finp elimina su transacción personal vinculada y
 marca el impacto privado como removido; no modifica el movimiento compartido.
+La acción identifica de forma explícita la transacción seleccionada y es
+idempotente. Si falta el impacto privado porque un alta anterior falló después
+de crear la transacción, puede quitar exclusivamente esa transacción huérfana
+si todavía coincide con el usuario, el Espacio y el movimiento de origen.
 
 ### Configuración personal
 
@@ -621,6 +625,10 @@ Nueva transacción, Captura rápida, importación, cuotas, compromisos e impacto
 ### Eliminación
 
 Eliminar una transacción debe identificar y resolver compromisos, impactos, notificaciones, cuotas u otras relaciones. Las cascadas ambiguas se reportan y requieren una decisión.
+La eliminación lee primero la transacción con alcance de usuario, ejecuta el
+teardown mientras existe y sólo después la borra. Las superficies que la
+invocan comparten esa operación y no confirman éxito si el movimiento personal
+continúa vigente.
 
 ## 16. Mobile y evolución de plataformas
 

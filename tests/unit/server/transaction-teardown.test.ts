@@ -1,16 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+    dbSession: {
+        withTransaction: vi.fn(async (callback: () => Promise<void>) => callback()),
+        endSession: vi.fn(),
+    },
+    startSession: vi.fn(),
     revertApplicationForTransaction: vi.fn(),
-    SpaceEntryPersonalImpact: { findOneAndUpdate: vi.fn() },
+    SpaceEntryPersonalImpact: {
+        findOneAndUpdate: vi.fn(),
+        updateOne: vi.fn(),
+    },
     Notification: { updateMany: vi.fn() },
     Transaction: {
         findOne: vi.fn(),
         find: vi.fn(),
         exists: vi.fn(),
         updateMany: vi.fn(),
+        deleteOne: vi.fn(),
     },
     InstallmentPlan: { findOneAndDelete: vi.fn() },
+}))
+
+vi.mock('mongoose', () => ({
+    default: { startSession: mocks.startSession },
 }))
 
 vi.mock('@/lib/server/commitments', () => ({
@@ -25,7 +38,9 @@ vi.mock('@/lib/models', () => ({
 }))
 
 const {
+    deleteAuthorizedPersonalTransactions,
     normalizePaymentGroup,
+    removePersonalImpactWithoutTransaction,
     unlinkTransactionDependents,
 } = await import('@/lib/server/transaction-teardown')
 
@@ -35,9 +50,19 @@ function selectChain(value: unknown) {
     return { select: vi.fn().mockResolvedValue(value) }
 }
 
+function sessionLeanChain(value: unknown) {
+    const query = {
+        session: vi.fn(),
+        lean: vi.fn().mockResolvedValue(value),
+    }
+    query.session.mockReturnValue(query)
+    return query
+}
+
 describe('unlinkTransactionDependents', () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        mocks.startSession.mockResolvedValue(mocks.dbSession)
         mocks.revertApplicationForTransaction.mockResolvedValue(null)
         mocks.SpaceEntryPersonalImpact.findOneAndUpdate.mockResolvedValue(null)
         mocks.Notification.updateMany.mockResolvedValue({ modifiedCount: 0 })
@@ -45,6 +70,7 @@ describe('unlinkTransactionDependents', () => {
         mocks.Transaction.find.mockReturnValue(selectChain([]))
         mocks.Transaction.exists.mockResolvedValue(null)
         mocks.Transaction.updateMany.mockResolvedValue({ modifiedCount: 0 })
+        mocks.Transaction.deleteOne.mockResolvedValue({ deletedCount: 1 })
         mocks.InstallmentPlan.findOneAndDelete.mockResolvedValue(null)
     })
 
@@ -237,5 +263,128 @@ describe('unlinkTransactionDependents', () => {
 
         expect(await normalizePaymentGroup('user-1', 'group-1')).toBeNull()
         expect(mocks.Transaction.updateMany).not.toHaveBeenCalled()
+    })
+})
+
+describe('deleteAuthorizedPersonalTransactions', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        mocks.startSession.mockResolvedValue(mocks.dbSession)
+        mocks.revertApplicationForTransaction.mockResolvedValue(null)
+        mocks.SpaceEntryPersonalImpact.findOneAndUpdate.mockResolvedValue(null)
+        mocks.Notification.updateMany.mockResolvedValue({ modifiedCount: 0 })
+        mocks.Transaction.deleteOne.mockResolvedValue({ deletedCount: 1 })
+    })
+
+    it('consulta con alcance completo, ejecuta teardown antes del borrado y usa una transaccion', async () => {
+        const target = {
+            _id: { toString: () => '64b000000000000000000004' },
+            type: 'expense',
+        }
+        mocks.Transaction.find.mockReturnValue(sessionLeanChain([target]))
+
+        const result = await deleteAuthorizedPersonalTransactions(
+            'user-1',
+            [{
+                transactionId: '64b000000000000000000004',
+                spaceId: '64b000000000000000000001',
+                spaceEntryId: '64b000000000000000000002',
+            }]
+        )
+
+        expect(mocks.Transaction.find).toHaveBeenCalledWith({
+            userId: 'user-1',
+            $or: [{
+                _id: '64b000000000000000000004',
+                spaceId: '64b000000000000000000001',
+                spaceEntryId: '64b000000000000000000002',
+            }],
+        })
+        expect(mocks.dbSession.withTransaction).toHaveBeenCalledOnce()
+        expect(mocks.revertApplicationForTransaction.mock.invocationCallOrder[0])
+            .toBeLessThan(mocks.Transaction.deleteOne.mock.invocationCallOrder[0])
+        expect(mocks.Transaction.deleteOne).toHaveBeenCalledWith(
+            {
+                _id: '64b000000000000000000004',
+                userId: 'user-1',
+                spaceId: '64b000000000000000000001',
+                spaceEntryId: '64b000000000000000000002',
+            },
+            { session: mocks.dbSession }
+        )
+        expect(result.deletedTransactions).toEqual([target])
+        expect(mocks.dbSession.endSession).toHaveBeenCalledOnce()
+    })
+
+    it('no borra si falla el teardown y devuelve un error observable', async () => {
+        const target = {
+            _id: { toString: () => '64b000000000000000000004' },
+            type: 'expense',
+        }
+        mocks.Transaction.find.mockReturnValue(sessionLeanChain([target]))
+        mocks.revertApplicationForTransaction.mockRejectedValue(new Error('mongo caido'))
+
+        await expect(deleteAuthorizedPersonalTransactions(
+            'user-1',
+            [{ transactionId: '64b000000000000000000004' }]
+        )).rejects.toMatchObject({
+            code: 'TRANSACTION_TEARDOWN_FAILED',
+            status: 500,
+        })
+
+        expect(mocks.Transaction.deleteOne).not.toHaveBeenCalled()
+        expect(mocks.dbSession.endSession).toHaveBeenCalledOnce()
+    })
+
+    it('es idempotente cuando la transaccion ya no existe', async () => {
+        mocks.Transaction.find.mockReturnValue(sessionLeanChain([]))
+
+        const result = await deleteAuthorizedPersonalTransactions(
+            'user-1',
+            [{ transactionId: '64b000000000000000000004' }]
+        )
+
+        expect(result.deletedTransactions).toEqual([])
+        expect(mocks.Transaction.deleteOne).not.toHaveBeenCalled()
+    })
+})
+
+describe('removePersonalImpactWithoutTransaction', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        mocks.startSession.mockResolvedValue(mocks.dbSession)
+        mocks.SpaceEntryPersonalImpact.updateOne.mockResolvedValue({ modifiedCount: 1 })
+        mocks.Notification.updateMany.mockResolvedValue({ modifiedCount: 1 })
+    })
+
+    it('cierra impacto y notificaciones en la misma sesion sin buscar transacciones ambiguas', async () => {
+        await expect(removePersonalImpactWithoutTransaction(
+            'user-1',
+            '64b000000000000000000003'
+        )).resolves.toBe(true)
+
+        expect(mocks.SpaceEntryPersonalImpact.updateOne).toHaveBeenCalledWith(
+            {
+                _id: '64b000000000000000000003',
+                userId: 'user-1',
+                status: { $in: ['linked', 'needs_review'] },
+            },
+            expect.objectContaining({
+                $set: expect.objectContaining({ status: 'removed' }),
+                $unset: { transactionId: 1, accountId: 1 },
+            }),
+            { session: mocks.dbSession }
+        )
+        expect(mocks.Notification.updateMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                recipientUserId: 'user-1',
+                actionStatus: 'pending',
+            }),
+            expect.objectContaining({
+                $set: expect.objectContaining({ actionStatus: 'completed' }),
+            }),
+            { session: mocks.dbSession }
+        )
+        expect(mocks.Transaction.find).not.toHaveBeenCalled()
     })
 })

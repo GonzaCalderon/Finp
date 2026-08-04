@@ -1,7 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { buildEntryShares, buildSpaceBalances, buildSpaceSummary } from '@/lib/utils/spaces'
+import { Types } from 'mongoose'
+import { buildEntryShares, buildSpaceBalances, buildSpaceSummary, extractId } from '@/lib/utils/spaces'
 import { simplifyDebts } from '@/lib/utils/space-debts'
 import type { ISpace, ISpaceEntry, ISpaceParticipant, SpaceBalanceItem } from '@/types'
+
+describe('extractId', () => {
+    it('acepta string, ObjectId y documentos poblados priorizando _id', () => {
+        const objectId = new Types.ObjectId()
+        const populated = {
+            _id: objectId,
+            toString: () => 'Documento poblado completo',
+        }
+
+        expect(extractId(objectId.toString())).toBe(objectId.toString())
+        expect(extractId(objectId)).toBe(objectId.toString())
+        expect(extractId(populated)).toBe(objectId.toString())
+    })
+
+    it('rechaza valores nulos, vacios y objetos sin identidad', () => {
+        expect(extractId(null)).toBeUndefined()
+        expect(extractId('   ')).toBeUndefined()
+        expect(extractId({ toString: () => 'objeto completo' })).toBeUndefined()
+    })
+})
 
 function participant(overrides: Record<string, unknown>): ISpaceParticipant {
     return {

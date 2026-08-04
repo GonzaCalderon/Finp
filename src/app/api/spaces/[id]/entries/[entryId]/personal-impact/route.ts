@@ -2,20 +2,23 @@ import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { SpaceEntry, SpaceEntryPersonalImpact, Transaction } from '@/lib/models'
+import { SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
 import {
     createPersonalImpactFromSpaceEntry,
     getPersonalImpactForEntries,
     resolveCurrentUserEntryShare,
 } from '@/lib/server/space-personal-impact'
 import { resolveSuggestedPersonalCategory } from '@/lib/server/space-personal-settings'
-import { resolveNotificationsForTarget } from '@/lib/server/notifications'
-import { NOTIFICATION_ACTION_STATUSES, SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
+import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spacePersonalImpactSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
 import type { ISpaceEntry, ISpaceEntryPersonalImpact } from '@/types'
-import { unlinkTransactionDependents } from '@/lib/server/transaction-teardown'
+import {
+    deleteAuthorizedPersonalTransactions,
+    removePersonalImpactWithoutTransaction,
+} from '@/lib/server/transaction-teardown'
+import { isServiceError } from '@/lib/server/errors'
 
 type Params = Promise<{ id: string; entryId: string }>
 
@@ -141,6 +144,13 @@ export async function POST(request: Request, { params }: { params: Params }) {
                 return NextResponse.json({ error: error.message }, { status: 409 })
             }
 
+            if (isServiceError(error)) {
+                return NextResponse.json(
+                    { error: error.message, code: error.code },
+                    { status: error.status }
+                )
+            }
+
             return NextResponse.json(
                 {
                     error:
@@ -157,7 +167,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
     }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Params }) {
+export async function DELETE(request: Request, { params }: { params: Params }) {
     try {
         const session = await auth()
         if (!session) {
@@ -165,8 +175,18 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
         }
 
         const { id, entryId } = await params
-        if (!Types.ObjectId.isValid(entryId)) {
+        const transactionId = new URL(request.url).searchParams.get('transactionId')?.trim()
+        if (!Types.ObjectId.isValid(id) || !Types.ObjectId.isValid(entryId)) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
+        }
+        if (!transactionId || !Types.ObjectId.isValid(transactionId)) {
+            return NextResponse.json(
+                {
+                    error: 'La transacción seleccionada no es válida.',
+                    code: 'INVALID_TRANSACTION_ID',
+                },
+                { status: 400 }
+            )
         }
 
         await connectDB()
@@ -186,51 +206,60 @@ export async function DELETE(_request: Request, { params }: { params: Params }) 
         ).lean<ISpaceEntryPersonalImpact | null>()
 
         if (!impact) {
-            return NextResponse.json({ ok: true, deletedTransaction: false })
-        }
+            const deletion = await deleteAuthorizedPersonalTransactions(
+                session.user.id,
+                [{ transactionId, spaceId: id, spaceEntryId: entryId }]
+            )
+            const deletedTransaction = deletion.deletedTransactions.length === 1
 
-        let deletedTransaction = false
-        if (impact.transactionId) {
-            const transaction = await Transaction.findOneAndDelete({
-                _id: impact.transactionId,
-                userId: session.user.id,
+            return NextResponse.json({
+                ok: true,
+                deletedTransaction,
+                orphanTransactionDeleted: deletedTransaction,
             })
-
-            if (transaction) {
-                deletedTransaction = true
-                // El teardown es la única regla que marca el impacto como REMOVED,
-                // suelta sus referencias y cancela dependencias de la transacción.
-                await unlinkTransactionDependents(session.user.id, transaction)
-            }
         }
 
-        // Compatibilidad con impactos cuyo movimiento ya no existe: quitar sigue
-        // siendo idempotente y deja el estado personal cerrado.
-        if (!deletedTransaction) {
-            await SpaceEntryPersonalImpact.updateOne(
-                { _id: impact._id, userId: session.user.id },
+        const linkedTransactionId = extractId(impact.transactionId)
+        if (linkedTransactionId && linkedTransactionId !== transactionId) {
+            return NextResponse.json(
                 {
-                    $set: {
-                        status: SPACE_PERSONAL_IMPACT_STATUSES.REMOVED,
-                        removedAt: new Date(),
-                        reviewedAt: new Date(),
-                        reviewedResolution: 'removed',
-                    },
-                    $unset: { transactionId: 1, accountId: 1 },
-                }
+                    error: 'La transacción seleccionada no coincide con este impacto personal.',
+                    code: 'PERSONAL_IMPACT_TRANSACTION_MISMATCH',
+                },
+                { status: 409 }
             )
         }
 
-        if (impact) {
-            await resolveNotificationsForTarget({
-                personalImpactId: impact._id.toString(),
-                actionStatus: NOTIFICATION_ACTION_STATUSES.COMPLETED,
-            })
+        const deletion = linkedTransactionId
+            ? await deleteAuthorizedPersonalTransactions(
+                session.user.id,
+                [{ transactionId, spaceId: id, spaceEntryId: entryId }]
+            )
+            : { deletedTransactions: [] }
+        const deletedTransaction = deletion.deletedTransactions.length === 1
+
+        // Si el impacto sobrevivió a una eliminación anterior, se cierra sin
+        // inferir otra transacción. La operación sigue siendo idempotente.
+        if (!deletedTransaction) {
+            await removePersonalImpactWithoutTransaction(
+                session.user.id,
+                impact._id.toString()
+            )
         }
 
-        return NextResponse.json({ ok: true, deletedTransaction })
+        return NextResponse.json({
+            ok: true,
+            deletedTransaction,
+            orphanTransactionDeleted: false,
+        })
     } catch (error) {
         console.error('Error al desvincular impacto personal:', error)
+        if (isServiceError(error)) {
+            return NextResponse.json(
+                { error: error.message, code: error.code },
+                { status: error.status }
+            )
+        }
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
     }
 }

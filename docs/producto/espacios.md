@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-08-04
 > Fuente de verdad: reglas funcionales de Espacios
 
 ## Índice
@@ -216,6 +216,19 @@ el impacto privado como `removed`. No borra ni edita el movimiento compartido.
 Es idempotente: repetirla sobre un impacto ya quitado no crea otro efecto. La
 confirmación muestra cuenta, dirección, monto y moneda para que el usuario pueda
 anticipar el cambio.
+
+El cliente envía el `transactionId` de la tarjeta elegida. El servidor lo valida
+y consulta desde el inicio por `transactionId + userId + spaceId + entryId`; no
+usa descripción, monto, moneda o fecha para resolver identidades. Un impacto
+`linked` o `needs_review` sólo puede quitar su propia transacción. Si el impacto
+no existe pero la transacción conserva exactamente ese contexto, se considera
+huérfana y se elimina sin exigir que el `SpaceEntry` continúe presente. Si no
+existe ninguna coincidencia, el reintento no modifica otros documentos.
+
+La creación normaliza ids de documentos poblados por su `_id`. Si falla después
+de crear una transacción personal, compensa sólo esa transacción mediante el
+mismo teardown autorizado. El nivel de aprendizaje de esta operación es
+`no aplica`.
 
 Cuando una edicion cambia el reparto de manera material, los pendientes se
 reconcilian contra el reparto nuevo:

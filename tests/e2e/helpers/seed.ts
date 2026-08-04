@@ -30,6 +30,10 @@ import {
     PROJECTION_SMOKE_NAMES,
     PROJECTION_SMOKE_USER_NAME,
 } from './projection-smoke'
+import {
+    SPACE_IMPACT_ACCOUNT_NAME,
+    SPACE_IMPACT_FIXTURES,
+} from './space-impact'
 
 const TEST_NAME = 'Test User'
 const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
@@ -43,9 +47,168 @@ async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
     await Promise.all([
         db.collection('transactions').deleteMany({ userId }),
         db.collection('installmentplans').deleteMany({ userId }),
+        db.collection('spaceentrypersonalimpacts').deleteMany({ userId }),
+        db.collection('spaceentries').deleteMany({ createdByUserId: userId }),
+        db.collection('spaceparticipants').deleteMany({ userId }),
+        db.collection('spaces').deleteMany({ ownerUserId: userId }),
+        db.collection('notifications').deleteMany({ recipientUserId: userId }),
         ScheduledCommitment.deleteMany({ userId }),
         FunctionalSuggestionDismissal.deleteMany({ userId }),
     ])
+}
+
+async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no esta conectado para sembrar Espacios E2E.')
+
+    const [account, category] = await Promise.all([
+        Account.findOne({ userId, name: SPACE_IMPACT_ACCOUNT_NAME }),
+        Category.findOne({ userId, type: 'expense', isArchived: false }),
+    ])
+    if (!account || !category) {
+        throw new Error('No se pudo resolver cuenta o categoria para Espacios E2E.')
+    }
+
+    const now = new Date()
+    // Mantener los movimientos dentro del período actual y antes del límite
+    // temporal que usa la fuente canónica de saldos (`Date.now() + 1`).
+    const transactionDate = new Date(now.getTime() - 60_000)
+    const timestamps = { createdAt: now, updatedAt: now }
+
+    for (const fixture of Object.values(SPACE_IMPACT_FIXTURES)) {
+        const spaceId = new mongoose.Types.ObjectId(fixture.spaceId)
+        const participantId = new mongoose.Types.ObjectId(fixture.participantId)
+        const normalEntryId = new mongoose.Types.ObjectId(fixture.normalEntryId)
+        const normalTransactionId = new mongoose.Types.ObjectId(fixture.normalTransactionId)
+        const orphanEntryId = new mongoose.Types.ObjectId(fixture.orphanEntryId)
+        const orphanTransactionId = new mongoose.Types.ObjectId(fixture.orphanTransactionId)
+
+        await Promise.all([
+            db.collection('spaces').replaceOne(
+                { _id: spaceId },
+                {
+                    _id: spaceId,
+                    ownerUserId: userId,
+                    name: fixture.spaceName,
+                    type: 'home',
+                    mode: 'synchronized',
+                    status: 'active',
+                    currencies: ['ARS'],
+                    reportingCurrency: 'ARS',
+                    defaultSplitMode: 'none',
+                    simplifyDebts: false,
+                    debtMode: 'direct',
+                    ...timestamps,
+                },
+                { upsert: true }
+            ),
+            db.collection('spaceparticipants').replaceOne(
+                { _id: participantId },
+                {
+                    _id: participantId,
+                    spaceId,
+                    kind: 'finp_user',
+                    userId,
+                    displayName: 'Test User',
+                    role: 'owner',
+                    inviteStatus: 'accepted',
+                    isActive: true,
+                    ...timestamps,
+                },
+                { upsert: true }
+            ),
+            db.collection('spaceentries').replaceOne(
+                { _id: normalEntryId },
+                {
+                    _id: normalEntryId,
+                    spaceId,
+                    createdByUserId: userId,
+                    createdByParticipantId: participantId,
+                    type: 'expense',
+                    status: 'confirmed',
+                    title: fixture.normalDescription,
+                    amount: 7_000,
+                    currency: 'ARS',
+                    reportingAmount: 7_000,
+                    date: transactionDate,
+                    paidByParticipantId: participantId,
+                    sharedWithParticipantIds: [participantId],
+                    splitMode: 'none',
+                    confirmationRequired: false,
+                    confirmedByUserId: userId,
+                    confirmedAt: now,
+                    isVoided: false,
+                    editCount: 0,
+                    ...timestamps,
+                },
+                { upsert: true }
+            ),
+            db.collection('transactions').replaceOne(
+                { _id: normalTransactionId },
+                {
+                    _id: normalTransactionId,
+                    userId,
+                    type: 'expense',
+                    amount: 7_000,
+                    currency: 'ARS',
+                    date: transactionDate,
+                    description: fixture.normalDescription,
+                    categoryId: category._id,
+                    sourceAccountId: account._id,
+                    status: 'confirmed',
+                    createdFrom: 'system',
+                    spaceId,
+                    spaceEntryId: normalEntryId,
+                    spaceNameSnapshot: fixture.spaceName,
+                    tags: ['e2e-space-impact'],
+                    ...timestamps,
+                },
+                { upsert: true }
+            ),
+            db.collection('transactions').replaceOne(
+                { _id: orphanTransactionId },
+                {
+                    _id: orphanTransactionId,
+                    userId,
+                    type: 'expense',
+                    amount: 9_000,
+                    currency: 'ARS',
+                    date: transactionDate,
+                    description: fixture.orphanDescription,
+                    categoryId: category._id,
+                    sourceAccountId: account._id,
+                    status: 'confirmed',
+                    createdFrom: 'system',
+                    spaceId,
+                    spaceEntryId: orphanEntryId,
+                    spaceNameSnapshot: fixture.spaceName,
+                    tags: ['e2e-space-impact-orphan'],
+                    ...timestamps,
+                },
+                { upsert: true }
+            ),
+            db.collection('spaceentrypersonalimpacts').replaceOne(
+                { _id: new mongoose.Types.ObjectId(fixture.normalImpactId) },
+                {
+                    _id: new mongoose.Types.ObjectId(fixture.normalImpactId),
+                    spaceId,
+                    entryId: normalEntryId,
+                    userId,
+                    participantId,
+                    transactionId: normalTransactionId,
+                    accountId: account._id,
+                    categoryId: category._id,
+                    impactKind: 'payer_full_amount',
+                    amount: 7_000,
+                    currency: 'ARS',
+                    status: 'linked',
+                    resolvedAt: now,
+                    ...timestamps,
+                },
+                { upsert: true }
+            ),
+        ])
+    }
 }
 
 async function ensureTestUser(
@@ -810,6 +973,7 @@ async function seed() {
             allowNegativeBalance: false,
         })
         await seedP2RecurringCandidate(user._id)
+        await seedSpaceImpactFixtures(user._id)
         const financialSmoke = await seedFinancialSmokeData(
             TEST_USER_EMAIL,
             TEST_USER_PASSWORD
@@ -828,6 +992,7 @@ async function seed() {
             `   Cuentas base: ${Number(cashCreated) + Number(cardCreated) + Number(p2HistoryCreated)} creadas`
         )
         console.log('   P2: candidato mensual explicable verificado')
+        console.log('   Espacios: impactos normal y huerfano preparados para desktop/mobile')
         console.log(
             `   Smoke financiero: usuario ${financialSmoke.created ? 'creado' : 'actualizado'}, ` +
             `períodos ${financialSmoke.historical} y ${financialSmoke.current}`

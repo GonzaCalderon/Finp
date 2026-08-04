@@ -12,11 +12,11 @@ import { resolveTransactionDescription } from '@/lib/utils/transaction-descripti
 import { getBalanceBeforeReplacingTransaction } from '@/lib/utils/transaction-account-impact'
 import { recordTransactionLearningEvent } from '@/lib/server/quick-capture-learning'
 import {
-    normalizePaymentGroup,
-    unlinkTransactionDependents,
+    deleteAuthorizedPersonalTransactions,
 } from '@/lib/server/transaction-teardown'
 import { resolveRuleTraceForEdit } from '@/lib/server/transactions'
 import { syncApplicationSnapshotFromTransaction } from '@/lib/server/commitments'
+import { isServiceError } from '@/lib/server/errors'
 
 type DeleteTransaction = {
     _id: { toString(): string }
@@ -456,36 +456,19 @@ export async function DELETE(
             )
         }
 
-        // Se desvincula antes de borrar: si el borrado falla, no queda una
-        // aplicación revertida apuntando a una transacción que sigue viva... y si
-        // se hiciera después, un fallo dejaría los huérfanos que había hasta ahora.
-        const teardowns = []
-        for (const target of targets) {
-            teardowns.push(await unlinkTransactionDependents(session.user.id, target))
-        }
-
-        let deletedTransactions: DeleteTransaction[]
-        if (scope === 'group' && existing.paymentGroupId) {
-            await Transaction.deleteMany({
-                userId: session.user.id,
-                _id: { $in: targets.map((target) => target._id) },
-            })
-            deletedTransactions = targets
-        } else {
-            const transaction = await Transaction.findOneAndDelete({
-                _id: id,
-                userId: session.user.id,
-            })
-            deletedTransactions = transaction ? [transaction as DeleteTransaction] : []
-        }
+        const deletion = await deleteAuthorizedPersonalTransactions(
+            session.user.id,
+            targets.map((target) => ({ transactionId: target._id.toString() }))
+        )
+        const deletedTransactions = deletion.deletedTransactions as DeleteTransaction[]
+        const teardowns = deletion.teardowns
 
         if (deletedTransactions.length === 0) {
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
         }
 
-        const normalizedGroup = await normalizePaymentGroup(
-            session.user.id,
-            existing.paymentGroupId
+        const normalizedGroup = deletion.normalizedGroups.find(
+            (group) => group.groupId === existing.paymentGroupId
         )
 
         try {
@@ -530,6 +513,12 @@ export async function DELETE(
         })
     } catch (error) {
         console.error('Error al eliminar transacción:', error)
+        if (isServiceError(error)) {
+            return NextResponse.json(
+                { error: error.message, code: error.code },
+                { status: error.status }
+            )
+        }
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
     }
 }
