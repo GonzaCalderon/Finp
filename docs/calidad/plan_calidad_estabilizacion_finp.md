@@ -383,9 +383,9 @@ Checks base y E2E global verificados el 2026-08-17:
 - cobertura no bloqueante;
 - el smoke financiero conserva datos representativos de dos períodos y volvió a
   quedar verde sin depender de cuentas residuales;
-- `next dev` todavía expone avisos repetidos del fallback del Sankey y de
-  descripción accesible ausente en diálogos de Captura rápida; su limpieza está
-  priorizada como FINP-P1-012;
+- la regresión de Captura rápida recarga un Dashboard sin primera capa del
+  Sankey, espera el SVG, valida la descripción accesible del diálogo y falla si
+  reaparece cualquiera de los dos avisos cerrados por FINP-P1-012;
 - recorridos P2 aprobados para candidato recurrente, compra en un pago con
   Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
 

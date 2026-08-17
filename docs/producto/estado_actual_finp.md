@@ -369,6 +369,8 @@ Mobile web sigue siendo la superficie prioritaria.
   categorías, cuentas y datasets representativos;
 - suite global aprobada contra `finp-e2e` en Chromium desktop y Pixel 7 tanto
   sobre el build de producción como con `next dev`, sin escrituras en desarrollo;
+- regresión E2E para el Sankey con capas dispersas y la descripción accesible de
+  Captura rápida, sin recuperar desde excepciones ni advertencias de Radix;
 - CI para verificaciones principales y job E2E listo para ejecutarse apenas
   reciba la credencial rotada;
 - build de producción reproducible.
@@ -376,9 +378,6 @@ Mobile web sigue siendo la superficie prioritaria.
 ### Brechas
 
 - primera ejecución remota de E2E bloqueada por la rotación de credenciales;
-- `next dev` todavía registra una recuperación repetida del Sankey y avisos de
-  descripción accesible ausente en diálogos de Captura rápida; FINP-P1-012
-  concentra ese trabajo sin invalidar la evidencia funcional verde;
 - cobertura de integración/API desigual;
 - validación visual y accesibilidad no sistematizadas;
 - cobertura no bloquea CI;
@@ -403,12 +402,13 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Estabilización de la suite E2E global local, 2026-08-17:
+Cierre de advertencias E2E, 2026-08-17:
 
-- el seed elimina y vuelve a crear sólo las cuentas del usuario general de E2E,
-  con Efectivo suficiente y la cuenta predeterminada restaurada;
-- los gastos dejan de depender de saldos residuales o del orden de los tests;
-- el recorrido largo de alta de Compromisos admite la compilación en frío de
-  desarrollo sin aumentar el timeout global;
-- preflight, seed y 60 de 60 escenarios pasaron en desktop y Pixel 7 sobre el
-  build de producción y nuevamente con `next dev`.
+- el Sankey compacta sólo las capas presentes antes de calcular el layout, por
+  lo que un período sin nodos iniciales ya no lanza una excepción por render;
+- Captura rápida conserva su descripción visible y vuelve a usar la relación
+  accesible generada por Radix, sin identificadores paralelos;
+- la regresión focal pasa 2 de 2 y verifica SVG, responsive y descripción
+  accesible en desktop y Pixel 7;
+- la suite global pasa 60 de 60 con `next dev` sin los avisos de Sankey ni de
+  descripción ausente.

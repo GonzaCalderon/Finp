@@ -58,14 +58,13 @@ Un documento de dominio puede describir una posibilidad, pero sólo este archivo
 Orden:
 
 1. conservar la suite E2E global local y la documentación como gates verdes;
-2. eliminar la deuda técnica inmediata expuesta por la suite global;
-3. cerrar exactitud y verificación pendientes;
-4. resolver UX mobile bloqueante;
-5. antes de promover a producción, rotar la credencial remota y activar E2E en CI;
-6. profundizar colaboración;
-7. revisar el criterio de producto de Escenarios antes de retomar Proyección;
-8. retomar la orientación por dominio después de esa revisión;
-9. estudiar mobile/offline cuando el producto web esté estable.
+2. cerrar exactitud y verificación pendientes;
+3. resolver UX mobile bloqueante;
+4. antes de promover a producción, rotar la credencial remota y activar E2E en CI;
+5. profundizar colaboración;
+6. revisar el criterio de producto de Escenarios antes de retomar Proyección;
+7. retomar la orientación por dominio después de esa revisión;
+8. estudiar mobile/offline cuando el producto web esté estable.
 
 Los principios de producto y de trabajo viven en
 [`../../AGENTS.md`](../../AGENTS.md) §4 y §6. Acá sólo rigen los de priorización:
@@ -100,19 +99,6 @@ Los principios de producto y de trabajo viven en
   rotación debe completarse antes de configurar los secretos de FINP-P0-004.
 - Criterio: credencial anterior inválida, aplicación conectando con la nueva y
   ausencia de secretos en logs, commits y artefactos.
-
-### FINP-P1-012 — Limpiar advertencias detectadas por la suite E2E
-
-- Estado: `pendiente`.
-- Alcance: evitar que el Sankey necesite recuperar cada render desde una
-  excepción de ordenamiento y completar la descripción accesible de los
-  diálogos usados por Captura rápida.
-- Evidencia: la suite global verde del 2026-08-17 expone ambos avisos de forma
-  repetida en `next dev`; no producen fallos funcionales, pero ocultan señales
-  nuevas y agregan trabajo evitable en cliente.
-- Criterio: la suite global sigue verde en desktop y mobile sin esos avisos;
-  los fallbacks legítimos permanecen explícitos, observables y cubiertos.
-
 
 ## 5. Prioridad P2 — recurrencia, proyección y análisis
 
@@ -368,9 +354,9 @@ vivir acá y se convierte en un ítem con ID, criterio y estado.
 - proteger `main` y `dev` con checks;
 - medir rendimiento antes de adoptar procesos costosos.
 
-Ya priorizadas como ítem: activar E2E es FINP-P0-004 y limpiar las advertencias
-detectadas es FINP-P1-012. Ya resueltas: la validación documental corre con
-`npm run docs:check`.
+Ya priorizada como ítem: activar E2E es FINP-P0-004. Ya resueltas: la validación
+documental corre con `npm run docs:check` y FINP-P1-012 eliminó las advertencias
+del Sankey y Captura rápida.
 
 ## 10. Cerrado recientemente
 
@@ -383,6 +369,12 @@ detectadas es FINP-P1-012. Ya resueltas: la validación documental corre con
 - la suite global pasó 60 de 60 en Chromium desktop y Pixel 7 tanto sobre el
   build de producción como con `next dev`, sin reproducir los 404 ni las altas
   fallidas de la línea base. Nivel de aprendizaje: `no aplica`.
+- FINP-P1-012: el Sankey compacta las capas presentes antes de ejecutar
+  `d3-sankey`, y Captura rápida deja que Radix vincule su descripción mediante
+  los identificadores accesibles propios;
+- una regresión E2E monta el gráfico sin primera capa y verifica la descripción
+  del diálogo; la suite global pasó 60 de 60 con `next dev` sin los dos avisos
+  de la línea base. Nivel de aprendizaje: `no aplica`.
 
 ### 2026-08-04
 

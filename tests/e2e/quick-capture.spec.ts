@@ -53,6 +53,22 @@ test.describe('Captura rápida', () => {
     test('interpreta una captura y mantiene el diálogo usable en desktop y mobile', async ({
         page,
     }, testInfo) => {
+        const qualityWarnings: string[] = []
+        page.on('console', (message) => {
+            const text = message.text()
+            if (
+                text.includes('Sankey fallback:') ||
+                text.includes('Missing `Description`')
+            ) {
+                qualityWarnings.push(text)
+            }
+        })
+
+        // La recarga vuelve a montar el Sankey con el usuario general, cuyo
+        // dataset puede no tener nodos en la primera capa.
+        await page.reload()
+        await expect(page.getByTestId('sankey-chart').locator('svg')).toBeVisible()
+
         if (testInfo.project.name === 'mobile-chromium') {
             await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
             await page.getByRole('button', { name: 'Captura rápida' }).click()
@@ -62,6 +78,15 @@ test.describe('Captura rápida', () => {
 
         const dialog = page.getByRole('dialog').filter({ hasText: 'Captura rápida' })
         await expect(dialog).toBeVisible()
+        const accessibleDescription = await dialog.evaluate((element) => {
+            const descriptionId = element.getAttribute('aria-describedby')
+            return descriptionId
+                ? document.getElementById(descriptionId)?.textContent?.trim()
+                : null
+        })
+        expect(accessibleDescription).toContain(
+            'Escribí como te salga. Revisamos todo antes de guardar.'
+        )
         await dialog.getByLabel('Describí el movimiento').fill('Café 1500 ayer mp')
 
         await expect(dialog).toContainText('1.500')
@@ -90,6 +115,7 @@ test.describe('Captura rápida', () => {
             }
         })
         expect(layout).toEqual({ documentFits: true, dialogFits: true })
+        expect(qualityWarnings).toEqual([])
     })
 
     test('coordina un candidato mensual aprendido con el descarte persistente', async ({
