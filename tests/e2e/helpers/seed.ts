@@ -39,6 +39,7 @@ const TEST_NAME = 'Test User'
 const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
 const P2_CANDIDATE_SUBJECT_KEY = 'create_commitment|ARS|cobertura p2'
 const P2_HISTORY_ACCOUNT_NAME = 'Historial P2'
+const GENERAL_CASH_INITIAL_BALANCE = 100_000
 
 async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
     const db = mongoose.connection.db
@@ -52,6 +53,7 @@ async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
         db.collection('spaceparticipants').deleteMany({ userId }),
         db.collection('spaces').deleteMany({ ownerUserId: userId }),
         db.collection('notifications').deleteMany({ recipientUserId: userId }),
+        Account.deleteMany({ userId }),
         ScheduledCommitment.deleteMany({ userId }),
         FunctionalSuggestionDismissal.deleteMany({ userId }),
     ])
@@ -279,11 +281,11 @@ async function ensureAccount(
     if (account) {
         Object.assign(account, values)
         await account.save()
-        return false
+        return { account, created: false }
     }
 
-    await Account.create({ userId, name, ...values })
-    return true
+    const createdAccount = await Account.create({ userId, name, ...values })
+    return { account: createdAccount, created: true }
 }
 
 async function seedP2RecurringCandidate(userId: mongoose.Types.ObjectId) {
@@ -931,19 +933,22 @@ async function seed() {
         )
         await resetGeneralE2EFinancialData(user._id)
         const categories = await ensureDefaultCategories(user._id)
-        const cashCreated = await ensureAccount(user._id, 'Efectivo', {
+        const { account: cashAccount, created: cashCreated } = await ensureAccount(user._id, 'Efectivo', {
             type: 'cash',
             currency: 'ARS',
             supportedCurrencies: ['ARS'],
             defaultPaymentMethods: ['cash'],
-            initialBalance: 0,
-            initialBalances: { ARS: 0, USD: 0 },
+            // Los impactos de Espacios agregan $16.000 de egresos antes de los
+            // tests de Transacciones. El saldo base evita que el resultado
+            // dependa del orden entre specs sin permitir sobregiros reales.
+            initialBalance: GENERAL_CASH_INITIAL_BALANCE,
+            initialBalances: { ARS: GENERAL_CASH_INITIAL_BALANCE, USD: 0 },
             color: '#10B981',
             isActive: true,
             includeInNetWorth: true,
             allowNegativeBalance: false,
         })
-        const cardCreated = await ensureAccount(user._id, 'Tarjeta E2E', {
+        const { created: cardCreated } = await ensureAccount(user._id, 'Tarjeta E2E', {
             type: 'credit_card',
             currency: 'ARS',
             supportedCurrencies: ['ARS', 'USD'],
@@ -960,7 +965,7 @@ async function seed() {
                 creditLimit: 1_000_000,
             },
         })
-        const p2HistoryCreated = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
+        const { created: p2HistoryCreated } = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
             type: 'cash',
             currency: 'ARS',
             supportedCurrencies: ['ARS'],
@@ -972,6 +977,8 @@ async function seed() {
             includeInNetWorth: false,
             allowNegativeBalance: false,
         })
+        user.set('preferences.defaultAccountId', cashAccount._id)
+        await user.save()
         await seedP2RecurringCandidate(user._id)
         await seedSpaceImpactFixtures(user._id)
         const financialSmoke = await seedFinancialSmokeData(

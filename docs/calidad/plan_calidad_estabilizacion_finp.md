@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-08-17
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -365,23 +365,27 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Verificado 2026-08-04:
+Checks base y E2E global verificados el 2026-08-17:
 
 - 804 pruebas unitarias aprobadas en 100 archivos;
 - build, typecheck, lint y validación documental aprobados;
-- 4 de 4 E2E focales de Espacios aprobados en Chromium desktop y Pixel 7;
-- la corrida global adicional cerró 52 de 60: queda pendiente aislar cuentas
-  residuales del smoke financiero y estabilizar el servidor largo de `next dev`,
-  que devolvió 404 para rutas dinámicas y afectó otras dos altas;
+- 60 de 60 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
+  de producción;
+- 60 de 60 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
+  ni altas fallidas después de una ejecución larga;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
   conectar; con la credencial ejecuta preflight, seed, build y Playwright;
 - preflight de aislamiento aprobado contra `finp-e2e`;
-- seed focal de Espacios repetible y aislado del usuario del smoke; la limpieza
-  global del dataset financiero queda asociada a FINP-P0-004;
+- seed repetible: recrea todas las cuentas sólo para el usuario general y
+  mantiene usuarios independientes para smoke financiero, Proyección e impactos
+  personales de Espacios;
 - cobertura no bloqueante;
-- el smoke financiero conserva datos representativos de dos períodos, pero su
-  próxima corrida verde depende de limpiar todas las cuentas residuales;
+- el smoke financiero conserva datos representativos de dos períodos y volvió a
+  quedar verde sin depender de cuentas residuales;
+- `next dev` todavía expone avisos repetidos del fallback del Sankey y de
+  descripción accesible ausente en diálogos de Captura rápida; su limpieza está
+  priorizada como FINP-P1-012;
 - recorridos P2 aprobados para candidato recurrente, compra en un pago con
   Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
 

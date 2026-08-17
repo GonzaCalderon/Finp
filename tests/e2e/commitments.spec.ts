@@ -50,6 +50,11 @@ test.describe('Compromisos', () => {
     test('crea un compromiso con fechas claras y categoría buscable', async ({
         page,
     }, testInfo) => {
+        // En `next dev` este recorrido visita y compila en frío varias rutas y
+        // overlays. El límite sigue siendo acotado, pero no confunde ese costo
+        // local con un fallo del último botón del formulario.
+        test.setTimeout(60_000)
+
         const dueDate = new Date()
         dueDate.setHours(12, 0, 0, 0)
         dueDate.setDate(dueDate.getDate() + 8)

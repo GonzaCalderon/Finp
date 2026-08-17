@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-08-17
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -31,17 +31,19 @@ Estado general:
 - Espacios y Deudas operativos;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- E2E local reproducible en una base aislada;
-- smoke financiero real aprobado;
-- falta rotar la credencial de pruebas para que el job E2E ya configurado pueda
-  ejecutarse en CI.
+- entorno E2E local aislado y reproducible, con 60 de 60 escenarios globales
+  aprobados en desktop y mobile tanto sobre producción como en desarrollo;
+- smoke financiero con validación histórica y fixtures independientes del orden
+  de ejecución;
+- rotación de la credencial y activación E2E en CI diferidas hasta la preparación
+  de la promoción a producción.
 
 La especificación completa está en [`especificacion_funcional.md`](especificacion_funcional.md). Las prioridades viven sólo en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-08-04 sobre
-`codex/fix-orphan-space-transactions`:
+Verificado localmente el 2026-08-17 sobre `codex/stabilize-global-e2e`, nacida
+de `dev` en `9b5252f`:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -49,20 +51,20 @@ Verificado localmente el 2026-08-04 sobre
 - 98 rutas API;
 - typecheck limpio;
 - ESLint limpio;
+- validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
 - 804 unit tests aprobados en 100 archivos, sin tests en `todo`;
-- 4 de 4 escenarios E2E focales de impactos personales de Espacios aprobados
-  para desktop y mobile;
-- la corrida E2E global adicional completó 52 de 60: el smoke financiero leyó
-  cuentas residuales y, después de varios minutos de `next dev`, rutas dinámicas
-  devolvieron 404 y dos altas de transacciones no cerraron el diálogo;
+- 60 de 60 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
+  sobre el build de producción;
+- 60 de 60 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
+  ni altas fallidas después de una ejecución larga;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
 - `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
   desarrollo conserva `finm`;
-- el seed acotado de Espacios es repetible y restaura el usuario general; la
-  limpieza completa del usuario independiente del smoke financiero requiere
-  estabilización antes de considerar verde la suite global;
+- el seed recrea todas las cuentas del usuario general, restaura su cuenta
+  predeterminada y mantiene usuarios independientes para smoke financiero,
+  Proyección e impactos personales de Espacios;
 - CI activo para lint, build y unit tests;
 - job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
   la rotación.
@@ -71,10 +73,11 @@ Ramas:
 
 - `main`: producción;
 - `dev`: desarrollo;
-- `dev` coincide con `origin/dev` en `d8ae0e6`;
-- `origin/main` es ancestro de `origin/dev` y está 17 commits detrás;
-- la rama local `main` está 87 commits detrás de `origin/main` y no se usa para
-  trabajo hasta actualizarla de forma autorizada.
+- `dev` coincide con `origin/dev` en `9b5252f`;
+- `codex/stabilize-global-e2e`: estabilización local y cierre documental actual;
+- `origin/main` es ancestro de `origin/dev` y está un commit detrás;
+- la rama local `main` está desactualizada y no se usa para trabajo hasta
+  actualizarla de forma autorizada.
 
 ## 3. Finanzas personales
 
@@ -364,7 +367,8 @@ Mobile web sigue siendo la superficie prioritaria.
 - preflight E2E compartido por configuración, seed y Playwright;
 - seed repetible que repara los usuarios general, financiero y de Proyección,
   categorías, cuentas y datasets representativos;
-- suite completa aprobada contra `finp-e2e` sin escrituras en desarrollo;
+- suite global aprobada contra `finp-e2e` en Chromium desktop y Pixel 7 tanto
+  sobre el build de producción como con `next dev`, sin escrituras en desarrollo;
 - CI para verificaciones principales y job E2E listo para ejecutarse apenas
   reciba la credencial rotada;
 - build de producción reproducible.
@@ -372,6 +376,9 @@ Mobile web sigue siendo la superficie prioritaria.
 ### Brechas
 
 - primera ejecución remota de E2E bloqueada por la rotación de credenciales;
+- `next dev` todavía registra una recuperación repetida del Sankey y avisos de
+  descripción accesible ausente en diálogos de Captura rápida; FINP-P1-012
+  concentra ese trabajo sin invalidar la evidencia funcional verde;
 - cobertura de integración/API desigual;
 - validación visual y accesibilidad no sistematizadas;
 - cobertura no bloquea CI;
@@ -396,15 +403,12 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Cierre operativo de Proyección, 2026-07-31:
+Estabilización de la suite E2E global local, 2026-08-17:
 
-- contrato compartido y serializable con fuente, certeza, contexto, enlaces y
-  totales separados;
-- compras `1/1`, históricos sin plan y cuotas incluidos en el período correcto,
-  sin contar la transacción padre ni pagos de tarjeta;
-- agrupaciones por tipo, tarjeta y categoría con los mismos ítems y totales;
-- seis meses por defecto, Año calendario, resumen, gráfico y detalle expandible;
-- preferencias privadas, fallback local, hidratación estable e invalidaciones;
-- carga, vacío, período vacío, error, reintento, privacidad, accesibilidad,
-  contenido largo, dark mode y movimiento reducido;
-- verificación unitaria, API/servicio y E2E aislada en desktop y Pixel 7.
+- el seed elimina y vuelve a crear sólo las cuentas del usuario general de E2E,
+  con Efectivo suficiente y la cuenta predeterminada restaurada;
+- los gastos dejan de depender de saldos residuales o del orden de los tests;
+- el recorrido largo de alta de Compromisos admite la compilación en frío de
+  desarrollo sin aumentar el timeout global;
+- preflight, seed y 60 de 60 escenarios pasaron en desktop y Pixel 7 sobre el
+  build de producción y nuevamente con `next dev`.

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad y agentes
-> Última actualización: 2026-07-31
+> Última actualización: 2026-08-17
 > Fuente de verdad: procedimiento local para preparar y ejecutar Playwright
 
 ## Índice
@@ -71,7 +71,8 @@ El seed es idempotente y acotado al usuario configurado. Crea o repara:
 
 - usuario y contraseña de test;
 - categorías predeterminadas;
-- cuenta Efectivo;
+- cuenta Efectivo recreada con saldo suficiente para que los gastos de los
+  fixtures no vuelvan dependiente la suite del orden de ejecución;
 - tarjeta bimonetaria Tarjeta E2E;
 - cuenta histórica no patrimonial y candidato recurrente P2;
 - usuario financiero independiente derivado del email de test;
@@ -125,6 +126,8 @@ siete días.
 
 - Los tests de transacciones crean datos con nombres únicos y no hacen una
   limpieza global.
+- El seed sí elimina y recrea todas las cuentas del usuario general de E2E antes
+  de sembrar sus fixtures; nunca aplica esa limpieza a otro usuario.
 - El fixture financiero usa otro usuario y documentos con identificadores
   deterministas para no depender de esos movimientos.
 - Si el puerto 3001 está ocupado, la ejecución falla y debe revisarse el proceso
