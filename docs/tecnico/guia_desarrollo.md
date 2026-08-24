@@ -223,6 +223,38 @@ Un `GO` habilita preparar el modelo compatible; nunca autoriza por sí solo un
 backfill. Cualquier escritura mantiene el protocolo de migración, aprobación y
 rollback de esta sección.
 
+### Índices compatibles de Espacios v2
+
+La etapa de modelo de FINP-P0-006 usa un manifiesto independiente de
+`autoIndex`:
+
+```bash
+npm run indexes:spaces:v2 -- --env test
+npm run indexes:spaces:v2 -- --env test --apply
+npm run indexes:spaces:v2 -- --env development --confirm-database <nombre>
+```
+
+Garantías:
+
+- el comando es `dry-run` por defecto y muestra colección, nombre y propósito;
+- `--apply` sólo se admite contra la base aislada `finp-e2e` después del mismo
+  preflight que Playwright;
+- development exige coincidencia exacta de base y permanece siempre read-only;
+- producción, CI sin entorno E2E y bases reservadas se rechazan;
+- crear nuevamente el mismo manifiesto es idempotente;
+- los índices únicos v2 son parciales por versión o procedencia y conviven con
+  documentos legacy;
+- aplicar índices no autoriza backfill, activación de rutas ni cutover.
+
+La integración transaccional canónica de esta base se ejecuta con:
+
+```bash
+npm run test:integration:spaces:v2
+```
+
+El recorrido crea datos identificables sólo en `finp-e2e`, valida operaciones
+con sesión real y elimina exclusivamente esos fixtures al terminar.
+
 ## 9. Errores
 
 ### Principios

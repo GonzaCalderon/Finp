@@ -16,6 +16,9 @@ const DebtMovementSchema = new Schema<IDebtMovement>(
         transactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
         spaceId: { type: Schema.Types.ObjectId, ref: 'Space' },
         spaceEntryId: { type: Schema.Types.ObjectId, ref: 'SpaceEntry' },
+        spaceOperationId: { type: Schema.Types.ObjectId, ref: 'SpaceOperation' },
+        balanceBefore: { type: Number, min: 0 },
+        balanceAfter: { type: Number, min: 0 },
 
         date: { type: Date, required: true },
         notes: { type: String, trim: true, maxlength: 500 },
@@ -26,6 +29,18 @@ const DebtMovementSchema = new Schema<IDebtMovement>(
 DebtMovementSchema.index({ userId: 1, debtId: 1, createdAt: -1 })
 DebtMovementSchema.index({ transactionId: 1 }, { sparse: true })
 
+const existingDebtMovementModel = mongoose.models.DebtMovement as
+    | mongoose.Model<IDebtMovement>
+    | undefined
+const needsDebtMovementSchemaRefresh = Boolean(
+    existingDebtMovementModel &&
+    (!existingDebtMovementModel.schema.path('spaceOperationId') ||
+        !existingDebtMovementModel.schema.path('balanceBefore') ||
+        !existingDebtMovementModel.schema.path('balanceAfter'))
+)
+
+if (needsDebtMovementSchemaRefresh) delete mongoose.models.DebtMovement
+
 export const DebtMovement =
-    (mongoose.models.DebtMovement as mongoose.Model<IDebtMovement> | undefined) ||
+    (needsDebtMovementSchemaRefresh ? undefined : existingDebtMovementModel) ||
     mongoose.model<IDebtMovement>('DebtMovement', DebtMovementSchema)

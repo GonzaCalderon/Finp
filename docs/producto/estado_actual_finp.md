@@ -44,8 +44,9 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-08-17 sobre `codex/stabilize-global-e2e`, nacida
-de `dev` en `9b5252f`:
+Checks base verificados localmente el 2026-08-24 sobre
+`codex/spaces-financial-model-v2`; la suite E2E global conserva su última
+verificación del 2026-08-17:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -55,7 +56,9 @@ de `dev` en `9b5252f`:
 - ESLint limpio;
 - validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
-- 821 unit tests aprobados en 103 archivos, sin tests en `todo`;
+- 858 unit tests aprobados en 110 archivos, sin tests en `todo`;
+- 6 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+  sesiones MongoDB reales;
 - 60 de 60 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
   sobre el build de producción;
 - 60 de 60 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
@@ -315,6 +318,24 @@ La caracterización de datos ejecutada el 2026-08-24 confirmó además:
 - las decisiones 0007 y 0008 siguen vigentes: el resultado habilita la etapa de
   modelo compatible, pero bloquea cualquier migración automática o cutover.
 
+La base compatible v2 completada el 2026-08-24 incorpora:
+
+- modelo explícito de parte propia, impacto real y operacional, snapshots de
+  origen, día financiero, revisión y procedencia;
+- cálculo cent-based de repartos, moneda, balances y deuda directa o simplificada;
+- permisos y transiciones centralizados, protección del último `owner` y control
+  de concurrencia optimista;
+- servicios transaccionales e idempotentes para movimientos, historia, impacto
+  privado, liquidaciones, deudas y administración;
+- reconciliación de notificaciones posterior al commit, sin repetir la unidad
+  financiera;
+- 10 índices compatibles aplicados sólo en E2E y una prueba de integración real
+  de rollback, concurrencia, replay, historia y ambas superficies de liquidación.
+
+Esta base todavía no está expuesta por rutas ni interfaz. No hubo backfill,
+cutover ni escritura en development; por eso no cambia aún el comportamiento
+disponible para el usuario ni levanta el `NO-GO` de migración.
+
 Los detalles con identificadores permanecen locales en
 `test-results/audits/spaces/` y no se versionan.
 
@@ -421,6 +442,8 @@ Mobile web sigue siendo la superficie prioritaria.
 - auditoría legacy de Espacios cubierta con detectores puros, barreras de
   entorno, adaptador Mongo sin primitivas de escritura y prueba E2E contra el
   seed aislado;
+- modelo financiero v2 de Espacios cubierto con 37 casos unitarios focales y 6
+  recorridos de integración sobre transacciones MongoDB reales;
 
 ### Brechas
 
@@ -456,14 +479,14 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Caracterización legacy de Espacios, 2026-08-24:
+Base financiera compatible de Espacios v2, 2026-08-24:
 
-- motor determinista para participantes, movimientos, impactos personales,
-  transacciones, deudas, liquidaciones, pendientes, notificaciones y actividad;
-- CLI read-only con snapshot, confirmación exacta de development, rechazo de
-  producción y salida configurable sin modo de escritura;
-- reportes local detallado, manifiesto técnico y resumen sanitizado bajo una
-  ruta excluida de Git;
-- E2E y development auditados sin mutaciones; resultado `GO` para diseñar la
-  compatibilidad de la etapa 2 y `NO-GO` para migración automática;
-- prueba Playwright focal aprobada contra el seed aislado.
+- contratos y cálculos puros nuevos con adaptación de lectura legacy;
+- servicios de aplicación atómicos, idempotentes y con control de concurrencia;
+- una sola autoridad de deuda derivada y liquidación compartida por Espacios y
+  Deudas;
+- 10 índices parciales reaplicados idempotentemente sobre `finp-e2e`, con
+  development limitado a `dry-run`;
+- 858 unitarias globales y 6 recorridos de integración v2 aprobados;
+- etapa 2 completa como base interna; APIs, UI, backfill y cutover continúan
+  pendientes y el P0 permanece `en curso`.

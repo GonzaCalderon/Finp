@@ -383,10 +383,13 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Checks base y E2E global verificados el 2026-08-17; auditoría de Espacios
-verificada el 2026-08-24:
+Checks base y modelo compatible de Espacios verificados el 2026-08-24; la suite
+E2E global conserva su última verificación del 2026-08-17:
 
-- 821 pruebas unitarias aprobadas en 103 archivos;
+- 858 pruebas unitarias aprobadas en 110 archivos;
+- 6 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+  sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
+  deuda, liquidación y lifecycle;
 - build, typecheck, lint y validación documental aprobados;
 - 60 de 60 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
   de producción;
@@ -413,6 +416,8 @@ verificada el 2026-08-24:
   conocido sin escribir;
 - resultado sanitizado: E2E 18 hallazgos y development 337; ambos permanecen en
   `NO-GO` para migración automática y habilitan la etapa de modelo compatible.
+- los 10 índices v2 parciales se aplicaron y reaplicaron sólo en `finp-e2e`;
+  development fue validado en `dry-run` y no recibió escrituras.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

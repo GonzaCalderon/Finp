@@ -5,6 +5,7 @@ import type {
     SpaceActivityEventType,
     SpaceDebtMode,
     SpaceEntryStatus,
+    SpaceEntryV2Status,
     SpaceEntryType,
     SpaceInviteStatus,
     SpaceInviteType,
@@ -16,6 +17,8 @@ import type {
     SpacePersonalImpactStatus,
     SpacePersonalImpactSourceType,
     SpacePersonalPendingActionType,
+    SpaceOperationStatus,
+    SpaceOperationType,
     SpaceSplitMode,
     SpaceStatus,
     SpaceType,
@@ -55,11 +58,15 @@ export interface ISpace {
     startDate?: Date
     endDate?: Date
     closedAt?: Date
+    archivedFromStatus?: Exclude<SpaceStatus, 'archived'>
     currencies: SpaceCurrency[]
     reportingCurrency: SpaceCurrency
     defaultSplitMode: SpaceSplitMode
     simplifyDebts?: boolean | null
     debtMode?: SpaceDebtMode
+    contractVersion?: 2
+    timezone?: string
+    revision?: number
     createdAt: Date
     updatedAt: Date
 }
@@ -83,6 +90,7 @@ export interface ISpaceParticipant {
         }>
         updatedAt?: Date
     }
+    revision?: number
     createdAt: Date
     updatedAt: Date
 }
@@ -115,6 +123,8 @@ export interface ISpaceEntrySnapshot {
     reportingAmount: number
     exchangeRate?: number
     date: Date
+    dateKey?: string
+    timezone?: string
     spaceCategoryId?: Types.ObjectId
     paidByParticipantId?: Types.ObjectId
     sharedWithParticipantIds?: Types.ObjectId[]
@@ -129,7 +139,8 @@ export interface ISpaceEntry {
     createdByUserId: Types.ObjectId
     createdByParticipantId?: Types.ObjectId
     type: SpaceEntryType
-    status: SpaceEntryStatus
+    status: SpaceEntryStatus | SpaceEntryV2Status
+    contractVersion?: 2
     title: string
     description?: string
     amount: number
@@ -137,6 +148,8 @@ export interface ISpaceEntry {
     reportingAmount: number
     exchangeRate?: number
     date: Date
+    dateKey?: string
+    timezone?: string
     categoryId?: Types.ObjectId | { _id?: Types.ObjectId; name?: string; color?: string; type?: string }
     spaceCategoryId?: Types.ObjectId | ISpaceCategorySnapshot
     paidByParticipantId?: Types.ObjectId
@@ -145,7 +158,7 @@ export interface ISpaceEntry {
     splitAllocations?: ISpaceEntrySplitAllocation[]
     notes?: string
     linkedTransactionId?: Types.ObjectId
-    confirmationRequired: boolean
+    confirmationRequired?: boolean
     confirmedByUserId?: Types.ObjectId
     confirmedAt?: Date
     rejectedAt?: Date
@@ -160,6 +173,8 @@ export interface ISpaceEntry {
     editedByUserId?: Types.ObjectId
     editCount?: number
     previousVersions?: ISpaceEntrySnapshot[]
+    revision?: number
+    operationId?: Types.ObjectId
     createdAt: Date
     updatedAt: Date
 }
@@ -175,6 +190,8 @@ export interface ISpaceEntryPersonalImpact {
     categoryId?: Types.ObjectId
     impactKind: SpacePersonalImpactKind
     amount: number
+    contractVersion?: 2
+    ownShareAmount?: number
     currency: SpaceCurrency
     status: SpacePersonalImpactStatus
     // Campos de pendiente accionable (Fase 6F.1)
@@ -187,6 +204,20 @@ export interface ISpaceEntryPersonalImpact {
     debtMovementId?: Types.ObjectId
     accountImpactAmount?: number
     operationalAmount?: number
+    originSnapshot?: {
+        entryRevision: number
+        entryStatus: 'recorded' | 'voided'
+        payerParticipantId?: Types.ObjectId
+        amount: number
+        reportingAmount: number
+        currency: string
+        reportingCurrency: string
+        exchangeRate?: number
+        dateKey: string
+        timezone: string
+    }
+    revision?: number
+    operationId?: Types.ObjectId
     resolvedAt?: Date
     ignoredAt?: Date
     removedAt?: Date
@@ -217,9 +248,35 @@ export interface ISpaceActivityEvent {
     title: string
     description?: string
     metadata?: Record<string, unknown>
+    operationId?: Types.ObjectId
     visibleToUserIds: Types.ObjectId[]
     readByUserIds: Types.ObjectId[]
     createdAt: Date
+}
+
+export interface ISpaceOperation {
+    _id: Types.ObjectId
+    contractVersion: 2
+    spaceId: Types.ObjectId
+    actorUserId: Types.ObjectId
+    type: SpaceOperationType
+    idempotencyKeyHash: string
+    payloadHash: string
+    status: SpaceOperationStatus
+    resultRefs?: {
+        spaceEntryId?: Types.ObjectId
+        personalImpactId?: Types.ObjectId
+        transactionId?: Types.ObjectId
+        debtId?: Types.ObjectId
+        debtMovementId?: Types.ObjectId
+        pendingActionIds?: Types.ObjectId[]
+        debtIds?: Types.ObjectId[]
+        debtMovementIds?: Types.ObjectId[]
+        activityEventIds?: Types.ObjectId[]
+    }
+    committedAt?: Date
+    createdAt: Date
+    updatedAt: Date
 }
 
 export interface ISpaceInvite {

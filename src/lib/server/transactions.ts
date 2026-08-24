@@ -14,6 +14,7 @@ import { evaluateRules, previewRuleActions } from '@/lib/utils/rules'
 import { getTextSimilarity } from '@/lib/utils/category-ranking'
 import { parseOperationalStartDate } from '@/lib/utils/operational-start'
 import { ServiceError } from '@/lib/server/errors'
+import { Types, type ClientSession } from 'mongoose'
 import type {
     CreatedFrom,
     ImportSourceType,
@@ -45,6 +46,28 @@ type CreateTransactionOptions = {
 }
 
 export type CreateTransactionInput = TransactionFormData | Record<string, unknown>
+
+type SpaceTransactionBase = {
+    userId: string
+    spaceId: string
+    spaceEntryId: string
+    spaceImpactId: string
+    spaceOperationId: string
+    amount: number
+    operationalAmount: number
+    currency: ITransaction['currency']
+    date: Date
+    description: string
+    categoryId?: string
+    spaceNameSnapshot?: string
+}
+
+export type CreateInternalSpaceTransactionInput = SpaceTransactionBase & (
+    | { variant: 'payer_expense' | 'advance'; sourceAccountId: string }
+    | { variant: 'participant_expense'; sourceAccountId?: never }
+    | { variant: 'settlement_paid'; sourceAccountId: string }
+    | { variant: 'settlement_received'; destinationAccountId: string }
+)
 
 type PreparedTransaction = {
     data: TransactionFormData
@@ -517,6 +540,108 @@ export async function createTransactionForUser(
     }
 
     return populated
+}
+
+/**
+ * Variante interna y discriminada para Espacios v2. Es el único camino que
+ * admite un gasto operacional sin cuenta: representa la parte propia de quien
+ * no pagó y no queda disponible para formularios o payloads HTTP generales.
+ */
+export async function createInternalSpaceTransaction(
+    input: CreateInternalSpaceTransactionInput,
+    session: ClientSession
+) {
+    const objectIdFields = [
+        input.userId,
+        input.spaceId,
+        input.spaceEntryId,
+        input.spaceImpactId,
+        input.spaceOperationId,
+        input.categoryId,
+        'sourceAccountId' in input ? input.sourceAccountId : undefined,
+        'destinationAccountId' in input ? input.destinationAccountId : undefined,
+    ].filter((value): value is string => Boolean(value))
+    if (objectIdFields.some((value) => !Types.ObjectId.isValid(value))) {
+        throw new ServiceError(400, 'INVALID_SPACE_TRANSACTION_REFERENCE', 'La procedencia del movimiento no es válida.')
+    }
+    if (
+        !Number.isFinite(input.amount) ||
+        input.amount <= 0 ||
+        !Number.isFinite(input.operationalAmount) ||
+        input.operationalAmount < 0
+    ) {
+        throw new ServiceError(400, 'INVALID_SPACE_TRANSACTION_AMOUNT', 'Los montos del impacto personal no son válidos.')
+    }
+    if (input.variant === 'participant_expense' && input.operationalAmount !== input.amount) {
+        throw new ServiceError(
+            400,
+            'INVALID_SPACE_OPERATIONAL_AMOUNT',
+            'La parte sin salida de cuenta debe coincidir con el gasto operacional.'
+        )
+    }
+    if (input.variant === 'advance' && input.operationalAmount !== 0) {
+        throw new ServiceError(400, 'INVALID_SPACE_ADVANCE', 'Un adelanto puro no tiene gasto operacional.')
+    }
+    if (
+        (input.variant === 'settlement_paid' || input.variant === 'settlement_received') &&
+        input.operationalAmount !== 0
+    ) {
+        throw new ServiceError(400, 'INVALID_SPACE_SETTLEMENT', 'Una liquidación no tiene impacto operacional.')
+    }
+
+    const sourceAccountId = 'sourceAccountId' in input ? input.sourceAccountId : undefined
+    const destinationAccountId = 'destinationAccountId' in input ? input.destinationAccountId : undefined
+    const accountId = sourceAccountId ?? destinationAccountId
+    if (accountId) {
+        const account = await Account.findOne({ _id: accountId, userId: input.userId }).session(session)
+        if (!account) {
+            throw new ServiceError(404, 'SPACE_ACCOUNT_NOT_FOUND', 'La cuenta no existe o no pertenece al usuario.')
+        }
+        if (account.isActive === false) {
+            throw new ServiceError(400, 'ACCOUNT_INACTIVE', 'La cuenta seleccionada está inactiva.')
+        }
+        if (!isSimpleTransactionAccountType(account.type)) {
+            throw new ServiceError(400, 'SPECIAL_ACCOUNT_REQUIRES_FULL_FLOW', 'La cuenta seleccionada requiere otro flujo.')
+        }
+        if (!supportsCurrency(account, input.currency)) {
+            throw new ServiceError(400, 'SPACE_ACCOUNT_CURRENCY_UNSUPPORTED', 'La cuenta no opera en la moneda del impacto.')
+        }
+    }
+
+    if (input.categoryId) {
+        const category = await Category.findOne({ _id: input.categoryId, userId: input.userId }).session(session)
+        if (!category || category.isArchived || category.type !== 'expense') {
+            throw new ServiceError(404, 'SPACE_CATEGORY_NOT_FOUND', 'La categoría no es válida para este gasto.')
+        }
+    }
+
+    const type: ITransaction['type'] = input.variant === 'settlement_paid'
+        ? 'personal_debt_payment'
+        : input.variant === 'settlement_received'
+            ? 'personal_debt_collect'
+            : 'expense'
+    const [transaction] = await Transaction.create([{
+        userId: input.userId,
+        type,
+        amount: input.amount,
+        operationalAmount: input.operationalAmount,
+        currency: input.currency,
+        date: input.date,
+        description: input.description.trim(),
+        categoryId: input.categoryId,
+        sourceAccountId,
+        destinationAccountId,
+        status: 'confirmed',
+        createdFrom: 'space',
+        spaceId: input.spaceId,
+        spaceEntryId: input.spaceEntryId,
+        spaceImpactId: input.spaceImpactId,
+        spaceOperationId: input.spaceOperationId,
+        spaceContractVersion: 2,
+        spaceNameSnapshot: input.spaceNameSnapshot,
+    }], { session })
+
+    return transaction
 }
 
 /** Tipos que el motor de reglas puede evaluar. */

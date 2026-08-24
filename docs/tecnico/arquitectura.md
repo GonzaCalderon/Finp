@@ -178,9 +178,9 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Aplicación | subdocumento/relación de compromiso | Snapshot por período y transacción. |
 | Regla | `TransactionRule` | Servicio compartido resuelve coincidencia y acciones. |
 | Aprendizaje | perfil, eventos, alias y control de patrones | Menor autoridad que entrada explícita y reglas. |
-| Espacio | `Space`, participantes y movimientos | Contexto compartido. |
-| Impacto personal | `SpaceEntryPersonalImpact` | Privado por usuario; no usar estado global `linked`. |
-| Deuda | `Debt` + `DebtMovement` | Manual o derivada; pagos sin impacto operacional. |
+| Espacio | `Space`, participantes y `SpaceEntry` | En contrato v2, el movimiento contiene sólo contexto compartido, día financiero y snapshots. |
+| Impacto personal | `SpaceEntryPersonalImpact` | Privado por usuario; parte propia, impacto real y operacional son magnitudes explícitas. No usar estado global `linked`. |
+| Deuda | `Debt` + `DebtMovement` | Manual o derivada; el balance de Espacios manda sobre la derivada y los pagos no tienen impacto operacional. |
 | Notificación | `Notification` | Información y presentación. |
 | Pendiente | entidad de acción correspondiente | No se resuelve por leer notificación. |
 
@@ -195,7 +195,11 @@ Servicios relevantes en `src/lib/server/`:
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
-| `spaces.ts` y `space-*.ts` | permisos, movimientos, actividad, invitaciones e impacto |
+| `spaces.ts` y servicios legacy `space-*.ts` | contrato vigente de permisos, movimientos, actividad, invitaciones e impacto durante la compatibilidad |
+| `space-*-service-v2.ts` | servicios de aplicación compatibles para movimiento, historia, impacto privado, liquidación y administración; aún sin exposición en rutas |
+| `space-operation-executor.ts` | transacción MongoDB, idempotencia de intención y referencias de resultado de Espacios v2 |
+| `space-financial-v2.ts` | reparto, moneda, día financiero, impactos y balances puros en centavos |
+| `space-legacy-adapter.ts` | lectura determinista del estado legacy sin convertir ambigüedad en autoridad v2 |
 | `debt-sync.ts` | materialización idempotente desde Espacios |
 | `debt-settlement.ts` | pago/cobro atómico |
 | `notifications.ts` | creación, dedupe y resolución |
@@ -245,6 +249,23 @@ Casos:
 - pago/cobro de deuda + movimiento;
 - aplicación de compromiso + transacción + snapshot;
 - acciones multi-entidad que no pueden confirmarse parcialmente.
+
+En Espacios v2, una intención financiera se identifica por actor, Espacio, tipo
+de operación y hash de una clave idempotente. `SpaceOperation` y todas las
+escrituras financieras se confirman en la misma sesión MongoDB. Un reintento con
+la misma carga devuelve las referencias confirmadas; la misma clave con otra
+carga produce conflicto. Alta, edición, anulación, impacto personal, liquidación,
+deuda, actividad y pendientes no usan compensación manual.
+
+Las notificaciones son presentación posterior al commit: se derivan de impactos
+`pending` o `needs_review`, admiten reconciliación observable y no repiten la
+operación financiera. Edición, anulación, roles, ownership y modo de deuda exigen
+la revisión esperada para evitar sobrescritura silenciosa.
+
+Los diez índices v2 viven en un manifiesto explícito y no dependen de
+`autoIndex`. Durante esta etapa sólo se aplican en la base E2E aislada;
+development admite validación `dry-run` y producción se rechaza. Los índices
+parciales por `contractVersion: 2` preservan la lectura de documentos legacy.
 
 Los efectos derivados deben:
 

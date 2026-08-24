@@ -26,6 +26,8 @@ const entrySnapshotSchema = new Schema(
         reportingAmount: { type: Number, required: true },
         exchangeRate: { type: Number },
         date: { type: Date, required: true },
+        dateKey: { type: String, trim: true },
+        timezone: { type: String, trim: true },
         spaceCategoryId: { type: Schema.Types.ObjectId },
         paidByParticipantId: { type: Schema.Types.ObjectId },
         sharedWithParticipantIds: [{ type: Schema.Types.ObjectId }],
@@ -61,6 +63,7 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
             required: true,
             default: SPACE_ENTRY_STATUSES.RECORDED,
         },
+        contractVersion: { type: Number, enum: [2] },
         title: { type: String, required: true, trim: true },
         description: { type: String, trim: true },
         amount: { type: Number, required: true },
@@ -68,6 +71,8 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         reportingAmount: { type: Number, required: true },
         exchangeRate: { type: Number },
         date: { type: Date, required: true },
+        dateKey: { type: String, trim: true },
+        timezone: { type: String, trim: true },
         categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
         spaceCategoryId: { type: Schema.Types.ObjectId, ref: 'SpaceCategory' },
         paidByParticipantId: { type: Schema.Types.ObjectId, ref: 'SpaceParticipant' },
@@ -81,7 +86,12 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         splitAllocations: [splitAllocationSchema],
         notes: { type: String, trim: true },
         linkedTransactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
-        confirmationRequired: { type: Boolean, required: true, default: false },
+        confirmationRequired: {
+            type: Boolean,
+            default: function legacyConfirmationDefault(this: { contractVersion?: number }) {
+                return this.contractVersion === 2 ? undefined : false
+            },
+        },
         confirmedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
         confirmedAt: { type: Date },
         rejectedAt: { type: Date },
@@ -96,6 +106,8 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         editedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
         editCount: { type: Number, required: true, default: 0 },
         previousVersions: { type: [entrySnapshotSchema], default: undefined },
+        revision: { type: Number, min: 0, default: 0 },
+        operationId: { type: Schema.Types.ObjectId, ref: 'SpaceOperation' },
     },
     { timestamps: true }
 )
@@ -112,7 +124,13 @@ const needsSchemaRefresh =
     !!existingSpaceEntryModel &&
     (!existingSpaceEntryModel.schema.path('confirmationRequired') ||
         !existingSpaceEntryModel.schema.path('confirmedByUserId') ||
-        !currentStatusEnum?.includes(SPACE_ENTRY_STATUSES.CONFIRMED))
+        !currentStatusEnum?.includes(SPACE_ENTRY_STATUSES.CONFIRMED) ||
+        !currentStatusEnum?.includes('voided') ||
+        !existingSpaceEntryModel.schema.path('contractVersion') ||
+        !existingSpaceEntryModel.schema.path('dateKey') ||
+        !existingSpaceEntryModel.schema.path('timezone') ||
+        !existingSpaceEntryModel.schema.path('revision') ||
+        !existingSpaceEntryModel.schema.path('operationId'))
 
 if (needsSchemaRefresh) {
     delete mongoose.models.SpaceEntry

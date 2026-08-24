@@ -25,6 +25,7 @@ const SpaceSchema = new Schema<ISpace>(
         startDate: { type: Date },
         endDate: { type: Date },
         closedAt: { type: Date },
+        archivedFromStatus: { type: String, enum: ['active', 'paused', 'closed'] },
         currencies: {
             type: [{ type: String }],
             required: true,
@@ -47,12 +48,26 @@ const SpaceSchema = new Schema<ISpace>(
             enum: Object.values(SPACE_DEBT_MODES),
             default: SPACE_DEBT_MODES.SIMPLIFIED,
         },
+        contractVersion: { type: Number, enum: [2] },
+        timezone: { type: String, trim: true },
+        revision: { type: Number, min: 0, default: 0 },
     },
     { timestamps: true }
 )
 
 SpaceSchema.index({ ownerUserId: 1, status: 1, createdAt: -1 })
 
+const existingSpaceModel = mongoose.models.Space as mongoose.Model<ISpace> | undefined
+const needsSpaceSchemaRefresh = Boolean(
+    existingSpaceModel &&
+    (!existingSpaceModel.schema.path('contractVersion') ||
+        !existingSpaceModel.schema.path('timezone') ||
+        !existingSpaceModel.schema.path('revision') ||
+        !existingSpaceModel.schema.path('archivedFromStatus'))
+)
+
+if (needsSpaceSchemaRefresh) delete mongoose.models.Space
+
 export const Space =
-    (mongoose.models.Space as mongoose.Model<ISpace> | undefined) ||
+    (needsSpaceSchemaRefresh ? undefined : existingSpaceModel) ||
     mongoose.model<ISpace>('Space', SpaceSchema)

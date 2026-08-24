@@ -14,6 +14,11 @@ export interface IDebtMetadata {
         debtMode: 'direct' | 'simplified'
         calculatedAt: string
     }
+    balanceSnapshot?: {
+        operationId: string
+        spaceRevision: number
+        calculatedAt: string
+    }
 }
 
 export interface IDebt {
@@ -42,6 +47,8 @@ export interface IDebt {
     // Clave de idempotencia (solo deudas de espacio)
     // Formato: "{userId}:{spaceId}:{counterpartyParticipantId}:{currency}"
     spaceDebtKey?: string
+    contractVersion?: 2
+    spaceOperationId?: Types.ObjectId
 
     notes?: string
     metadata?: IDebtMetadata
@@ -64,6 +71,9 @@ export interface IDebtMovement {
     transactionId?: Types.ObjectId
     spaceId?: Types.ObjectId
     spaceEntryId?: Types.ObjectId
+    spaceOperationId?: Types.ObjectId
+    balanceBefore?: number
+    balanceAfter?: number
 
     date: Date
     notes?: string

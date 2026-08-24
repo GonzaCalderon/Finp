@@ -135,6 +135,28 @@ Los principios de producto y de trabajo viven en
     resolver y ensayar los hallazgos críticos y altos;
   - los reportes detallados permanecen locales y excluidos de Git bajo
     `test-results/audits/spaces/`; sólo estos conteos sanitizados son canónicos.
+- Avance verificado de la etapa 2 — completada el 2026-08-24:
+  - contrato compatible v2 para Espacio, movimiento compartido, impacto privado,
+    transacción personal, deuda, movimiento de deuda, actividad y operación;
+  - cálculos puros cent-based para reparto, redondeo, conversión, día financiero,
+    impacto personal y balances directos o simplificados;
+  - matriz central de capacidades, adaptación legacy determinista y control de
+    concurrencia optimista;
+  - servicios de aplicación transaccionales para alta, edición, anulación,
+    impacto personal, liquidación desde Espacios o Deudas, ciclo de vida, roles,
+    ownership y modo de deuda;
+  - `SpaceOperation` conserva la intención idempotente y sus referencias sin
+    contenido financiero libre; las notificaciones se reconcilian después del
+    commit desde pendientes persistidos;
+  - 10 índices compatibles aplicados y reaplicados únicamente sobre `finp-e2e`;
+    development fue validado sólo en `dry-run` y producción permanece rechazada;
+  - 37 casos unitarios focales y 6 recorridos de integración con sesión MongoDB
+    real cubren exactitud, rollback, retry simultáneo, conflictos, historia,
+    liquidaciones, permisos e índices parciales;
+  - límite deliberado: los servicios v2 todavía no están conectados a las rutas
+    ni a la interfaz, y no hubo backfill, cutover ni escritura en development.
+    La etapa siguiente es la 3; el ítem continúa `en curso` y el `NO-GO` de
+    migración automática sigue vigente.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;
