@@ -1,13 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse as parseEnv } from 'dotenv'
+import { parseMongoDatabaseTarget } from '@/lib/server/mongo-database-target'
 
 type EnvironmentSource = Record<string, string | undefined>
-
-interface MongoDatabaseTarget {
-    databaseName: string
-    server: string
-}
 
 export interface E2EEnvironment {
     databaseName: string
@@ -61,44 +57,6 @@ function requireVariable(source: EnvironmentSource, key: string): string {
         throw new Error(`Falta ${key} en el entorno E2E.`)
     }
     return value
-}
-
-function parseMongoDatabaseTarget(uri: string, label: string): MongoDatabaseTarget {
-    const schemeMatch = uri.match(/^(mongodb(?:\+srv)?):\/\//i)
-    if (!schemeMatch) {
-        throw new Error(`${label} no es una URI de MongoDB válida.`)
-    }
-
-    const withoutScheme = uri.slice(schemeMatch[0].length)
-    const pathSeparator = withoutScheme.indexOf('/')
-    if (pathSeparator < 0) {
-        throw new Error(`${label} debe seleccionar una base explícita en la ruta.`)
-    }
-
-    const authority = withoutScheme.slice(0, pathSeparator)
-    const server = (authority.includes('@')
-        ? authority.slice(authority.lastIndexOf('@') + 1)
-        : authority
-    ).toLowerCase()
-    const encodedDatabaseName = withoutScheme
-        .slice(pathSeparator + 1)
-        .split(/[/?#]/, 1)[0]
-
-    let databaseName: string
-    try {
-        databaseName = decodeURIComponent(encodedDatabaseName).trim()
-    } catch {
-        throw new Error(`${label} contiene un nombre de base inválido.`)
-    }
-
-    if (!server || !databaseName) {
-        throw new Error(`${label} debe seleccionar servidor y base explícitos.`)
-    }
-
-    return {
-        databaseName,
-        server: `${schemeMatch[1].toLowerCase()}://${server}`,
-    }
 }
 
 export function assertE2EDatabaseIsolation(input: {

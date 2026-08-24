@@ -18,6 +18,7 @@
         "test:e2e:debug": "playwright test --debug",
         "test:seed": "tsx tests/e2e/helpers/seed.ts",
         "typecheck": "tsc --noEmit",
+        "audit:spaces:legacy": "tsx scripts/audit-spaces-legacy.ts",
         "backfill:commitments": "tsx scripts/backfill-commitments.ts",
         "repair:payment-groups": "tsx scripts/repair-payment-groups.ts"
     },

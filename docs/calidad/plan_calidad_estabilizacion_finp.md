@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-08-17
+> Última actualización: 2026-08-24
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -350,6 +350,24 @@ Recomendado:
 - Scripts destructivos requieren destino explícito.
 - Seeds y factories deben ser idempotentes o indicar precondición.
 
+### Auditorías de datos
+
+La caracterización previa a una migración financiera debe:
+
+- separar detectores puros del adaptador de persistencia;
+- usar códigos y severidades estables;
+- verificar referencias, aislamiento, estados, snapshots, fechas, monedas,
+  idempotencia y relaciones derivadas;
+- leer por lotes dentro de un snapshot y no exponer primitivas de escritura;
+- producir un resumen sanitizado y un detalle local excluido de Git;
+- probar rechazo de entornos inseguros, determinismo y ausencia de escrituras;
+- ejecutarse primero sobre E2E y después sobre development con confirmación
+  exacta; producción queda fuera de alcance.
+
+Para FINP-P0-006 el comando canónico es `npm run audit:spaces:legacy`; su uso y
+sus garantías están documentados en
+[`../tecnico/guia_desarrollo.md`](../tecnico/guia_desarrollo.md#auditoría-legacy-de-espacios).
+
 ## 14. Criterio de release
 
 Una versión puede promoverse cuando:
@@ -365,9 +383,10 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Checks base y E2E global verificados el 2026-08-17:
+Checks base y E2E global verificados el 2026-08-17; auditoría de Espacios
+verificada el 2026-08-24:
 
-- 804 pruebas unitarias aprobadas en 100 archivos;
+- 821 pruebas unitarias aprobadas en 103 archivos;
 - build, typecheck, lint y validación documental aprobados;
 - 60 de 60 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
   de producción;
@@ -388,6 +407,12 @@ Checks base y E2E global verificados el 2026-08-17:
   reaparece cualquiera de los dos avisos cerrados por FINP-P1-012;
 - recorridos P2 aprobados para candidato recurrente, compra en un pago con
   Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
+- auditoría legacy de Espacios aprobada como herramienta read-only: detectores,
+  barreras del CLI y adaptador Mongo pasan 30 casos focales junto con el
+  preflight; el recorrido Playwright lee el seed E2E y caracteriza el huérfano
+  conocido sin escribir;
+- resultado sanitizado: E2E 18 hallazgos y development 337; ambos permanecen en
+  `NO-GO` para migración automática y habilitan la etapa de modelo compatible.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

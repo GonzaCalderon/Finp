@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-08-24
 > Fuente de verdad: prácticas técnicas de implementación
 
 ## Índice
@@ -191,6 +191,37 @@ Cada endpoint debe considerar:
 - Script de escritura: `dry-run`, `--apply`, conteos, anomalías e idempotencia.
 - Antes de aplicar: ambiente, backup y aprobación.
 - Después: verificación y plan de retiro legacy.
+
+### Auditoría legacy de Espacios
+
+Antes de modificar el modelo o preparar el backfill de FINP-P0-006:
+
+```bash
+npm run audit:spaces:legacy -- --env test
+npm run audit:spaces:legacy -- --env development --confirm-database <nombre>
+```
+
+Garantías:
+
+- `test` carga `.env.test.local` y atraviesa el mismo preflight de aislamiento
+  que Playwright y el seed;
+- `development` carga `.env.local`, se rechaza en CI y exige que
+  `--confirm-database` coincida exactamente con la URI;
+- producción y bases reservadas se rechazan;
+- la lectura ocurre dentro de una transacción MongoDB con `readConcern:
+  snapshot` que se aborta al terminar;
+- el CLI no tiene modo `apply` y rechaza argumentos de escritura;
+- `--fail-on never|high|critical` controla sólo el código de salida, no cambia
+  el contenido de la auditoría;
+- `summary.md`, `details.json` y `manifest.json` se escriben bajo
+  `test-results/audits/spaces/<entorno>-<timestamp>/`, que está excluido de Git;
+- consola y resumen no contienen identificadores, datos personales, URI,
+  secretos ni montos; el detalle técnico local conserva únicamente ids,
+  relaciones, códigos estables y evidencia mínima.
+
+Un `GO` habilita preparar el modelo compatible; nunca autoriza por sí solo un
+backfill. Cualquier escritura mantiene el protocolo de migración, aprobación y
+rollback de esta sección.
 
 ## 9. Errores
 

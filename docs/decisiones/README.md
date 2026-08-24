@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-07-31
+> Última actualización: 2026-08-24
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -91,3 +91,9 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0006 — Período, clasificación y lectura de Proyección`](0006-periodo-clasificacion-y-lectura-de-proyeccion.md):
   período de tarjetas, compra `1/1`, certeza, agrupaciones invariantes y límites
   del cierre operativo.
+- [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](0007-autoridad-espacios-finp-deudas.md):
+  origen compartido, parte propia exacta, impacto privado y una sola operación
+  de liquidación entre Espacios y Deudas.
+- [`0008 — Modelo y consistencia financiera de Espacios`](0008-modelo-consistencia-financiera-espacios.md):
+  modelo discriminado, servicios de aplicación, atomicidad, idempotencia,
+  permisos, migración y retiro del legado.

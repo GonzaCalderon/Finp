@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-08-24
 > Fuente de verdad: reglas funcionales de Deudas
 
 ## Índice
@@ -148,8 +148,17 @@ Cuando la deuda nace en un espacio:
 
 - el espacio sigue siendo el origen funcional;
 - la deuda aparece en `/debts` como reflejo operativo personal;
-- pagos y cobros desde Deudas y desde Espacios tienen que mantenerse coherentes;
+- el criterio directo o simplificado conserva una sola fuente compartida;
+- pagos y cobros desde Deudas y desde Espacios invocan la misma operación
+  atómica e idempotente;
+- una liquidación parcial actualiza el saldo pendiente y ambas superficies sin
+  crear otro gasto o ingreso operacional;
 - ignorar una deuda derivada no borra el movimiento del espacio ni altera su historial.
+
+Una decisión pendiente de `Agregar a Mi Finp` no es una deuda. Sólo existe
+deuda derivada cuando hay una obligación monetaria positiva entre personas. Una
+parte propia igual a cero no crea deuda por sí sola, pero sí puede existir una
+deuda a favor cuando esa persona pagó por otras y adelantó el total.
 
 ## 9. Experiencia responsive
 
@@ -176,5 +185,7 @@ Decision actual:
 - pagar deuda no es gasto;
 - cobrar deuda no es ingreso operacional;
 - las deudas de espacios pueden ignorarse y restaurarse;
+- liquidar desde Espacios o Deudas representa la misma intención financiera;
+- los pendientes de impacto personal no pertenecen a Deudas;
 - el modulo debe mostrar posicion neta y relacion por persona;
 - la fuente del saldo importa: manual no significa lo mismo que `space`.

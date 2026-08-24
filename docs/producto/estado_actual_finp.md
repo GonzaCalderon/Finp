@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-17
+> Última actualización: 2026-08-24
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -26,9 +26,11 @@ Finp es una aplicación web funcional de finanzas personales y compartidas. Cubr
 
 Estado general:
 
-- base apta para preproducción controlada;
+- base personal apta para preproducción controlada; Espacios requiere cerrar su
+  exactitud P0 antes de considerarse listo para liberación;
 - dominio personal amplio;
-- Espacios y Deudas operativos;
+- Espacios y Deudas tienen capacidades operativas amplias, con inconsistencias
+  de integración y experiencia verificadas;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
 - entorno E2E local aislado y reproducible, con 60 de 60 escenarios globales
@@ -53,7 +55,7 @@ de `dev` en `9b5252f`:
 - ESLint limpio;
 - validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
-- 804 unit tests aprobados en 100 archivos, sin tests en `todo`;
+- 821 unit tests aprobados en 103 archivos, sin tests en `todo`;
 - 60 de 60 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
   sobre el build de producción;
 - 60 de 60 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
@@ -68,6 +70,9 @@ de `dev` en `9b5252f`:
 - CI activo para lint, build y unit tests;
 - job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
   la rotación.
+- auditoría legacy de Espacios disponible como lectura snapshot estrictamente
+  read-only para E2E y development, con confirmación de base, códigos estables,
+  reportes locales sanitizados y rechazo de producción;
 
 Ramas:
 
@@ -278,6 +283,45 @@ elige el usuario.
 - reconciliación de pendientes al cambiar el reparto: se actualizan, cancelan o
   crean según quién deba decidir con el reparto nuevo.
 
+### Brechas verificadas
+
+La auditoría funcional y de interfaz confirmó que la amplitud disponible no
+equivale todavía a un recorrido confiable de punta a punta:
+
+- el estado compartido y la decisión privada pueden presentarse como si una
+  persona tuviera que confirmar el movimiento para los demás;
+- `Agregar a Mi Finp` no guía siempre hacia la parte propia exacta ni distingue
+  al no pagador con parte cero del pagador que realizó un adelanto;
+- la carga y edición del impacto personal pueden mostrar o permitir un monto que
+  no representa con claridad gasto propio, salida real y adelanto;
+- pendientes, notificaciones y deudas se superponen en algunos recorridos y
+  pueden producir relaciones sin saldo útil;
+- el cierre del Espacio, los roles y la protección del último `owner` no están
+  aplicados de forma uniforme entre interfaz y servidor;
+- las fechas editables pueden desplazarse por conversión UTC;
+- mobile y desktop divergen en navegación, densidad y ubicación de acciones;
+- faltan estados de recuperación, foco y accesibilidad consistentes en flujos
+  principales y secundarios.
+
+La caracterización de datos ejecutada el 2026-08-24 confirmó además:
+
+- E2E: 2 Espacios y 18 hallazgos — 6 críticos, 4 altos, 6 medios y 2
+  informativos;
+- development: 11 Espacios y 337 hallazgos — 20 críticos, 77 altos, 149 medios
+  y 91 informativos;
+- los grupos críticos y altos incluyen huérfanos, deriva entre balance y deuda,
+  liquidaciones aplicadas dos veces, impactos privados duplicados o incompletos,
+  vínculos personales globales y pendientes faltantes;
+- las decisiones 0007 y 0008 siguen vigentes: el resultado habilita la etapa de
+  modelo compatible, pero bloquea cualquier migración automática o cutover.
+
+Los detalles con identificadores permanecen locales en
+`test-results/audits/spaces/` y no se versionan.
+
+La fuente del comportamiento esperado es [`espacios.md`](espacios.md). La
+corrección y el rediseño están registrados una sola vez como FINP-P0-006 y
+FINP-P1-013 en [`roadmap_finp.md`](roadmap_finp.md).
+
 ### No disponible todavía
 
 - cuotas dentro de Espacios;
@@ -374,6 +418,9 @@ Mobile web sigue siendo la superficie prioritaria.
 - CI para verificaciones principales y job E2E listo para ejecutarse apenas
   reciba la credencial rotada;
 - build de producción reproducible.
+- auditoría legacy de Espacios cubierta con detectores puros, barreras de
+  entorno, adaptador Mongo sin primitivas de escritura y prueba E2E contra el
+  seed aislado;
 
 ### Brechas
 
@@ -390,6 +437,13 @@ Mobile web sigue siendo la superficie prioritaria.
   aplicarse sin identificar la base y revisar el resultado.
 - `auto_month_start` no tiene scheduler.
 - La orientación aún no cubre reglas, Deudas, Espacios e Importación.
+- Espacios no cumple todavía de punta a punta el contrato de parte propia,
+  autonomía, consistencia, permisos y experiencia definido en las decisiones
+  [`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md) y
+  [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md).
+- La auditoría de Espacios mantiene un `NO-GO` explícito para backfill y cutover
+  hasta clasificar o resolver los 20 hallazgos críticos y 77 altos de
+  development.
 - La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
   elegir.
 - Proyección no calcula cashflow por cuenta ni escenarios y todavía no incluye
@@ -402,13 +456,14 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Cierre de advertencias E2E, 2026-08-17:
+Caracterización legacy de Espacios, 2026-08-24:
 
-- el Sankey compacta sólo las capas presentes antes de calcular el layout, por
-  lo que un período sin nodos iniciales ya no lanza una excepción por render;
-- Captura rápida conserva su descripción visible y vuelve a usar la relación
-  accesible generada por Radix, sin identificadores paralelos;
-- la regresión focal pasa 2 de 2 y verifica SVG, responsive y descripción
-  accesible en desktop y Pixel 7;
-- la suite global pasa 60 de 60 con `next dev` sin los avisos de Sankey ni de
-  descripción ausente.
+- motor determinista para participantes, movimientos, impactos personales,
+  transacciones, deudas, liquidaciones, pendientes, notificaciones y actividad;
+- CLI read-only con snapshot, confirmación exacta de development, rechazo de
+  producción y salida configurable sin modo de escritura;
+- reportes local detallado, manifiesto técnico y resumen sanitizado bajo una
+  ruta excluida de Git;
+- E2E y development auditados sin mutaciones; resultado `GO` para diseñar la
+  compatibilidad de la etapa 2 y `NO-GO` para migración automática;
+- prueba Playwright focal aprobada contra el seed aislado.
