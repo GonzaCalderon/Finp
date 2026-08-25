@@ -7,7 +7,12 @@ export interface MoneyDto {
 }
 
 export type ConversionDirection = 'multiply' | 'divide'
-export type ConversionSource = 'dolarapi_official' | 'frankfurter' | 'manual' | 'identity'
+export type ConversionSource =
+    | 'dolarapi_official'
+    | 'frankfurter'
+    | 'manual'
+    | 'identity'
+    | 'legacy'
 
 export interface ConversionPathStep {
     fromCurrency: string

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-08-24
+> Última actualización: 2026-08-25
 > Fuente de verdad: reglas funcionales de Deudas
 
 ## Índice
@@ -174,6 +174,11 @@ Cuando la deuda nace en un espacio:
   sobrepago superior a una unidad menor se rechaza;
 - una liquidación confirmada se revierte de forma explícita y no se edita;
 - ignorar una deuda derivada no borra el movimiento del espacio ni altera su historial.
+- durante una migración, una deuda derivada se reconstruye exclusivamente desde
+  el ledger por moneda; el documento legacy queda en historia del ensayo y un
+  settlement histórico se representa una vez, como tramo explícito;
+- un Espacio legacy bloqueado no expone una deuda parcial como saldo confiable
+  ni permite liquidarla hasta resolver o migrar su agregado.
 
 Una decisión pendiente de `Agregar a Mi Finp` no es una deuda. Sólo existe
 deuda derivada cuando hay una obligación monetaria positiva entre personas. Una
@@ -211,3 +216,5 @@ Decision actual:
 - los pendientes de impacto personal no pertenecen a Deudas;
 - el modulo debe mostrar posicion neta y relacion por persona;
 - la fuente del saldo importa: manual no significa lo mismo que `space`.
+- el backfill y rollback por Espacio siguen la
+  [`decisión 0010`](../decisiones/0010-migracion-progresiva-espacios-v2.md).

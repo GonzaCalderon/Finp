@@ -119,7 +119,8 @@ export async function POST(
         const { id } = await params
         const body: unknown = await request.json()
         await connectDB()
-        const contract = await Space.findById(id, { contractVersion: 1 }).lean<{ contractVersion?: number } | null>()
+        const contract = await Space.findById(id, { contractVersion: 1, migration: 1 })
+            .lean<{ contractVersion?: number; migration?: { state?: string } } | null>()
         if (!contract) return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         if (contract.contractVersion === 2) {
             const parsedV2 = spaceEntryV2RequestSchema.safeParse(body)

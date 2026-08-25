@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-08-24
+> Última actualización: 2026-08-25
 > Fuente de verdad: reglas funcionales y experiencia esperada de Espacios
 
 ## Índice
@@ -20,8 +20,9 @@
 11. [Estados, errores y accesibilidad](#11-estados-errores-y-accesibilidad)
 12. [Aprendizaje y automatización](#12-aprendizaje-y-automatización)
 13. [Multimoneda integral](#13-multimoneda-integral)
-14. [Verificación obligatoria](#14-verificación-obligatoria)
-15. [Decisiones y evolución](#15-decisiones-y-evolución)
+14. [Migración progresiva](#14-migración-progresiva)
+15. [Verificación obligatoria](#15-verificación-obligatoria)
+16. [Decisiones y evolución](#16-decisiones-y-evolución)
 
 Las posibilidades futuras descritas aquí no establecen prioridad. El backlog
 único es [`roadmap_finp.md`](roadmap_finp.md).
@@ -71,6 +72,8 @@ La decisión estructural está registrada en
 [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md).
 El modelo, la atomicidad y la migración se rigen por
 [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md).
+El backfill, la coexistencia y el retiro del legado se rigen por
+[`0010 — Migración progresiva de Espacios v2`](../decisiones/0010-migracion-progresiva-espacios-v2.md).
 
 ## 3. Tipos y ciclo de vida
 
@@ -429,7 +432,24 @@ el equivalente de reporte.
 La autoridad técnica y las consecuencias se registran en
 [`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md).
 
-## 14. Verificación obligatoria
+## 14. Migración progresiva
+
+Durante la convivencia, cada detalle expone sólo `legacy`, `bloqueado`, `listo`
+o `migrado` y un motivo seguro de sólo lectura. Nunca publica el `runId`,
+fingerprints, manifiesto, montos ni decisiones privadas de migración.
+
+Un Espacio bloqueado conserva historia y acceso permitido, pero no presenta
+balances parciales ni admite nuevas mutaciones. Un Espacio migra de forma
+atómica y confirma `contractVersion: 2` sólo después de comprobar dinero exacto,
+deuda por moneda, privacidad, replay y rollback. Desde entonces no puede volver
+a una escritura legacy.
+
+Las ambigüedades personales se representan como `needs_review`; no reasignan
+propietarios, cuentas ni dinero. Los detalles operativos y las preimágenes
+permanecen sólo en artefactos privados excluidos de Git. La copia o el ensayo no
+habilitan por sí mismos development ni producción.
+
+## 15. Verificación obligatoria
 
 El recorrido crítico se valida primero en mobile y luego en desktop, con
 aislamiento por usuario y Espacio. La matriz mínima incluye:
@@ -459,7 +479,7 @@ Las cuentas deben reflejar dinero real; Dashboard y reportes, gasto operacional
 propio; Espacios y Deudas, saldos derivados coherentes. Las cuatro lecturas se
 comparan en los E2E financieros.
 
-## 15. Decisiones y evolución
+## 16. Decisiones y evolución
 
 Decisiones consolidadas:
 
@@ -475,6 +495,8 @@ Decisiones consolidadas:
 - edición y anulación conservan historia y disparan revisión cuando corresponde.
 - la deuda conserva autoridad por moneda y toda conversión aplicada tiene un
   snapshot explícito;
+- el cutover es por Espacio, falla cerrado y exige rollback exacto antes de
+  retirar su fallback legacy;
 
 Cuotas, compromisos, realtime, slugs, reintegros y otras extensiones se
 priorizan únicamente en [`roadmap_finp.md`](roadmap_finp.md). No se amplía el

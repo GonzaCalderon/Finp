@@ -100,3 +100,6 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0009 — Autoridad multimoneda de Espacios`](0009-autoridad-multimoneda-espacios.md):
   dinero exacto, snapshots, cotizaciones, saldos por moneda, liquidaciones
   multitramos y presentación de composiciones.
+- [`0010 — Migración progresiva de Espacios v2`](0010-migracion-progresiva-espacios-v2.md):
+  clasificación cerrada, copia sanitizada, manifiesto privado, backfill por
+  Espacio, verificación y rollback exacto.

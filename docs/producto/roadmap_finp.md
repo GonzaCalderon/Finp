@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-24
+> Última actualización: 2026-08-25
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -80,7 +80,8 @@ Los principios de producto y de trabajo viven en
 - Decisiones:
   - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
   - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
-  - [`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md).
+  - [`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md);
+  - [`0010 — Migración progresiva de Espacios v2`](../decisiones/0010-migracion-progresiva-espacios-v2.md).
 - Regla de entrega: es un cierre indivisible. Puede avanzar mediante commits y
   verificaciones internas, pero no pasa a `validación` ni se presenta como
   terminado hasta completar dominio, datos, API, UI afectada, migración,
@@ -123,7 +124,8 @@ Los principios de producto y de trabajo viven en
      — completada el 2026-08-24;
   2. modelo, cálculos puros, servicios e índices nuevos con lectura compatible;
   3. APIs y UI existentes migradas al contrato nuevo, sin rutas paralelas;
-  4. backfill idempotente, comparación, cutover y retiro del legado;
+  4. backfill idempotente, comparación y rollback sobre copia aislada; luego
+     cutover progresivo y retiro del legado con autorización separada;
   5. fallos inyectados, rendimiento, accesibilidad y regresión completa.
 - Avance verificado de la etapa 1:
   - `npm run audit:spaces:legacy` ejecuta una lectura snapshot estrictamente
@@ -205,6 +207,37 @@ Los principios de producto y de trabajo viven en
     859 ms; las referencias se resuelven por lote de monedas, no por movimiento;
   - escrituras e índices continúan limitados a `finp-e2e`; no hubo backfill,
     cutover ni habilitación en development o producción.
+- Avance verificado de la etapa 4 — checkpoint preparado el 2026-08-25:
+  - los 97 hallazgos críticos/altos de development se clasificaron en 56
+    reparaciones automáticas, 33 representaciones privadas `needs_review` y 8
+    resoluciones manuales; un código desconocido queda manual y bloquea sólo al
+    Espacio afectado;
+  - contratos internos de plan, run, issue, disposición y resolución; estado
+    público reducido a legacy, bloqueado, listo o migrado sin metadata privada;
+  - `migrate:spaces:v2` concentra plan, copia, apply, verify y rollback, todos
+    `dry-run` por defecto y con escritura rechazada fuera de `e2e-migration`;
+  - la copia conserva IDs, dinero, monedas, fechas y relaciones, y anonimiza
+    identidad, texto libre, secretos, tokens, adjuntos y URLs;
+  - fingerprints enlazan snapshot, auditoría, plan, manifiesto y copia; cada
+    Espacio guarda preimágenes con checksum y se transforma en una transacción;
+  - el manifiesto privado adopta las resoluciones aprobadas de preservar la
+    transacción personal al separar un vínculo cross-user y mantener el huérfano
+    global en cuarentena, sin reasignar dueños ni borrar dinero;
+  - el ensayo sobre copia migró 11 de 11 Espacios, dejó cero balances, deudas o
+    vínculos privados incompatibles, conservó el ledger personal y produjo
+    replay sin cambios; rollback recuperó el fingerprint previo exacto;
+  - apply quedó bajo 30 segundos y verify alrededor de 3,3 segundos; una prueba
+    sintética de 1.000 movimientos mantiene apply, verify y rollback bajo 30
+    segundos por fase;
+  - 895 unitarias, 12 recorridos de integración y 68 E2E globales quedaron
+    verdes; desktop y mobile verifican la convivencia de un Espacio v2 operativo
+    con uno legacy bloqueado, sin totales parciales ni metadata privada;
+  - el criterio de elegibilidad por Espacio exige cero manuales pendientes,
+    dinero y deuda exactos por moneda, privacidad, replay estable y rollback
+    probado; un Espacio no elegible queda en sólo lectura sin totales parciales;
+  - desarrollo y producción no recibieron escrituras, backfill ni cutover. La
+    etapa 4 continúa abierta hasta revisar el checkpoint y autorizar la ventana
+    progresiva; el `NO-GO` productivo no cambia.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;
@@ -216,7 +249,8 @@ Los principios de producto y de trabajo viven en
   - cada error informa si no escribió, revirtió o sólo falló una presentación;
   - no hay `catch` silencioso, `Promise.allSettled` ni compensación manual en la
     unidad financiera;
-  - scripts identifican ambiente, tienen `dry-run`/`--apply`, conteos,
+  - scripts identifican ambiente, tienen `dry-run` y confirmación explícita de
+    escritura, conteos,
     anomalías, backup y rollback ensayado;
   - se miden latencia, tamaño de consulta, payload e idempotencia sin registrar
     contenido financiero; no se agrega cola, cache o dependencia sin evidencia.

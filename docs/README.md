@@ -115,6 +115,7 @@ Decisiones vigentes:
 - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](decisiones/0007-autoridad-espacios-finp-deudas.md).
 - [`0008 — Modelo y consistencia financiera de Espacios`](decisiones/0008-modelo-consistencia-financiera-espacios.md).
 - [`0009 — Autoridad multimoneda de Espacios`](decisiones/0009-autoridad-multimoneda-espacios.md).
+- [`0010 — Migración progresiva de Espacios v2`](decisiones/0010-migracion-progresiva-espacios-v2.md).
 
 Una decisión se documenta cuando:
 

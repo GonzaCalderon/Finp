@@ -33,7 +33,7 @@ Estado general:
   de integración y experiencia verificadas;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- entorno E2E local aislado y reproducible, con 66 de 66 escenarios globales
+- entorno E2E local aislado y reproducible, con 68 de 68 escenarios globales
   aprobados en desktop y mobile tanto sobre producción como en desarrollo;
 - smoke financiero con validación histórica y fixtures independientes del orden
   de ejecución;
@@ -44,8 +44,10 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 
 ## 2. Estado técnico
 
-Checks base verificados localmente el 2026-08-24 sobre el checkpoint
-`codex/spaces-multicurrency` (`23aed5d`), incluida la suite E2E global:
+El checkpoint multimoneda quedó integrado en `dev` mediante el merge
+`8b31c87`. La etapa de migración se desarrolla sobre
+`codex/spaces-v2-migration`; sus checks focales y ensayo aislado se verificaron
+el 2026-08-25:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -55,12 +57,12 @@ Checks base verificados localmente el 2026-08-24 sobre el checkpoint
 - ESLint limpio;
 - validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
-- 881 unit tests aprobados en 117 archivos, sin tests en `todo`;
-- 10 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+- 895 unit tests aprobados en 119 archivos, sin tests en `todo`;
+- 12 recorridos de integración de Espacios v2 aprobados contra bases E2E con
   sesiones MongoDB reales;
-- 66 de 66 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
+- 68 de 68 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
   sobre el build de producción;
-- 66 de 66 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
+- 68 de 68 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
   ni altas fallidas después de una ejecución larga;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
@@ -75,15 +77,16 @@ Checks base verificados localmente el 2026-08-24 sobre el checkpoint
 - auditoría legacy de Espacios disponible como lectura snapshot estrictamente
   read-only para E2E y development, con confirmación de base, códigos estables,
   reportes locales sanitizados y rechazo de producción;
+- CLI único de migración con `plan`, `clone`, `apply`, `verify` y `rollback`,
+  todos `dry-run` por defecto y con escritura limitada a `e2e-migration`;
 
 Ramas:
 
 - `main`: producción;
-- `dev`: desarrollo;
 - `dev`: base de integración del próximo estado productivo;
-- `codex/spaces-multicurrency`: checkpoint publicado de modelo, contratos,
-  recorridos financieros y soporte multimoneda v2 de Espacios;
-- `23aed5d`: último commit funcional verificado del checkpoint multimoneda;
+- `codex/spaces-multicurrency`: integrada en `dev` mediante PR 31 y merge
+  `8b31c87`;
+- `codex/spaces-v2-migration`: rama corta actual para el checkpoint de etapa 4;
 - antes del checkpoint se verificó que `origin/main` fuera ancestro de
   `origin/dev`;
 - la rama local `main` está desactualizada y no se usa para trabajo hasta
@@ -307,6 +310,13 @@ elige el usuario.
   varios componentes y tramos;
 - tira de cotizaciones, composición `Incluye…` y filtros combinables por moneda
   original, pagada o de deuda.
+- clasificación cerrada de los 97 hallazgos críticos/altos, contratos internos
+  de plan, run, issue, disposición y resolución, y estado público seguro de
+  migración;
+- copia aislada que conserva dinero y relaciones mientras anonimiza identidad,
+  texto libre, credenciales, tokens, adjuntos y URLs;
+- backfill por Espacio con snapshots `legacy`, preimágenes con checksum,
+  manifiesto privado aprobado, replay y rollback exacto.
 
 ### Brechas verificadas
 
@@ -328,7 +338,8 @@ equivale todavía a un recorrido confiable de punta a punta:
 - faltan estados de recuperación, foco y accesibilidad consistentes en flujos
   principales y secundarios.
 
-La caracterización de datos ejecutada el 2026-08-24 confirmó además:
+La caracterización de datos, actualizada mediante snapshot el 2026-08-25,
+confirmó:
 
 - E2E: 2 Espacios y 18 hallazgos — 6 críticos, 4 altos, 6 medios y 2
   informativos;
@@ -337,8 +348,8 @@ La caracterización de datos ejecutada el 2026-08-24 confirmó además:
 - los grupos críticos y altos incluyen huérfanos, deriva entre balance y deuda,
   liquidaciones aplicadas dos veces, impactos privados duplicados o incompletos,
   vínculos personales globales y pendientes faltantes;
-- las decisiones 0007 y 0008 siguen vigentes: el resultado habilita la etapa de
-  modelo compatible, pero bloquea cualquier migración automática o cutover.
+- los 97 críticos/altos se clasifican en 56 automáticos, 33 de revisión y 8
+  manuales; un código nuevo falla cerrado como manual.
 
 La base compatible v2 completada el 2026-08-24 incorpora:
 
@@ -354,11 +365,13 @@ La base compatible v2 completada el 2026-08-24 incorpora:
 - 10 índices compatibles aplicados sólo en E2E y una prueba de integración real
   de rollback, concurrencia, replay, historia y ambas superficies de liquidación.
 
-Las etapas 2 y 3 ya están conectadas a las rutas e interfaz existentes, y el
-checkpoint multimoneda amplía ese mismo contrato sin crear rutas paralelas. La
-activación de escrituras permanece limitada a fixtures v2 en `finp-e2e`. No
-hubo backfill, cutover ni escritura en development o producción; por eso no se
-levanta el `NO-GO` de migración.
+Las etapas 2 y 3 están conectadas a las rutas e interfaz existentes, y el
+checkpoint multimoneda amplía ese contrato sin rutas paralelas. La etapa 4 ya
+prepara y verifica la migración, pero sólo sobre una copia sanitizada: migró 11
+de 11 Espacios, conservó el ledger personal, dejó cero saldos o vínculos
+incompatibles, produjo replay sin cambios y restauró el fingerprint previo al
+revertir. No hubo backfill, cutover ni escritura en development o producción;
+por eso no se levanta el `NO-GO` productivo.
 
 Los detalles con identificadores permanecen locales en
 `test-results/audits/spaces/` y no se versionan.
@@ -466,8 +479,11 @@ Mobile web sigue siendo la superficie prioritaria.
 - auditoría legacy de Espacios cubierta con detectores puros, barreras de
   entorno, adaptador Mongo sin primitivas de escritura y prueba E2E contra el
   seed aislado;
-- modelo financiero v2 de Espacios cubierto dentro de 881 unitarias globales y
+- el checkpoint multimoneda previo quedó cubierto por 881 unitarias globales y
   10 recorridos de integración sobre transacciones MongoDB reales;
+- el estado actual suma 895 unitarias globales y 12 recorridos de integración:
+  la migración agrega apply, fallo cerrado, replay, verificación, rollback y
+  1.000 movimientos bajo el presupuesto por fase;
 
 ### Brechas
 
@@ -491,11 +507,11 @@ Mobile web sigue siendo la superficie prioritaria.
   [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md), y la
   autoridad multimoneda definida en
   [`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md), pero
-  su activación sigue limitada a `finp-e2e`: los datos legacy no se migran ni
-  se habilitan para escritura v2 hasta aprobar backfill y cutover.
-- La auditoría de Espacios mantiene un `NO-GO` explícito para backfill y cutover
-  hasta clasificar o resolver los 20 hallazgos críticos y 77 altos de
-  development.
+  su activación sigue limitada a `finp-e2e`: el ensayo aislado no habilita datos
+  legacy de development ni producción para escritura v2.
+- La clasificación y el ensayo de rollback están completos, pero el `NO-GO`
+  para development/producción continúa hasta revisar el checkpoint, aprobar la
+  ventana de cutover y ejecutar la habilitación progresiva autorizada.
 - La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
   elegir.
 - Proyección no calcula cashflow por cuenta ni escenarios y todavía no incluye
@@ -508,27 +524,17 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Soporte multimoneda integral sobre contratos y recorridos financieros de
-Espacios v2, 2026-08-24:
+Preparación de migración compatible de Espacios v2, 2026-08-25:
 
-- contratos y cálculos puros nuevos con adaptación de lectura legacy;
-- servicios de aplicación atómicos, idempotentes y con control de concurrencia;
-- una sola autoridad de deuda derivada y liquidación compartida por Espacios y
-  Deudas;
-- dinero exacto, registro ISO y snapshots históricos o manuales sin usar punto
-  flotante como autoridad;
-- referencias DolarAPI/Frankfurter cacheadas y solicitadas en lote, con
-  conflicto recuperable por cambio o vencimiento;
-- saldo de deuda por moneda y liquidación atómica con varios componentes y
-  tramos, sin neteo silencioso;
-- composición de totales, tira de referencias y filtros multimoneda en mobile y
-  desktop;
-- 10 índices parciales reaplicados idempotentemente sobre `finp-e2e`, con
-  development limitado a `dry-run`;
-- 881 unitarias globales, 10 recorridos de integración v2 y 66 E2E globales en
-  desarrollo y producción aprobados;
-- lectura de 1.000 movimientos medida en 45.987 bytes y 859 ms para una página
-  de 50 elementos;
-- etapas 2 y 3 y checkpoint multimoneda implementados; backfill, comparación
-  legacy, rollback de migración y cutover continúan pendientes, por lo que el P0
-  permanece `en curso`.
+- clasificación 56/33/8 y contratos internos fail-closed;
+- CLI único, copia sanitizada por lotes, fingerprints, manifiesto privado,
+  preimágenes, transformación transaccional por Espacio y estado público seguro;
+- ensayo real sobre copia: 11/11 migrados, invariantes financieras y privadas
+  aprobadas, replay estable y rollback al fingerprint exacto;
+- apply bajo 30 segundos, verify cercano a 3,3 segundos y prueba de 1.000
+  movimientos bajo 30 segundos en apply, verify y rollback;
+- 895 unitarias y 12 recorridos de integración aprobados; la regresión global
+  suma la convivencia migrado/bloqueado y pasa 68 E2E en desarrollo y
+  producción;
+- sin escrituras en development o producción; cutover y retiro global del
+  fallback continúan pendientes, por lo que FINP-P0-006 permanece `en curso`.

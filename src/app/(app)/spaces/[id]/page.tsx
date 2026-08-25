@@ -49,6 +49,7 @@ import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
 import { SpaceDetailMobileHeader } from '@/components/spaces/detail/SpaceDetailMobileHeader'
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
 import { SpaceQuoteTicker } from '@/components/spaces/detail/SpaceQuoteTicker'
+import { SpaceMigrationNotice } from '@/components/spaces/detail/SpaceMigrationNotice'
 import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobileSettingsSheet'
 import { SpaceEntryDetailSheet } from '@/components/spaces/detail/SpaceEntryDetailSheet'
 import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
@@ -225,7 +226,7 @@ function SpaceDetailPageInner() {
     const { success, error: toastError } = useToast()
     const { data, loading, error, updateSpace } = useSpace(spaceId)
     const spaceActivity = useSpaceActivity(spaceId)
-    const quotesApi = useSpaceQuotes(spaceId, (data?.space.currencies.length ?? 0) > 1)
+    const quotesApi = useSpaceQuotes(spaceId, (data?.space.currencies?.length ?? 0) > 1)
     const [currencyFilters, setCurrencyFilters] = useState<SpaceMovementFilters>({})
     const entriesApi = useSpaceEntries(spaceId, currencyFilters, data?.api, quotesApi.data)
     const participantsApi = useSpaceParticipants(spaceId, data?.api)
@@ -674,11 +675,7 @@ function SpaceDetailPageInner() {
                     </motion.div>
                 ) : null}
 
-                {data.api.readMode === 'legacy_incompatible' ? (
-                    <div className="rounded-2xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning-foreground" role="status">
-                        Este Espacio conserva su historia, pero Finp no puede calcular sus saldos con precisión. Está disponible sólo para consulta hasta revisar los datos legacy.
-                    </div>
-                ) : null}
+                <SpaceMigrationNotice status={data.api} />
 
                 {/* Summary tab */}
                 {activeTab === 'summary' ? (

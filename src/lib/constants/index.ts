@@ -258,6 +258,7 @@ export const SPACE_ACTIVITY_EVENT_TYPES = {
     PARTICIPANT_REMOVED: 'participant_removed',
     ROLE_CHANGED: 'role_changed',
     SPACE_UPDATED: 'space_updated',
+    MIGRATION_IMPORTED: 'migration_imported',
 } as const
 
 export const SPACE_ACTIVITY_ENTITY_TYPES = {

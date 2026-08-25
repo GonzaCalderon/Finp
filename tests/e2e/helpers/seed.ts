@@ -34,7 +34,7 @@ import {
     SPACE_IMPACT_ACCOUNT_NAME,
     SPACE_IMPACT_FIXTURES,
 } from './space-impact'
-import { SPACE_V2_E2E } from './spaces-v2'
+import { SPACE_MIGRATION_E2E, SPACE_V2_E2E } from './spaces-v2'
 
 const TEST_NAME = 'Test User'
 const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
@@ -67,6 +67,7 @@ async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
     const db = mongoose.connection.db
     if (!db) throw new Error('MongoDB no está conectado para sembrar Espacios v2 E2E.')
     const spaceId = new mongoose.Types.ObjectId(SPACE_V2_E2E.spaceId)
+    const blockedSpaceId = new mongoose.Types.ObjectId(SPACE_MIGRATION_E2E.blockedSpaceId)
     const now = new Date()
     const timestamps = { createdAt: now, updatedAt: now }
     await Promise.all([
@@ -86,6 +87,39 @@ async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
                 debtMode: 'simplified',
                 timezone: 'America/Argentina/Buenos_Aires',
                 revision: 0,
+                migration: {
+                    state: 'migrated',
+                    runId: SPACE_MIGRATION_E2E.runId,
+                    sourceFingerprint: SPACE_MIGRATION_E2E.sourceFingerprint,
+                    reason: 'migration_verified',
+                    migratedAt: now,
+                },
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaces').replaceOne(
+            { _id: blockedSpaceId },
+            {
+                _id: blockedSpaceId,
+                contractVersion: 1,
+                ownerUserId: userId,
+                name: SPACE_MIGRATION_E2E.blockedName,
+                type: 'other',
+                mode: 'managed',
+                status: 'active',
+                currency: 'ARS',
+                reportingCurrency: 'ARS',
+                defaultSplitMode: 'equal',
+                debtMode: 'simplified',
+                timezone: 'America/Argentina/Buenos_Aires',
+                revision: 0,
+                migration: {
+                    state: 'blocked',
+                    runId: SPACE_MIGRATION_E2E.runId,
+                    sourceFingerprint: SPACE_MIGRATION_E2E.sourceFingerprint,
+                    reason: 'manual_review_required',
+                },
                 ...timestamps,
             },
             { upsert: true }
@@ -95,6 +129,22 @@ async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
             {
                 _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
                 spaceId,
+                kind: 'finp_user',
+                userId,
+                displayName: TEST_NAME,
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_MIGRATION_E2E.blockedParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_MIGRATION_E2E.blockedParticipantId),
+                spaceId: blockedSpaceId,
                 kind: 'finp_user',
                 userId,
                 displayName: TEST_NAME,

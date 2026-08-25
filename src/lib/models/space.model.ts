@@ -51,6 +51,17 @@ const SpaceSchema = new Schema<ISpace>(
         contractVersion: { type: Number, enum: [2] },
         timezone: { type: String, trim: true },
         revision: { type: Number, min: 0, default: 0 },
+        migration: {
+            _id: false,
+            state: { type: String, enum: ['blocked', 'ready', 'migrated'] },
+            runId: { type: String, trim: true },
+            sourceFingerprint: { type: String, trim: true },
+            reason: {
+                type: String,
+                enum: ['manual_review_required', 'verification_failed', 'migration_verified'],
+            },
+            migratedAt: { type: Date },
+        },
     },
     { timestamps: true }
 )
@@ -63,6 +74,7 @@ const needsSpaceSchemaRefresh = Boolean(
     (!existingSpaceModel.schema.path('contractVersion') ||
         !existingSpaceModel.schema.path('timezone') ||
         !existingSpaceModel.schema.path('revision') ||
+        !existingSpaceModel.schema.path('migration') ||
         !existingSpaceModel.schema.path('archivedFromStatus'))
 )
 

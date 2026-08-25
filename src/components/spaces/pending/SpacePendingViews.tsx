@@ -311,6 +311,7 @@ const ACTIVITY_ICON_BY_TYPE: Record<SpaceActivityEventType, typeof FileText> = {
     participant_removed: UserMinus,
     role_changed: Shield,
     space_updated: Settings,
+    migration_imported: FileText,
 }
 
 function ActivityEventCard({

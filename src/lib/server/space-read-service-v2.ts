@@ -37,9 +37,20 @@ import type {
     SpacePersonalImpactDto,
     SpaceSummaryDto,
 } from '@/types'
+import { getSpaceMigrationPublicStatus } from '@/lib/server/migrations/space-v2-migration-public'
 
 const DEFAULT_MOVEMENT_LIMIT = 50
 const MAX_MOVEMENT_LIMIT = 100
+
+export function normalizeSpaceReadRecord(space: ISpace): ISpace {
+    const reportingCurrency = space.reportingCurrency ?? 'ARS'
+    return {
+        ...space,
+        currencies: space.currencies?.length ? space.currencies : [reportingCurrency],
+        reportingCurrency,
+        defaultSplitMode: space.defaultSplitMode ?? 'equal',
+    }
+}
 
 interface MovementCursor {
     dateKey: string
@@ -434,11 +445,12 @@ export async function getSpaceDetailV2(input: {
     }
     const filterHash = movementFilterHash(filter)
     const cursor = parseSpaceMovementCursor(input.cursor, filterHash)
-    const [space, participants] = await Promise.all([
+    const [spaceDocument, participants] = await Promise.all([
         Space.findById(input.spaceId).lean<ISpace | null>(),
         SpaceParticipant.find({ spaceId: input.spaceId }).lean<ISpaceParticipant[]>(),
     ])
-    if (!space) throw new ServiceError(404, 'SPACE_NOT_FOUND', 'El Espacio no existe o no está disponible.')
+    if (!spaceDocument) throw new ServiceError(404, 'SPACE_NOT_FOUND', 'El Espacio no existe o no está disponible.')
+    const space = normalizeSpaceReadRecord(spaceDocument)
     const sortedParticipants = sortParticipants(participants)
     const currentParticipant = sortedParticipants.find(
         (participant) => extractId(participant.userId) === input.actorUserId
@@ -511,8 +523,13 @@ export async function getSpaceDetailV2(input: {
         }
     }
 
+    const migrationBlocked = space.migration?.state === 'blocked'
+    if (migrationBlocked) {
+        readMode = 'legacy_incompatible'
+        readOnlyReason = 'MIGRATION_REVIEW_REQUIRED'
+    }
     const isOwnerRecord = extractId(space.ownerUserId) === input.actorUserId
-    const capabilitySet = readMode === 'legacy_incompatible'
+    const capabilitySet = readMode === 'legacy_incompatible' || migrationBlocked
         ? new Set(['view'])
         : getSpaceCapabilitiesV2({
             status: space.status,
@@ -536,6 +553,7 @@ export async function getSpaceDetailV2(input: {
         readMode,
         readOnlyReason,
         warnings,
+        migration: getSpaceMigrationPublicStatus(space, readMode),
         currentUserId: input.actorUserId,
         currentParticipantId: extractId(currentParticipant._id)!,
         capabilities: capabilities as SpaceApiCapability[],
