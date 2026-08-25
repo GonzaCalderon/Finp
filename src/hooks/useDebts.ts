@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiJson } from '@/lib/client/auth-client'
 import { invalidateData, DEBT_INVALIDATION_TAGS } from '@/lib/client/data-sync'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import type { IDebt, IDebtMovement } from '@/types/debt'
 import type { DebtSummary } from '@/lib/utils/debt'
+import type { SpaceDetailDto, SpaceMutationResultDto } from '@/types'
 
 export type CreateDebtPayload = {
     direction: 'payable' | 'receivable'
@@ -37,6 +38,55 @@ export function useDebts() {
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const settlementKeys = useRef(new Map<string, string>())
+
+    const settleSpaceDebt = useCallback(async (
+        debt: IDebt,
+        endpoint: 'pay' | 'collect',
+        body: PayDebtPayload | CollectDebtPayload
+    ): Promise<IDebt> => {
+        const spaceId = debt.spaceId?.toString()
+        if (!spaceId) throw new Error('La deuda no conserva su Espacio de origen.')
+        const detail = await apiJson<{ data: SpaceDetailDto }>(`/api/spaces/${spaceId}?limit=1`)
+        const date = new Date(body.date)
+        const dateKey = [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0'),
+        ].join('-')
+        const attemptKey = `${endpoint}:${debt._id}:${JSON.stringify(body)}:${detail.data.space.revision}`
+        let idempotencyKey = settlementKeys.current.get(attemptKey)
+        if (!idempotencyKey) {
+            idempotencyKey = crypto.randomUUID()
+            settlementKeys.current.set(attemptKey, idempotencyKey)
+        }
+        const result = await apiJson<SpaceMutationResultDto<{ remainingAmount: number }>>(
+            `/api/debts/${debt._id}/${endpoint}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': idempotencyKey,
+                },
+                body: JSON.stringify({
+                    expectedRevision: detail.data.space.revision,
+                    amount: body.amount,
+                    currency: debt.currency,
+                    dateKey,
+                    accountId: body.accountId,
+                    notes: body.notes,
+                }),
+            }
+        )
+        settlementKeys.current.delete(attemptKey)
+        const remainingAmount = result.data?.remainingAmount ?? Math.max(0, debt.remainingAmount - body.amount)
+        invalidateData(DEBT_INVALIDATION_TAGS)
+        return {
+            ...debt,
+            remainingAmount,
+            status: remainingAmount <= 0.01 ? 'paid' : 'partially_paid',
+        }
+    }, [])
 
     const fetchDebts = useCallback(async (options?: { silent?: boolean }) => {
         try {
@@ -75,6 +125,10 @@ export function useDebts() {
     }, [])
 
     const payDebt = useCallback(async (debtId: string, body: PayDebtPayload): Promise<IDebt> => {
+        const debt = allDebts.find((item) => item._id.toString() === debtId)
+        if (debt?.contractVersion === 2 && debt.sourceType === 'space') {
+            return settleSpaceDebt(debt, 'pay', body)
+        }
         const data = await apiJson<{ debt: IDebt }>(`/api/debts/${debtId}/pay`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -82,9 +136,13 @@ export function useDebts() {
         })
         invalidateData(DEBT_INVALIDATION_TAGS)
         return data.debt
-    }, [])
+    }, [allDebts, settleSpaceDebt])
 
     const collectDebt = useCallback(async (debtId: string, body: CollectDebtPayload): Promise<IDebt> => {
+        const debt = allDebts.find((item) => item._id.toString() === debtId)
+        if (debt?.contractVersion === 2 && debt.sourceType === 'space') {
+            return settleSpaceDebt(debt, 'collect', body)
+        }
         const data = await apiJson<{ debt: IDebt }>(`/api/debts/${debtId}/collect`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -92,7 +150,7 @@ export function useDebts() {
         })
         invalidateData(DEBT_INVALIDATION_TAGS)
         return data.debt
-    }, [])
+    }, [allDebts, settleSpaceDebt])
 
     const ignoreDebt = useCallback(async (debtId: string): Promise<IDebt> => {
         const data = await apiJson<{ debt: IDebt }>(`/api/debts/${debtId}/ignore`, {

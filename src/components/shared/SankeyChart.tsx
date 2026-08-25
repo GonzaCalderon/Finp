@@ -431,18 +431,12 @@ function computeSankeyLayout(
     graph: ReturnType<typeof buildGraph>,
     generator: ReturnType<typeof d3Sankey<ChartNode, ChartLink>>
 ) {
-    const buildWithGraph = (sourceGraph: ReturnType<typeof buildGraph>) =>
-        generator({
-            nodes: sourceGraph.nodes.map((n, index) => ({ ...n, sortOrder: index })),
-            links: sourceGraph.links.map((l) => ({ ...l })),
-        } as SankeyGraph<ChartNode, ChartLink>)
+    const normalizedGraph = normalizeGraphLayers(graph)
 
-    try {
-        return buildWithGraph(graph)
-    } catch (error) {
-        console.warn('Sankey fallback: normalizando capas por compatibilidad.', error)
-        return buildWithGraph(normalizeGraphLayers(graph))
-    }
+    return generator({
+        nodes: normalizedGraph.nodes.map((node) => ({ ...node })),
+        links: normalizedGraph.links.map((link) => ({ ...link })),
+    } as SankeyGraph<ChartNode, ChartLink>)
 }
 
 function buildDesktopLayout(graph: ReturnType<typeof buildGraph>, width: number) {
@@ -1160,6 +1154,7 @@ export function SankeyChart({ month }: { month?: string }) {
 
     return (
         <div
+            data-testid="sankey-chart"
             className="rounded-2xl p-4 md:p-5"
             style={{
                 background: 'var(--card)',

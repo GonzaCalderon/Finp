@@ -10,6 +10,7 @@
         "docs:check": "node scripts/check-docs.mjs",
         "test": "vitest run",
         "test:unit": "vitest run tests/unit",
+        "test:integration:spaces:v2": "vitest run --config vitest.integration.config.ts",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage tests/unit",
         "test:e2e:check": "tsx tests/e2e/helpers/check-environment.ts",
@@ -18,6 +19,8 @@
         "test:e2e:debug": "playwright test --debug",
         "test:seed": "tsx tests/e2e/helpers/seed.ts",
         "typecheck": "tsc --noEmit",
+        "audit:spaces:legacy": "tsx scripts/audit-spaces-legacy.ts",
+        "indexes:spaces:v2": "tsx scripts/manage-spaces-v2-indexes.ts",
         "backfill:commitments": "tsx scripts/backfill-commitments.ts",
         "repair:payment-groups": "tsx scripts/repair-payment-groups.ts"
     },

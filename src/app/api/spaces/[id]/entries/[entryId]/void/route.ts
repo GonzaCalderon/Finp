@@ -12,6 +12,13 @@ import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceEntryVoidSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
 import type { ISpaceEntry } from '@/types'
+import {
+    requireIdempotencyKey,
+    spaceApiErrorResponse,
+    toSpaceMutationResult,
+} from '@/lib/server/space-api-contract'
+import { voidSpaceEntryV2 } from '@/lib/server/space-entry-history-service-v2'
+import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
 
 type Params = Promise<{ id: string; entryId: string }>
 
@@ -28,7 +35,35 @@ export async function POST(request: Request, { params }: { params: Params }) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
         }
 
-        const body = await request.json()
+        const body: unknown = await request.json()
+        await connectDB()
+        const entryContract = await SpaceEntry.findOne(
+            { _id: entryId, spaceId: id },
+            { contractVersion: 1 }
+        ).lean<{ contractVersion?: number } | null>()
+        if (!entryContract) return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
+        if (entryContract.contractVersion === 2) {
+            const expectedRevision = (body as { expectedRevision?: unknown })?.expectedRevision
+            const reason = (body as { reason?: unknown })?.reason
+            if (!Number.isInteger(expectedRevision) || (expectedRevision as number) < 0 || typeof reason !== 'string') {
+                return NextResponse.json({
+                    error: 'La anulación requiere revisión esperada y motivo.',
+                    code: 'SPACE_ENTRY_VOID_INVALID',
+                    failureState: 'not_started',
+                    retryable: false,
+                }, { status: 400 })
+            }
+            const execution = await voidSpaceEntryV2({
+                actorUserId: session.user.id,
+                spaceId: id,
+                entryId,
+                idempotencyKey: requireIdempotencyKey(request),
+                expectedRevision: expectedRevision as number,
+                reason: reason.trim(),
+            })
+            return NextResponse.json(toSpaceMutationResult(execution))
+        }
+        enterLegacySpaceWriteFacade(entryContract)
         const parsed = spaceEntryVoidSchema.safeParse(body)
 
         if (!parsed.success) {
@@ -37,8 +72,6 @@ export async function POST(request: Request, { params }: { params: Params }) {
                 { status: 400 }
             )
         }
-
-        await connectDB()
 
         const context = await getAccessibleSpaceContext(id, session.user.id)
         if (!context) {
@@ -181,7 +214,6 @@ export async function POST(request: Request, { params }: { params: Params }) {
             affectedUsersCount: linkedImpactsBeforeVoid.length,
         })
     } catch (error) {
-        console.error('Error al anular movimiento:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo anular el movimiento.')
     }
 }

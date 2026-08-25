@@ -79,10 +79,12 @@ export function SpacePersonalImpactDialog({
     onOpenChange,
     spaceId,
     entry,
+    initialImpact,
     onCreated,
 }: DialogProps & {
     spaceId: string
     entry: ISpaceEntry | null
+    initialImpact?: ISpaceEntryPersonalImpact
     onCreated?: (impact: ISpaceEntryPersonalImpact) => void
 }) {
     const { accounts } = useAccounts()
@@ -113,6 +115,9 @@ export function SpacePersonalImpactDialog({
         () => categories.filter((category) => !category.isArchived),
         [categories]
     )
+    const requiresPersonalAccount = entry?.contractVersion === 2
+        ? (initialImpact?.accountImpactAmount ?? 0) > 0
+        : true
 
     useEffect(() => {
         if (!open || !spaceId || !entryId || !entry) return
@@ -131,6 +136,26 @@ export function SpacePersonalImpactDialog({
             setExistingImpact(null)
 
             try {
+                if (currentEntry.contractVersion === 2 && initialImpact) {
+                    const impactAmount = initialImpact.accountImpactAmount || initialImpact.ownShareAmount || initialImpact.amount
+                    setExistingImpact(initialImpact.status === 'linked' ? initialImpact : null)
+                    setSuggestion({
+                        amount: impactAmount,
+                        currency: initialImpact.currency,
+                        impactKind: initialImpact.impactKind,
+                        categoryId: extractId(initialImpact.categoryId),
+                    })
+                    setAmount(String(impactAmount))
+                    const transactionsData = await apiJson<{ transactions: ITransaction[] }>(
+                        `/api/transactions?limit=25&sort=date_desc&currency=${currentEntry.currency}`
+                    )
+                    if (!cancelled) {
+                        setRecentTransactions(transactionsData.transactions.filter(
+                            (transaction) => Math.abs(transaction.amount - impactAmount) < 0.01
+                        ))
+                    }
+                    return
+                }
                 const impactData = await apiJson<{
                     impact: ISpaceEntryPersonalImpact | null
                     pendingActions: ISpaceEntryPersonalImpact[]
@@ -167,7 +192,7 @@ export function SpacePersonalImpactDialog({
         return () => {
             cancelled = true
         }
-    }, [entry, entryId, open, spaceId])
+    }, [entry, entryId, initialImpact, open, spaceId])
 
     async function handleSubmit() {
         if (!entryId) return
@@ -175,6 +200,38 @@ export function SpacePersonalImpactDialog({
         setError(null)
 
         try {
+            if (entry?.contractVersion === 2 && initialImpact) {
+                const response = await apiJson<{
+                    data?: { impactId: string; status: 'linked' }
+                }>(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': crypto.randomUUID(),
+                    },
+                    body: JSON.stringify({
+                        impactId: extractId(initialImpact._id),
+                        expectedRevision: initialImpact.revision ?? 0,
+                        decision: mode === 'link_existing'
+                            ? { type: 'link_existing', transactionId: linkedTransactionId }
+                            : {
+                                type: 'create_transaction',
+                                accountId,
+                                categoryId,
+                                description: entry.title,
+                            },
+                    }),
+                })
+                const impact = {
+                    ...initialImpact,
+                    status: response.data?.status ?? 'linked',
+                    revision: (initialImpact.revision ?? 0) + 1,
+                } as ISpaceEntryPersonalImpact
+                invalidateData(SPACE_INVALIDATION_TAGS)
+                onCreated?.(impact)
+                onOpenChange(false)
+                return
+            }
             const response = await apiJson<{ impact: ISpaceEntryPersonalImpact }>(
                 `/api/spaces/${spaceId}/entries/${entryId}/personal-impact`,
                 {
@@ -305,7 +362,11 @@ export function SpacePersonalImpactDialog({
                                                 </div>
 
                                                 {mode === 'create_transaction' ? (
-                                                    compatibleAccounts.length === 0 ? (
+                                                    !requiresPersonalAccount ? (
+                                                        <div className="rounded-[22px] border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-foreground">
+                                                            Tu parte se registra como gasto operacional sin mover ninguna cuenta personal.
+                                                        </div>
+                                                    ) : compatibleAccounts.length === 0 ? (
                                                         <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
                                                             <p className="font-medium">Para registrar esto en tu Finp necesitás crear una cuenta.</p>
                                                             <div className="mt-3 flex flex-wrap gap-2">
@@ -385,6 +446,7 @@ export function SpacePersonalImpactDialog({
                                                     onValueChangeAction={(value) =>
                                                         setAmount(value ? String(value) : '')
                                                     }
+                                                    disabled={entry?.contractVersion === 2}
                                                 />
 
                                                 <SpaceDialogField
@@ -454,7 +516,9 @@ export function SpacePersonalImpactDialog({
                                     submitting ||
                                     loading ||
                                     !entry ||
-                                    (mode === 'create_transaction' && compatibleAccounts.length === 0)
+                                    (mode === 'create_transaction' &&
+                                        requiresPersonalAccount &&
+                                        compatibleAccounts.length === 0)
                                 }
                             >
                                 {submitting ? 'Registrando...' : 'Registrar en mi Finp'}

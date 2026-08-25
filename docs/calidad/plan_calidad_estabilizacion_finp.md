@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-08-24
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -163,6 +163,13 @@ Casos especializados:
 - parte propia y total de Espacio;
 - compromiso fijo/variable;
 - snapshot histórico.
+- escalas ISO 0, 2 y 3, límites, redondeo y reparto por restos mayores;
+- cotización directa, derivada por USD/EUR, oficial compra/venta, manual,
+  cambiada y vencida;
+- deuda y simplificación independientes por moneda;
+- liquidación con varios componentes y tramos, pagos parciales, sobrepago,
+  rollback, replay y reversión;
+- composición histórica y revaluación actual sin presentar totales parciales.
 
 ## 7. APIs y seguridad
 
@@ -244,6 +251,10 @@ Un flujo no está cerrado si sólo funciona en desktop.
 - deuda;
 - impacto personal de Espacio;
 - permisos de invitación.
+- Espacio ARS/USD/EUR con composición y filtros;
+- pago de deuda sólo ARS, sólo USD y combinado ARS+USD;
+- referencia manual, automática, vencida y proveedor caído;
+- liquidación propia o representada y continuidad hacia Mi Finp.
 
 ### CI
 
@@ -350,6 +361,24 @@ Recomendado:
 - Scripts destructivos requieren destino explícito.
 - Seeds y factories deben ser idempotentes o indicar precondición.
 
+### Auditorías de datos
+
+La caracterización previa a una migración financiera debe:
+
+- separar detectores puros del adaptador de persistencia;
+- usar códigos y severidades estables;
+- verificar referencias, aislamiento, estados, snapshots, fechas, monedas,
+  idempotencia y relaciones derivadas;
+- leer por lotes dentro de un snapshot y no exponer primitivas de escritura;
+- producir un resumen sanitizado y un detalle local excluido de Git;
+- probar rechazo de entornos inseguros, determinismo y ausencia de escrituras;
+- ejecutarse primero sobre E2E y después sobre development con confirmación
+  exacta; producción queda fuera de alcance.
+
+Para FINP-P0-006 el comando canónico es `npm run audit:spaces:legacy`; su uso y
+sus garantías están documentados en
+[`../tecnico/guia_desarrollo.md`](../tecnico/guia_desarrollo.md#auditoría-legacy-de-espacios).
+
 ## 14. Criterio de release
 
 Una versión puede promoverse cuando:
@@ -365,25 +394,50 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Verificado 2026-08-04:
+Checks base, contratos y recorridos financieros de Espacios verificados el
+2026-08-24:
 
-- 804 pruebas unitarias aprobadas en 100 archivos;
+- 881 pruebas unitarias aprobadas en 117 archivos;
+- 10 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+  sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
+  deuda, configuración monetaria, lifecycle, ownership, participantes inactivos
+  y liquidaciones propias o representadas;
 - build, typecheck, lint y validación documental aprobados;
-- 4 de 4 E2E focales de Espacios aprobados en Chromium desktop y Pixel 7;
-- la corrida global adicional cerró 52 de 60: queda pendiente aislar cuentas
-  residuales del smoke financiero y estabilizar el servidor largo de `next dev`,
-  que devolvió 404 para rutas dinámicas y afectó otras dos altas;
+- 66 de 66 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
+  de producción;
+- 66 de 66 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
+  ni altas fallidas después de una ejecución larga;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
   conectar; con la credencial ejecuta preflight, seed, build y Playwright;
 - preflight de aislamiento aprobado contra `finp-e2e`;
-- seed focal de Espacios repetible y aislado del usuario del smoke; la limpieza
-  global del dataset financiero queda asociada a FINP-P0-004;
+- seed repetible: recrea todas las cuentas sólo para el usuario general y
+  mantiene usuarios independientes para smoke financiero, Proyección e impactos
+  personales de Espacios;
 - cobertura no bloqueante;
-- el smoke financiero conserva datos representativos de dos períodos, pero su
-  próxima corrida verde depende de limpiar todas las cuentas residuales;
+- fixture contractual v2 y recorrido de gasto en tres pasos con preview e
+  impacto vinculado aprobados en desktop y mobile;
+- historia de 1.000 movimientos medida en 45.987 bytes y 859 ms para una página
+  de 50 elementos, sin cache, colas ni dependencias nuevas;
+- el smoke financiero conserva datos representativos de dos períodos y volvió a
+  quedar verde sin depender de cuentas residuales;
+- la regresión de Captura rápida recarga un Dashboard sin primera capa del
+  Sankey, espera el SVG, valida la descripción accesible del diálogo y falla si
+  reaparece cualquiera de los dos avisos cerrados por FINP-P1-012;
 - recorridos P2 aprobados para candidato recurrente, compra en un pago con
   Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
+- auditoría legacy de Espacios aprobada como herramienta read-only: detectores,
+  barreras del CLI y adaptador Mongo pasan 30 casos focales junto con el
+  preflight; el recorrido Playwright lee el seed E2E y caracteriza el huérfano
+  conocido sin escribir;
+- resultado sanitizado: E2E 18 hallazgos y development 337; ambos permanecen en
+  `NO-GO` para migración automática y habilitan la etapa de modelo compatible.
+- los 10 índices v2 parciales se aplicaron y reaplicaron sólo en `finp-e2e`;
+  development fue validado en `dry-run` y no recibió escrituras.
+- el checkpoint multimoneda agrega cobertura focal de dinero exacto, registro
+  ISO, cotizaciones, composición accesible y asignación de liquidaciones por
+  moneda; la matriz E2E usa un Espacio ARS/USD/EUR y conserva el rollout
+  exclusivamente en `finp-e2e`.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
+import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceCategory, SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
@@ -17,6 +18,33 @@ import { spaceEntryEditSchema } from '@/lib/validations'
 import { calculateReportingAmount, extractId } from '@/lib/utils/spaces'
 import { SPACE_PERSONAL_IMPACT_STATUSES } from '@/lib/constants'
 import type { ISpace, ISpaceEntry, ISpaceEntrySnapshot } from '@/types'
+import {
+    requireIdempotencyKey,
+    spaceApiErrorResponse,
+    toSpaceMutationResult,
+} from '@/lib/server/space-api-contract'
+import { editSpaceEntryV2 } from '@/lib/server/space-entry-history-service-v2'
+import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
+
+const spaceEntryEditV2Schema = z.object({
+    expectedRevision: z.number().int().nonnegative(),
+    title: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(1000).optional(),
+    amount: z.number().finite().positive(),
+    currency: z.string().min(1).max(12),
+    exchangeRate: z.number().finite().positive().optional(),
+    dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    paidByParticipantId: z.string().min(1),
+    sharedWithParticipantIds: z.array(z.string().min(1)).min(1).max(100),
+    splitMode: z.enum(['none', 'equal', 'percentage', 'fixed']),
+    splitAllocations: z.array(z.object({
+        participantId: z.string().min(1),
+        percentage: z.number().finite().nonnegative().optional(),
+        amount: z.number().finite().nonnegative().optional(),
+    }).strict()).max(100).optional(),
+    spaceCategoryId: z.string().optional(),
+    notes: z.string().trim().max(1000).optional(),
+}).strict()
 
 type Params = Promise<{ id: string; entryId: string }>
 
@@ -100,7 +128,34 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
         }
 
-        const body = await request.json()
+        const body: unknown = await request.json()
+        await connectDB()
+        const entryContract = await SpaceEntry.findOne(
+            { _id: entryId, spaceId: id },
+            { contractVersion: 1 }
+        ).lean<{ contractVersion?: number } | null>()
+        if (!entryContract) return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
+        if (entryContract.contractVersion === 2) {
+            const parsedV2 = spaceEntryEditV2Schema.safeParse(body)
+            if (!parsedV2.success) {
+                return NextResponse.json({
+                    error: 'Datos de movimiento inválidos',
+                    code: 'SPACE_ENTRY_INVALID',
+                    failureState: 'not_started',
+                    retryable: false,
+                    details: parsedV2.error.flatten(),
+                }, { status: 400 })
+            }
+            const execution = await editSpaceEntryV2({
+                actorUserId: session.user.id,
+                spaceId: id,
+                entryId,
+                idempotencyKey: requireIdempotencyKey(request),
+                ...parsedV2.data,
+            })
+            return NextResponse.json(toSpaceMutationResult(execution))
+        }
+        enterLegacySpaceWriteFacade(entryContract)
         const parsed = spaceEntryEditSchema.safeParse(body)
 
         if (!parsed.success) {
@@ -109,8 +164,6 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
                 { status: 400 }
             )
         }
-
-        await connectDB()
 
         const context = await getAccessibleSpaceContext(id, session.user.id)
         if (!context) {
@@ -346,7 +399,6 @@ export async function PATCH(request: Request, { params }: { params: Params }) {
 
         return NextResponse.json({ entry: updatedEntry, hasSubsequentSettlement, materialChange: isMaterial })
     } catch (error) {
-        console.error('Error al editar movimiento:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo editar el movimiento.')
     }
 }

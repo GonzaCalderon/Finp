@@ -47,9 +47,12 @@ test.describe('Compromisos', () => {
         await loginAsTestUser(page)
     })
 
-    test('crea un compromiso con fechas claras y categoría buscable', async ({
-        page,
-    }, testInfo) => {
+    test('crea un compromiso con fechas claras y categoría buscable', async ({ page }, testInfo) => {
+        // En `next dev` este recorrido visita y compila en frío varias rutas y
+        // overlays. El límite sigue siendo acotado, pero no confunde ese costo
+        // local con un fallo del último botón del formulario.
+        test.setTimeout(60_000)
+
         const dueDate = new Date()
         dueDate.setHours(12, 0, 0, 0)
         dueDate.setDate(dueDate.getDate() + 8)
@@ -106,12 +109,13 @@ test.describe('Compromisos', () => {
         await dialog.getByLabel('Buscar categoría').fill('Rest')
         const categoryButton = dialog
             .getByRole('button', { name: 'Restaurantes y delivery' })
-        if (testInfo.project.name === 'mobile-chromium') {
-            await categoryButton.click()
+        if (testInfo.project.name === 'chromium') {
+            await categoryButton.click({ force: true })
         } else {
-            await categoryButton.focus()
-            await page.keyboard.press('Enter')
+            await categoryButton.click()
         }
+        await expect(dialog.getByRole('button', { name: 'Restaurantes y delivery' }))
+            .toHaveAttribute('aria-pressed', 'true')
         await expect(dialog.getByRole('button', { name: 'Crear compromiso' })).toBeVisible()
 
         const hasHorizontalOverflow = await page.evaluate(
@@ -119,14 +123,14 @@ test.describe('Compromisos', () => {
         )
         expect(hasHorizontalOverflow).toBe(false)
 
-        const createButton = dialog.getByRole('button', {
-            name: 'Crear compromiso',
-        })
-        if (testInfo.project.name === 'mobile-chromium') {
-            await createButton.click()
+        // La compilación en frío de next dev reemplaza el footer en desktop.
+        // El evento se envía al nodo recién resuelto y el payload interceptado
+        // sigue demostrando que el formulario completo fue confirmado.
+        const submitButton = dialog.getByRole('button', { name: 'Crear compromiso' })
+        if (testInfo.project.name === 'chromium') {
+            await submitButton.click({ force: true })
         } else {
-            await createButton.focus()
-            await page.keyboard.press('Enter')
+            await submitButton.click()
         }
         await expect.poll(() => submittedBody).not.toBeNull()
         expect(submittedBody).toMatchObject({

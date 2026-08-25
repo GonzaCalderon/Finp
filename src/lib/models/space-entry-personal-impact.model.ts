@@ -6,6 +6,19 @@ import {
     SPACE_PERSONAL_PENDING_ACTION_TYPES,
     SPACE_PERSONAL_IMPACT_SOURCE_TYPES,
 } from '@/lib/constants'
+import { moneySchema } from '@/lib/models/space-money.schemas'
+
+const financialLinkSchema = new Schema(
+    {
+        legId: { type: String, required: true },
+        currency: { type: String, required: true, uppercase: true },
+        amountMoney: { type: moneySchema, required: true },
+        accountId: { type: Schema.Types.ObjectId, ref: 'Account' },
+        transactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
+        status: { type: String, enum: ['pending', 'linked', 'ignored', 'removed'], required: true },
+    },
+    { _id: false }
+)
 
 const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
     {
@@ -21,7 +34,11 @@ const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
             enum: Object.values(SPACE_PERSONAL_IMPACT_KINDS),
             required: true,
         },
+        contractVersion: { type: Number, enum: [2] },
         amount: { type: Number, required: true },
+        amountMoney: { type: moneySchema },
+        financialLinks: { type: [financialLinkSchema], default: undefined },
+        ownShareAmount: { type: Number, min: 0 },
         currency: { type: String, required: true },
         status: {
             type: String,
@@ -45,6 +62,21 @@ const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
         debtMovementId: { type: Schema.Types.ObjectId, ref: 'DebtMovement' },
         accountImpactAmount: { type: Number },
         operationalAmount: { type: Number },
+        originSnapshot: {
+            _id: false,
+            entryRevision: { type: Number },
+            entryStatus: { type: String, enum: ['recorded', 'voided'] },
+            payerParticipantId: { type: Schema.Types.ObjectId, ref: 'SpaceParticipant' },
+            amount: { type: Number },
+            reportingAmount: { type: Number },
+            currency: { type: String },
+            reportingCurrency: { type: String },
+            exchangeRate: { type: Number },
+            dateKey: { type: String },
+            timezone: { type: String },
+        },
+        revision: { type: Number, min: 0, default: 0 },
+        operationId: { type: Schema.Types.ObjectId, ref: 'SpaceOperation' },
         resolvedAt: { type: Date },
         ignoredAt: { type: Date },
         removedAt: { type: Date },
@@ -82,8 +114,23 @@ SpaceEntryPersonalImpactSchema.index(
     }
 )
 
+const existingPersonalImpactModel = mongoose.models.SpaceEntryPersonalImpact as
+    | mongoose.Model<ISpaceEntryPersonalImpact>
+    | undefined
+const needsPersonalImpactSchemaRefresh = Boolean(
+    existingPersonalImpactModel &&
+    (!existingPersonalImpactModel.schema.path('contractVersion') ||
+        !existingPersonalImpactModel.schema.path('ownShareAmount') ||
+        !existingPersonalImpactModel.schema.path('originSnapshot.entryRevision') ||
+        !existingPersonalImpactModel.schema.path('revision') ||
+        !existingPersonalImpactModel.schema.path('operationId') ||
+        !existingPersonalImpactModel.schema.path('financialLinks'))
+)
+
+if (needsPersonalImpactSchemaRefresh) delete mongoose.models.SpaceEntryPersonalImpact
+
 export const SpaceEntryPersonalImpact =
-    (mongoose.models.SpaceEntryPersonalImpact as mongoose.Model<ISpaceEntryPersonalImpact> | undefined) ||
+    (needsPersonalImpactSchemaRefresh ? undefined : existingPersonalImpactModel) ||
     mongoose.model<ISpaceEntryPersonalImpact>(
         'SpaceEntryPersonalImpact',
         SpaceEntryPersonalImpactSchema

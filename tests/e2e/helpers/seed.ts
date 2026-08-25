@@ -34,11 +34,13 @@ import {
     SPACE_IMPACT_ACCOUNT_NAME,
     SPACE_IMPACT_FIXTURES,
 } from './space-impact'
+import { SPACE_V2_E2E } from './spaces-v2'
 
 const TEST_NAME = 'Test User'
 const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
 const P2_CANDIDATE_SUBJECT_KEY = 'create_commitment|ARS|cobertura p2'
 const P2_HISTORY_ACCOUNT_NAME = 'Historial P2'
+const GENERAL_CASH_INITIAL_BALANCE = 100_000
 
 async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
     const db = mongoose.connection.db
@@ -51,9 +53,146 @@ async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
         db.collection('spaceentries').deleteMany({ createdByUserId: userId }),
         db.collection('spaceparticipants').deleteMany({ userId }),
         db.collection('spaces').deleteMany({ ownerUserId: userId }),
+        db.collection('debts').deleteMany({ userId }),
+        db.collection('debtmovements').deleteMany({ userId }),
+        db.collection('spaceoperations').deleteMany({ actorUserId: userId }),
         db.collection('notifications').deleteMany({ recipientUserId: userId }),
+        Account.deleteMany({ userId }),
         ScheduledCommitment.deleteMany({ userId }),
         FunctionalSuggestionDismissal.deleteMany({ userId }),
+    ])
+}
+
+async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no está conectado para sembrar Espacios v2 E2E.')
+    const spaceId = new mongoose.Types.ObjectId(SPACE_V2_E2E.spaceId)
+    const now = new Date()
+    const timestamps = { createdAt: now, updatedAt: now }
+    await Promise.all([
+        db.collection('spaces').replaceOne(
+            { _id: spaceId },
+            {
+                _id: spaceId,
+                contractVersion: 2,
+                ownerUserId: userId,
+                name: SPACE_V2_E2E.name,
+                type: 'travel',
+                mode: 'managed',
+                status: 'active',
+                currencies: ['ARS', 'USD', 'EUR'],
+                reportingCurrency: 'ARS',
+                defaultSplitMode: 'equal',
+                debtMode: 'simplified',
+                timezone: 'America/Argentina/Buenos_Aires',
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                spaceId,
+                kind: 'finp_user',
+                userId,
+                displayName: TEST_NAME,
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId),
+                spaceId,
+                kind: 'external',
+                displayName: SPACE_V2_E2E.externalName,
+                role: 'participant',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceentries').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.arsEntryId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.arsEntryId),
+                contractVersion: 2,
+                spaceId,
+                createdByUserId: userId,
+                createdByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                type: 'expense',
+                status: 'recorded',
+                title: 'Alojamiento en ARS',
+                amount: 10_000,
+                currency: 'ARS',
+                reportingAmount: 10_000,
+                originalMoney: { currency: 'ARS', minorUnits: '1000000', scale: 2 },
+                reportingMoney: { currency: 'ARS', minorUnits: '1000000', scale: 2 },
+                date: now,
+                dateKey: '2026-08-24',
+                timezone: 'America/Argentina/Buenos_Aires',
+                paidByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                sharedWithParticipantIds: [
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId),
+                ],
+                splitMode: 'equal',
+                splitAllocations: [],
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceentries').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.usdEntryId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.usdEntryId),
+                contractVersion: 2,
+                spaceId,
+                createdByUserId: userId,
+                createdByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                type: 'expense',
+                status: 'recorded',
+                title: 'Hotel en USD',
+                amount: 100,
+                currency: 'USD',
+                reportingAmount: 130_000,
+                exchangeRate: 1300,
+                originalMoney: { currency: 'USD', minorUnits: '10000', scale: 2 },
+                reportingMoney: { currency: 'ARS', minorUnits: '13000000', scale: 2 },
+                conversionSnapshot: {
+                    rate: '1300',
+                    direction: 'multiply',
+                    source: 'manual',
+                    manualAuthorUserId: userId,
+                    observedAt: now.toISOString(),
+                    capturedAt: now.toISOString(),
+                    path: [{ fromCurrency: 'USD', toCurrency: 'ARS', rate: '1300', source: 'manual' }],
+                },
+                date: now,
+                dateKey: '2026-08-23',
+                timezone: 'America/Argentina/Buenos_Aires',
+                paidByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                sharedWithParticipantIds: [
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId),
+                ],
+                splitMode: 'equal',
+                splitAllocations: [],
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
     ])
 }
 
@@ -279,11 +418,11 @@ async function ensureAccount(
     if (account) {
         Object.assign(account, values)
         await account.save()
-        return false
+        return { account, created: false }
     }
 
-    await Account.create({ userId, name, ...values })
-    return true
+    const createdAccount = await Account.create({ userId, name, ...values })
+    return { account: createdAccount, created: true }
 }
 
 async function seedP2RecurringCandidate(userId: mongoose.Types.ObjectId) {
@@ -931,19 +1070,22 @@ async function seed() {
         )
         await resetGeneralE2EFinancialData(user._id)
         const categories = await ensureDefaultCategories(user._id)
-        const cashCreated = await ensureAccount(user._id, 'Efectivo', {
+        const { account: cashAccount, created: cashCreated } = await ensureAccount(user._id, 'Efectivo', {
             type: 'cash',
             currency: 'ARS',
             supportedCurrencies: ['ARS'],
             defaultPaymentMethods: ['cash'],
-            initialBalance: 0,
-            initialBalances: { ARS: 0, USD: 0 },
+            // Los impactos de Espacios agregan $16.000 de egresos antes de los
+            // tests de Transacciones. El saldo base evita que el resultado
+            // dependa del orden entre specs sin permitir sobregiros reales.
+            initialBalance: GENERAL_CASH_INITIAL_BALANCE,
+            initialBalances: { ARS: GENERAL_CASH_INITIAL_BALANCE, USD: 0 },
             color: '#10B981',
             isActive: true,
             includeInNetWorth: true,
             allowNegativeBalance: false,
         })
-        const cardCreated = await ensureAccount(user._id, 'Tarjeta E2E', {
+        const { created: cardCreated } = await ensureAccount(user._id, 'Tarjeta E2E', {
             type: 'credit_card',
             currency: 'ARS',
             supportedCurrencies: ['ARS', 'USD'],
@@ -960,7 +1102,7 @@ async function seed() {
                 creditLimit: 1_000_000,
             },
         })
-        const p2HistoryCreated = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
+        const { created: p2HistoryCreated } = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
             type: 'cash',
             currency: 'ARS',
             supportedCurrencies: ['ARS'],
@@ -972,8 +1114,11 @@ async function seed() {
             includeInNetWorth: false,
             allowNegativeBalance: false,
         })
+        user.set('preferences.defaultAccountId', cashAccount._id)
+        await user.save()
         await seedP2RecurringCandidate(user._id)
         await seedSpaceImpactFixtures(user._id)
+        await seedSpaceV2Fixtures(user._id)
         const financialSmoke = await seedFinancialSmokeData(
             TEST_USER_EMAIL,
             TEST_USER_PASSWORD
@@ -993,6 +1138,7 @@ async function seed() {
         )
         console.log('   P2: candidato mensual explicable verificado')
         console.log('   Espacios: impactos normal y huerfano preparados para desktop/mobile')
+        console.log('   Espacios v2: fixture contractual preparado para desktop/mobile')
         console.log(
             `   Smoke financiero: usuario ${financialSmoke.created ? 'creado' : 'actualizado'}, ` +
             `períodos ${financialSmoke.historical} y ${financialSmoke.current}`

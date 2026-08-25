@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-31
+> Última actualización: 2026-08-24
 > Fuente de verdad: índice canónico de documentación
 
 ## Índice
@@ -112,6 +112,9 @@ Decisiones vigentes:
 - [`0004 — Resumen bimonetario de tarjetas`](decisiones/0004-resumen-bimonetario-de-tarjetas.md).
 - [`0005 — Captura rápida, tarjetas y handoffs tipados`](decisiones/0005-captura-rapida-tarjetas-y-handoffs.md).
 - [`0006 — Período, clasificación y lectura de Proyección`](decisiones/0006-periodo-clasificacion-y-lectura-de-proyeccion.md).
+- [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](decisiones/0007-autoridad-espacios-finp-deudas.md).
+- [`0008 — Modelo y consistencia financiera de Espacios`](decisiones/0008-modelo-consistencia-financiera-espacios.md).
+- [`0009 — Autoridad multimoneda de Espacios`](decisiones/0009-autoridad-multimoneda-espacios.md).
 
 Una decisión se documenta cuando:
 

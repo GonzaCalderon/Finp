@@ -178,9 +178,9 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Aplicación | subdocumento/relación de compromiso | Snapshot por período y transacción. |
 | Regla | `TransactionRule` | Servicio compartido resuelve coincidencia y acciones. |
 | Aprendizaje | perfil, eventos, alias y control de patrones | Menor autoridad que entrada explícita y reglas. |
-| Espacio | `Space`, participantes y movimientos | Contexto compartido. |
-| Impacto personal | `SpaceEntryPersonalImpact` | Privado por usuario; no usar estado global `linked`. |
-| Deuda | `Debt` + `DebtMovement` | Manual o derivada; pagos sin impacto operacional. |
+| Espacio | `Space`, participantes y `SpaceEntry` | En contrato v2, el movimiento contiene sólo contexto compartido, dinero exacto, día financiero y snapshots. La moneda de reporte no reemplaza la original. |
+| Impacto personal | `SpaceEntryPersonalImpact` | Privado por usuario; parte propia, impacto real y operacional son magnitudes explícitas. No usar estado global `linked`. |
+| Deuda | `Debt` + `DebtMovement` | Manual o derivada; el ledger de Espacios por moneda manda sobre la derivada. El dinero pagado y el aplicado se conservan separados y no tienen impacto operacional. |
 | Notificación | `Notification` | Información y presentación. |
 | Pendiente | entidad de acción correspondiente | No se resuelve por leer notificación. |
 
@@ -195,7 +195,17 @@ Servicios relevantes en `src/lib/server/`:
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
-| `spaces.ts` y `space-*.ts` | permisos, movimientos, actividad, invitaciones e impacto |
+| `spaces.ts` y servicios legacy `space-*.ts` | contrato vigente de permisos, movimientos, actividad, invitaciones e impacto durante la compatibilidad |
+| `space-*-service-v2.ts` | servicios de aplicación para movimiento, historia, impacto privado, liquidación y administración, compartidos por las rutas existentes |
+| `space-operation-executor.ts` | transacción MongoDB, idempotencia de intención y referencias de resultado de Espacios v2 |
+| `money.ts` e `iso-currencies.ts` | `MoneyDto`, registro ISO de curso legal, conversión exacta, redondeo y reparto por restos mayores |
+| `space-financial-v2.ts` | reparto, día financiero, impactos y balances puros por moneda en unidades menores exactas |
+| `space-quote-service.ts` | lote de referencias DolarAPI/Frankfurter, cache, caminos directos o derivados, snapshots manuales y conflictos por antigüedad o cambio |
+| `space-settlement-allocator-v2.ts` | aplicación determinista de tramos contra componentes de deuda, primero en la misma moneda y luego mediante conversiones explícitas |
+| `space-debt-materialization-v2.ts` | ledger y materialización de deudas y movimientos separados por moneda dentro de la sesión financiera |
+| `space-legacy-adapter.ts` | lectura determinista del estado legacy sin convertir ambigüedad en autoridad v2 |
+| `space-read-service-v2.ts` y `space-api-contract.ts` | DTOs JSON, capacidades y paginación por cursor; errores y mutaciones normalizados |
+| `space-v2-write-gate.ts` y `space-legacy-write-facade.ts` | activación exclusiva en `finp-e2e` y frontera que impide fallback v2 hacia escrituras legacy |
 | `debt-sync.ts` | materialización idempotente desde Espacios |
 | `debt-settlement.ts` | pago/cobro atómico |
 | `notifications.ts` | creación, dedupe y resolución |
@@ -245,6 +255,34 @@ Casos:
 - pago/cobro de deuda + movimiento;
 - aplicación de compromiso + transacción + snapshot;
 - acciones multi-entidad que no pueden confirmarse parcialmente.
+
+En Espacios v2, una intención financiera se identifica por actor, Espacio, tipo
+de operación y hash de una clave idempotente. `SpaceOperation` y todas las
+escrituras financieras se confirman en la misma sesión MongoDB. Un reintento con
+la misma carga devuelve las referencias confirmadas; la misma clave con otra
+carga produce conflicto. Alta, edición, anulación, impacto personal, liquidación,
+deuda, actividad y pendientes no usan compensación manual.
+
+Las notificaciones son presentación posterior al commit: se derivan de impactos
+`pending` o `needs_review`, admiten reconciliación observable y no repiten la
+operación financiera. Edición, anulación, roles, ownership y modo de deuda exigen
+la revisión esperada para evitar sobrescritura silenciosa.
+
+Los importes v2 no usan `number` como autoridad persistida. `MoneyDto` transporta
+moneda, unidades menores como entero decimal y escala ISO. Cada conversión
+confirmada conserva un `ConversionSnapshot`: el gasto histórico se lee con ese
+snapshot y una posición abierta se puede revaluar por separado.
+
+Una liquidación multimoneda registra componentes objetivo, varios tramos y sus
+aplicaciones. Cada aplicación distingue dinero pagado, dinero aplicado y
+conversión. Movimiento compartido, `Debt`, `DebtMovement`, actividad y
+decisiones privadas se confirman atómicamente; una liquidación confirmada se
+revierte y no se edita en sitio.
+
+Los diez índices v2 viven en un manifiesto explícito y no dependen de
+`autoIndex`. Durante esta etapa sólo se aplican en la base E2E aislada;
+development admite validación `dry-run` y producción se rechaza. Los índices
+parciales por `contractVersion: 2` preservan la lectura de documentos legacy.
 
 Los efectos derivados deben:
 
@@ -400,6 +438,12 @@ Prácticas:
 
 No agregar cache derivada sin estrategia de invalidación.
 
+Las referencias externas de Espacios son una excepción acotada: DolarAPI usa
+cache de 15 minutos y Frankfurter su frecuencia diaria. La interfaz solicita un
+lote por Espacio al recuperar foco y cada 15 minutos sólo con pestaña visible;
+nunca realiza una consulta por movimiento. La caída del proveedor conserva las
+monedas originales y no habilita un agregado parcial como total exacto.
+
 ## 16. Migraciones y compatibilidad
 
 Toda migración:
@@ -418,6 +462,10 @@ Compatibilidad conocida:
 - campos legacy de vinculación en Espacios;
 - datos previos a políticas variables de compromisos;
 - relaciones incompletas entre transacciones y cuotas.
+
+Los campos monetarios exactos y los índices multimoneda permanecen limitados a
+`contractVersion: 2` en `finp-e2e`. Development no recibe cutover y producción
+no recibe backfill hasta aprobar la migración definida para FINP-P0-006.
 
 El roadmap contiene la prioridad de limpieza.
 

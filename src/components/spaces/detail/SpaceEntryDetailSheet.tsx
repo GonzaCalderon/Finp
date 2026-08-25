@@ -215,8 +215,15 @@ export function SpaceEntryDetailSheet({
     async function handleVoidConfirm(voidReason?: string) {
         const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}/void`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ voidReason }),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(currentEntry?.contractVersion === 2
+                    ? { 'Idempotency-Key': crypto.randomUUID() }
+                    : {}),
+            },
+            body: JSON.stringify(currentEntry?.contractVersion === 2
+                ? { expectedRevision: currentEntry.revision ?? 0, reason: voidReason ?? 'Anulado por el usuario' }
+                : { voidReason }),
         })
 
         if (!response.ok) {
@@ -224,9 +231,15 @@ export function SpaceEntryDetailSheet({
             throw new Error(json.error ?? 'Error al anular el movimiento')
         }
 
-        const json = await response.json() as { entry: ISpaceEntry; hasLinkedTransaction: boolean; hasSubsequentSettlement: boolean }
-        setCurrentEntry(json.entry)
-        onVoided?.(json.entry)
+        const json = await response.json() as { entry?: ISpaceEntry }
+        const voidedEntry = json.entry ?? ({
+            ...currentEntry,
+            status: 'voided',
+            isVoided: true,
+            revision: (currentEntry?.revision ?? 0) + 1,
+        } as ISpaceEntry)
+        setCurrentEntry(voidedEntry)
+        onVoided?.(voidedEntry)
     }
 
     async function handleEditClick() {
@@ -633,6 +646,7 @@ export function SpaceEntryDetailSheet({
                 onOpenChange={setImpactDialogOpen}
                 spaceId={spaceId}
                 entry={currentEntry}
+                initialImpact={personalImpact}
                 onCreated={(impact) => {
                     onPersonalImpactCreated?.(entryId, impact)
                 }}

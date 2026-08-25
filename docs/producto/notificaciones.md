@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-08-24
 > Fuente de verdad: reglas funcionales de seguimiento
 
 ## Índice
@@ -76,7 +76,13 @@ Es la capa visible de seguimiento. Puede reabrirse, archivarse o descartarse sin
 
 ### Pending action
 
-Es el trabajo pendiente real del usuario, hoy centrado en `SpaceEntryPersonalImpact` con estado `pending`.
+Es el trabajo pendiente real del usuario, hoy centrado en
+`SpaceEntryPersonalImpact` con estado `pending`. En Espacios existe cuando el
+usuario tiene una parte propia positiva o un adelanto real todavía no resuelto.
+
+No es una aprobación del movimiento compartido ni una deuda. Una parte propia
+igual a cero sin pago no genera pendiente ni notificación accionable; si la
+persona pagó por otras, la acción corresponde al adelanto, no a un gasto propio.
 
 ### Linked
 
@@ -87,6 +93,8 @@ Principio:
 - un pendiente puede generar una notificacion;
 - una notificacion archivada puede seguir apuntando a una accion no resuelta;
 - resolver la accion puede cerrar o cancelar notificaciones relacionadas.
+- cambiar un reparto puede actualizar o cancelar un pendiente que todavía no
+  creó historia, pero nunca reescribir automáticamente un impacto `linked`.
 
 ## 4. Review flows
 
@@ -190,6 +198,8 @@ No definen por si solas resolucion automatica. Sirven para:
 
 - notification no es fuente de verdad;
 - pending action no equivale a linked;
+- pending action no equivale a aprobación compartida ni a deuda;
+- una parte propia igual a cero sin pago no genera una acción pendiente;
 - archived no equivale a resuelto;
 - dismissed no debe seguir molestando, pero el dominio puede seguir existiendo;
 - review no implica eliminacion automatica de la transaccion personal;

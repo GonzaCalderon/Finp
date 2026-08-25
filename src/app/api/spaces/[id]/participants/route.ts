@@ -1,12 +1,29 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { SpaceInvite, SpaceParticipant, User } from '@/lib/models'
+import { Space, SpaceInvite, SpaceParticipant, User } from '@/lib/models'
 import { SPACE_INVITE_TYPES } from '@/lib/constants'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { spaceParticipantSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
+import { getSpaceDetailV2 } from '@/lib/server/space-read-service-v2'
+import {
+    requireIdempotencyKey,
+    spaceApiErrorResponse,
+    toSpaceMutationResult,
+} from '@/lib/server/space-api-contract'
+import { addSpaceParticipantV2 } from '@/lib/server/space-management-service-v2'
+import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
+
+const participantCreateV2Schema = z.object({
+    expectedRevision: z.number().int().nonnegative(),
+    kind: z.enum(['finp_user', 'external']),
+    displayName: z.string().trim().min(2).max(80),
+    email: z.string().trim().email().optional(),
+    role: z.enum(['admin', 'participant']),
+}).strict()
 
 export async function GET(
     request: Request,
@@ -22,16 +39,10 @@ export async function GET(
 
         await connectDB()
 
-        const context = await getAccessibleSpaceContext(id, session.user.id)
-
-        if (!context) {
-            return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
-        }
-
-        return NextResponse.json({ participants: context.participants })
+        const detail = await getSpaceDetailV2({ spaceId: id, actorUserId: session.user.id, limit: 1 })
+        return NextResponse.json({ data: detail.participants, capabilities: detail.capabilities })
     } catch (error) {
-        console.error('Error al obtener participantes del espacio:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudieron obtener los participantes.')
     }
 }
 
@@ -46,7 +57,31 @@ export async function POST(
         }
 
         const { id } = await params
-        const body = await request.json()
+        const body: unknown = await request.json()
+        await connectDB()
+        const contract = await Space.findById(id, { contractVersion: 1 })
+            .lean<{ contractVersion?: number } | null>()
+        if (!contract) return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
+        if (contract.contractVersion === 2) {
+            const parsedV2 = participantCreateV2Schema.safeParse(body)
+            if (!parsedV2.success) {
+                return NextResponse.json({
+                    error: 'Datos de participante inválidos',
+                    code: 'SPACE_PARTICIPANT_INVALID',
+                    failureState: 'not_started',
+                    retryable: false,
+                    details: parsedV2.error.flatten(),
+                }, { status: 400 })
+            }
+            const execution = await addSpaceParticipantV2({
+                actorUserId: session.user.id,
+                spaceId: id,
+                idempotencyKey: requireIdempotencyKey(request),
+                ...parsedV2.data,
+            })
+            return NextResponse.json(toSpaceMutationResult(execution), { status: 201 })
+        }
+        enterLegacySpaceWriteFacade(contract)
         const parsed = spaceParticipantSchema.safeParse(body)
 
         if (!parsed.success) {
@@ -58,8 +93,6 @@ export async function POST(
                 { status: 400 }
             )
         }
-
-        await connectDB()
 
         const context = await getAccessibleSpaceContext(id, session.user.id)
 
@@ -196,7 +229,6 @@ export async function POST(
 
         return NextResponse.json({ participant }, { status: 201 })
     } catch (error) {
-        console.error('Error al agregar participante al espacio:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo agregar el participante.')
     }
 }

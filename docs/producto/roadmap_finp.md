@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-08-24
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -57,13 +57,13 @@ Un documento de dominio puede describir una posibilidad, pero sólo este archivo
 
 Orden:
 
-1. cerrar exactitud y verificación;
-2. eliminar deuda técnica inmediata del último bloque;
-3. resolver UX mobile bloqueante;
-4. aprender recurrencia sin crear automatismos;
-5. profundizar Proyección y explicar el impacto financiero futuro;
-6. profundizar colaboración;
-7. retomar la orientación por dominio después de Proyección;
+1. conservar la suite E2E global local y la documentación como gates verdes;
+2. corregir la exactitud de Espacios con Mi Finp y Deudas;
+3. rediseñar y estabilizar los recorridos principales de Espacios, mobile primero;
+4. antes de promover a producción, rotar la credencial remota y activar E2E en CI;
+5. ampliar colaboración sólo después de cerrar la base de Espacios;
+6. revisar el criterio de producto de Escenarios antes de retomar Proyección;
+7. retomar la orientación por dominio después de esa revisión;
 8. estudiar mobile/offline cuando el producto web esté estable.
 
 Los principios de producto y de trabajo viven en
@@ -73,6 +73,170 @@ Los principios de producto y de trabajo viven en
 - una prioridad nueva no desplaza P0/P1 sin una decisión explícita.
 
 ## 3. Prioridad P0 — confianza financiera y cierre operativo
+
+### FINP-P0-006 — Exactitud financiera de Espacios, Mi Finp y Deudas
+
+- Estado: `en curso`.
+- Decisiones:
+  - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
+  - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
+  - [`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md).
+- Regla de entrega: es un cierre indivisible. Puede avanzar mediante commits y
+  verificaciones internas, pero no pasa a `validación` ni se presenta como
+  terminado hasta completar dominio, datos, API, UI afectada, migración,
+  recuperación, pruebas y documentación.
+- Solución comprometida:
+  - convertir `SpaceEntry` en estado exclusivamente compartido y retirar
+    confirmación y vínculo personal globales;
+  - mantener un único impacto por usuario y movimiento, con parte propia,
+    impacto real, impacto operacional, tipo y estado explícitos;
+  - reutilizar `Transaction`: el pagador registra salida real y parte propia; el
+    no pagador registra gasto operacional sin inventar salida de cuenta;
+  - distinguir al pagador con parte cero como adelanto recuperable y al no
+    pagador con parte cero como ausencia de acción financiera;
+  - hacer del balance del Espacio la autoridad de la deuda derivada y evitar que
+    una liquidación se descuente otra vez mediante `DebtMovement`;
+  - concentrar alta, edición, anulación, impacto personal y liquidación en
+    servicios de aplicación compartidos; las rutas sólo autentican, validan e
+    invocan;
+  - confirmar en una sesión MongoDB el movimiento, actividad auditable, deudas,
+    movimientos de deuda, impacto/transacción del actor y pendientes que forman
+    la misma intención;
+  - usar claves de idempotencia e índices únicos para reintentos simultáneos y
+    posteriores a una respuesta perdida;
+  - usar control de concurrencia optimista en edición, anulación, roles y modo
+    de deuda para no sobrescribir una versión que el usuario no revisó;
+  - derivar notificaciones desde pendientes persistidos, con reconciliación
+    observable sin repetir la operación financiera;
+  - centralizar permisos y capacidades para roles, último `owner`, pausa,
+    cierre, liquidación, reapertura y archivo;
+  - persistir día financiero y zona horaria sin corrimiento UTC, y conservar
+    moneda original, cotización y monto de reporte como snapshot.
+  - conservar dinero v2 en unidades menores exactas, saldos de deuda separados
+    por moneda y conversiones aplicadas mediante snapshots explícitos;
+  - admitir liquidaciones atómicas con varios componentes y tramos de pago,
+    distinguiendo dinero pagado, dinero aplicado y diferencia de cambio;
+  - mostrar composición, referencias y filtros multimoneda sin reemplazar la
+    autoridad histórica por la cotización actual.
+- Secuencia interna obligatoria:
+  1. caracterización de comportamiento y datos legacy, más reporte `dry-run`
+     — completada el 2026-08-24;
+  2. modelo, cálculos puros, servicios e índices nuevos con lectura compatible;
+  3. APIs y UI existentes migradas al contrato nuevo, sin rutas paralelas;
+  4. backfill idempotente, comparación, cutover y retiro del legado;
+  5. fallos inyectados, rendimiento, accesibilidad y regresión completa.
+- Avance verificado de la etapa 1:
+  - `npm run audit:spaces:legacy` ejecuta una lectura snapshot estrictamente
+    read-only, con aislamiento E2E reutilizado y confirmación exacta para
+    development;
+  - E2E: 2 Espacios, 18 hallazgos — 6 críticos, 4 altos, 6 medios y 2
+    informativos;
+  - development: 11 Espacios, 337 hallazgos — 20 críticos, 77 altos, 149
+    medios y 91 informativos;
+  - los hallazgos confirman, sin contradecir, las decisiones 0007 y 0008:
+    existen relaciones huérfanas, deriva de deuda, liquidaciones con riesgo de
+    doble aplicación, semántica legacy de impacto personal, pendientes faltantes
+    y autoridad privada alojada todavía en estado compartido;
+  - decisión: `GO` para la etapa 2 de modelo, cálculos, servicios e índices;
+    `NO-GO` para cualquier backfill, cutover o migración automática hasta
+    resolver y ensayar los hallazgos críticos y altos;
+  - los reportes detallados permanecen locales y excluidos de Git bajo
+    `test-results/audits/spaces/`; sólo estos conteos sanitizados son canónicos.
+- Avance verificado de la etapa 2 — completada el 2026-08-24:
+  - contrato compatible v2 para Espacio, movimiento compartido, impacto privado,
+    transacción personal, deuda, movimiento de deuda, actividad y operación;
+  - cálculos puros cent-based para reparto, redondeo, conversión, día financiero,
+    impacto personal y balances directos o simplificados;
+  - matriz central de capacidades, adaptación legacy determinista y control de
+    concurrencia optimista;
+  - servicios de aplicación transaccionales para alta, edición, anulación,
+    impacto personal, liquidación desde Espacios o Deudas, ciclo de vida, roles,
+    ownership y modo de deuda;
+  - `SpaceOperation` conserva la intención idempotente y sus referencias sin
+    contenido financiero libre; las notificaciones se reconcilian después del
+    commit desde pendientes persistidos;
+  - 10 índices compatibles aplicados y reaplicados únicamente sobre `finp-e2e`;
+    development fue validado sólo en `dry-run` y producción permanece rechazada;
+  - 37 casos unitarios focales y 6 recorridos de integración con sesión MongoDB
+    real cubren exactitud, rollback, retry simultáneo, conflictos, historia,
+    liquidaciones, permisos e índices parciales;
+  - límite deliberado: los servicios v2 todavía no están conectados a las rutas
+    ni a la interfaz en ese checkpoint, y no hubo backfill, cutover ni escritura
+    en development.
+- Avance verificado de la etapa 3 — completada el 2026-08-24:
+  - DTOs públicos normalizan detalle, participantes, movimientos paginados,
+    capacidades, impacto privado, previews y resultados de mutación sin exponer
+    documentos Mongoose;
+  - las rutas existentes despachan por contrato; v2 exige idempotencia y
+    revisión esperada, mientras una fachada impide que un documento v2 caiga en
+    escrituras legacy;
+  - las escrituras v2 sólo se habilitan con conexión efectiva a `finp-e2e`;
+    development permanece cerrado, sin datos ni índices v2 nuevos;
+  - gasto guiado en tres pasos con preview exacto, borrador preservado ante
+    conflicto y acción personal explícita; permisos y acciones por movimiento
+    provienen del servidor;
+  - Espacios y Deudas invocan el mismo preview y servicio de liquidación propia
+    o representada; una representación no mueve la cuenta del actor y deja la
+    decisión privada a ambas contrapartes;
+  - moneda de reporte bloqueada desde el primer movimiento, monedas usadas no
+    removibles, ownership y participantes históricos cubiertos;
+  - 864 unitarias globales, 9 recorridos de integración MongoDB y 64 E2E en
+    desktop/mobile quedaron verdes tanto con `next dev` como con el build de
+    producción;
+  - una historia de 1.000 movimientos devolvió 50 movimientos en 31.766 bytes y
+    440 ms en la medición aislada, sin cache, colas ni dependencias nuevas.
+  - el ítem continúa `en curso`: backfill, comparación completa de los hallazgos
+    legacy, ensayo de rollback de migración y cutover siguen en `NO-GO`.
+- Etapa multimoneda integral — implementada sobre el contrato v2 E2E el
+  2026-08-24:
+  - `MoneyDto` exacto y registro activo de monedas ISO de curso legal con
+    escalas 0, 2 y 3; redondeo único y reparto estable por restos mayores;
+  - referencias DolarAPI y Frankfurter resueltas en lote, con cache, camino
+    directo/USD/EUR, reemplazo manual y conflicto por vencimiento o cambio;
+  - historial inmutable y revaluación separada de posiciones abiertas;
+  - deudas y simplificación independientes por moneda; liquidación multitramos
+    atómica con aplicaciones, pagos parciales, reversión y decisiones privadas;
+  - tira de cotizaciones, composición `Incluye…`, importes originales
+    prioritarios y filtros combinables antes de paginar;
+  - 881 unitarias globales, 10 recorridos de integración MongoDB y 66 E2E en
+    desktop/mobile aprobados tanto con `next dev` como con el build de
+    producción;
+  - una historia de 1.000 movimientos devolvió 50 registros en 45.987 bytes y
+    859 ms; las referencias se resuelven por lote de monedas, no por movimiento;
+  - escrituras e índices continúan limitados a `finp-e2e`; no hubo backfill,
+    cutover ni habilitación en development o producción.
+- Criterio financiero:
+  - cuentas muestran dinero real;
+  - Dashboard y reportes muestran gasto propio;
+  - Espacios y Deudas muestran el mismo saldo derivado;
+  - adelanto, parte propia y liquidación permanecen distinguibles;
+  - editar o anular historia vinculada pide revisión y nunca reescribe en
+    silencio.
+- Criterio operativo:
+  - cada error informa si no escribió, revirtió o sólo falló una presentación;
+  - no hay `catch` silencioso, `Promise.allSettled` ni compensación manual en la
+    unidad financiera;
+  - scripts identifican ambiente, tienen `dry-run`/`--apply`, conteos,
+    anomalías, backup y rollback ensayado;
+  - se miden latencia, tamaño de consulta, payload e idempotencia sin registrar
+    contenido financiero; no se agrega cola, cache o dependencia sin evidencia.
+- Verificación:
+  - unit para reparto, redondeo, moneda, fecha, saldo y transiciones;
+  - integración con sesión real para atomicidad, retry, concurrencia, migración
+    y aislamiento;
+  - API para `401`, `403/404`, validación, mass assignment, roles, estado e
+    idempotencia;
+  - componentes para preview, errores, foco, estados y recuperación;
+  - E2E mobile y desktop para pagador total, adelanto, pagador con parte cero,
+    no pagador con parte positiva/cero, liquidación parcial/total desde ambas
+    superficies, edición, anulación, roles, cierre y datos legacy;
+  - comparación explícita entre Cuentas, Transacciones, Dashboard, Espacios y
+    Deudas; suite global y `docs:check` verdes.
+- No se cierra si queda un fallback legacy sin criterio de retiro, un camino que
+  sólo funciona en una superficie, una escritura derivada best-effort, una
+  deuda en cero activa, un monto ambiguo o una combinación de la matriz sin
+  prueba proporcional.
+- Absorbe: FINP-P3-005.
 
 ### FINP-P0-004 — Activar E2E crítico en CI
 
@@ -84,24 +248,72 @@ Los principios de producto y de trabajo viven en
   `MONGODB_URI_TEST` informa el bloqueo y no conecta.
 - Pendiente externo: rotar la credencial, limitarla a `finp-e2e`, cargar la URI
   nueva en GitHub y obtener la primera ejecución verde.
-- Pendiente técnico local: limpiar todas las cuentas residuales del usuario del
-  smoke y estabilizar la corrida larga de `next dev`; el 2026-08-04 la suite
-  focal pasó 4 de 4 y la global terminó 52 de 60.
 - Criterio: flujos críticos ejecutan en CI con secretos y base aislada; reportes se conservan ante fallos.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
 
+### FINP-P1-013 — Cierre integral de experiencia de Espacios
+
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P0-006.
+- Regla de entrega: es un único cierre de producto. Los recorridos pueden
+  implementarse por bloques seguros, pero el ítem permanece abierto hasta que
+  la experiencia principal, secundaria y transversal sea coherente.
+- Alcance integral:
+  - portada, estados vacío/carga/error, búsqueda y cards con señal útil;
+  - creación mínima e invitación omisible, sin configuración prematura;
+  - navegación estable `Inicio`, `Movimientos`, `Balances` y `Configuración` en
+    mobile y desktop;
+  - gasto guiado en tres pasos con categoría, adjuntos y opciones avanzadas por
+    complejidad progresiva;
+  - detalle que prioriza total, pagador, parte propia, adelanto y efecto en Mi
+    Finp antes de metadata y actividad;
+  - balances y liquidación con una intención y una operación compartida con
+    Deudas;
+  - separación visual y semántica entre movimiento, pendiente, notificación,
+    revisión y deuda;
+  - participantes, roles, invitación directa/link, General, Mi Finp, pausa,
+    cierre, reapertura y archivo;
+  - continuidad entre Espacios, Transacciones, Deudas y campana sin perder
+    filtros, posición, borradores ni regreso.
+- Patrones obligatorios:
+  - mobile-first con la misma lógica y capacidad en desktop;
+  - una intención, una superficie responsable y una acción primaria clara;
+  - resultado financiero antes que mecanismo;
+  - componentes, selectores, dialogs/sheets, tokens y lenguaje compartidos;
+  - dominio resuelto en servidor; la UI sólo presenta previews y capacidades;
+  - encabezado y acciones fuera del scroll, CTA sobre `safe area` y opciones
+    infrecuentes progresivas;
+  - carga, vacío, error, éxito, reversión y recuperación en cada mutación;
+  - teclado, foco, labels, contraste, zoom, movimiento reducido, texto largo,
+    montos grandes, ARS/USD y áreas táctiles verificadas.
+- Criterio de uso:
+  - una persona puede crear un Espacio, sumar participantes, registrar un gasto,
+    entender total/parte/adelanto, impactar Mi Finp, identificar una deuda y
+    liquidarla sin conocer el modelo interno;
+  - los recorridos críticos se validan en mobile y desktop sin ambigüedad
+    de monto, rol, estado, consecuencia o siguiente acción;
+  - configuración y casos infrecuentes no compiten con el uso cotidiano;
+  - las acciones ofrecidas coinciden con las capacidades del servidor.
+- Verificación: tests de componentes y accesibilidad, E2E de recorridos y
+  recuperación, revisión visual light/dark y anchos intermedios, contenido
+  representativo y evaluación guiada de las tareas críticas antes del cierre.
+- No se cierra con pantallas duplicadas, lógica mobile distinta, acciones sólo
+  por `hover`, errores sólo en toast, placeholders, `TODO`, copy temporal,
+  caminos sin recuperación ni una superficie secundaria pendiente de alinear.
+- Absorbe: FINP-P1-014 y FINP-P1-015.
+
 ### FINP-P1-011 — Rotar credenciales remotas expuestas
 
 - Estado: `pendiente`.
-- Prioridad operativa: no bloquea desarrollo local ni documentación.
+- Momento acordado: antes de configurar E2E en CI o promover a producción; no
+  bloquea la estabilización local ni la documentación.
 - Alcance: rotar la credencial del usuario de MongoDB, revocar la anterior y
   actualizar los entornos locales autorizados y `MONGODB_URI_TEST` en GitHub.
 - Restricción: la credencial actual no se copia a CI ni a otros servicios; la
   rotación debe completarse antes de configurar los secretos de FINP-P0-004.
 - Criterio: credencial anterior inválida, aplicación conectando con la nueva y
   ausencia de secretos en logs, commits y artefactos.
-
 
 ## 5. Prioridad P2 — recurrencia, proyección y análisis
 
@@ -157,10 +369,15 @@ Los principios de producto y de trabajo viven en
 ### FINP-P2-012 — Escenarios de Proyección
 
 - Estado: `en discovery`.
+- Prioridad operativa: diferido por decisión del prompter; no es el siguiente
+  bloque después de la estabilización.
 - Alcance: comparar una base con cambios hipotéticos sin alterar compromisos,
   planes ni transacciones persistidos.
 - Criterio a definir: variables permitidas, monedas, vigencia, explicación,
   guardado, descarte y costo de cálculo.
+- Antecedente: existe una implementación experimental no integrada en
+  `origin/codex/p2-012-escenarios`; no se continúa, rebasa ni integra hasta
+  revisar la experiencia y el criterio de producto.
 
 ### FINP-P2-013 — Cashflow proyectado por cuenta
 
@@ -209,8 +426,9 @@ Los principios de producto y de trabajo viven en
 
 ### FINP-P3-001 — Compromisos en Espacios
 
-- Estado: `pendiente`.
-- Dependencias: compromisos variables e impacto personal.
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P1-013.
+- Dependencia funcional: compromisos variables e impacto personal estabilizado.
 - Criterio: plantilla compartida, reparto, aplicación idempotente, un movimiento del Espacio e impacto privado por participante.
 
 ### FINP-P3-002 — Ajustes porcentuales pautados
@@ -223,11 +441,6 @@ Los principios de producto y de trabajo viven en
 - Estado: `en discovery`.
 - Criterio: fuentes, rezagos, snapshot, trazabilidad y fallback manual.
 
-### FINP-P3-005 — Parte propia igual a cero
-
-- Estado: `pendiente`.
-- Criterio: el detalle muestra explícitamente `Tu parte: $0`.
-
 ### FINP-P3-006 — Apuntar préstamo desde Deudas
 
 - Estado: `pendiente`.
@@ -236,11 +449,13 @@ Los principios de producto y de trabajo viven en
 ### FINP-P3-007 — Cuotas en Espacios
 
 - Estado: `en discovery`.
+- Dependencias: FINP-P0-006 y FINP-P1-013.
 - Criterio previo: definir reconocimiento, balances, settlements e impacto personal.
 
 ### FINP-P3-008 — Reintegros avanzados
 
-- Estado: `pendiente`.
+- Estado: `bloqueado`.
+- Bloqueado por: FINP-P0-006.
 - Criterio: diferenciar devolución, adelanto y gasto sin distorsionar balances.
 
 ### FINP-P3-009 — Realtime
@@ -352,10 +567,27 @@ vivir acá y se convierte en un ítem con ID, criterio y estado.
 - proteger `main` y `dev` con checks;
 - medir rendimiento antes de adoptar procesos costosos.
 
-Ya priorizadas como ítem: activar E2E es FINP-P0-004. Ya resueltas: la validación
-documental corre con `npm run docs:check`.
+Ya priorizada como ítem: activar E2E es FINP-P0-004. Ya resueltas: la validación
+documental corre con `npm run docs:check` y FINP-P1-012 eliminó las advertencias
+del Sankey y Captura rápida.
 
 ## 10. Cerrado recientemente
+
+### 2026-08-17
+
+- FINP-P0-005: el seed vuelve a crear todas las cuentas del usuario general de
+  E2E, fija Efectivo con saldo suficiente y restaura su cuenta predeterminada;
+  los escenarios dejan de depender de residuos o del orden de ejecución;
+- preflight y seed repetible aprobaron contra la base exclusiva `finp-e2e`;
+- la suite global pasó 60 de 60 en Chromium desktop y Pixel 7 tanto sobre el
+  build de producción como con `next dev`, sin reproducir los 404 ni las altas
+  fallidas de la línea base. Nivel de aprendizaje: `no aplica`.
+- FINP-P1-012: el Sankey compacta las capas presentes antes de ejecutar
+  `d3-sankey`, y Captura rápida deja que Radix vincule su descripción mediante
+  los identificadores accesibles propios;
+- una regresión E2E monta el gráfico sin primera capa y verifica la descripción
+  del diálogo; la suite global pasó 60 de 60 con `next dev` sin los dos avisos
+  de la línea base. Nivel de aprendizaje: `no aplica`.
 
 ### 2026-08-04
 

@@ -1,11 +1,46 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Space } from '@/lib/models'
 import {
-    buildSpaceDetailPayload,
     getAccessibleSpaceContext,
 } from '@/lib/server/spaces'
+import { getSpaceDetailV2 } from '@/lib/server/space-read-service-v2'
+import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
+import { spaceApiErrorResponse } from '@/lib/server/space-api-contract'
+import {
+    requireIdempotencyKey,
+    toSpaceMutationResult,
+} from '@/lib/server/space-api-contract'
+import {
+    changeSpaceDebtModeV2,
+    changeSpaceLifecycleV2,
+    updateSpaceSettingsV2,
+} from '@/lib/server/space-management-service-v2'
+
+const spacePatchV2Schema = z.discriminatedUnion('intent', [
+    z.object({
+        intent: z.literal('settings'),
+        expectedRevision: z.number().int().nonnegative(),
+        name: z.string().trim().min(1).max(120),
+        description: z.string().trim().max(1000).optional(),
+        currencies: z.array(z.string().min(1).max(12)).min(1).max(20),
+        reportingCurrency: z.string().min(1).max(12),
+        defaultSplitMode: z.enum(['none', 'equal', 'percentage', 'fixed']),
+        timezone: z.string().trim().min(1).max(100),
+    }).strict(),
+    z.object({
+        intent: z.literal('lifecycle'),
+        expectedRevision: z.number().int().nonnegative(),
+        targetStatus: z.enum(['active', 'paused', 'closed', 'archived']),
+    }).strict(),
+    z.object({
+        intent: z.literal('debt_mode'),
+        expectedRevision: z.number().int().nonnegative(),
+        debtMode: z.enum(['direct', 'simplified']),
+    }).strict(),
+])
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { updateSpaceVirtualCategoryNames } from '@/lib/server/space-personal-settings'
@@ -26,19 +61,21 @@ export async function GET(
         }
 
         const { id } = await params
+        const { searchParams } = new URL(request.url)
 
         await connectDB()
-
-        const payload = await buildSpaceDetailPayload(id, session.user.id)
-
-        if (!payload) {
-            return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
-        }
-
-        return NextResponse.json({ ...payload, currentUserId: session.user.id })
+        const payload = await getSpaceDetailV2({
+            spaceId: id,
+            actorUserId: session.user.id,
+            cursor: searchParams.get('cursor'),
+            limit: searchParams.get('limit'),
+            originalCurrencies: searchParams.getAll('originalCurrency'),
+            paidCurrencies: searchParams.getAll('paidCurrency'),
+            debtCurrencies: searchParams.getAll('debtCurrency'),
+        })
+        return NextResponse.json({ data: payload })
     } catch (error) {
-        console.error('Error al obtener espacio:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo obtener el Espacio.')
     }
 }
 
@@ -53,7 +90,48 @@ export async function PATCH(
         }
 
         const { id } = await params
-        const body = await request.json()
+        const body: unknown = await request.json()
+        await connectDB()
+        const contract = await Space.findById(id, { contractVersion: 1 }).lean<{ contractVersion?: number } | null>()
+        if (!contract) return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
+        if (contract.contractVersion === 2) {
+            const parsedV2 = spacePatchV2Schema.safeParse(body)
+            if (!parsedV2.success) {
+                return NextResponse.json({
+                    error: 'Datos de Espacio inválidos',
+                    code: 'SPACE_PATCH_INVALID',
+                    failureState: 'not_started',
+                    retryable: false,
+                    details: parsedV2.error.flatten(),
+                }, { status: 400 })
+            }
+            const idempotencyKey = requireIdempotencyKey(request)
+            const data = parsedV2.data
+            const execution = data.intent === 'settings'
+                ? await updateSpaceSettingsV2({
+                    actorUserId: session.user.id,
+                    spaceId: id,
+                    idempotencyKey,
+                    ...data,
+                })
+                : data.intent === 'lifecycle'
+                    ? await changeSpaceLifecycleV2({
+                        actorUserId: session.user.id,
+                        spaceId: id,
+                        idempotencyKey,
+                        expectedRevision: data.expectedRevision,
+                        targetStatus: data.targetStatus,
+                    })
+                    : await changeSpaceDebtModeV2({
+                        actorUserId: session.user.id,
+                        spaceId: id,
+                        idempotencyKey,
+                        expectedRevision: data.expectedRevision,
+                        debtMode: data.debtMode,
+                    })
+            return NextResponse.json(toSpaceMutationResult<unknown>(execution))
+        }
+        enterLegacySpaceWriteFacade(contract)
         const parsed = spaceSchema.safeParse(body)
 
         if (!parsed.success) {
@@ -62,8 +140,6 @@ export async function PATCH(
                 { status: 400 }
             )
         }
-
-        await connectDB()
 
         const context = await getAccessibleSpaceContext(id, session.user.id)
 
@@ -181,7 +257,6 @@ export async function PATCH(
 
         return NextResponse.json({ space })
     } catch (error) {
-        console.error('Error al actualizar espacio:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo actualizar el Espacio.')
     }
 }

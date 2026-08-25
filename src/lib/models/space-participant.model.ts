@@ -55,6 +55,7 @@ const SpaceParticipantSchema = new Schema<ISpaceParticipant>(
         },
         isActive: { type: Boolean, required: true, default: true },
         personalSettings: { type: PersonalSettingsSchema },
+        revision: { type: Number, min: 0, default: 0 },
     },
     { timestamps: true }
 )
@@ -70,6 +71,14 @@ SpaceParticipantSchema.index(
     }
 )
 
+const existingSpaceParticipantModel = mongoose.models.SpaceParticipant as
+    | mongoose.Model<ISpaceParticipant>
+    | undefined
+const needsParticipantSchemaRefresh = Boolean(
+    existingSpaceParticipantModel && !existingSpaceParticipantModel.schema.path('revision')
+)
+if (needsParticipantSchemaRefresh) delete mongoose.models.SpaceParticipant
+
 export const SpaceParticipant =
-    (mongoose.models.SpaceParticipant as mongoose.Model<ISpaceParticipant> | undefined) ||
+    (needsParticipantSchemaRefresh ? undefined : existingSpaceParticipantModel) ||
     mongoose.model<ISpaceParticipant>('SpaceParticipant', SpaceParticipantSchema)

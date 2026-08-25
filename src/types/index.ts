@@ -163,6 +163,9 @@ export interface ITransaction {
     importSourceType?: ImportSourceType
     spaceId?: Types.ObjectId
     spaceEntryId?: Types.ObjectId
+    spaceImpactId?: Types.ObjectId
+    spaceOperationId?: Types.ObjectId
+    spaceContractVersion?: 2
     spaceNameSnapshot?: string
     /**
      * For space payer transactions: the portion of the amount that counts for
@@ -367,3 +370,4 @@ export interface ICommitmentApplication {
 }
 
 export * from './space'
+export * from './space-api'

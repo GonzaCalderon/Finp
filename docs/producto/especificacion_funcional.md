@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-08-24
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -434,18 +434,50 @@ Un Espacio permite:
 - editar o anular con trazabilidad;
 - invitar por link.
 
+Puede usarse sin configurar las finanzas personales. El movimiento, el reparto,
+los balances y la actividad pertenecen al contexto compartido; cuentas,
+categorías, transacciones e historia personal permanecen privadas. Cuando ambos
+planos se relacionan, Mi Finp conserva autoridad absoluta sobre la contabilidad
+del usuario.
+
 ### Deuda directa y simplificada
 
 El Espacio puede mostrar deudas directas o una simplificación de pagos. La representación no cambia el historial de movimientos.
 
+### Monedas y cotizaciones
+
+Un Espacio puede operar integralmente con varias monedas. Cada gasto conserva
+importe original, equivalente histórico de reporte y snapshot de la conversión.
+Los agregados identifican las monedas incluidas y permiten abrir su composición;
+las posiciones abiertas pueden mostrar además una equivalencia actual sin
+reescribir historia.
+
+La deuda y su simplificación mantienen saldos independientes por moneda. Una
+liquidación puede elegir varios componentes y combinar varios tramos de pago;
+primero aplica la misma moneda y luego las conversiones explícitas revisadas por
+la persona. El dinero pagado, el aplicado y la diferencia de cambio no se
+confunden con gasto operacional.
+
+Las referencias automáticas pueden reemplazarse manualmente. Una cotización
+vencida o cambiada exige revisión y conserva el borrador. La tira de referencias
+y el detalle `Incluye…` informan fuente, antigüedad y composición sin sobrecargar
+el monto principal.
+
 ### Impacto personal
 
-Cada participante decide si y cómo registrar su impacto en Finp:
+Cada participante decide si registra su parte en Mi Finp. `Agregar a Mi Finp`
+crea una transacción privada cuyo gasto operacional es la parte propia exacta:
 
-- monto pagado completo;
-- parte propia;
-- settlement pagado o recibido;
-- vínculo con una transacción existente.
+- si pagó más que su parte, la cuenta refleja la salida real y la diferencia se
+  conserva como adelanto recuperable, no como gasto;
+- si no pagó, reconocer la parte propia no inventa una salida de cuenta; esa
+  salida ocurre al liquidar;
+- si no pagó y su parte es cero, se muestra de forma explícita y no se ofrece
+  una acción financiera;
+- si pagó por otras personas y su parte es cero, puede registrar la salida real
+  como adelanto y deuda a favor con gasto operacional cero;
+- la decisión privada no cambia el estado compartido ni el impacto de otra
+  persona.
 
 Si el movimiento compartido cambia materialmente, el impacto personal pasa a revisión.
 Quitar el movimiento de Mi Finp elimina su transacción personal vinculada y
@@ -465,6 +497,15 @@ Un participante puede:
 - mapear categorías compartidas a personales.
 
 Esta configuración no es pública para los demás participantes.
+
+El contrato completo de autoridad, recorridos y verificación vive en
+[`espacios.md`](espacios.md) y en la decisión
+[`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md). La solución
+técnica integral se define en la decisión
+[`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md).
+La autoridad por moneda, las cotizaciones y las liquidaciones multitramos se
+definen en la decisión
+[`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md).
 
 ## 12. Deudas
 
@@ -486,6 +527,10 @@ Pagar o cobrar:
 - no se clasifica como gasto o ingreso operacional;
 - actualiza deuda y movimiento de manera atómica;
 - evita duplicar obligaciones provenientes de Espacios.
+
+En deudas derivadas, el saldo permanece expresado por moneda. Un pago en otra
+moneda sólo reduce la obligación mediante una aplicación y un snapshot
+explícitos; los saldos restantes conservan la moneda original.
 
 ## 13. Notificaciones, pendientes e insights
 
@@ -606,11 +651,15 @@ La intención se interpreta, se muestra y se transporta. El destino conserva aut
 
 ### Espacio → Finp personal
 
-El movimiento compartido permanece compartido. Cada usuario crea o vincula su impacto privado.
+El movimiento compartido permanece compartido. Cada usuario crea o vincula su
+impacto privado por su parte propia exacta. El total pagado sólo afecta su cuenta
+real cuando corresponda y no infla el gasto operacional.
 
 ### Espacio → Deuda
 
-Los balances pueden producir deudas derivadas idempotentes. Pagar la deuda no altera el carácter operacional del gasto original.
+Los balances pueden producir deudas derivadas idempotentes. Liquidar desde
+Espacios o Deudas usa la misma operación; pagar o cobrar no altera el carácter
+operacional del gasto original.
 
 ### Compromiso → Transacción
 
