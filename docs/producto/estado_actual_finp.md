@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-24
+> Última actualización: 2026-08-25
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -33,7 +33,7 @@ Estado general:
   de integración y experiencia verificadas;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- entorno E2E local aislado y reproducible, con 64 de 64 escenarios globales
+- entorno E2E local aislado y reproducible, con 66 de 66 escenarios globales
   aprobados en desktop y mobile tanto sobre producción como en desarrollo;
 - smoke financiero con validación histórica y fixtures independientes del orden
   de ejecución;
@@ -44,8 +44,8 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 
 ## 2. Estado técnico
 
-Checks base verificados localmente el 2026-08-24 sobre
-`codex/spaces-financial-model-v2`, incluida la suite E2E global:
+Checks base verificados localmente el 2026-08-24 sobre el checkpoint
+`codex/spaces-multicurrency` (`23aed5d`), incluida la suite E2E global:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -80,10 +80,12 @@ Ramas:
 
 - `main`: producción;
 - `dev`: desarrollo;
-- `dev` coincide con `origin/dev` en `9b5252f`;
-- `codex/spaces-financial-model-v2`: modelo y recorridos financieros v2 de
-  Espacios;
-- `origin/main` es ancestro de `origin/dev` y está un commit detrás;
+- `dev`: base de integración del próximo estado productivo;
+- `codex/spaces-multicurrency`: checkpoint publicado de modelo, contratos,
+  recorridos financieros y soporte multimoneda v2 de Espacios;
+- `23aed5d`: último commit funcional verificado del checkpoint multimoneda;
+- antes del checkpoint se verificó que `origin/main` fuera ancestro de
+  `origin/dev`;
 - la rama local `main` está desactualizada y no se usa para trabajo hasta
   actualizarla de forma autorizada.
 
