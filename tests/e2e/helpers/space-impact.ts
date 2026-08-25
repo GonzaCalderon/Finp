@@ -25,6 +25,18 @@ export const SPACE_IMPACT_FIXTURES = {
         normalDescription: 'Impacto normal E2E mobile',
         orphanDescription: 'Impacto huerfano E2E mobile',
     },
+    audit: {
+        spaceId: '750000000000000000000001',
+        participantId: '750000000000000000000002',
+        normalEntryId: '750000000000000000000003',
+        normalImpactId: '750000000000000000000004',
+        normalTransactionId: '750000000000000000000005',
+        orphanEntryId: '750000000000000000000006',
+        orphanTransactionId: '750000000000000000000007',
+        spaceName: 'Espacio E2E auditoría',
+        normalDescription: 'Impacto normal E2E auditoría',
+        orphanDescription: 'Impacto huerfano E2E auditoría persistente',
+    },
 } as const
 
 export function getSpaceImpactFixture(projectName: string) {

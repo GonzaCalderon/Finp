@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
+import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Account, Debt, Space, SpaceParticipant } from '@/lib/models'
@@ -17,6 +18,22 @@ import {
     SPACE_PERSONAL_PENDING_ACTION_TYPES,
     TRANSACTION_TYPES,
 } from '@/lib/constants'
+import {
+    requireIdempotencyKey,
+    spaceApiErrorResponse,
+    toSpaceMutationResult,
+} from '@/lib/server/space-api-contract'
+import { settleSpaceDebtV2 } from '@/lib/server/space-settlement-service-v2'
+
+const spaceDebtSettlementV2Schema = z.object({
+    expectedRevision: z.number().int().nonnegative(),
+    amount: z.number().finite().positive(),
+    currency: z.string().min(1).max(12),
+    exchangeRate: z.number().finite().positive().optional(),
+    dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    accountId: z.string().min(1),
+    notes: z.string().trim().max(1000).optional(),
+}).strict()
 
 export async function POST(
     request: Request,
@@ -31,18 +48,54 @@ export async function POST(
             return NextResponse.json({ error: 'ID de deuda inválido' }, { status: 400 })
         }
 
-        const parsed = collectDebtSchema.safeParse(await request.json())
+        const body: unknown = await request.json()
+        await connectDB()
+
+        const debt = await Debt.findOne({ _id: id, userId: authSession.user.id })
+        if (!debt) return NextResponse.json({ error: 'Deuda no encontrada' }, { status: 404 })
+        if (debt.contractVersion === 2 && debt.sourceType === 'space' && debt.spaceId) {
+            const parsedV2 = spaceDebtSettlementV2Schema.safeParse(body)
+            if (!parsedV2.success) {
+                return NextResponse.json({
+                    error: 'Datos de liquidación inválidos',
+                    code: 'SPACE_SETTLEMENT_INVALID',
+                    failureState: 'not_started',
+                    retryable: false,
+                    details: parsedV2.error.flatten(),
+                }, { status: 400 })
+            }
+            if (debt.direction !== 'receivable') {
+                return NextResponse.json({
+                    error: 'La obligación no corresponde a un cobro.',
+                    code: 'SPACE_DEBT_DIRECTION_CONFLICT',
+                    failureState: 'conflict',
+                    retryable: false,
+                }, { status: 409 })
+            }
+            const execution = await settleSpaceDebtV2({
+                mode: 'own',
+                actorUserId: authSession.user.id,
+                spaceId: debt.spaceId.toString(),
+                debtId: id,
+                accountId: parsedV2.data.accountId,
+                idempotencyKey: requireIdempotencyKey(request),
+                expectedRevision: parsedV2.data.expectedRevision,
+                originSurface: 'debts',
+                amount: parsedV2.data.amount,
+                currency: parsedV2.data.currency,
+                exchangeRate: parsedV2.data.exchangeRate,
+                dateKey: parsedV2.data.dateKey,
+                description: parsedV2.data.notes,
+            })
+            return NextResponse.json(toSpaceMutationResult(execution))
+        }
+        const parsed = collectDebtSchema.safeParse(body)
         if (!parsed.success) {
             return NextResponse.json(
                 { error: 'Datos inválidos', details: parsed.error.flatten() },
                 { status: 400 }
             )
         }
-
-        await connectDB()
-
-        const debt = await Debt.findOne({ _id: id, userId: authSession.user.id })
-        if (!debt) return NextResponse.json({ error: 'Deuda no encontrada' }, { status: 404 })
         if (debt.direction !== 'receivable') {
             return NextResponse.json(
                 { error: 'Este endpoint es para cobrar deudas que te deben (receivable)' },
@@ -205,7 +258,6 @@ export async function POST(
         const updated = await Debt.findById(id)
         return NextResponse.json({ debt: updated, transactionId, spaceEntryId })
     } catch (error) {
-        console.error('Error al registrar cobro de deuda:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo registrar el cobro de la deuda.')
     }
 }

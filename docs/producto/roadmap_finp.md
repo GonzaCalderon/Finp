@@ -154,9 +154,32 @@ Los principios de producto y de trabajo viven en
     real cubren exactitud, rollback, retry simultáneo, conflictos, historia,
     liquidaciones, permisos e índices parciales;
   - límite deliberado: los servicios v2 todavía no están conectados a las rutas
-    ni a la interfaz, y no hubo backfill, cutover ni escritura en development.
-    La etapa siguiente es la 3; el ítem continúa `en curso` y el `NO-GO` de
-    migración automática sigue vigente.
+    ni a la interfaz en ese checkpoint, y no hubo backfill, cutover ni escritura
+    en development.
+- Avance verificado de la etapa 3 — completada el 2026-08-24:
+  - DTOs públicos normalizan detalle, participantes, movimientos paginados,
+    capacidades, impacto privado, previews y resultados de mutación sin exponer
+    documentos Mongoose;
+  - las rutas existentes despachan por contrato; v2 exige idempotencia y
+    revisión esperada, mientras una fachada impide que un documento v2 caiga en
+    escrituras legacy;
+  - las escrituras v2 sólo se habilitan con conexión efectiva a `finp-e2e`;
+    development permanece cerrado, sin datos ni índices v2 nuevos;
+  - gasto guiado en tres pasos con preview exacto, borrador preservado ante
+    conflicto y acción personal explícita; permisos y acciones por movimiento
+    provienen del servidor;
+  - Espacios y Deudas invocan el mismo preview y servicio de liquidación propia
+    o representada; una representación no mueve la cuenta del actor y deja la
+    decisión privada a ambas contrapartes;
+  - moneda de reporte bloqueada desde el primer movimiento, monedas usadas no
+    removibles, ownership y participantes históricos cubiertos;
+  - 864 unitarias globales, 9 recorridos de integración MongoDB y 64 E2E en
+    desktop/mobile quedaron verdes tanto con `next dev` como con el build de
+    producción;
+  - una historia de 1.000 movimientos devolvió 50 movimientos en 31.766 bytes y
+    440 ms en la medición aislada, sin cache, colas ni dependencias nuevas.
+  - el ítem continúa `en curso`: backfill, comparación completa de los hallazgos
+    legacy, ensayo de rollback de migración y cutover siguen en `NO-GO`.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;

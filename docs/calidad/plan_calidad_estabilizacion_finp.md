@@ -383,17 +383,18 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Checks base y modelo compatible de Espacios verificados el 2026-08-24; la suite
-E2E global conserva su última verificación del 2026-08-17:
+Checks base, contratos y recorridos financieros de Espacios verificados el
+2026-08-24:
 
-- 858 pruebas unitarias aprobadas en 110 archivos;
-- 6 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+- 864 pruebas unitarias aprobadas en 112 archivos;
+- 9 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
   sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
-  deuda, liquidación y lifecycle;
+  deuda, configuración monetaria, lifecycle, ownership, participantes inactivos
+  y liquidaciones propias o representadas;
 - build, typecheck, lint y validación documental aprobados;
-- 60 de 60 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
+- 64 de 64 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
   de producción;
-- 60 de 60 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
+- 64 de 64 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
   ni altas fallidas después de una ejecución larga;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
@@ -403,6 +404,10 @@ E2E global conserva su última verificación del 2026-08-17:
   mantiene usuarios independientes para smoke financiero, Proyección e impactos
   personales de Espacios;
 - cobertura no bloqueante;
+- fixture contractual v2 y recorrido de gasto en tres pasos con preview e
+  impacto vinculado aprobados en desktop y mobile;
+- historia de 1.000 movimientos medida en 31.766 bytes y 440 ms para una página
+  de 50 elementos, sin cache, colas ni dependencias nuevas;
 - el smoke financiero conserva datos representativos de dos períodos y volvió a
   quedar verde sin depender de cuentas residuales;
 - la regresión de Captura rápida recarga un Dashboard sin primera capa del

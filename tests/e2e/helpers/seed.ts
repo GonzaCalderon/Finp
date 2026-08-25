@@ -34,6 +34,7 @@ import {
     SPACE_IMPACT_ACCOUNT_NAME,
     SPACE_IMPACT_FIXTURES,
 } from './space-impact'
+import { SPACE_V2_E2E } from './spaces-v2'
 
 const TEST_NAME = 'Test User'
 const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
@@ -52,10 +53,74 @@ async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
         db.collection('spaceentries').deleteMany({ createdByUserId: userId }),
         db.collection('spaceparticipants').deleteMany({ userId }),
         db.collection('spaces').deleteMany({ ownerUserId: userId }),
+        db.collection('debts').deleteMany({ userId }),
+        db.collection('debtmovements').deleteMany({ userId }),
+        db.collection('spaceoperations').deleteMany({ actorUserId: userId }),
         db.collection('notifications').deleteMany({ recipientUserId: userId }),
         Account.deleteMany({ userId }),
         ScheduledCommitment.deleteMany({ userId }),
         FunctionalSuggestionDismissal.deleteMany({ userId }),
+    ])
+}
+
+async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no está conectado para sembrar Espacios v2 E2E.')
+    const spaceId = new mongoose.Types.ObjectId(SPACE_V2_E2E.spaceId)
+    const now = new Date()
+    const timestamps = { createdAt: now, updatedAt: now }
+    await Promise.all([
+        db.collection('spaces').replaceOne(
+            { _id: spaceId },
+            {
+                _id: spaceId,
+                contractVersion: 2,
+                ownerUserId: userId,
+                name: SPACE_V2_E2E.name,
+                type: 'travel',
+                mode: 'managed',
+                status: 'active',
+                currencies: ['ARS'],
+                reportingCurrency: 'ARS',
+                defaultSplitMode: 'equal',
+                debtMode: 'simplified',
+                timezone: 'America/Argentina/Buenos_Aires',
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                spaceId,
+                kind: 'finp_user',
+                userId,
+                displayName: TEST_NAME,
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId),
+                spaceId,
+                kind: 'external',
+                displayName: SPACE_V2_E2E.externalName,
+                role: 'participant',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
     ])
 }
 
@@ -981,6 +1046,7 @@ async function seed() {
         await user.save()
         await seedP2RecurringCandidate(user._id)
         await seedSpaceImpactFixtures(user._id)
+        await seedSpaceV2Fixtures(user._id)
         const financialSmoke = await seedFinancialSmokeData(
             TEST_USER_EMAIL,
             TEST_USER_PASSWORD
@@ -1000,6 +1066,7 @@ async function seed() {
         )
         console.log('   P2: candidato mensual explicable verificado')
         console.log('   Espacios: impactos normal y huerfano preparados para desktop/mobile')
+        console.log('   Espacios v2: fixture contractual preparado para desktop/mobile')
         console.log(
             `   Smoke financiero: usuario ${financialSmoke.created ? 'creado' : 'actualizado'}, ` +
             `períodos ${financialSmoke.historical} y ${financialSmoke.current}`

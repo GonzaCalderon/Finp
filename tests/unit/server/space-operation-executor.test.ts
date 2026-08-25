@@ -31,6 +31,10 @@ vi.mock('@/lib/models', () => ({
     },
 }))
 
+vi.mock('@/lib/server/space-v2-write-gate', () => ({
+    assertSpaceV2WriteEnabled: vi.fn(),
+}))
+
 const { executeSpaceOperation, hashSpaceOperationValue } = await import('@/lib/server/space-operation-executor')
 
 const actorUserId = new Types.ObjectId().toString()

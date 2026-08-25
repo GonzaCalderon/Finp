@@ -33,7 +33,7 @@ Estado general:
   de integración y experiencia verificadas;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- entorno E2E local aislado y reproducible, con 60 de 60 escenarios globales
+- entorno E2E local aislado y reproducible, con 64 de 64 escenarios globales
   aprobados en desktop y mobile tanto sobre producción como en desarrollo;
 - smoke financiero con validación histórica y fixtures independientes del orden
   de ejecución;
@@ -45,8 +45,7 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 ## 2. Estado técnico
 
 Checks base verificados localmente el 2026-08-24 sobre
-`codex/spaces-financial-model-v2`; la suite E2E global conserva su última
-verificación del 2026-08-17:
+`codex/spaces-financial-model-v2`, incluida la suite E2E global:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -56,12 +55,12 @@ verificación del 2026-08-17:
 - ESLint limpio;
 - validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
-- 858 unit tests aprobados en 110 archivos, sin tests en `todo`;
-- 6 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+- 864 unit tests aprobados en 112 archivos, sin tests en `todo`;
+- 9 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
   sesiones MongoDB reales;
-- 60 de 60 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
+- 64 de 64 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
   sobre el build de producción;
-- 60 de 60 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
+- 64 de 64 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
   ni altas fallidas después de una ejecución larga;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
@@ -82,7 +81,8 @@ Ramas:
 - `main`: producción;
 - `dev`: desarrollo;
 - `dev` coincide con `origin/dev` en `9b5252f`;
-- `codex/stabilize-global-e2e`: estabilización local y cierre documental actual;
+- `codex/spaces-financial-model-v2`: modelo y recorridos financieros v2 de
+  Espacios;
 - `origin/main` es ancestro de `origin/dev` y está un commit detrás;
 - la rama local `main` está desactualizada y no se usa para trabajo hasta
   actualizarla de forma autorizada.
@@ -284,7 +284,17 @@ elige el usuario.
   la transacción recién creada si falla el alta del impacto;
 - revisión cuando cambia el origen;
 - reconciliación de pendientes al cambiar el reparto: se actualizan, cancelan o
-  crean según quién deba decidir con el reparto nuevo.
+  crean según quién deba decidir con el reparto nuevo;
+- contrato público v2 sin documentos Mongoose, lectura legacy normalizada y
+  modo seguro de sólo lectura cuando no se puede demostrar un saldo;
+- movimientos paginados por `dateKey + _id`, capacidades calculadas por servidor
+  y mutaciones con idempotencia y revisión esperada;
+- gasto v2 en tres pasos con revisión de total, parte propia, cuenta, gasto
+  operacional, adelanto y deuda antes de confirmar;
+- liquidación propia o representada compartida por Espacios y Deudas, con
+  decisión personal separada para cada contraparte;
+- configuración v2 con moneda de reporte inmutable desde el primer movimiento,
+  preservación de monedas usadas y continuidad histórica de participantes.
 
 ### Brechas verificadas
 
@@ -442,8 +452,8 @@ Mobile web sigue siendo la superficie prioritaria.
 - auditoría legacy de Espacios cubierta con detectores puros, barreras de
   entorno, adaptador Mongo sin primitivas de escritura y prueba E2E contra el
   seed aislado;
-- modelo financiero v2 de Espacios cubierto con 37 casos unitarios focales y 6
-  recorridos de integración sobre transacciones MongoDB reales;
+- modelo financiero v2 de Espacios cubierto dentro de 864 unitarias globales y
+  9 recorridos de integración sobre transacciones MongoDB reales;
 
 ### Brechas
 
@@ -451,7 +461,8 @@ Mobile web sigue siendo la superficie prioritaria.
 - cobertura de integración/API desigual;
 - validación visual y accesibilidad no sistematizadas;
 - cobertura no bloquea CI;
-- faltan métricas de rendimiento y presupuesto de bundle.
+- falta extender las métricas de rendimiento a los demás dominios y establecer
+  un presupuesto global de bundle.
 
 ## 11. Limitaciones conocidas
 
@@ -460,10 +471,12 @@ Mobile web sigue siendo la superficie prioritaria.
   aplicarse sin identificar la base y revisar el resultado.
 - `auto_month_start` no tiene scheduler.
 - La orientación aún no cubre reglas, Deudas, Espacios e Importación.
-- Espacios no cumple todavía de punta a punta el contrato de parte propia,
-  autonomía, consistencia, permisos y experiencia definido en las decisiones
+- Los recorridos v2 de Espacios cumplen el contrato de parte propia, autonomía,
+  consistencia y permisos definido en las decisiones
   [`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md) y
-  [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md).
+  [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md), pero
+  su activación sigue limitada a `finp-e2e`: los datos legacy no se migran ni
+  se habilitan para escritura v2 hasta aprobar backfill y cutover.
 - La auditoría de Espacios mantiene un `NO-GO` explícito para backfill y cutover
   hasta clasificar o resolver los 20 hallazgos críticos y 77 altos de
   development.
@@ -479,7 +492,7 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Base financiera compatible de Espacios v2, 2026-08-24:
+Contratos, API y recorridos financieros de Espacios v2, 2026-08-24:
 
 - contratos y cálculos puros nuevos con adaptación de lectura legacy;
 - servicios de aplicación atómicos, idempotentes y con control de concurrencia;
@@ -487,6 +500,9 @@ Base financiera compatible de Espacios v2, 2026-08-24:
   Deudas;
 - 10 índices parciales reaplicados idempotentemente sobre `finp-e2e`, con
   development limitado a `dry-run`;
-- 858 unitarias globales y 6 recorridos de integración v2 aprobados;
-- etapa 2 completa como base interna; APIs, UI, backfill y cutover continúan
-  pendientes y el P0 permanece `en curso`.
+- 864 unitarias globales, 9 recorridos de integración v2 y 64 E2E globales en
+  desarrollo y producción aprobados;
+- lectura de 1.000 movimientos medida en 31.766 bytes y 440 ms para una página
+  de 50 elementos;
+- etapas 2 y 3 completas; backfill, comparación legacy, rollback de migración y
+  cutover continúan pendientes, por lo que el P0 permanece `en curso`.

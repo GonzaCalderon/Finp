@@ -196,10 +196,12 @@ Servicios relevantes en `src/lib/server/`:
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
 | `spaces.ts` y servicios legacy `space-*.ts` | contrato vigente de permisos, movimientos, actividad, invitaciones e impacto durante la compatibilidad |
-| `space-*-service-v2.ts` | servicios de aplicación compatibles para movimiento, historia, impacto privado, liquidación y administración; aún sin exposición en rutas |
+| `space-*-service-v2.ts` | servicios de aplicación para movimiento, historia, impacto privado, liquidación y administración, compartidos por las rutas existentes |
 | `space-operation-executor.ts` | transacción MongoDB, idempotencia de intención y referencias de resultado de Espacios v2 |
 | `space-financial-v2.ts` | reparto, moneda, día financiero, impactos y balances puros en centavos |
 | `space-legacy-adapter.ts` | lectura determinista del estado legacy sin convertir ambigüedad en autoridad v2 |
+| `space-read-service-v2.ts` y `space-api-contract.ts` | DTOs JSON, capacidades y paginación por cursor; errores y mutaciones normalizados |
+| `space-v2-write-gate.ts` y `space-legacy-write-facade.ts` | activación exclusiva en `finp-e2e` y frontera que impide fallback v2 hacia escrituras legacy |
 | `debt-sync.ts` | materialización idempotente desde Espacios |
 | `debt-settlement.ts` | pago/cobro atómico |
 | `notifications.ts` | creación, dedupe y resolución |

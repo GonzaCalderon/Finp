@@ -28,6 +28,7 @@ type PersonalImpactDecisionV2 =
     | { type: 'link_existing'; transactionId: string }
     | { type: 'ignore' }
     | { type: 'keep_review' }
+    | { type: 'sync_transaction' }
     | { type: 'remove_transaction' }
 
 function amountsForImpact(entry: ISpaceEntry, impact: ISpaceEntryPersonalImpact) {
@@ -105,7 +106,7 @@ export async function resolveSpacePersonalImpactV2(input: {
         ? 'link_personal_impact' as const
         : input.decision.type === 'ignore'
             ? 'ignore_personal_impact' as const
-            : input.decision.type === 'keep_review'
+            : input.decision.type === 'keep_review' || input.decision.type === 'sync_transaction'
                 ? 'review_personal_impact' as const
                 : input.decision.type === 'remove_transaction'
                     ? 'remove_personal_impact' as const
@@ -190,6 +191,83 @@ export async function resolveSpacePersonalImpactV2(input: {
                         personalImpactId: impact._id,
                         transactionId: impact.transactionId,
                     },
+                }
+            }
+
+            if (input.decision.type === 'sync_transaction') {
+                if (impact.status !== 'needs_review' || !impact.transactionId) {
+                    throw new ServiceError(409, 'SPACE_IMPACT_NOT_IN_REVIEW', 'El impacto no tiene una transacción para actualizar.')
+                }
+                if (entry.status !== 'recorded') {
+                    throw new ServiceError(409, 'SPACE_ENTRY_VOIDED', 'Un movimiento anulado no puede actualizar una transacción.')
+                }
+                const amounts = amountsForImpact(entry, impact)
+                if (amounts.action === 'none') {
+                    throw new ServiceError(409, 'SPACE_IMPACT_NOT_REQUIRED', 'La nueva versión ya no produce un impacto personal.')
+                }
+                const isPayer = extractId(entry.paidByParticipantId) === impact.participantId.toString()
+                const variant = impactVariant({ kind: amounts.kind, isPayer })
+                const transaction = await Transaction.findOne({
+                    _id: impact.transactionId,
+                    userId: input.actorUserId,
+                    spaceId: input.spaceId,
+                    spaceEntryId: input.entryId,
+                    spaceImpactId: impact._id,
+                    spaceContractVersion: 2,
+                }).session(session).lean<ITransaction | null>()
+                if (!transaction) throw new ServiceError(409, 'SPACE_TRANSACTION_LINK_CONFLICT', 'La transacción vinculada ya no coincide.')
+                const sourceAccountId = extractId(transaction.sourceAccountId)
+                const destinationAccountId = extractId(transaction.destinationAccountId)
+                if (variant === 'participant_expense' && (sourceAccountId || destinationAccountId)) {
+                    throw new ServiceError(409, 'SPACE_TRANSACTION_SHAPE_CHANGED', 'El nuevo impacto ya no debe mover una cuenta; quitá y recreá la vinculación.')
+                }
+                if ((variant === 'payer_expense' || variant === 'advance' || variant === 'settlement_paid') && !sourceAccountId) {
+                    throw new ServiceError(409, 'SPACE_TRANSACTION_SHAPE_CHANGED', 'El nuevo impacto exige una cuenta de salida.')
+                }
+                if (variant === 'settlement_received' && !destinationAccountId) {
+                    throw new ServiceError(409, 'SPACE_TRANSACTION_SHAPE_CHANGED', 'El nuevo impacto exige una cuenta de entrada.')
+                }
+                const transactionAmount = amounts.accountImpactAmount || amounts.ownShareAmount
+                const transactionUpdate = await Transaction.updateOne(
+                    { _id: transaction._id, userId: input.actorUserId, spaceImpactId: impact._id },
+                    {
+                        $set: {
+                            type: expectedTransactionType(variant),
+                            amount: transactionAmount,
+                            operationalAmount: amounts.operationalAmount,
+                            currency: entry.currency,
+                            date: entry.date,
+                            description: entry.title,
+                            spaceOperationId: operationId,
+                        },
+                    },
+                    { session }
+                )
+                if (transactionUpdate.modifiedCount !== 1) {
+                    throw new ServiceError(409, 'SPACE_TRANSACTION_UPDATE_CONFLICT', 'La transacción cambió antes de actualizarse.')
+                }
+                const impactUpdate = await SpaceEntryPersonalImpact.updateOne(
+                    { _id: impact._id, contractVersion: 2, status: 'needs_review', revision: input.expectedRevision },
+                    {
+                        $set: {
+                            status: 'linked',
+                            impactKind: amounts.kind,
+                            amount: amounts.accountImpactAmount || amounts.ownShareAmount,
+                            ownShareAmount: amounts.ownShareAmount,
+                            accountImpactAmount: amounts.accountImpactAmount,
+                            operationalAmount: amounts.operationalAmount,
+                            reviewedAt: new Date(),
+                            reviewedResolution: 'kept',
+                            operationId,
+                        },
+                        $inc: { revision: 1 },
+                    },
+                    { session }
+                )
+                if (impactUpdate.modifiedCount !== 1) throw new ServiceError(409, 'SPACE_IMPACT_VERSION_CONFLICT', 'El impacto cambió.')
+                return {
+                    value: { impactId: input.impactId, status: 'linked' as const },
+                    resultRefs: { personalImpactId: impact._id, transactionId: transaction._id },
                 }
             }
 

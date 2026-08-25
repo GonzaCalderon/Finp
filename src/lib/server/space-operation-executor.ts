@@ -3,6 +3,7 @@ import mongoose, { Types, type ClientSession } from 'mongoose'
 
 import { SpaceOperation } from '@/lib/models'
 import { ServiceError, isDuplicateKeyError } from '@/lib/server/errors'
+import { assertSpaceV2WriteEnabled } from '@/lib/server/space-v2-write-gate'
 import type { SpaceOperationType } from '@/lib/constants'
 import type { ISpaceOperation } from '@/types'
 
@@ -95,6 +96,7 @@ export async function executeSpaceOperation<T>(input: {
         operationId: Types.ObjectId
     ) => Promise<{ value: T; resultRefs?: SpaceOperationResultRefs }>
 }): Promise<SpaceOperationExecution<T>> {
+    assertSpaceV2WriteEnabled()
     if (!Types.ObjectId.isValid(input.actorUserId) || !Types.ObjectId.isValid(input.spaceId)) {
         throw new ServiceError(400, 'INVALID_SPACE_OPERATION_CONTEXT', 'El contexto de la operación no es válido.')
     }

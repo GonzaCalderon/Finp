@@ -32,7 +32,15 @@ export function getSpaceCapabilitiesV2(
     context: SpaceCapabilityContextV2
 ): ReadonlySet<SpaceCapabilityV2> {
     const capabilities = new Set<SpaceCapabilityV2>()
-    if (!context.isActiveParticipant && !context.isOwnerRecord) return capabilities
+    if (!context.isActiveParticipant && !context.isOwnerRecord) {
+        if (!context.role) return capabilities
+        capabilities.add('view')
+        if (context.status !== 'archived') capabilities.add('resolve_personal_impact')
+        if (context.status === 'active' || context.status === 'closed') {
+            capabilities.add('settle_balance')
+        }
+        return capabilities
+    }
 
     capabilities.add('view')
     const role = context.isOwnerRecord ? 'owner' : context.role

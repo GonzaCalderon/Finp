@@ -37,6 +37,20 @@ describe('space capabilities v2', () => {
         expect(admin.has('restore_space')).toBe(false)
     })
 
+    it('participante removido conserva historia, impacto privado y liquidación propia', () => {
+        const capabilities = getSpaceCapabilitiesV2({
+            status: 'active', role: 'participant', isActiveParticipant: false, isOwnerRecord: false,
+        })
+        expect([...capabilities]).toEqual(expect.arrayContaining([
+            'view',
+            'resolve_personal_impact',
+            'settle_balance',
+        ]))
+        expect(capabilities.has('create_entry')).toBe(false)
+        expect(capabilities.has('manage_participants')).toBe(false)
+        expect(capabilities.has('act_for_participant')).toBe(false)
+    })
+
     it('impide dejar el Espacio sin owner salvo transferencia atómica', () => {
         expect(() => assertOwnerContinuityV2({
             activeOwnerCount: 1,

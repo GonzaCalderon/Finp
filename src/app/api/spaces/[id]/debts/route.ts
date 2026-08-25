@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Debt, Space, SpaceParticipant } from '@/lib/models'
 import { DEBT_STATUSES, SPACE_DEBT_MODES } from '@/lib/constants'
+import type { SpaceDebtDto } from '@/types'
 
 export async function GET(
     _request: Request,
@@ -23,7 +24,6 @@ export async function GET(
         const participant = await SpaceParticipant.findOne({
             spaceId: id,
             userId: session.user.id,
-            isActive: true,
         })
 
         if (!participant) {
@@ -37,7 +37,26 @@ export async function GET(
             userId: session.user.id,
             spaceId: id,
             status: { $in: [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID, DEBT_STATUSES.IGNORED] },
-        }).sort({ createdAt: -1 })
+        }).sort({ createdAt: -1 }).lean()
+
+        if (space.contractVersion === 2) {
+            const data: SpaceDebtDto[] = debts.map((debt) => ({
+                id: debt._id.toString(),
+                direction: debt.direction,
+                counterpartyParticipantId: debt.counterpartyParticipantId?.toString() ?? '',
+                counterpartyName: debt.counterpartyNameSnapshot,
+                amount: debt.amount,
+                remainingAmount: debt.remainingAmount,
+                currency: debt.currency,
+                status: debt.status,
+                contractVersion: 2,
+                spaceRevision: space.revision ?? 0,
+            }))
+            return NextResponse.json({
+                data,
+                spaceDebtMode: space.debtMode ?? SPACE_DEBT_MODES.SIMPLIFIED,
+            })
+        }
 
         return NextResponse.json({
             debts,

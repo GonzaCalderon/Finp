@@ -66,10 +66,10 @@ test.describe('Impacto personal de Espacios', () => {
         const entriesResponse = await page.request.get(`/api/spaces/${fixture.spaceId}/entries`)
         expect(entriesResponse.ok()).toBe(true)
         const entriesBody = await entriesResponse.json() as {
-            entries: Array<{ _id: string }>
+            data: { items: Array<{ id: string }> }
         }
-        expect(entriesBody.entries.some(
-            (entry) => entry._id.toString() === fixture.normalEntryId
+        expect(entriesBody.data.items.some(
+            (entry) => entry.id === fixture.normalEntryId
         )).toBe(true)
 
         const retry = await page.request.delete(

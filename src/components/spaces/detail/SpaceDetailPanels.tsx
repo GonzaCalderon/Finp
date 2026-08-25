@@ -102,7 +102,7 @@ function MovementCard({
     currentUserId,
     personalImpact,
     reviewImpact,
-    canManage,
+    capabilities,
     highlighted,
     onEntryClick,
     onEdit,
@@ -117,7 +117,7 @@ function MovementCard({
     currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
     reviewImpact?: ISpaceEntryPersonalImpact
-    canManage?: boolean
+    capabilities?: Array<'edit' | 'void'>
     highlighted?: boolean
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
@@ -151,10 +151,8 @@ function MovementCard({
     const isEdited = (entry.editCount ?? 0) > 0
 
     // Permission to edit/void per entry
-    const entryCreatorId = extractId(entry.createdByUserId)
-    const isCreator = Boolean(currentUserId && entryCreatorId && entryCreatorId === currentUserId)
-    const canEditEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onEdit)
-    const canVoidEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onVoid)
+    const canEditEntry = !isVoided && Boolean(capabilities?.includes('edit')) && Boolean(onEdit)
+    const canVoidEntry = !isVoided && Boolean(capabilities?.includes('void')) && Boolean(onVoid)
     const hasActions = canEditEntry || canVoidEntry
 
     const currentParticipant = currentUserId
@@ -384,7 +382,7 @@ export function SpaceMovementsPanel({
     participants,
     currentUserId,
     personalImpactsByEntryId = {},
-    canManage,
+    entryCapabilitiesById = {},
     entryFilter,
     onFilterChange,
     reportingCurrency,
@@ -401,13 +399,13 @@ export function SpaceMovementsPanel({
     participants: ISpaceParticipant[]
     currentUserId?: string
     personalImpactsByEntryId?: Record<string, ISpaceEntryPersonalImpactByEntry>
-    canManage?: boolean
+    entryCapabilitiesById?: Record<string, Array<'edit' | 'void'>>
     entryFilter: SpaceEntryFilter
     onFilterChange: (filter: SpaceEntryFilter) => void
     reportingCurrency: string
     hidden: boolean
     focusEntryId?: string | null
-    onCreate: () => void
+    onCreate?: () => void
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
@@ -494,7 +492,7 @@ export function SpaceMovementsPanel({
                         icon={Sparkles}
                         title="Todavía no hay movimientos"
                         description="Registrá el primero para empezar a ver balances, evolución y distribución."
-                        actionLabel="Nuevo movimiento"
+                        actionLabel={onCreate ? 'Nuevo movimiento' : undefined}
                         onAction={onCreate}
                     />
                 ) : (
@@ -508,7 +506,7 @@ export function SpaceMovementsPanel({
                             currentUserId={currentUserId}
                             personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.linkedImpact}
                             reviewImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.reviewImpact}
-                            canManage={canManage}
+                            capabilities={entryCapabilitiesById[extractId(entry._id) ?? '']}
                             highlighted={Boolean(focusEntryId && extractId(entry._id) === focusEntryId)}
                             onEntryClick={onEntryClick}
                             onEdit={onEdit}

@@ -370,3 +370,4 @@ export interface ICommitmentApplication {
 }
 
 export * from './space'
+export * from './space-api'

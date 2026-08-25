@@ -3,7 +3,9 @@ import { Types } from 'mongoose'
 import {
     Space,
     SpaceEntry,
+    SpaceInvite,
     SpaceParticipant,
+    User,
 } from '@/lib/models'
 import { ServiceError } from '@/lib/server/errors'
 import {
@@ -17,8 +19,339 @@ import {
 import { materializeSpaceDebtsV2 } from '@/lib/server/space-debt-materialization-v2'
 import { executeSpaceOperation } from '@/lib/server/space-operation-executor'
 import { extractId } from '@/lib/utils/spaces'
+import { assertIanaTimezone } from '@/lib/utils/space-financial-v2'
 import type { ISpace, ISpaceEntry, ISpaceParticipant } from '@/types'
 import type { SpaceParticipantRole, SpaceStatus } from '@/lib/constants'
+import { SPACE_INVITE_TYPES } from '@/lib/constants'
+
+export async function addSpaceParticipantV2(input: {
+    actorUserId: string
+    spaceId: string
+    idempotencyKey: string
+    expectedRevision: number
+    kind: 'finp_user' | 'external'
+    displayName: string
+    email?: string
+    role: 'admin' | 'participant'
+}) {
+    return executeSpaceOperation({
+        actorUserId: input.actorUserId,
+        spaceId: input.spaceId,
+        type: 'add_participant',
+        idempotencyKey: input.idempotencyKey,
+        payload: { ...input, idempotencyKey: undefined },
+        run: async (session, operationId) => {
+            const context = await loadSpaceApplicationContextV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                session,
+                capability: 'manage_participants',
+            })
+            if ((context.space.revision ?? 0) !== input.expectedRevision) {
+                throw new ServiceError(409, 'SPACE_VERSION_CONFLICT', 'El Espacio cambió. Revisalo antes de invitar.')
+            }
+            if (context.space.mode === 'solo') {
+                throw new ServiceError(409, 'SPACE_SOLO_PARTICIPANTS_DISABLED', 'Un Espacio solo no admite más participantes.')
+            }
+            const normalizedEmail = input.email?.trim().toLowerCase()
+            let userId: Types.ObjectId | undefined
+            let displayName = input.displayName.trim()
+            let inviteStatus: 'pending' | 'accepted' = 'accepted'
+            if (input.kind === 'finp_user') {
+                if (!normalizedEmail) throw new ServiceError(400, 'SPACE_PARTICIPANT_EMAIL_REQUIRED', 'Ingresá el email de Finp.')
+                const user = await User.findOne({ email: normalizedEmail }).session(session)
+                if (!user) throw new ServiceError(404, 'SPACE_PARTICIPANT_USER_NOT_FOUND', 'No encontramos esa cuenta de Finp.')
+                userId = user._id
+                displayName = user.displayName
+                inviteStatus = 'pending'
+                const existing = await SpaceParticipant.findOne({ spaceId: input.spaceId, userId }).session(session)
+                if (existing) {
+                    throw new ServiceError(
+                        409,
+                        'SPACE_PARTICIPANT_EXISTS',
+                        existing.isActive ? 'La persona ya participa del Espacio.' : 'La persona tiene historia; reactivala en lugar de crearla otra vez.'
+                    )
+                }
+            }
+            if (!displayName) throw new ServiceError(400, 'SPACE_PARTICIPANT_NAME_REQUIRED', 'La persona necesita un nombre.')
+            const [participant] = await SpaceParticipant.create([{
+                spaceId: input.spaceId,
+                kind: input.kind,
+                userId,
+                displayName,
+                email: normalizedEmail,
+                role: input.role,
+                inviteStatus,
+                isActive: true,
+                revision: 0,
+            }], { session })
+            let inviteId: string | undefined
+            if (userId) {
+                const [invite] = await SpaceInvite.create([{
+                    spaceId: input.spaceId,
+                    inviteType: SPACE_INVITE_TYPES.DIRECT,
+                    participantId: participant._id,
+                    senderUserId: input.actorUserId,
+                    recipientUserId: userId,
+                    status: 'pending',
+                }], { session })
+                inviteId = invite._id.toString()
+            }
+            const activity = await createSpaceActivityEventV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                actorParticipantId: context.currentParticipant._id.toString(),
+                operationId,
+                type: userId ? 'participant_invited' : 'participant_joined',
+                entityType: 'participant',
+                entityId: participant._id.toString(),
+                title: userId ? 'Participante invitado' : 'Participante agregado',
+                metadata: { contractVersion: 2, kind: input.kind },
+                participants: [...context.participants, participant.toObject() as ISpaceParticipant],
+                session,
+            })
+            return {
+                value: { participantId: participant._id.toString(), inviteId },
+                resultRefs: { activityEventIds: [activity._id] },
+            }
+        },
+    })
+}
+
+export async function respondSpaceInviteV2(input: {
+    actorUserId: string
+    spaceId: string
+    participantId: string
+    idempotencyKey: string
+    expectedParticipantRevision: number
+    inviteStatus: 'accepted' | 'declined'
+}) {
+    return executeSpaceOperation({
+        actorUserId: input.actorUserId,
+        spaceId: input.spaceId,
+        type: 'respond_invite',
+        idempotencyKey: input.idempotencyKey,
+        payload: { ...input, idempotencyKey: undefined },
+        run: async (session, operationId) => {
+            const context = await loadSpaceApplicationContextV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                session,
+                capability: 'view',
+            })
+            const target = context.participants.find(
+                (participant) => extractId(participant._id) === input.participantId
+            )
+            if (!target || extractId(target.userId) !== input.actorUserId || target.inviteStatus !== 'pending') {
+                throw new ServiceError(404, 'SPACE_INVITE_NOT_FOUND', 'La invitación no está disponible.')
+            }
+            const updated = await SpaceParticipant.findOneAndUpdate(
+                {
+                    _id: input.participantId,
+                    spaceId: input.spaceId,
+                    inviteStatus: 'pending',
+                    revision: input.expectedParticipantRevision,
+                },
+                {
+                    $set: {
+                        inviteStatus: input.inviteStatus,
+                        isActive: input.inviteStatus === 'accepted',
+                    },
+                    $inc: { revision: 1 },
+                },
+                { new: true, session }
+            ).lean<ISpaceParticipant | null>()
+            if (!updated) throw new ServiceError(409, 'SPACE_PARTICIPANT_VERSION_CONFLICT', 'La invitación cambió.')
+            await SpaceInvite.updateMany(
+                { spaceId: input.spaceId, participantId: input.participantId, status: 'pending' },
+                { $set: { status: input.inviteStatus, respondedAt: new Date() } },
+                { session }
+            )
+            const activity = await createSpaceActivityEventV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                actorParticipantId: input.participantId,
+                operationId,
+                type: input.inviteStatus === 'accepted' ? 'participant_joined' : 'participant_removed',
+                entityType: 'participant',
+                entityId: input.participantId,
+                title: input.inviteStatus === 'accepted' ? 'Invitación aceptada' : 'Invitación rechazada',
+                metadata: { contractVersion: 2 },
+                participants: context.participants,
+                session,
+            })
+            return {
+                value: {
+                    participantId: input.participantId,
+                    inviteStatus: input.inviteStatus,
+                    revision: updated.revision ?? input.expectedParticipantRevision + 1,
+                },
+                resultRefs: { activityEventIds: [activity._id] },
+            }
+        },
+    })
+}
+
+export async function updateSpaceSettingsV2(input: {
+    actorUserId: string
+    spaceId: string
+    idempotencyKey: string
+    expectedRevision: number
+    name: string
+    description?: string
+    currencies: string[]
+    reportingCurrency: string
+    defaultSplitMode: 'none' | 'equal' | 'percentage' | 'fixed'
+    timezone: string
+}) {
+    return executeSpaceOperation({
+        actorUserId: input.actorUserId,
+        spaceId: input.spaceId,
+        type: 'update_settings',
+        idempotencyKey: input.idempotencyKey,
+        payload: { ...input, idempotencyKey: undefined },
+        run: async (session, operationId) => {
+            const context = await loadSpaceApplicationContextV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                session,
+                capability: 'manage_shared_settings',
+            })
+            const name = input.name.trim()
+            if (!name) throw new ServiceError(400, 'SPACE_NAME_REQUIRED', 'El Espacio necesita un nombre.')
+            const currencies = Array.from(new Set(input.currencies.map((currency) => currency.trim()).filter(Boolean)))
+            if (!currencies.includes(input.reportingCurrency) || currencies.length === 0) {
+                throw new ServiceError(400, 'SPACE_CURRENCY_INVALID', 'La moneda de reporte debe estar habilitada.')
+            }
+            const usedCurrencies = await SpaceEntry.distinct('currency', { spaceId: input.spaceId }).session(session)
+            const removedUsedCurrency = usedCurrencies.find((currency) => !currencies.includes(currency))
+            if (removedUsedCurrency) {
+                throw new ServiceError(
+                    409,
+                    'SPACE_CURRENCY_IN_USE',
+                    `No se puede retirar ${removedUsedCurrency} porque tiene movimientos históricos.`
+                )
+            }
+            const hasMovements = usedCurrencies.length > 0
+            if (hasMovements && input.reportingCurrency !== context.space.reportingCurrency) {
+                throw new ServiceError(
+                    409,
+                    'SPACE_REPORTING_CURRENCY_LOCKED',
+                    'La moneda de reporte queda fija desde el primer movimiento histórico.'
+                )
+            }
+            const timezone = assertIanaTimezone(input.timezone)
+            const updated = await Space.findOneAndUpdate(
+                { _id: input.spaceId, contractVersion: 2, revision: input.expectedRevision },
+                {
+                    $set: {
+                        name,
+                        description: input.description?.trim() || undefined,
+                        currencies,
+                        reportingCurrency: input.reportingCurrency,
+                        defaultSplitMode: context.space.mode === 'solo' ? 'none' : input.defaultSplitMode,
+                        timezone,
+                    },
+                    $inc: { revision: 1 },
+                },
+                { new: true, session }
+            ).lean<ISpace | null>()
+            if (!updated) {
+                throw new ServiceError(409, 'SPACE_VERSION_CONFLICT', 'El Espacio cambió. Revisalo antes de continuar.')
+            }
+            const activity = await createSpaceActivityEventV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                actorParticipantId: context.currentParticipant._id.toString(),
+                operationId,
+                type: 'space_updated',
+                entityType: 'space',
+                entityId: input.spaceId,
+                title: 'Configuración del Espacio actualizada',
+                metadata: { contractVersion: 2 },
+                participants: context.participants,
+                session,
+            })
+            return {
+                value: {
+                    revision: updated.revision ?? input.expectedRevision + 1,
+                    name: updated.name,
+                    description: updated.description,
+                    currencies: updated.currencies,
+                    reportingCurrency: updated.reportingCurrency,
+                    defaultSplitMode: updated.defaultSplitMode,
+                    timezone: updated.timezone,
+                },
+                resultRefs: { activityEventIds: [activity._id] },
+            }
+        },
+    })
+}
+
+export async function setSpaceParticipantActiveV2(input: {
+    actorUserId: string
+    spaceId: string
+    participantId: string
+    idempotencyKey: string
+    expectedParticipantRevision: number
+    isActive: boolean
+}) {
+    return executeSpaceOperation({
+        actorUserId: input.actorUserId,
+        spaceId: input.spaceId,
+        type: 'change_participant_state',
+        idempotencyKey: input.idempotencyKey,
+        payload: { ...input, idempotencyKey: undefined },
+        run: async (session, operationId) => {
+            const context = await loadSpaceApplicationContextV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                session,
+                capability: 'manage_participants',
+            })
+            const target = context.participants.find(
+                (participant) => extractId(participant._id) === input.participantId
+            )
+            if (!target) throw new ServiceError(404, 'SPACE_PARTICIPANT_NOT_FOUND', 'La persona no pertenece al Espacio.')
+            if (!input.isActive && target.role === 'owner') {
+                throw new ServiceError(409, 'SPACE_OWNER_TRANSFER_REQUIRED', 'Transferí la propiedad antes de remover al owner.')
+            }
+            const updated = await SpaceParticipant.findOneAndUpdate(
+                {
+                    _id: input.participantId,
+                    spaceId: input.spaceId,
+                    revision: input.expectedParticipantRevision,
+                },
+                { $set: { isActive: input.isActive }, $inc: { revision: 1 } },
+                { new: true, session }
+            ).lean<ISpaceParticipant | null>()
+            if (!updated) {
+                throw new ServiceError(409, 'SPACE_PARTICIPANT_VERSION_CONFLICT', 'La persona cambió. Revisá la última versión.')
+            }
+            const activity = await createSpaceActivityEventV2({
+                spaceId: input.spaceId,
+                actorUserId: input.actorUserId,
+                actorParticipantId: context.currentParticipant._id.toString(),
+                operationId,
+                type: 'space_updated',
+                entityType: 'participant',
+                entityId: input.participantId,
+                title: input.isActive ? 'Participante reactivado' : 'Participante removido',
+                metadata: { contractVersion: 2, isActive: input.isActive },
+                participants: context.participants,
+                session,
+            })
+            return {
+                value: {
+                    participantId: input.participantId,
+                    isActive: updated.isActive,
+                    revision: updated.revision ?? input.expectedParticipantRevision + 1,
+                },
+                resultRefs: { activityEventIds: [activity._id] },
+            }
+        },
+    })
+}
 
 function lifecycleCapability(current: SpaceStatus, target: SpaceStatus): SpaceCapabilityV2 {
     if (target === 'archived') return 'archive_space'

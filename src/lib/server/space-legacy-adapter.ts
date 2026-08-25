@@ -45,6 +45,7 @@ export interface SpaceEntryReadV2 {
     id: string
     contractVersion: 2
     spaceId: string
+    createdByUserId: string
     type: ISpaceEntry['type']
     status: 'recorded' | 'voided'
     title: string
@@ -182,6 +183,7 @@ export function adaptSpaceEntryToV2(input: {
             id: entryId,
             contractVersion: 2,
             spaceId,
+            createdByUserId: requiredId(input.entry.createdByUserId, 'LEGACY_ENTRY_INCOMPATIBLE'),
             type: input.entry.type,
             status,
             title: input.entry.title,

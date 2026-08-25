@@ -3,13 +3,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
+import { useAccounts } from '@/hooks/useAccounts'
 import {
     spaceSettlementSchema,
     type SpaceEntryFormData,
     type SpaceSettlementData,
 } from '@/lib/validations'
 import { extractId, formatCurrencyAmount } from '@/lib/utils/spaces'
-import type { ISpaceParticipant } from '@/types'
+import type {
+    ISpaceParticipant,
+    SpaceApiCapability,
+    SpaceDebtDto,
+    SpaceSettlementPreviewDto,
+} from '@/types'
 import {
     Dialog,
     DialogContent,
@@ -39,6 +45,8 @@ import { DatePickerField } from '@/components/shared/transaction-dialog/fields/D
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { CurrencySelector } from '@/components/shared/CurrencySelector'
 import { cn } from '@/lib/utils'
+import { apiJson, ApiError } from '@/lib/client/auth-client'
+import { DEBT_INVALIDATION_TAGS, invalidateData } from '@/lib/client/data-sync'
 
 export interface SettlementPrefill {
     payerId?: string
@@ -102,6 +110,7 @@ export function SpaceSettlementDialog({
     reportingCurrency,
     prefill,
     suggestedPayments,
+    v2,
 }: DialogProps & {
     onSubmit: (data: SpaceEntryFormData) => Promise<unknown>
     participants: ISpaceParticipant[]
@@ -109,9 +118,20 @@ export function SpaceSettlementDialog({
     reportingCurrency: string
     prefill?: SettlementPrefill
     suggestedPayments?: SuggestedPayment[]
+    v2?: {
+        spaceId: string
+        expectedRevision: number
+        currentUserId: string
+        capabilities: SpaceApiCapability[]
+    }
 }) {
     const { error: toastError } = useToast()
-    const activeParticipants = participants.filter((p) => p.isActive)
+    const { accounts } = useAccounts()
+    const v2SpaceId = v2?.spaceId
+    const v2ExpectedRevision = v2?.expectedRevision
+    const v2CurrentUserId = v2?.currentUserId
+    const v2Capabilities = v2?.capabilities
+    const activeParticipants = v2 ? participants : participants.filter((p) => p.isActive)
     const amountInputRef = useRef<HTMLInputElement>(null)
     const hasSuggestions = Boolean(suggestedPayments && suggestedPayments.length > 0)
 
@@ -123,6 +143,11 @@ export function SpaceSettlementDialog({
     const [preset, setPreset] = useState<AmountPreset>(prefill?.amount != null ? 'total' : null)
     const [selectedSuggestion, setSelectedSuggestion] = useState<SuggestedPayment | null>(null)
     const [datePickerOpen, setDatePickerOpen] = useState(false)
+    const [debts, setDebts] = useState<SpaceDebtDto[]>([])
+    const [accountId, setAccountId] = useState('')
+    const [serverPreview, setServerPreview] = useState<SpaceSettlementPreviewDto | null>(null)
+    const [previewing, setPreviewing] = useState(false)
+    const idempotencyKeyRef = useRef<string | null>(null)
 
     useEffect(() => {
         if (!open) return
@@ -131,8 +156,23 @@ export function SpaceSettlementDialog({
         setSubmitting(false)
         setPreset(prefill?.amount != null ? 'total' : null)
         setSelectedSuggestion(null)
+        setServerPreview(null)
+        idempotencyKeyRef.current = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open])
+
+    useEffect(() => {
+        if (!open || !v2SpaceId) return
+        void apiJson<{ data: SpaceDebtDto[] }>(`/api/spaces/${v2SpaceId}/debts`)
+            .then((response) => setDebts(response.data))
+            .catch((error) => {
+                setDebts([])
+                setErrors((current) => ({
+                    ...current,
+                    form: error instanceof Error ? error.message : 'No se pudo cargar el saldo.',
+                }))
+            })
+    }, [open, v2SpaceId])
 
     const currencies = Array.from(new Set([defaultCurrency, reportingCurrency]))
 
@@ -167,6 +207,77 @@ export function SpaceSettlementDialog({
     const isFullPayment = activeContext != null && parsedAmount >= effectiveAmount - 0.01
     const showPreview = activeContext != null && parsedAmount > 0.01
     const showSuggestionsPanel = !hasPrefillContext && hasSuggestions
+    const currentParticipantId = extractId(
+        participants.find((participant) => extractId(participant.userId) === v2CurrentUserId)?._id
+    )
+    const isOwnSettlement = Boolean(
+        v2 && currentParticipantId &&
+        (currentParticipantId === form.payerId || currentParticipantId === form.receiverId)
+    )
+    const matchingDebt = isOwnSettlement
+        ? debts.find((debt) =>
+            debt.counterpartyParticipantId === (
+                currentParticipantId === form.payerId ? form.receiverId : form.payerId
+            ) && debt.direction === (currentParticipantId === form.payerId ? 'payable' : 'receivable')
+        )
+        : undefined
+    const canRepresent = v2Capabilities?.includes('act_for_participant') ?? false
+    const compatibleAccounts = accounts.filter((account) =>
+        account.isActive && (
+            account.currency === form.currency || account.supportedCurrencies?.includes(form.currency as never)
+        )
+    )
+
+    useEffect(() => {
+        if (!open || !v2SpaceId || parsedAmount <= 0 || !form.payerId || !form.receiverId) {
+            setServerPreview(null)
+            return
+        }
+        if (isOwnSettlement && !matchingDebt) {
+            setServerPreview(null)
+            return
+        }
+        if (!isOwnSettlement && !canRepresent) {
+            setServerPreview(null)
+            return
+        }
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setPreviewing(true)
+            const body = isOwnSettlement
+                ? { mode: 'own', debtId: matchingDebt!.id, amount: parsedAmount, currency: form.currency }
+                : {
+                    mode: 'represented',
+                    payerParticipantId: form.payerId,
+                    receiverParticipantId: form.receiverId,
+                    amount: parsedAmount,
+                    currency: form.currency,
+                }
+            void apiJson<{ data: SpaceSettlementPreviewDto }>(
+                `/api/spaces/${v2SpaceId}/settlements/preview`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                    signal: controller.signal,
+                }
+            ).then((response) => {
+                setServerPreview(response.data)
+                setErrors((current) => ({ ...current, form: undefined }))
+            }).catch((error) => {
+                if (error instanceof DOMException && error.name === 'AbortError') return
+                setServerPreview(null)
+                setErrors((current) => ({
+                    ...current,
+                    form: error instanceof Error ? error.message : 'No se pudo calcular el pago.',
+                }))
+            }).finally(() => setPreviewing(false))
+        }, 250)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [canRepresent, form.currency, form.payerId, form.receiverId, isOwnSettlement, matchingDebt, open, parsedAmount, v2SpaceId])
 
     function applySuggestion(suggestion: SuggestedPayment) {
         const isAlreadySelected =
@@ -221,6 +332,68 @@ export function SpaceSettlementDialog({
         }
 
         const data = result.data
+
+        if (v2) {
+            if (!serverPreview || v2ExpectedRevision === undefined || !v2SpaceId) {
+                setErrors((current) => ({ ...current, form: 'Revisá el preview financiero antes de confirmar.' }))
+                return
+            }
+            if (isOwnSettlement && !accountId) {
+                setErrors((current) => ({ ...current, form: 'Elegí la cuenta personal que participa del pago.' }))
+                return
+            }
+            if (!isOwnSettlement && !canRepresent) {
+                setErrors((current) => ({ ...current, form: 'No podés registrar pagos en nombre de otras personas.' }))
+                return
+            }
+            setSubmitting(true)
+            setErrors({})
+            try {
+                idempotencyKeyRef.current ??= crypto.randomUUID()
+                const body = isOwnSettlement
+                    ? {
+                        mode: 'own',
+                        debtId: matchingDebt!.id,
+                        accountId,
+                        expectedRevision: v2ExpectedRevision,
+                        amount: data.amount,
+                        currency: data.currency,
+                        dateKey: formatDateInput(data.date),
+                        description: data.notes,
+                    }
+                    : {
+                        mode: 'represented',
+                        payerParticipantId: data.payerId,
+                        receiverParticipantId: data.receiverId,
+                        expectedRevision: v2ExpectedRevision,
+                        amount: data.amount,
+                        currency: data.currency,
+                        dateKey: formatDateInput(data.date),
+                        description: data.notes,
+                    }
+                await apiJson(`/api/spaces/${v2SpaceId}/settlements`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': idempotencyKeyRef.current,
+                    },
+                    body: JSON.stringify(body),
+                })
+                invalidateData(DEBT_INVALIDATION_TAGS)
+                idempotencyKeyRef.current = null
+                onOpenChange(false)
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'No se pudo registrar el pago.'
+                setErrors((current) => ({ ...current, form: message }))
+                if (error instanceof ApiError && error.status === 409) {
+                    invalidateData(DEBT_INVALIDATION_TAGS)
+                }
+                toastError(message)
+            } finally {
+                setSubmitting(false)
+            }
+            return
+        }
         const title = `Pago de ${payerName} a ${receiverName}`
 
         const entryData: SpaceEntryFormData = {
@@ -529,6 +702,43 @@ export function SpaceSettlementDialog({
                             </SpaceDialogPanel>
                         ) : null}
 
+                        {v2 && isOwnSettlement ? (
+                            <SpaceDialogPanel>
+                                <SpaceDialogField label="Cuenta personal" hint="El movimiento se registrará en Mi Finp">
+                                    <Select value={accountId} onValueChange={setAccountId}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Elegí una cuenta compatible" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {compatibleAccounts.map((account) => (
+                                                <SelectItem key={String(account._id)} value={String(account._id)}>
+                                                    {account.name} · {account.currency}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </SpaceDialogField>
+                            </SpaceDialogPanel>
+                        ) : null}
+
+                        {v2 && (serverPreview || previewing || errors.form) ? (
+                            <SpaceDialogPanel>
+                                <SpaceDialogSectionEyebrow>Revisión financiera</SpaceDialogSectionEyebrow>
+                                {previewing ? <p className="mt-2 text-sm text-muted-foreground">Calculando impacto…</p> : null}
+                                {serverPreview ? (
+                                    <div className="mt-3 space-y-2 text-sm">
+                                        <div className="flex justify-between"><span>Impacto en tu cuenta</span><strong>{formatCurrencyAmount(serverPreview.actorAccountImpactAmount, serverPreview.currency)}</strong></div>
+                                        <div className="flex justify-between"><span>Impacto operacional</span><strong>{formatCurrencyAmount(serverPreview.actorOperationalAmount, serverPreview.currency)}</strong></div>
+                                        <div className="flex justify-between"><span>Saldo restante</span><strong>{formatCurrencyAmount(serverPreview.remainingBalanceReporting, serverPreview.reportingCurrency)}</strong></div>
+                                        {!serverPreview.actorMovesPersonalAccount ? (
+                                            <p className="text-xs text-muted-foreground">Es una liquidación representada: no mueve ninguna cuenta personal tuya.</p>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                                {errors.form ? <p className="mt-2 text-xs text-destructive" role="alert">{errors.form}</p> : null}
+                            </SpaceDialogPanel>
+                        ) : null}
+
                         {/* Comentario */}
                         <SpaceDialogPanel>
                             <SpaceDialogField label="Comentario" hint="Opcional">
@@ -553,7 +763,7 @@ export function SpaceSettlementDialog({
                     >
                         Cancelar
                     </Button>
-                    <Button onClick={handleSubmit} disabled={submitting}>
+                    <Button onClick={handleSubmit} disabled={submitting || Boolean(v2 && (previewing || !serverPreview))}>
                         {submitting ? 'Guardando…' : 'Guardar pago'}
                     </Button>
                 </DialogFooter>

@@ -1,12 +1,9 @@
 import { Types } from 'mongoose'
 
-import {
-    Debt,
-    SpaceEntry,
-    SpaceEntryPersonalImpact,
-} from '@/lib/models'
+import { Debt, SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
 import { CURRENCIES } from '@/lib/constants'
 import { ServiceError } from '@/lib/server/errors'
+import { getSpaceCapabilitiesV2 } from '@/lib/server/space-capabilities'
 import {
     buildSpaceImpactOriginSnapshotV2,
     createSpaceActivityEventV2,
@@ -20,13 +17,32 @@ import {
     type CreateInternalSpaceTransactionInput,
 } from '@/lib/server/transactions'
 import {
+    calculateSpaceDebtProjectionsV2,
     convertSpaceAmountV2,
     financialDateKeyToInstant,
     normalizeFinancialDateKey,
 } from '@/lib/utils/space-financial-v2'
 import { extractId } from '@/lib/utils/spaces'
-import type { ISpaceEntry } from '@/types'
 import type { IDebt } from '@/types/debt'
+import type { ISpaceEntry, ISpaceParticipant } from '@/types'
+
+interface SettlementCommonInput {
+    actorUserId: string
+    spaceId: string
+    idempotencyKey: string
+    expectedRevision: number
+    originSurface: 'spaces' | 'debts'
+    amount: number
+    currency: string
+    exchangeRate?: number
+    dateKey: string
+    description?: string
+}
+
+export type SettleSpaceDebtV2Input = SettlementCommonInput & (
+    | { mode?: 'own'; debtId: string; accountId: string }
+    | { mode: 'represented'; payerParticipantId: string; receiverParticipantId: string }
+)
 
 async function reconcileSettlementPresentation(ids: Types.ObjectId[]) {
     if (ids.length === 0) return { state: 'not_needed' as const, failures: [] }
@@ -46,20 +62,32 @@ async function reconcileSettlementPresentation(ids: Types.ObjectId[]) {
     }
 }
 
+function participantById(participants: ISpaceParticipant[], participantId: string) {
+    return participants.find((participant) => extractId(participant._id) === participantId)
+}
+
+function toLedgerEntries(entries: ISpaceEntry[]) {
+    return entries.map((entry) => ({
+        entryId: extractId(entry._id)!,
+        status: entry.status === 'voided' ? 'voided' as const : 'recorded' as const,
+        type: entry.type,
+        amount: entry.amount,
+        reportingAmount: entry.reportingAmount,
+        paidByParticipantId: extractId(entry.paidByParticipantId),
+        sharedWithParticipantIds: (entry.sharedWithParticipantIds ?? [])
+            .map(extractId)
+            .filter((id): id is string => Boolean(id)),
+        splitMode: entry.splitMode,
+        splitAllocations: (entry.splitAllocations ?? []).map((allocation) => ({
+            participantId: extractId(allocation.participantId)!,
+            percentage: allocation.percentage,
+            amount: allocation.amount,
+        })),
+    }))
+}
+
 /** Única operación de liquidación para las superficies Espacios y Deudas. */
-export async function settleSpaceDebtV2(input: {
-    actorUserId: string
-    spaceId: string
-    debtId: string
-    idempotencyKey: string
-    originSurface: 'spaces' | 'debts'
-    amount: number
-    currency: 'ARS' | 'USD'
-    exchangeRate?: number
-    dateKey: string
-    accountId: string
-    description?: string
-}) {
+export async function settleSpaceDebtV2(input: SettleSpaceDebtV2Input) {
     const execution = await executeSpaceOperation({
         actorUserId: input.actorUserId,
         spaceId: input.spaceId,
@@ -73,30 +101,87 @@ export async function settleSpaceDebtV2(input: {
                 session,
                 capability: 'settle_balance',
             })
+            if ((context.space.revision ?? 0) !== input.expectedRevision) {
+                throw new ServiceError(409, 'SPACE_VERSION_CONFLICT', 'El Espacio cambió. Revisá el saldo antes de liquidar.', {
+                    expectedRevision: input.expectedRevision,
+                    actualRevision: context.space.revision ?? 0,
+                })
+            }
             if (!context.space.timezone) {
                 throw new ServiceError(409, 'SPACE_TIMEZONE_REQUIRED', 'El Espacio necesita una zona horaria.')
             }
-            if (!Object.values(CURRENCIES).includes(input.currency)) {
-                throw new ServiceError(400, 'PERSONAL_CURRENCY_UNSUPPORTED', 'Mi Finp no admite esa moneda personal.')
+            if (!context.space.currencies.includes(input.currency)) {
+                throw new ServiceError(400, 'SPACE_CURRENCY_UNSUPPORTED', 'La moneda no está habilitada en el Espacio.')
             }
-            const debt = await Debt.findOne({
-                _id: input.debtId,
-                userId: input.actorUserId,
-                spaceId: input.spaceId,
-                sourceType: 'space',
-                contractVersion: 2,
-                status: { $in: ['active', 'partially_paid', 'ignored'] },
-            }).session(session).lean<IDebt | null>()
-            if (!debt || debt.remainingAmount <= 0.01) {
-                throw new ServiceError(404, 'SPACE_DEBT_NOT_FOUND', 'La obligación no existe o ya está saldada.')
-            }
+
+            const entries = await SpaceEntry.find({ spaceId: input.spaceId, contractVersion: 2 })
+                .session(session).lean<ISpaceEntry[]>()
             const actorParticipantId = context.currentParticipant._id.toString()
-            const counterpartyParticipantId = extractId(debt.counterpartyParticipantId)
-            const counterparty = context.participants.find(
-                (participant) => extractId(participant._id) === counterpartyParticipantId
-            )
-            if (!counterpartyParticipantId || !counterparty) {
-                throw new ServiceError(409, 'SPACE_DEBT_COUNTERPARTY_MISSING', 'La contraparte histórica no está disponible.')
+            const represented = input.mode === 'represented'
+            let payerParticipantId: string
+            let receiverParticipantId: string
+            let balanceReporting: number
+            let actorDebt: IDebt | null = null
+
+            if (represented) {
+                const capabilities = getSpaceCapabilitiesV2({
+                    status: context.space.status,
+                    role: context.currentParticipant.role,
+                    isActiveParticipant: context.currentParticipant.isActive,
+                    isOwnerRecord: context.isOwnerRecord,
+                })
+                if (!capabilities.has('act_for_participant')) {
+                    throw new ServiceError(403, 'SPACE_REPRESENTATION_DENIED', 'No podés liquidar en nombre de otras personas.')
+                }
+                payerParticipantId = input.payerParticipantId
+                receiverParticipantId = input.receiverParticipantId
+                if (payerParticipantId === receiverParticipantId) {
+                    throw new ServiceError(400, 'SPACE_SETTLEMENT_PARTIES_INVALID', 'Las contrapartes deben ser distintas.')
+                }
+                const projection = calculateSpaceDebtProjectionsV2({
+                    mode: context.space.debtMode ?? 'simplified',
+                    entries: toLedgerEntries(entries),
+                    participants: context.participants.map((participant) => ({
+                        participantId: extractId(participant._id)!,
+                        displayName: participant.displayName,
+                        userId: extractId(participant.userId),
+                    })),
+                }).find((item) =>
+                    item.fromParticipantId === payerParticipantId &&
+                    item.toParticipantId === receiverParticipantId
+                )
+                if (!projection) {
+                    throw new ServiceError(404, 'SPACE_DEBT_NOT_FOUND', 'No existe un saldo vigente entre esas personas.')
+                }
+                balanceReporting = projection.amount
+            } else {
+                if (!Object.values(CURRENCIES).includes(input.currency as 'ARS' | 'USD')) {
+                    throw new ServiceError(400, 'PERSONAL_CURRENCY_UNSUPPORTED', 'Mi Finp no admite esa moneda personal.')
+                }
+                actorDebt = await Debt.findOne({
+                    _id: input.debtId,
+                    userId: input.actorUserId,
+                    spaceId: input.spaceId,
+                    sourceType: 'space',
+                    contractVersion: 2,
+                    status: { $in: ['active', 'partially_paid', 'ignored'] },
+                }).session(session).lean<IDebt | null>()
+                if (!actorDebt || actorDebt.remainingAmount <= 0.01) {
+                    throw new ServiceError(404, 'SPACE_DEBT_NOT_FOUND', 'La obligación no existe o ya está saldada.')
+                }
+                const counterpartyParticipantId = extractId(actorDebt.counterpartyParticipantId)
+                if (!counterpartyParticipantId) {
+                    throw new ServiceError(409, 'SPACE_DEBT_COUNTERPARTY_MISSING', 'La contraparte histórica no está disponible.')
+                }
+                payerParticipantId = actorDebt.direction === 'payable' ? actorParticipantId : counterpartyParticipantId
+                receiverParticipantId = actorDebt.direction === 'receivable' ? actorParticipantId : counterpartyParticipantId
+                balanceReporting = actorDebt.remainingAmount
+            }
+
+            const payer = participantById(context.participants, payerParticipantId)
+            const receiver = participantById(context.participants, receiverParticipantId)
+            if (!payer || !receiver) {
+                throw new ServiceError(409, 'SPACE_DEBT_COUNTERPARTY_MISSING', 'Las contrapartes históricas no están disponibles.')
             }
             const dateKey = normalizeFinancialDateKey(input.dateKey)
             const date = financialDateKeyToInstant(dateKey, context.space.timezone)
@@ -106,15 +191,10 @@ export async function settleSpaceDebtV2(input: {
                 reportingCurrency: context.space.reportingCurrency,
                 exchangeRate: input.exchangeRate,
             })
-            if (conversion.reportingAmount > debt.remainingAmount + 0.01) {
+            if (conversion.reportingAmount > balanceReporting + 0.01) {
                 throw new ServiceError(409, 'SPACE_SETTLEMENT_EXCEEDS_BALANCE', 'La liquidación supera el saldo vigente.')
             }
-            const payerParticipantId = debt.direction === 'payable'
-                ? actorParticipantId
-                : counterpartyParticipantId
-            const receiverParticipantId = debt.direction === 'receivable'
-                ? actorParticipantId
-                : counterpartyParticipantId
+
             const [createdEntry] = await SpaceEntry.create([{
                 contractVersion: 2,
                 spaceId: input.spaceId,
@@ -138,57 +218,56 @@ export async function settleSpaceDebtV2(input: {
                 operationId,
             }], { session })
             const entry = createdEntry.toObject() as ISpaceEntry
-            const entries = await SpaceEntry.find({ spaceId: input.spaceId, contractVersion: 2 })
-                .session(session).lean<ISpaceEntry[]>()
             const debts = await materializeSpaceDebtsV2({
                 space: context.space,
                 participants: context.participants,
-                entries,
+                entries: [...entries, entry],
                 operationId,
                 triggeringEntryId: createdEntry._id,
                 session,
             })
 
             const originSnapshot = buildSpaceImpactOriginSnapshotV2({ space: context.space, entry })
-            const actionImpactIds: Types.ObjectId[] = []
+            const pendingImpactIds: Types.ObjectId[] = []
             let actorImpactId: Types.ObjectId | undefined
             let actorTransactionId: Types.ObjectId | undefined
-            for (const participant of [context.currentParticipant, counterparty]) {
+            for (const participant of [payer, receiver]) {
                 const participantId = participant._id.toString()
                 const userId = extractId(participant.userId)
                 if (!userId) continue
                 const isPayer = participantId === payerParticipantId
-                const kind = isPayer ? 'settlement_paid' as const : 'settlement_received' as const
-                const isActor = userId === input.actorUserId
+                const isActorOwnDecision = !represented && userId === input.actorUserId
+                const counterparty = isPayer ? receiver : payer
                 const [impact] = await SpaceEntryPersonalImpact.create([{
                     contractVersion: 2,
                     spaceId: input.spaceId,
                     entryId: entry._id,
                     userId,
                     participantId,
-                    impactKind: kind,
+                    impactKind: isPayer ? 'settlement_paid' : 'settlement_received',
                     amount: input.amount,
                     ownShareAmount: 0,
                     accountImpactAmount: input.amount,
                     operationalAmount: 0,
                     currency: input.currency,
-                    status: isActor ? 'linked' : 'pending',
+                    status: isActorOwnDecision ? 'linked' : 'pending',
                     actionType: isPayer ? 'impact_space_payment' : 'impact_space_collect',
                     sourceType: isPayer ? 'debt_payment' : 'debt_collect',
                     actorUserId: input.actorUserId,
-                    counterpartyParticipantId: isActor ? counterpartyParticipantId : actorParticipantId,
-                    counterpartyNameSnapshot: isActor ? counterparty.displayName : context.currentParticipant.displayName,
-                    debtId: isActor ? debt._id : undefined,
+                    counterpartyParticipantId: counterparty._id,
+                    counterpartyNameSnapshot: counterparty.displayName,
+                    debtId: isActorOwnDecision ? actorDebt?._id : undefined,
                     originSnapshot,
                     revision: 0,
                     operationId,
-                    ...(isActor ? { resolvedAt: new Date() } : {}),
+                    ...(isActorOwnDecision ? { resolvedAt: new Date() } : {}),
                 }], { session })
-                if (!isActor) {
-                    actionImpactIds.push(impact._id)
+                if (!isActorOwnDecision) {
+                    pendingImpactIds.push(impact._id)
                     continue
                 }
                 actorImpactId = impact._id
+                const ownInput = input as Extract<SettleSpaceDebtV2Input, { mode?: 'own' }>
                 const transactionInput = {
                     variant: isPayer ? 'settlement_paid' : 'settlement_received',
                     userId,
@@ -198,13 +277,13 @@ export async function settleSpaceDebtV2(input: {
                     spaceOperationId: operationId.toHexString(),
                     amount: input.amount,
                     operationalAmount: 0,
-                    currency: input.currency,
+                    currency: input.currency as 'ARS' | 'USD',
                     date,
                     description: input.description?.trim() || `Liquidación · ${context.space.name}`,
                     spaceNameSnapshot: context.space.name,
                     ...(isPayer
-                        ? { sourceAccountId: input.accountId }
-                        : { destinationAccountId: input.accountId }),
+                        ? { sourceAccountId: ownInput.accountId }
+                        : { destinationAccountId: ownInput.accountId }),
                 } as CreateInternalSpaceTransactionInput
                 const transaction = await createInternalSpaceTransaction(transactionInput, session)
                 const accountId = extractId(transaction.sourceAccountId) ?? extractId(transaction.destinationAccountId)
@@ -223,19 +302,23 @@ export async function settleSpaceDebtV2(input: {
                 type: 'settlement_created',
                 entityType: 'settlement',
                 entityId: entry._id.toString(),
-                title: 'Saldo liquidado',
-                metadata: { contractVersion: 2, originSurface: input.originSurface },
+                title: represented ? 'Liquidación representada registrada' : 'Saldo liquidado',
+                metadata: { contractVersion: 2, originSurface: input.originSurface, represented },
                 participants: context.participants,
                 session,
             })
             return {
-                value: { spaceEntryId: entry._id.toString(), remainingAmount: Math.max(0, debt.remainingAmount - conversion.reportingAmount) },
+                value: {
+                    spaceEntryId: entry._id.toString(),
+                    remainingAmount: Math.max(0, balanceReporting - conversion.reportingAmount),
+                    represented,
+                },
                 resultRefs: {
                     spaceEntryId: entry._id,
                     personalImpactId: actorImpactId,
                     transactionId: actorTransactionId,
-                    debtId: debt._id,
-                    pendingActionIds: actionImpactIds,
+                    debtId: actorDebt?._id,
+                    pendingActionIds: pendingImpactIds,
                     debtIds: debts.debtIds.map((id) => new Types.ObjectId(id)),
                     debtMovementIds: debts.movementIds.map((id) => new Types.ObjectId(id)),
                     activityEventIds: [activity._id],

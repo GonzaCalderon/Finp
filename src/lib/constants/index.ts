@@ -292,6 +292,10 @@ export const SPACE_OPERATION_TYPES = {
     CHANGE_LIFECYCLE: 'change_lifecycle',
     CHANGE_ROLE: 'change_role',
     TRANSFER_OWNERSHIP: 'transfer_ownership',
+    UPDATE_SETTINGS: 'update_settings',
+    CHANGE_PARTICIPANT_STATE: 'change_participant_state',
+    ADD_PARTICIPANT: 'add_participant',
+    RESPOND_INVITE: 'respond_invite',
 } as const
 
 export const SPACE_OPERATION_STATUSES = {

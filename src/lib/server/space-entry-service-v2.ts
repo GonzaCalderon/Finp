@@ -4,6 +4,7 @@ import {
     SpaceCategory,
     SpaceEntry,
     SpaceEntryPersonalImpact,
+    Transaction,
 } from '@/lib/models'
 import { ServiceError } from '@/lib/server/errors'
 import { getSpaceCapabilitiesV2 } from '@/lib/server/space-capabilities'
@@ -25,17 +26,19 @@ import {
     convertSpaceAmountV2,
     derivePersonalImpactAmountsV2,
     financialDateKeyToInstant,
+    financialDateKeyFromInstant,
     normalizeFinancialDateKey,
     type SpaceSplitAllocationV2,
 } from '@/lib/utils/space-financial-v2'
 import { extractId } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpaceParticipant } from '@/types'
+import type { ISpaceEntry, ISpaceParticipant, ITransaction } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
 
 export interface CreateSpaceEntryV2Input {
     actorUserId: string
     spaceId: string
     idempotencyKey: string
+    expectedRevision: number
     title: string
     description?: string
     amount: number
@@ -52,6 +55,7 @@ export interface CreateSpaceEntryV2Input {
         accountId?: string
         categoryId?: string
         description?: string
+        linkedTransactionId?: string
     }
 }
 
@@ -184,6 +188,74 @@ async function createPersonalImpactsForEntry(input: {
                 'La salida o entrada real exige una cuenta personal.'
             )
         }
+        const linkedTransactionId = input.actorPersonalImpact?.linkedTransactionId
+        if (linkedTransactionId) {
+            const expectedType: ITransaction['type'] = variant === 'settlement_paid'
+                ? 'personal_debt_payment'
+                : variant === 'settlement_received'
+                    ? 'personal_debt_collect'
+                    : 'expense'
+            const transaction = await Transaction.findOne({
+                _id: linkedTransactionId,
+                userId,
+                $or: [
+                    { spaceImpactId: { $exists: false } },
+                    { spaceImpactId: impact._id },
+                ],
+            }).session(input.session).lean<ITransaction | null>()
+            const expectedAmount = amounts.accountImpactAmount > 0
+                ? amounts.accountImpactAmount
+                : amounts.ownShareAmount
+            if (
+                !transaction ||
+                transaction.type !== expectedType ||
+                transaction.currency !== input.entry.currency ||
+                Math.abs(transaction.amount - expectedAmount) > 0.01 ||
+                Math.abs((transaction.operationalAmount ?? transaction.amount) - amounts.operationalAmount) > 0.01 ||
+                financialDateKeyFromInstant(transaction.date, input.entry.timezone!) !== input.entry.dateKey
+            ) {
+                throw new ServiceError(
+                    409,
+                    'SPACE_TRANSACTION_PREVIEW_STALE',
+                    'La transacción elegida ya no coincide con el impacto revisado.'
+                )
+            }
+            const link = await Transaction.updateOne(
+                {
+                    _id: transaction._id,
+                    userId,
+                    $or: [{ spaceImpactId: { $exists: false } }, { spaceImpactId: impact._id }],
+                },
+                {
+                    $set: {
+                        spaceId: input.space._id,
+                        spaceEntryId: input.entry._id,
+                        spaceImpactId: impact._id,
+                        spaceOperationId: input.operationId,
+                        spaceContractVersion: 2,
+                    },
+                },
+                { session: input.session }
+            )
+            if (link.matchedCount !== 1) {
+                throw new ServiceError(409, 'SPACE_TRANSACTION_LINK_CONFLICT', 'La transacción cambió antes de confirmar.')
+            }
+            const resolvedAccountId = extractId(transaction.sourceAccountId) ?? extractId(transaction.destinationAccountId)
+            await SpaceEntryPersonalImpact.updateOne(
+                { _id: impact._id, contractVersion: 2, revision: 0 },
+                {
+                    $set: {
+                        transactionId: transaction._id,
+                        ...(resolvedAccountId ? { accountId: resolvedAccountId } : {}),
+                        ...(transaction.categoryId ? { categoryId: transaction.categoryId } : {}),
+                    },
+                },
+                { session: input.session }
+            )
+            actorTransactionId = transaction._id
+            continue
+        }
+
         const transactionInput = {
             variant,
             userId,
@@ -237,6 +309,14 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 session,
                 capability: 'create_entry',
             })
+            if ((context.space.revision ?? 0) !== input.expectedRevision) {
+                throw new ServiceError(
+                    409,
+                    'SPACE_VERSION_CONFLICT',
+                    'La configuración del Espacio cambió. Revisá la última versión antes de confirmar.',
+                    { expectedRevision: input.expectedRevision, actualRevision: context.space.revision ?? 0 }
+                )
+            }
             if (!context.space.timezone) {
                 throw new ServiceError(409, 'SPACE_TIMEZONE_REQUIRED', 'El Espacio necesita una zona horaria IANA.')
             }

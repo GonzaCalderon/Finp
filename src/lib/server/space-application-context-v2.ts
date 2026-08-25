@@ -39,8 +39,7 @@ export async function loadSpaceApplicationContextV2(input: {
         throw new ServiceError(404, 'SPACE_V2_NOT_FOUND', 'El Espacio v2 no existe o todavía no fue migrado.')
     }
     const currentParticipant = participants.find(
-        (participant) =>
-            participant.isActive && extractId(participant.userId) === input.actorUserId
+        (participant) => extractId(participant.userId) === input.actorUserId
     )
     const isOwnerRecord = extractId(space.ownerUserId) === input.actorUserId
     if (!currentParticipant) {
@@ -54,7 +53,16 @@ export async function loadSpaceApplicationContextV2(input: {
             isOwnerRecord,
         }, input.capability)
     } catch {
-        throw new ServiceError(409, 'SPACE_CAPABILITY_DENIED', 'La acción no está permitida en el estado actual del Espacio.')
+        const lifecycleBlocked =
+            input.capability === 'create_entry' ||
+            input.capability.startsWith('edit_') ||
+            input.capability.startsWith('void_') ||
+            input.capability.endsWith('_space')
+        throw new ServiceError(
+            lifecycleBlocked ? 409 : 403,
+            lifecycleBlocked ? 'SPACE_STATE_CONFLICT' : 'SPACE_CAPABILITY_DENIED',
+            'La acción no está permitida para tu rol o en el estado actual del Espacio.'
+        )
     }
     return { space, participants, currentParticipant, isOwnerRecord }
 }
@@ -85,7 +93,7 @@ export async function createSpaceActivityEventV2(input: {
     actorUserId: string
     actorParticipantId: string
     operationId: Types.ObjectId
-    type: 'entry_created' | 'entry_edited' | 'entry_voided' | 'settlement_created' | 'role_changed' | 'space_updated'
+    type: 'entry_created' | 'entry_edited' | 'entry_voided' | 'settlement_created' | 'role_changed' | 'space_updated' | 'participant_invited' | 'participant_joined' | 'participant_removed'
     entityType: 'space' | 'entry' | 'settlement' | 'participant'
     entityId: string
     title: string

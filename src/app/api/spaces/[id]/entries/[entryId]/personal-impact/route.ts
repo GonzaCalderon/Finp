@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Types } from 'mongoose'
+import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceEntry, SpaceEntryPersonalImpact } from '@/lib/models'
@@ -19,6 +20,31 @@ import {
     removePersonalImpactWithoutTransaction,
 } from '@/lib/server/transaction-teardown'
 import { isServiceError } from '@/lib/server/errors'
+import {
+    requireIdempotencyKey,
+    spaceApiErrorResponse,
+    toSpaceMutationResult,
+} from '@/lib/server/space-api-contract'
+import { resolveSpacePersonalImpactV2 } from '@/lib/server/space-personal-impact-service-v2'
+import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
+
+const personalImpactDecisionV2Schema = z.object({
+    impactId: z.string().min(1),
+    expectedRevision: z.number().int().nonnegative(),
+    decision: z.discriminatedUnion('type', [
+        z.object({
+            type: z.literal('create_transaction'),
+            accountId: z.string().optional(),
+            categoryId: z.string().optional(),
+            description: z.string().trim().max(200).optional(),
+        }).strict(),
+        z.object({ type: z.literal('link_existing'), transactionId: z.string().min(1) }).strict(),
+        z.object({ type: z.literal('ignore') }).strict(),
+        z.object({ type: z.literal('keep_review') }).strict(),
+        z.object({ type: z.literal('sync_transaction') }).strict(),
+        z.object({ type: z.literal('remove_transaction') }).strict(),
+    ]),
+}).strict()
 
 type Params = Promise<{ id: string; entryId: string }>
 
@@ -95,7 +121,36 @@ export async function POST(request: Request, { params }: { params: Params }) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
         }
 
-        const body = await request.json()
+        const body: unknown = await request.json()
+        await connectDB()
+        const entryContract = await SpaceEntry.findOne(
+            { _id: entryId, spaceId: id },
+            { contractVersion: 1 }
+        ).lean<{ contractVersion?: number } | null>()
+        if (!entryContract) return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
+        if (entryContract.contractVersion === 2) {
+            const parsedV2 = personalImpactDecisionV2Schema.safeParse(body)
+            if (!parsedV2.success) {
+                return NextResponse.json({
+                    error: 'La decisión personal no es válida.',
+                    code: 'SPACE_PERSONAL_IMPACT_DECISION_INVALID',
+                    failureState: 'not_started',
+                    retryable: false,
+                    details: parsedV2.error.flatten(),
+                }, { status: 400 })
+            }
+            const execution = await resolveSpacePersonalImpactV2({
+                actorUserId: session.user.id,
+                spaceId: id,
+                entryId,
+                impactId: parsedV2.data.impactId,
+                expectedRevision: parsedV2.data.expectedRevision,
+                idempotencyKey: requireIdempotencyKey(request),
+                decision: parsedV2.data.decision,
+            })
+            return NextResponse.json(toSpaceMutationResult(execution), { status: 201 })
+        }
+        enterLegacySpaceWriteFacade(entryContract)
         const parsed = spacePersonalImpactSchema.safeParse(body)
         if (!parsed.success) {
             return NextResponse.json(
@@ -103,8 +158,6 @@ export async function POST(request: Request, { params }: { params: Params }) {
                 { status: 400 }
             )
         }
-
-        await connectDB()
 
         const context = await getAccessibleSpaceContext(id, session.user.id)
         if (!context || !context.currentParticipant) {
@@ -162,8 +215,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
             )
         }
     } catch (error) {
-        console.error('Error al crear impacto personal:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo resolver el impacto personal.')
     }
 }
 
@@ -179,6 +231,46 @@ export async function DELETE(request: Request, { params }: { params: Params }) {
         if (!Types.ObjectId.isValid(id) || !Types.ObjectId.isValid(entryId)) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
         }
+        if (transactionId && !Types.ObjectId.isValid(transactionId)) {
+            return NextResponse.json(
+                {
+                    error: 'La transacción seleccionada no es válida.',
+                    code: 'INVALID_TRANSACTION_ID',
+                },
+                { status: 400 }
+            )
+        }
+        await connectDB()
+
+        const v2Impact = await SpaceEntryPersonalImpact.findOne({
+            spaceId: id,
+            entryId,
+            userId: session.user.id,
+            contractVersion: 2,
+            status: { $in: [SPACE_PERSONAL_IMPACT_STATUSES.LINKED, SPACE_PERSONAL_IMPACT_STATUSES.NEEDS_REVIEW] },
+        }).lean<ISpaceEntryPersonalImpact | null>()
+        if (v2Impact?.contractVersion === 2) {
+            const revisionHeader = request.headers.get('Expected-Revision')
+            const expectedRevision = Number(revisionHeader)
+            if (!revisionHeader || !Number.isInteger(expectedRevision) || expectedRevision < 0) {
+                return NextResponse.json({
+                    error: 'La operación requiere Expected-Revision.',
+                    code: 'EXPECTED_REVISION_REQUIRED',
+                    failureState: 'not_started',
+                    retryable: false,
+                }, { status: 400 })
+            }
+            const execution = await resolveSpacePersonalImpactV2({
+                actorUserId: session.user.id,
+                spaceId: id,
+                entryId,
+                impactId: v2Impact._id.toString(),
+                expectedRevision,
+                idempotencyKey: requireIdempotencyKey(request),
+                decision: { type: 'remove_transaction' },
+            })
+            return NextResponse.json(toSpaceMutationResult(execution))
+        }
         if (!transactionId || !Types.ObjectId.isValid(transactionId)) {
             return NextResponse.json(
                 {
@@ -188,8 +280,6 @@ export async function DELETE(request: Request, { params }: { params: Params }) {
                 { status: 400 }
             )
         }
-
-        await connectDB()
 
         const context = await getAccessibleSpaceContext(id, session.user.id)
         if (!context) {
@@ -253,13 +343,6 @@ export async function DELETE(request: Request, { params }: { params: Params }) {
             orphanTransactionDeleted: false,
         })
     } catch (error) {
-        console.error('Error al desvincular impacto personal:', error)
-        if (isServiceError(error)) {
-            return NextResponse.json(
-                { error: error.message, code: error.code },
-                { status: error.status }
-            )
-        }
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo desvincular el impacto personal.')
     }
 }

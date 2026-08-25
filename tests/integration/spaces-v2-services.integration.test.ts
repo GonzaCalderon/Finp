@@ -20,6 +20,8 @@ import { editSpaceEntryV2 } from '@/lib/server/space-entry-history-service-v2'
 import {
     changeSpaceDebtModeV2,
     changeSpaceLifecycleV2,
+    setSpaceParticipantActiveV2,
+    updateSpaceSettingsV2,
     transferSpaceOwnershipV2,
 } from '@/lib/server/space-management-service-v2'
 import {
@@ -27,6 +29,7 @@ import {
     hashSpaceOperationValue,
 } from '@/lib/server/space-operation-executor'
 import { settleSpaceDebtV2 } from '@/lib/server/space-settlement-service-v2'
+import { getSpaceDetailV2 } from '@/lib/server/space-read-service-v2'
 import { resolveE2EEnvironment } from '../e2e/helpers/environment'
 
 describe.sequential('spaces v2 application services — Mongo transaction integration', () => {
@@ -168,6 +171,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             actorUserId: ownerUserId,
             spaceId,
             idempotencyKey: `create-first-${runId}`,
+            expectedRevision: 0,
             title: 'Gasto compartido v2',
             amount: 100,
             currency: 'ARS',
@@ -208,6 +212,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             actorUserId: ownerUserId,
             spaceId,
             idempotencyKey: `create-concurrent-${runId}`,
+            expectedRevision: 0,
             title: 'Concurrente v2',
             amount: 60,
             currency: 'ARS',
@@ -270,15 +275,46 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         })).rejects.toMatchObject({ code: 'SPACE_ENTRY_VERSION_CONFLICT' })
     })
 
+    it('bloquea la moneda de reporte, conserva monedas usadas y permite agregar nuevas', async () => {
+        const base = {
+            actorUserId: ownerUserId,
+            spaceId,
+            expectedRevision: 0,
+            name: `Espacio v2 ${runId}`,
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'equal' as const,
+            timezone: 'America/Argentina/Buenos_Aires',
+        }
+        await expect(updateSpaceSettingsV2({
+            ...base,
+            idempotencyKey: `currency-reporting-${runId}`,
+            currencies: ['ARS', 'USD'],
+            reportingCurrency: 'USD',
+        })).rejects.toMatchObject({ code: 'SPACE_REPORTING_CURRENCY_LOCKED' })
+        await expect(updateSpaceSettingsV2({
+            ...base,
+            idempotencyKey: `currency-remove-${runId}`,
+            currencies: ['USD'],
+            reportingCurrency: 'USD',
+        })).rejects.toMatchObject({ code: 'SPACE_CURRENCY_IN_USE' })
+        const updated = await updateSpaceSettingsV2({
+            ...base,
+            idempotencyKey: `currency-add-${runId}`,
+            currencies: ['ARS', 'USD'],
+        })
+        expect(updated.value).toMatchObject({ currencies: ['ARS', 'USD'], revision: 1 })
+    })
+
     it('cambia el modo sin dejar claves activas anteriores y liquida igual desde ambas superficies', async () => {
         const mode = await changeSpaceDebtModeV2({
             actorUserId: ownerUserId,
             spaceId,
             idempotencyKey: `mode-${runId}`,
-            expectedRevision: 0,
+            expectedRevision: 1,
             debtMode: 'simplified',
         })
-        expect(mode.value).toMatchObject({ debtMode: 'simplified', revision: 1 })
+        expect(mode.value).toMatchObject({ debtMode: 'simplified', revision: 2 })
         expect(await Debt.countDocuments({ spaceId, originMode: 'direct', status: 'active' })).toBe(0)
         let debt = await Debt.findOne({
             userId: ownerUserId,
@@ -294,6 +330,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             spaceId,
             debtId: debt!._id.toString(),
             idempotencyKey: `settle-spaces-${runId}`,
+            expectedRevision: 2,
             originSurface: 'spaces',
             amount: 20,
             currency: 'ARS',
@@ -303,13 +340,37 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         debt = await Debt.findById(debt!._id).lean()
         expect(debt?.remainingAmount).toBe(70)
 
+        const transactionCountBeforeRepresented = await Transaction.countDocuments({ spaceId })
+        const represented = await settleSpaceDebtV2({
+            mode: 'represented',
+            actorUserId: ownerUserId,
+            spaceId,
+            payerParticipantId: memberParticipantId,
+            receiverParticipantId: ownerParticipantId,
+            idempotencyKey: `settle-represented-${runId}`,
+            expectedRevision: 2,
+            originSurface: 'spaces',
+            amount: 10,
+            currency: 'ARS',
+            dateKey: '2026-08-27',
+        })
+        expect(represented.value).toMatchObject({ represented: true, remainingAmount: 60 })
+        expect(await Transaction.countDocuments({ spaceId })).toBe(transactionCountBeforeRepresented)
+        expect(await SpaceEntryPersonalImpact.countDocuments({
+            entryId: represented.resultRefs.spaceEntryId,
+            status: 'pending',
+        })).toBe(2)
+        debt = await Debt.findById(debt!._id).lean()
+        expect(debt?.remainingAmount).toBe(60)
+
         await settleSpaceDebtV2({
             actorUserId: ownerUserId,
             spaceId,
             debtId: debt!._id.toString(),
             idempotencyKey: `settle-debts-${runId}`,
+            expectedRevision: 2,
             originSurface: 'debts',
-            amount: 70,
+            amount: 60,
             currency: 'ARS',
             dateKey: '2026-08-27',
             accountId: ownerAccountId,
@@ -317,7 +378,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         debt = await Debt.findById(debt!._id).lean()
         expect(debt).toMatchObject({ remainingAmount: 0, status: 'paid' })
         const settlements = await SpaceEntry.find({ spaceId, type: 'settlement', contractVersion: 2 }).lean()
-        expect(settlements).toHaveLength(2)
+        expect(settlements).toHaveLength(3)
         const settlementTransactions = await Transaction.find({
             userId: ownerUserId,
             spaceEntryId: { $in: settlements.map((entry) => entry._id) },
@@ -331,14 +392,15 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             actorUserId: ownerUserId,
             spaceId,
             idempotencyKey: `pause-${runId}`,
-            expectedRevision: 1,
+            expectedRevision: 2,
             targetStatus: 'paused',
         })
-        expect(paused.value).toMatchObject({ status: 'paused', revision: 2 })
+        expect(paused.value).toMatchObject({ status: 'paused', revision: 3 })
         await expect(createSpaceEntryV2({
             actorUserId: ownerUserId,
             spaceId,
             idempotencyKey: `blocked-create-${runId}`,
+            expectedRevision: 3,
             title: 'No se crea',
             amount: 10,
             currency: 'ARS',
@@ -346,12 +408,12 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             paidByParticipantId: ownerParticipantId,
             sharedWithParticipantIds: [ownerParticipantId],
             splitMode: 'none',
-        })).rejects.toMatchObject({ code: 'SPACE_CAPABILITY_DENIED' })
+        })).rejects.toMatchObject({ code: 'SPACE_STATE_CONFLICT' })
         await changeSpaceLifecycleV2({
             actorUserId: ownerUserId,
             spaceId,
             idempotencyKey: `reopen-${runId}`,
-            expectedRevision: 2,
+            expectedRevision: 3,
             targetStatus: 'active',
         })
         const transfer = await transferSpaceOwnershipV2({
@@ -359,13 +421,63 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             spaceId,
             targetParticipantId: memberParticipantId,
             idempotencyKey: `transfer-${runId}`,
-            expectedSpaceRevision: 3,
+            expectedSpaceRevision: 4,
             expectedActorParticipantRevision: 0,
             expectedTargetParticipantRevision: 0,
         })
-        expect(transfer.value).toMatchObject({ ownerUserId: memberUserId, spaceRevision: 4 })
+        expect(transfer.value).toMatchObject({ ownerUserId: memberUserId, spaceRevision: 5 })
         expect(await SpaceParticipant.findById(ownerParticipantId).lean()).toMatchObject({ role: 'admin', revision: 1 })
         expect(await SpaceParticipant.findById(memberParticipantId).lean()).toMatchObject({ role: 'owner', revision: 1 })
+    })
+
+    it('una persona removida conserva historia, impacto privado y liquidación propia', async () => {
+        await createSpaceEntryV2({
+            actorUserId: memberUserId,
+            spaceId,
+            idempotencyKey: `inactive-origin-${runId}`,
+            expectedRevision: 5,
+            title: 'Saldo histórico después de transferir',
+            amount: 50,
+            currency: 'ARS',
+            dateKey: '2026-08-29',
+            paidByParticipantId: memberParticipantId,
+            sharedWithParticipantIds: [ownerParticipantId, memberParticipantId],
+            splitMode: 'equal',
+        })
+        await setSpaceParticipantActiveV2({
+            actorUserId: memberUserId,
+            spaceId,
+            participantId: ownerParticipantId,
+            idempotencyKey: `deactivate-historical-${runId}`,
+            expectedParticipantRevision: 1,
+            isActive: false,
+        })
+        expect(await SpaceParticipant.findById(ownerParticipantId).lean())
+            .toMatchObject({ isActive: false, revision: 2 })
+        const debt = await Debt.findOne({
+            userId: ownerUserId,
+            spaceId,
+            direction: 'payable',
+            status: 'active',
+        }).lean()
+        expect(debt?.remainingAmount).toBe(25)
+        const settlement = await settleSpaceDebtV2({
+            actorUserId: ownerUserId,
+            spaceId,
+            debtId: debt!._id.toString(),
+            accountId: ownerAccountId,
+            idempotencyKey: `inactive-own-settlement-${runId}`,
+            expectedRevision: 5,
+            originSurface: 'spaces',
+            amount: 25,
+            currency: 'ARS',
+            dateKey: '2026-08-30',
+        })
+        expect(settlement.value).toMatchObject({ remainingAmount: 0, represented: false })
+        expect(await Transaction.countDocuments({
+            userId: ownerUserId,
+            spaceEntryId: settlement.resultRefs.spaceEntryId,
+        })).toBe(1)
     })
 
     it('los índices parciales v2 conviven con impactos legacy paralelos', async () => {
@@ -410,4 +522,74 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             .map((index) => index.name)
         expect(indexNames).toContain('v2_unique_personal_impact_per_user_entry')
     })
+
+    it('pagina una historia grande con payload acotado sin cache ni dependencias nuevas', async () => {
+        const perfSpace = await Space.create({
+            contractVersion: 2,
+            ownerUserId,
+            name: `Rendimiento v2 ${runId}`,
+            type: 'project',
+            mode: 'solo',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'none',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        const participant = await SpaceParticipant.create({
+            spaceId: perfSpace._id,
+            kind: 'finp_user',
+            userId: ownerUserId,
+            displayName: 'Owner rendimiento',
+            role: 'owner',
+            inviteStatus: 'accepted',
+            isActive: true,
+            revision: 0,
+        })
+        try {
+            const createdAt = new Date('2026-08-24T12:00:00.000Z')
+            await SpaceEntry.insertMany(Array.from({ length: 1_000 }, (_, index) => ({
+                contractVersion: 2,
+                spaceId: perfSpace._id,
+                createdByUserId: ownerUserId,
+                createdByParticipantId: participant._id,
+                type: 'expense',
+                status: 'recorded',
+                title: `Movimiento ${index}`,
+                amount: 100,
+                currency: 'ARS',
+                reportingAmount: 100,
+                date: createdAt,
+                dateKey: `2026-08-${String((index % 24) + 1).padStart(2, '0')}`,
+                timezone: 'America/Argentina/Buenos_Aires',
+                paidByParticipantId: participant._id,
+                sharedWithParticipantIds: [participant._id],
+                splitMode: 'none',
+                splitAllocations: [],
+                revision: 0,
+                createdAt,
+                updatedAt: createdAt,
+            })), { ordered: true })
+            const startedAt = performance.now()
+            const detail = await getSpaceDetailV2({
+                spaceId: perfSpace._id.toString(),
+                actorUserId: ownerUserId,
+            })
+            const elapsedMs = performance.now() - startedAt
+            const payloadBytes = Buffer.byteLength(JSON.stringify(detail))
+            expect(detail.movements.items).toHaveLength(50)
+            expect(detail.movements.nextCursor).toBeTruthy()
+            expect(payloadBytes).toBeLessThan(150_000)
+            expect(elapsedMs).toBeLessThan(5_000)
+            console.info('[spaces-v2-performance] entries=1000 payloadBytes=%d elapsedMs=%d', payloadBytes, Math.round(elapsedMs))
+        } finally {
+            await Promise.all([
+                SpaceEntry.deleteMany({ spaceId: perfSpace._id }),
+                SpaceParticipant.deleteMany({ spaceId: perfSpace._id }),
+            ])
+            await Space.deleteOne({ _id: perfSpace._id })
+        }
+    }, 15_000)
 })

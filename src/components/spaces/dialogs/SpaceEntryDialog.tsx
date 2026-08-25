@@ -10,6 +10,7 @@ import {
     Coins,
     CreditCard,
     PiggyBank,
+    Link2,
     Save,
     Wallet,
 } from 'lucide-react'
@@ -26,7 +27,15 @@ import {
 import { spaceEntryEditSchema, spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
 import type { AccountType } from '@/lib/constants'
-import type { IAccount, ICategory, ISpaceCategory, ISpaceEntry, ISpaceParticipant } from '@/types'
+import type {
+    IAccount,
+    ICategory,
+    ISpaceCategory,
+    ISpaceEntry,
+    ISpaceParticipant,
+    ITransaction,
+    SpaceEntryPreviewDto,
+} from '@/types'
 import {
     Dialog,
     DialogContent,
@@ -66,6 +75,7 @@ import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitCo
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { CurrencySelector } from '@/components/shared/CurrencySelector'
+import { clientDateToDateKey } from '@/lib/client/space-api-adapter'
 
 // ── Account type helpers ──────────────────────────────────────────────────────
 
@@ -296,6 +306,7 @@ export function SpaceEntryDialog({
     mode = 'create',
     initialData,
     initialHasSubsequentSettlement,
+    contractVersion,
 }: DialogProps & {
     onSubmit: (data: SpaceEntryFormData) => Promise<ISpaceEntry>
     onEditComplete?: (entry: ISpaceEntry) => void
@@ -311,6 +322,7 @@ export function SpaceEntryDialog({
     mode?: 'create' | 'edit'
     initialData?: ISpaceEntry
     initialHasSubsequentSettlement?: boolean
+    contractVersion?: 2
 }) {
     const { categories } = useSpaceCategories(spaceId)
     const { categories: personalCategories } = useCategories()
@@ -337,6 +349,12 @@ export function SpaceEntryDialog({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [datePickerOpen, setDatePickerOpen] = useState(false)
     const [hasSubsequentSettlementWarning, setHasSubsequentSettlementWarning] = useState(false)
+    const [step, setStep] = useState<1 | 2 | 3>(1)
+    const [preview, setPreview] = useState<SpaceEntryPreviewDto | null>(null)
+    const [previewLoading, setPreviewLoading] = useState(false)
+    const [previewError, setPreviewError] = useState<string | null>(null)
+    const [showAdvancedLink, setShowAdvancedLink] = useState(false)
+    const [recentTransactions, setRecentTransactions] = useState<ITransaction[]>([])
     const attachmentsRef = useRef<SpaceAttachmentDraft[]>([])
     const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -366,6 +384,11 @@ export function SpaceEntryDialog({
         setSubmitting(false)
         setError(null)
         setHasSubsequentSettlementWarning(false)
+        setStep(1)
+        setPreview(null)
+        setPreviewError(null)
+        setShowAdvancedLink(false)
+        setRecentTransactions([])
 
         // Edit mode: pre-populate form from initialData
         if (mode === 'edit' && initialData) {
@@ -508,6 +531,93 @@ export function SpaceEntryDialog({
         () => filteredCategories.find((category) => extractId(category._id) === form.spaceCategoryId),
         [filteredCategories, form.spaceCategoryId]
     )
+
+    useEffect(() => {
+        if (!open || mode !== 'create' || step !== 3 || contractVersion !== 2) return
+        const sharedParticipantIds = form.sharedWithParticipantIds?.length
+            ? form.sharedWithParticipantIds
+            : form.paidByParticipantId
+                ? [form.paidByParticipantId]
+                : []
+        if (
+            !form.paidByParticipantId ||
+            !sharedParticipantIds.length ||
+            !Number.isFinite(form.amount) ||
+            form.amount <= 0
+        ) {
+            setPreview(null)
+            return
+        }
+        let cancelled = false
+        const timer = window.setTimeout(async () => {
+            setPreviewLoading(true)
+            setPreviewError(null)
+            try {
+                const response = await apiJson<{ data: SpaceEntryPreviewDto }>(
+                    `/api/spaces/${spaceId}/entries/preview`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: form.amount,
+                            currency: form.currency,
+                            exchangeRate: form.exchangeRate,
+                            paidByParticipantId: form.paidByParticipantId,
+                            sharedWithParticipantIds: sharedParticipantIds,
+                            splitMode: form.splitMode,
+                            splitAllocations: form.splitAllocations,
+                            linkedTransactionId: form.linkedTransactionId,
+                        }),
+                    }
+                )
+                if (!cancelled) setPreview(response.data)
+            } catch (err) {
+                if (!cancelled) {
+                    setPreview(null)
+                    setPreviewError(err instanceof Error ? err.message : 'No se pudo calcular la revisión financiera.')
+                }
+            } finally {
+                if (!cancelled) setPreviewLoading(false)
+            }
+        }, 250)
+        return () => {
+            cancelled = true
+            window.clearTimeout(timer)
+        }
+    }, [
+        contractVersion,
+        form.amount,
+        form.currency,
+        form.exchangeRate,
+        form.linkedTransactionId,
+        form.paidByParticipantId,
+        form.sharedWithParticipantIds,
+        form.splitAllocations,
+        form.splitMode,
+        mode,
+        open,
+        spaceId,
+        step,
+    ])
+
+    useEffect(() => {
+        if (!open || mode !== 'create' || step !== 3 || !showAdvancedLink) return
+        let cancelled = false
+        void apiJson<{ transactions: ITransaction[] }>(
+            `/api/transactions?limit=25&sort=date_desc&currency=${form.currency}`
+        ).then((response) => {
+            if (cancelled) return
+            const expected = preview?.accountImpactAmount || preview?.ownShareAmount || form.amount
+            setRecentTransactions(response.transactions.filter(
+                (transaction) => Math.abs(transaction.amount - expected) <= 0.01
+            ))
+        }).catch(() => {
+            if (!cancelled) setRecentTransactions([])
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [form.amount, form.currency, mode, open, preview?.accountImpactAmount, preview?.ownShareAmount, showAdvancedLink, step])
 
     useEffect(() => {
         if (!form.spaceCategoryId) return
@@ -770,6 +880,46 @@ export function SpaceEntryDialog({
         setFieldErrors({})
 
         try {
+            if (contractVersion === 2) {
+                await apiJson(`/api/spaces/${spaceId}/entries/${entryId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': crypto.randomUUID(),
+                    },
+                    body: JSON.stringify({
+                        expectedRevision: initialData.revision ?? 0,
+                        title: form.title,
+                        description: form.description || undefined,
+                        amount: form.amount,
+                        currency: form.currency,
+                        exchangeRate: form.exchangeRate,
+                        dateKey: clientDateToDateKey(form.date),
+                        spaceCategoryId: form.spaceCategoryId,
+                        paidByParticipantId: form.paidByParticipantId,
+                        sharedWithParticipantIds: form.sharedWithParticipantIds?.length
+                            ? form.sharedWithParticipantIds
+                            : form.paidByParticipantId
+                                ? [form.paidByParticipantId]
+                                : [],
+                        splitMode: spaceMode === 'solo' ? 'none' : form.splitMode,
+                        splitAllocations:
+                            form.splitMode === 'percentage' || form.splitMode === 'fixed'
+                                ? normalizedAllocations
+                                : undefined,
+                        notes: form.notes || undefined,
+                    }),
+                })
+                invalidateData(SPACE_INVALIDATION_TAGS)
+                onEditComplete?.({
+                    ...initialData,
+                    ...form,
+                    status: 'recorded',
+                    revision: (initialData.revision ?? 0) + 1,
+                } as ISpaceEntry)
+                onOpenChange(false)
+                return
+            }
             const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -793,6 +943,40 @@ export function SpaceEntryDialog({
             setError(err instanceof Error ? err.message : 'No pudimos guardar los cambios.')
         } finally {
             setSubmitting(false)
+        }
+    }
+
+    const handleNextStep = () => {
+        if (mode === 'edit') return
+        if (step === 1) {
+            const nextErrors: Record<string, string> = {}
+            if (!form.title.trim()) nextErrors.title = 'Ingresá una descripción.'
+            if (!Number.isFinite(form.amount) || form.amount <= 0) nextErrors.amount = 'Ingresá un monto mayor a cero.'
+            if (!form.paidByParticipantId) nextErrors.paidByParticipantId = 'Elegí quién pagó.'
+            if (form.currency !== reportingCurrency && !form.exchangeRate) {
+                nextErrors.exchangeRate = 'Ingresá la cotización para la moneda de reporte.'
+            }
+            if (Object.keys(nextErrors).length) {
+                setFieldErrors(nextErrors)
+                return
+            }
+            setFieldErrors({})
+            setStep(2)
+            return
+        }
+        if (step === 2) {
+            const parsed = spaceEntrySchema.safeParse({ ...form, type: 'expense' })
+            if (!parsed.success) {
+                const nextErrors: Record<string, string> = {}
+                for (const issue of parsed.error.issues) {
+                    const key = String(issue.path[0] ?? '')
+                    if (key && !nextErrors[key]) nextErrors[key] = issue.message
+                }
+                setFieldErrors(nextErrors)
+                return
+            }
+            setFieldErrors({})
+            setStep(3)
         }
     }
 
@@ -837,6 +1021,15 @@ export function SpaceEntryDialog({
                     ?.querySelector<HTMLElement>('.text-destructive')
                     ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
             })
+            return
+        }
+
+        if (contractVersion === 2 && !preview) {
+            setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
+            return
+        }
+        if (preview?.linkExisting && !preview.linkExisting.compatible) {
+            setError('La transacción elegida no coincide con la revisión financiera. Elegí otra o creá una nueva.')
             return
         }
 
@@ -893,6 +1086,27 @@ export function SpaceEntryDialog({
                                 </DialogDescription>
                             </div>
                         </DialogHeader>
+                        {mode === 'create' ? (
+                            <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="Pasos del gasto">
+                                {(['Datos', 'Reparto', 'Revisión'] as const).map((label, index) => {
+                                    const value = (index + 1) as 1 | 2 | 3
+                                    const active = step === value
+                                    const complete = step > value
+                                    return (
+                                        <li key={label}>
+                                            <button
+                                                type="button"
+                                                className={`w-full rounded-xl border px-2 py-2 text-xs font-medium transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : complete ? 'border-foreground/10 bg-muted/60 text-foreground' : 'border-foreground/10 text-muted-foreground'}`}
+                                                onClick={() => complete && setStep(value)}
+                                                aria-current={active ? 'step' : undefined}
+                                            >
+                                                {value}. {label}
+                                            </button>
+                                        </li>
+                                    )
+                                })}
+                            </ol>
+                        ) : null}
                         {mode === 'edit' && initialLinkedTransactionImpactsCurrentUser ? (
                             <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -914,12 +1128,13 @@ export function SpaceEntryDialog({
                     {/* ── Body ── */}
                     <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
                         <div className="space-y-5">
-                            <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+                            <div className={`grid gap-5 ${mode === 'edit' ? 'xl:grid-cols-[1.2fr_0.8fr]' : ''}`}>
 
                                 {/* ── Left column ── */}
-                                <div className="space-y-5">
+                                <div className={`space-y-5 ${mode === 'create' && step === 3 ? 'hidden' : ''}`}>
 
                                     {/* Monto, moneda, fecha, descripción, pagó, categoría */}
+                                    <div className={mode === 'edit' || step === 1 ? 'block' : 'hidden'}>
                                     <SpaceDialogPanel>
                                         <div className="grid gap-4">
                                             <div className="grid gap-4 lg:grid-cols-[1.1fr_0.55fr_0.7fr]">
@@ -1082,9 +1297,10 @@ export function SpaceEntryDialog({
                                             ) : null}
                                         </div>
                                     </SpaceDialogPanel>
+                                    </div>
 
                                     {/* Split configurator */}
-                                    {spaceMode !== 'solo' ? (
+                                    {(mode === 'edit' || step === 2) && spaceMode !== 'solo' ? (
                                         <div>
                                             <SpaceSplitConfigurator
                                                 participants={activeParticipants}
@@ -1119,7 +1335,7 @@ export function SpaceEntryDialog({
                                 </div>
 
                                 {/* ── Right column ── */}
-                                <div className="space-y-5">
+                                <div className={`space-y-5 ${mode === 'create' && step !== 3 ? 'hidden' : ''}`}>
 
                                     {/* Resumen */}
                                     <SpaceDialogPanel>
@@ -1159,6 +1375,48 @@ export function SpaceEntryDialog({
                                             </div>
                                         </div>
                                     </SpaceDialogPanel>
+
+                                    {mode === 'create' ? (
+                                        <SpaceDialogPanel>
+                                            <div className="space-y-4" aria-live="polite">
+                                                <div>
+                                                    <SpaceDialogSectionEyebrow>Revisión financiera</SpaceDialogSectionEyebrow>
+                                                    <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+                                                        Qué cambia al confirmar
+                                                    </h3>
+                                                </div>
+                                                {previewLoading ? (
+                                                    <p className="text-sm text-muted-foreground">Calculando con las reglas del Espacio…</p>
+                                                ) : preview ? (
+                                                    <dl className="grid grid-cols-2 gap-3 text-sm">
+                                                        {[
+                                                            ['Total', preview.totalAmount],
+                                                            ['Tu parte', preview.ownShareAmount],
+                                                            ['Impacto real de cuenta', preview.accountImpactAmount],
+                                                            ['Gasto operacional', preview.operationalAmount],
+                                                            ['Adelanto recuperable', preview.recoverableAdvanceAmount],
+                                                            ['Cambio en deuda', preview.debtDeltaReporting],
+                                                        ].map(([label, amount]) => (
+                                                            <div key={label as string} className="rounded-xl border border-foreground/[0.07] bg-background/70 p-3">
+                                                                <dt className="text-xs text-muted-foreground">{label}</dt>
+                                                                <dd className="mt-1 font-semibold">
+                                                                    <SpaceAmountInline
+                                                                        amount={amount as number}
+                                                                        currency={label === 'Cambio en deuda' ? preview.reportingCurrency : preview.currency}
+                                                                        hidden={false}
+                                                                    />
+                                                                </dd>
+                                                            </div>
+                                                        ))}
+                                                    </dl>
+                                                ) : (
+                                                    <p className="rounded-xl border border-destructive/15 bg-destructive/5 p-3 text-sm text-destructive">
+                                                        {previewError ?? 'No hay una revisión financiera disponible.'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </SpaceDialogPanel>
+                                    ) : null}
 
                                     {/* Pagado desde — solo en modo crear */}
                                     {mode === 'create' && isCurrentUserPayer ? (
@@ -1272,6 +1530,57 @@ export function SpaceEntryDialog({
                                         </SpaceDialogPanel>
                                     ) : null}
 
+                                    {mode === 'create' && isCurrentUserPayer ? (
+                                        <SpaceDialogPanel>
+                                            <div className="space-y-3">
+                                                <button
+                                                    type="button"
+                                                    className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                                                    onClick={() => {
+                                                        setShowAdvancedLink((value) => !value)
+                                                        setForm((previous) => ({
+                                                            ...previous,
+                                                            linkedTransactionId: undefined,
+                                                            ...(showAdvancedLink ? {} : { personalAccountId: undefined, categoryId: undefined }),
+                                                        }))
+                                                    }}
+                                                >
+                                                    <Link2 className="h-4 w-4" />
+                                                    Vincular una transacción existente (avanzado)
+                                                </button>
+                                                {showAdvancedLink ? (
+                                                    <SpaceDialogField label="Transacción compatible">
+                                                        <Select
+                                                            value={form.linkedTransactionId ?? ''}
+                                                            onValueChange={(linkedTransactionId) =>
+                                                                setForm((previous) => ({ ...previous, linkedTransactionId }))
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="w-full">
+                                                                <SelectValue placeholder="Elegí una transacción" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {recentTransactions.map((transaction) => (
+                                                                    <SelectItem
+                                                                        key={extractId(transaction._id)}
+                                                                        value={extractId(transaction._id) ?? ''}
+                                                                    >
+                                                                        {transaction.description} · {transaction.amount} {transaction.currency}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </SpaceDialogField>
+                                                ) : null}
+                                                {preview?.linkExisting && !preview.linkExisting.compatible ? (
+                                                    <p className="text-xs font-medium text-destructive">
+                                                        La transacción no coincide en monto o moneda con este impacto.
+                                                    </p>
+                                                ) : null}
+                                            </div>
+                                        </SpaceDialogPanel>
+                                    ) : null}
+
                                     {/* Adjuntos — solo en modo crear */}
                                     {mode === 'create' ? (
                                         <SpaceAttachmentsUploader
@@ -1304,6 +1613,7 @@ export function SpaceEntryDialog({
                             </div>
 
                             {/* Notas */}
+                            <div className={mode === 'edit' || step === 3 ? 'block' : 'hidden'}>
                             <SpaceDialogPanel>
                                 <div className="space-y-3">
                                     <div className="space-y-1">
@@ -1325,6 +1635,7 @@ export function SpaceEntryDialog({
                                     />
                                 </div>
                             </SpaceDialogPanel>
+                            </div>
 
                             {error ? (
                                 <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -1336,11 +1647,37 @@ export function SpaceEntryDialog({
 
                     {/* ── Footer ── */}
                     <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
-                        <Button className="rounded-full" onClick={() => void handleSubmit()} disabled={submitting}>
+                        <Button
+                            className="rounded-full"
+                            onClick={() => {
+                                if (mode === 'create' && step < 3) handleNextStep()
+                                else void handleSubmit()
+                            }}
+                            disabled={submitting || (mode === 'create' && step === 3 && previewLoading)}
+                        >
                             {submitting
                                 ? (mode === 'edit' ? 'Guardando cambios...' : 'Guardando...')
-                                : (mode === 'edit' ? 'Guardar cambios' : 'Guardar gasto')}
+                                : mode === 'edit'
+                                    ? 'Guardar cambios'
+                                    : step < 3
+                                        ? 'Continuar'
+                                        : form.personalAccountId || form.linkedTransactionId
+                                            ? 'Guardar y agregar a Mi Finp'
+                                            : preview?.personalAction === 'not_applicable'
+                                                ? 'Guardar en Espacios'
+                                                : 'Guardar; decidir Mi Finp después'}
                         </Button>
+                        {mode === 'create' && step > 1 ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-full"
+                                onClick={() => setStep((step - 1) as 1 | 2)}
+                                disabled={submitting}
+                            >
+                                Atrás
+                            </Button>
+                        ) : null}
                         <Button
                             variant="ghost"
                             className="rounded-full"
