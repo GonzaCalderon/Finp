@@ -51,6 +51,8 @@ export async function GET(
                 status: debt.status,
                 contractVersion: 2,
                 spaceRevision: space.revision ?? 0,
+                amountMoney: debt.amountMoney,
+                remainingMoney: debt.remainingMoney,
             }))
             return NextResponse.json({
                 data,

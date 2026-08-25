@@ -23,6 +23,7 @@ import type {
     SpaceStatus,
     SpaceType,
 } from '@/lib/constants'
+import type { ConversionSnapshot, MoneyDto } from '@/lib/utils/money'
 
 export type SpaceCurrencyTotals = Record<string, number>
 export type SpaceCategoryType = 'expense' | 'income' | 'adjustment'
@@ -122,6 +123,9 @@ export interface ISpaceEntrySnapshot {
     currency: string
     reportingAmount: number
     exchangeRate?: number
+    originalMoney?: MoneyDto
+    reportingMoney?: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
     date: Date
     dateKey?: string
     timezone?: string
@@ -131,6 +135,24 @@ export interface ISpaceEntrySnapshot {
     splitMode: string
     splitAllocations?: ISpaceEntrySplitAllocation[]
     notes?: string
+}
+
+export interface ISpaceSettlementApplication {
+    debtId?: Types.ObjectId
+    debtCurrency: string
+    paidMoney: MoneyDto
+    appliedMoney: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
+}
+
+export interface ISpaceSettlementLeg {
+    legId: string
+    paidMoney: MoneyDto
+    reportingMoney: MoneyDto
+    accountId?: Types.ObjectId
+    linkedTransactionId?: Types.ObjectId
+    conversionSnapshot?: ConversionSnapshot
+    applications: ISpaceSettlementApplication[]
 }
 
 export interface ISpaceEntry {
@@ -147,6 +169,10 @@ export interface ISpaceEntry {
     currency: SpaceCurrency
     reportingAmount: number
     exchangeRate?: number
+    originalMoney?: MoneyDto
+    reportingMoney?: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
+    settlementLegs?: ISpaceSettlementLeg[]
     date: Date
     dateKey?: string
     timezone?: string
@@ -156,6 +182,13 @@ export interface ISpaceEntry {
     sharedWithParticipantIds?: Types.ObjectId[]
     splitMode: SpaceSplitMode
     splitAllocations?: ISpaceEntrySplitAllocation[]
+    resolvedShares?: Array<{
+        participantId: string
+        amount: number
+        reportingAmount: number
+        amountMoney?: MoneyDto
+        reportingMoney?: MoneyDto
+    }>
     notes?: string
     linkedTransactionId?: Types.ObjectId
     confirmationRequired?: boolean
@@ -190,6 +223,15 @@ export interface ISpaceEntryPersonalImpact {
     categoryId?: Types.ObjectId
     impactKind: SpacePersonalImpactKind
     amount: number
+    amountMoney?: MoneyDto
+    financialLinks?: Array<{
+        legId: string
+        currency: string
+        amountMoney: MoneyDto
+        accountId?: Types.ObjectId
+        transactionId?: Types.ObjectId
+        status: 'pending' | 'linked' | 'ignored' | 'removed'
+    }>
     contractVersion?: 2
     ownShareAmount?: number
     currency: SpaceCurrency
@@ -342,6 +384,26 @@ export interface SpaceSummarySnapshot {
     categoryBreakdown: SpaceCategoryBreakdownItem[]
     balances: SpaceBalanceItem[]
     monthlyTrend: SpaceTrendPoint[]
+    totalReportingMoney?: MoneyDto
+    includedCurrencies?: string[]
+    composition?: Array<{
+        currency: string
+        original: MoneyDto
+        historicalReporting: MoneyDto
+        currentReporting?: MoneyDto
+        difference?: MoneyDto
+        snapshots: ConversionSnapshot[]
+        currentSnapshot?: ConversionSnapshot
+    }>
+    balancesByCurrency?: Array<{
+        participantId: string
+        currency: string
+        paid: MoneyDto
+        share: MoneyDto
+        balance: MoneyDto
+        currentReporting?: MoneyDto
+        currentSnapshot?: ConversionSnapshot
+    }>
 }
 
 export interface ISpaceListItem {

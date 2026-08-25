@@ -19,8 +19,9 @@
 10. [Recorridos e interfaz](#10-recorridos-e-interfaz)
 11. [Estados, errores y accesibilidad](#11-estados-errores-y-accesibilidad)
 12. [Aprendizaje y automatización](#12-aprendizaje-y-automatización)
-13. [Verificación obligatoria](#13-verificación-obligatoria)
-14. [Decisiones y evolución](#14-decisiones-y-evolución)
+13. [Multimoneda integral](#13-multimoneda-integral)
+14. [Verificación obligatoria](#14-verificación-obligatoria)
+15. [Decisiones y evolución](#15-decisiones-y-evolución)
 
 Las posibilidades futuras descritas aquí no establecen prioridad. El backlog
 único es [`roadmap_finp.md`](roadmap_finp.md).
@@ -179,6 +180,10 @@ Una liquidación o `settlement`:
 - conserva la relación con el Espacio y la deuda derivada;
 - produce el mismo resultado si se inicia desde Espacios o desde Deudas;
 - es atómica e idempotente ante reintentos.
+
+La obligación se conserva por moneda. Una liquidación puede combinar varios
+tramos de pago, pero cada aplicación a otra moneda muestra y conserva la
+conversión utilizada. La simplificación no compensa monedas distintas.
 
 Un pendiente de agregar un gasto a Mi Finp no es una deuda. Deudas no muestra
 relaciones en cero ni mezcla decisiones privadas de registración con saldos
@@ -366,7 +371,65 @@ y explicación. Una sugerencia no crea una transacción, no modifica el Espacio 
 puede corregirse, descartarse u olvidarse. La automatización futura requiere
 consentimiento explícito y no puede cruzar datos entre participantes.
 
-## 13. Verificación obligatoria
+## 13. Multimoneda integral
+
+Un Espacio define una moneda de reporte y una lista de monedas habilitadas. La
+moneda de reporte puede cambiar sólo antes del primer movimiento. Se pueden
+agregar monedas activas de curso legal; una moneda usada en gastos, partes,
+deudas o liquidaciones no se puede retirar.
+
+Todo importe confirmado usa unidades menores exactas y conserva:
+
+- moneda e importe original;
+- equivalente histórico en moneda de reporte;
+- tasa decimal, dirección, fuente, antigüedad y camino de conversión;
+- autor y momento cuando la referencia fue ingresada manualmente.
+
+Las referencias automáticas provienen de DolarAPI para USD/ARS oficial y de
+Frankfurter para cruces internacionales. La resolución intenta el par directo,
+luego USD y luego EUR; si no existe un camino confiable, exige una cotización
+manual. Una referencia automática siempre se puede reemplazar, pero una
+referencia vencida o cambiada no se confirma silenciosamente.
+
+Historia y posiciones abiertas tienen lecturas distintas:
+
+- gastos, partes y reportes históricos conservan el snapshot inmutable;
+- saldos abiertos muestran además la equivalencia actual y su diferencia;
+- si falta una referencia, la moneda original continúa disponible y no se
+  presenta un agregado parcial como total confiable.
+
+Los agregados se expresan en moneda de reporte con una acción `Incluye…`. El
+detalle explica la composición por moneda y los snapshots. Los movimientos
+priorizan el importe original y dejan el equivalente de reporte en segundo
+plano. Los filtros por moneda original, pagada y de deuda son combinables y se
+aplican antes de paginar.
+
+Las deudas se calculan y simplifican por moneda. Una liquidación multimoneda:
+
+1. selecciona componentes de deuda;
+2. agrega uno o más tramos de pago;
+3. aplica primero la misma moneda y luego conversiones en el orden visible;
+4. revisa aplicaciones, cotizaciones, diferencia de cambio y saldos restantes;
+5. confirma la unidad completa en una transacción MongoDB.
+
+El dinero pagado y el aplicado a la deuda permanecen distinguibles. Un pago
+parcial deja el resto en su moneda original; la diferencia de cambio es
+trazable y no operacional. Una liquidación confirmada se revierte, no se edita.
+
+La tira `Cotizaciones de referencia` muestra únicamente pares entre monedas
+habilitadas y la moneda de reporte. Expone hora, fuente, estado y antigüedad;
+sólo se mueve cuando hay overflow, se pausa al interactuar y respeta reducción
+de movimiento.
+
+Si Mi Finp no tiene una cuenta en la moneda del Espacio, la función compartida
+sigue operativa. Al registrar el impacto personal, el flujo de Mi Finp conserva
+la decisión final sobre cuenta, moneda e importe real; nunca adopta por omisión
+el equivalente de reporte.
+
+La autoridad técnica y las consecuencias se registran en
+[`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md).
+
+## 14. Verificación obligatoria
 
 El recorrido crítico se valida primero en mobile y luego en desktop, con
 aislamiento por usuario y Espacio. La matriz mínima incluye:
@@ -384,6 +447,11 @@ aislamiento por usuario y Espacio. La matriz mínima incluye:
 - participante inactivo, cambio de rol y último `owner`;
 - Espacio cerrado y reapertura;
 - moneda y fecha históricas en la zona horaria del Espacio;
+- escalas monetarias 0, 2 y 3, redondeo y reparto por restos mayores;
+- Espacio ARS/USD/EUR, referencias automáticas, manuales, vencidas y sin
+  proveedor;
+- deudas independientes por moneda y pagos sólo ARS, sólo USD y ARS+USD;
+- composición, filtros y revaluación de posiciones abiertas;
 - permisos, aislamiento, carga, vacío, error, recuperación y accesibilidad
   básica.
 
@@ -391,7 +459,7 @@ Las cuentas deben reflejar dinero real; Dashboard y reportes, gasto operacional
 propio; Espacios y Deudas, saldos derivados coherentes. Las cuatro lecturas se
 comparan en los E2E financieros.
 
-## 14. Decisiones y evolución
+## 15. Decisiones y evolución
 
 Decisiones consolidadas:
 
@@ -405,6 +473,8 @@ Decisiones consolidadas:
 - un Espacio usa deuda directa o simplificada, no ambas a la vez;
 - adjuntos y datos privados requieren autenticación y autorización;
 - edición y anulación conservan historia y disparan revisión cuando corresponde.
+- la deuda conserva autoridad por moneda y toda conversión aplicada tiene un
+  snapshot explícito;
 
 Cuotas, compromisos, realtime, slugs, reintegros y otras extensiones se
 priorizan únicamente en [`roadmap_finp.md`](roadmap_finp.md). No se amplía el

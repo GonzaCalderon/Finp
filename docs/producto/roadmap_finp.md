@@ -79,7 +79,8 @@ Los principios de producto y de trabajo viven en
 - Estado: `en curso`.
 - Decisiones:
   - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
-  - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md).
+  - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
+  - [`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md).
 - Regla de entrega: es un cierre indivisible. Puede avanzar mediante commits y
   verificaciones internas, pero no pasa a `validación` ni se presenta como
   terminado hasta completar dominio, datos, API, UI afectada, migración,
@@ -111,6 +112,12 @@ Los principios de producto y de trabajo viven en
     cierre, liquidación, reapertura y archivo;
   - persistir día financiero y zona horaria sin corrimiento UTC, y conservar
     moneda original, cotización y monto de reporte como snapshot.
+  - conservar dinero v2 en unidades menores exactas, saldos de deuda separados
+    por moneda y conversiones aplicadas mediante snapshots explícitos;
+  - admitir liquidaciones atómicas con varios componentes y tramos de pago,
+    distinguiendo dinero pagado, dinero aplicado y diferencia de cambio;
+  - mostrar composición, referencias y filtros multimoneda sin reemplazar la
+    autoridad histórica por la cotización actual.
 - Secuencia interna obligatoria:
   1. caracterización de comportamiento y datos legacy, más reporte `dry-run`
      — completada el 2026-08-24;
@@ -180,6 +187,24 @@ Los principios de producto y de trabajo viven en
     440 ms en la medición aislada, sin cache, colas ni dependencias nuevas.
   - el ítem continúa `en curso`: backfill, comparación completa de los hallazgos
     legacy, ensayo de rollback de migración y cutover siguen en `NO-GO`.
+- Etapa multimoneda integral — implementada sobre el contrato v2 E2E el
+  2026-08-24:
+  - `MoneyDto` exacto y registro activo de monedas ISO de curso legal con
+    escalas 0, 2 y 3; redondeo único y reparto estable por restos mayores;
+  - referencias DolarAPI y Frankfurter resueltas en lote, con cache, camino
+    directo/USD/EUR, reemplazo manual y conflicto por vencimiento o cambio;
+  - historial inmutable y revaluación separada de posiciones abiertas;
+  - deudas y simplificación independientes por moneda; liquidación multitramos
+    atómica con aplicaciones, pagos parciales, reversión y decisiones privadas;
+  - tira de cotizaciones, composición `Incluye…`, importes originales
+    prioritarios y filtros combinables antes de paginar;
+  - 881 unitarias globales, 10 recorridos de integración MongoDB y 66 E2E en
+    desktop/mobile aprobados tanto con `next dev` como con el build de
+    producción;
+  - una historia de 1.000 movimientos devolvió 50 registros en 45.987 bytes y
+    859 ms; las referencias se resuelven por lote de monedas, no por movimiento;
+  - escrituras e índices continúan limitados a `finp-e2e`; no hubo backfill,
+    cutover ni habilitación en development o producción.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;

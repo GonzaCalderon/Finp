@@ -1,4 +1,13 @@
 import type { SpaceSplitMode } from '@/lib/constants'
+import { getCurrencyScale } from '@/lib/constants/iso-currencies'
+import {
+    allocateMinorUnitsByLargestRemainder,
+    convertMoneyExact,
+    moneyFromDecimal,
+    moneyToNumber,
+    type ConversionDirection,
+    type ConversionSnapshot,
+} from '@/lib/utils/money'
 
 const MONEY_SCALE = 100
 const ZERO_TOLERANCE = 0.000001
@@ -22,19 +31,20 @@ export class SpaceFinancialRuleError extends Error {
     }
 }
 
-function toMinorUnits(value: number) {
+function toMinorUnits(value: number, currency = 'ARS') {
     if (!Number.isFinite(value) || value < 0) {
         throw new SpaceFinancialRuleError('INVALID_AMOUNT', 'El monto debe ser finito y no negativo.')
     }
-    const minorUnits = Math.round((value + Number.EPSILON) * MONEY_SCALE)
+    const minorUnits = Number(moneyFromDecimal(currency, value).minorUnits)
     if (!Number.isSafeInteger(minorUnits)) {
         throw new SpaceFinancialRuleError('INVALID_AMOUNT', 'El monto excede el rango seguro.')
     }
     return minorUnits
 }
 
-function fromMinorUnits(value: number) {
-    return value / MONEY_SCALE
+function fromMinorUnits(value: number, currency = 'ARS') {
+    const scale = getCurrencyScale(currency) ?? 2
+    return Number(value) / 10 ** scale
 }
 
 function uniqueParticipantIds(participantIds: string[]) {
@@ -48,24 +58,22 @@ function uniqueParticipantIds(participantIds: string[]) {
     return normalized
 }
 
-function distributeMinorUnits(total: number, weights: number[]) {
+function distributeMinorUnits(total: number, weights: number[], stableKeys: string[]) {
     if (weights.length === 0) return []
     const weightTotal = weights.reduce((sum, weight) => sum + weight, 0)
     if (!Number.isFinite(weightTotal) || weightTotal <= 0) {
         throw new SpaceFinancialRuleError('INVALID_SPLIT', 'El reparto debe tener un peso positivo.')
     }
 
-    let assigned = 0
-    return weights.map((weight, index) => {
-        if (!Number.isFinite(weight) || weight < 0) {
-            throw new SpaceFinancialRuleError('INVALID_SPLIT', 'El reparto contiene un valor inválido.')
-        }
-        const value = index === weights.length - 1
-            ? total - assigned
-            : Math.round(total * (weight / weightTotal))
-        assigned += value
-        return value
-    })
+    if (weights.some((weight) => !Number.isFinite(weight) || weight < 0)) {
+        throw new SpaceFinancialRuleError('INVALID_SPLIT', 'El reparto contiene un valor inválido.')
+    }
+    const normalizedWeights = weights.map((weight) => BigInt(Math.round(weight * 1_000_000)))
+    return allocateMinorUnitsByLargestRemainder({
+        totalMinorUnits: BigInt(total),
+        weights: normalizedWeights,
+        stableKeys,
+    }).map(Number)
 }
 
 export interface SpaceSplitAllocationV2 {
@@ -78,18 +86,24 @@ export interface SpaceShareV2 {
     participantId: string
     amount: number
     reportingAmount: number
+    amountMoney?: import('@/lib/utils/money').MoneyDto
+    reportingMoney?: import('@/lib/utils/money').MoneyDto
 }
 
 export function calculateSpaceSharesV2(input: {
     amount: number
     reportingAmount: number
+    currency?: string
+    reportingCurrency?: string
     splitMode: SpaceSplitMode
     participantIds: string[]
     allocations?: SpaceSplitAllocationV2[]
 }): SpaceShareV2[] {
     const participantIds = uniqueParticipantIds(input.participantIds)
-    const amountMinor = toMinorUnits(input.amount)
-    const reportingMinor = toMinorUnits(input.reportingAmount)
+    const currency = input.currency ?? 'ARS'
+    const reportingCurrency = input.reportingCurrency ?? 'ARS'
+    const amountMinor = toMinorUnits(input.amount, currency)
+    const reportingMinor = toMinorUnits(input.reportingAmount, reportingCurrency)
 
     if (amountMinor === 0) return []
     if (participantIds.length === 0) {
@@ -103,7 +117,7 @@ export function calculateSpaceSharesV2(input: {
         }
         amountParts = [amountMinor]
     } else if (input.splitMode === 'equal') {
-        amountParts = distributeMinorUnits(amountMinor, participantIds.map(() => 1))
+        amountParts = distributeMinorUnits(amountMinor, participantIds.map(() => 1), participantIds)
     } else {
         const allocations = input.allocations ?? []
         const byParticipant = new Map<string, SpaceSplitAllocationV2>()
@@ -125,10 +139,10 @@ export function calculateSpaceSharesV2(input: {
             if (Math.abs(totalPercentage - 100) > ZERO_TOLERANCE) {
                 throw new SpaceFinancialRuleError('INVALID_SPLIT', 'Los porcentajes deben sumar exactamente 100.')
             }
-            amountParts = distributeMinorUnits(amountMinor, percentages)
+            amountParts = distributeMinorUnits(amountMinor, percentages, participantIds)
         } else if (input.splitMode === 'fixed') {
             amountParts = participantIds.map((participantId) =>
-                toMinorUnits(byParticipant.get(participantId)?.amount ?? Number.NaN)
+                toMinorUnits(byParticipant.get(participantId)?.amount ?? Number.NaN, currency)
             )
             if (amountParts.reduce((sum, amount) => sum + amount, 0) !== amountMinor) {
                 throw new SpaceFinancialRuleError('INVALID_SPLIT', 'Los montos fijos deben cerrar exactamente el total.')
@@ -138,11 +152,21 @@ export function calculateSpaceSharesV2(input: {
         }
     }
 
-    const reportingParts = distributeMinorUnits(reportingMinor, amountParts)
+    const reportingParts = distributeMinorUnits(reportingMinor, amountParts, participantIds)
     return participantIds.map((participantId, index) => ({
         participantId,
-        amount: fromMinorUnits(amountParts[index] ?? 0),
-        reportingAmount: fromMinorUnits(reportingParts[index] ?? 0),
+        amount: fromMinorUnits(amountParts[index] ?? 0, currency),
+        reportingAmount: fromMinorUnits(reportingParts[index] ?? 0, reportingCurrency),
+        amountMoney: {
+            currency,
+            minorUnits: String(amountParts[index] ?? 0),
+            scale: getCurrencyScale(currency) ?? 2,
+        },
+        reportingMoney: {
+            currency: reportingCurrency,
+            minorUnits: String(reportingParts[index] ?? 0),
+            scale: getCurrencyScale(reportingCurrency) ?? 2,
+        },
     }))
 }
 
@@ -151,20 +175,39 @@ export function convertSpaceAmountV2(input: {
     currency: string
     reportingCurrency: string
     exchangeRate?: number
+    exchangeRateDecimal?: string
+    direction?: ConversionDirection
+    snapshot?: ConversionSnapshot
 }) {
-    toMinorUnits(input.amount)
+    const originalMoney = moneyFromDecimal(input.currency, input.amount)
     if (input.currency === input.reportingCurrency) {
-        return { reportingAmount: fromMinorUnits(toMinorUnits(input.amount)), exchangeRate: undefined }
+        return {
+            reportingAmount: moneyToNumber(originalMoney),
+            exchangeRate: undefined,
+            originalMoney,
+            reportingMoney: originalMoney,
+            conversionSnapshot: undefined,
+        }
     }
-    if (!Number.isFinite(input.exchangeRate) || (input.exchangeRate ?? 0) <= 0) {
+    const rate = input.exchangeRateDecimal ?? input.exchangeRate?.toString()
+    if (!rate || !Number.isFinite(Number(rate)) || Number(rate) <= 0) {
         throw new SpaceFinancialRuleError(
             'INVALID_EXCHANGE_RATE',
             'Una moneda distinta de la moneda de reporte exige cotización explícita.'
         )
     }
+    const reportingMoney = convertMoneyExact({
+        money: originalMoney,
+        targetCurrency: input.reportingCurrency,
+        rate,
+        direction: input.direction,
+    })
     return {
-        reportingAmount: fromMinorUnits(toMinorUnits(input.amount * input.exchangeRate!)),
-        exchangeRate: input.exchangeRate,
+        reportingAmount: moneyToNumber(reportingMoney),
+        exchangeRate: Number(rate),
+        originalMoney,
+        reportingMoney,
+        conversionSnapshot: input.snapshot,
     }
 }
 
@@ -340,6 +383,8 @@ export interface SpaceLedgerEntryV2 {
     type: 'expense' | 'income' | 'adjustment' | 'settlement'
     amount: number
     reportingAmount: number
+    currency?: string
+    reportingCurrency?: string
     paidByParticipantId?: string
     sharedWithParticipantIds: string[]
     splitMode: SpaceSplitMode
@@ -395,6 +440,7 @@ export interface SpaceDebtProjectionV2 {
     fromParticipantId: string
     toParticipantId: string
     amount: number
+    currency?: string
 }
 
 function netDebtEdges(edges: SpaceDebtProjectionV2[]) {
@@ -423,7 +469,25 @@ export function calculateSpaceDebtProjectionsV2(input: {
     mode: 'direct' | 'simplified'
     entries: SpaceLedgerEntryV2[]
     participants: SpaceLedgerParticipantV2[]
-}) {
+}): SpaceDebtProjectionV2[] {
+    const explicitCurrencies = Array.from(new Set(
+        input.entries.map((entry) => entry.currency).filter((currency): currency is string => Boolean(currency))
+    ))
+    if (explicitCurrencies.length > 0) {
+        return explicitCurrencies.flatMap((currency) => {
+            const entries = input.entries
+                .filter((entry) => entry.currency === currency)
+                .map((entry) => ({ ...entry, reportingAmount: entry.amount }))
+            return calculateSpaceDebtProjectionsV2({
+                ...input,
+                entries: entries.map((entry) => {
+                    const withoutCurrency = { ...entry }
+                    delete withoutCurrency.currency
+                    return withoutCurrency
+                }),
+            }).map((projection) => ({ ...projection, currency }))
+        })
+    }
     if (input.mode === 'simplified') {
         const balances = calculateSpaceBalancesV2(input.entries, input.participants)
         const debtors = balances

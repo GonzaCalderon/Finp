@@ -6,6 +6,19 @@ import {
     SPACE_PERSONAL_PENDING_ACTION_TYPES,
     SPACE_PERSONAL_IMPACT_SOURCE_TYPES,
 } from '@/lib/constants'
+import { moneySchema } from '@/lib/models/space-money.schemas'
+
+const financialLinkSchema = new Schema(
+    {
+        legId: { type: String, required: true },
+        currency: { type: String, required: true, uppercase: true },
+        amountMoney: { type: moneySchema, required: true },
+        accountId: { type: Schema.Types.ObjectId, ref: 'Account' },
+        transactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
+        status: { type: String, enum: ['pending', 'linked', 'ignored', 'removed'], required: true },
+    },
+    { _id: false }
+)
 
 const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
     {
@@ -23,6 +36,8 @@ const SpaceEntryPersonalImpactSchema = new Schema<ISpaceEntryPersonalImpact>(
         },
         contractVersion: { type: Number, enum: [2] },
         amount: { type: Number, required: true },
+        amountMoney: { type: moneySchema },
+        financialLinks: { type: [financialLinkSchema], default: undefined },
         ownShareAmount: { type: Number, min: 0 },
         currency: { type: String, required: true },
         status: {
@@ -108,7 +123,8 @@ const needsPersonalImpactSchemaRefresh = Boolean(
         !existingPersonalImpactModel.schema.path('ownShareAmount') ||
         !existingPersonalImpactModel.schema.path('originSnapshot.entryRevision') ||
         !existingPersonalImpactModel.schema.path('revision') ||
-        !existingPersonalImpactModel.schema.path('operationId'))
+        !existingPersonalImpactModel.schema.path('operationId') ||
+        !existingPersonalImpactModel.schema.path('financialLinks'))
 )
 
 if (needsPersonalImpactSchemaRefresh) delete mongoose.models.SpaceEntryPersonalImpact

@@ -39,7 +39,7 @@ Dos origenes principales:
 
 Una deuda necesita:
 
-- monto pendiente;
+- monto pendiente por moneda;
 - contraparte;
 - historial de pagos o cobros;
 - estado;
@@ -89,6 +89,11 @@ Pagos y cobros de deuda:
 - si impactan cuentas reales;
 - no son gasto ni ingreso operacional.
 
+Cuando la obligación y el pago usan monedas distintas, el movimiento conserva
+por separado el dinero efectivamente pagado, el importe aplicado a la deuda y
+el snapshot de conversión. La diferencia de cambio es trazable y no
+operacional.
+
 Esto evita errores de lectura financiera.
 
 Ejemplo:
@@ -101,6 +106,12 @@ Ejemplo:
 ## 5. Consolidacion y estado
 
 El modulo consolida relaciones activas y su estado.
+
+La consolidación y la simplificación operan independientemente dentro de cada
+moneda. ARS, USD y EUR pueden convivir en una misma relación, pero nunca se
+netean entre sí sin una conversión elegida y visible. Los totales de reporte
+muestran su composición y las posiciones abiertas pueden incluir una
+equivalencia actual sin modificar el saldo original.
 
 Estados funcionales actuales:
 
@@ -151,8 +162,17 @@ Cuando la deuda nace en un espacio:
 - el criterio directo o simplificado conserva una sola fuente compartida;
 - pagos y cobros desde Deudas y desde Espacios invocan la misma operación
   atómica e idempotente;
+- el saldo derivado se materializa por moneda y la simplificación nunca
+  compensa divisas diferentes;
+- una liquidación puede seleccionar varios componentes y combinar tramos ARS,
+  USD u otras monedas habilitadas;
+- cada tramo aplica primero contra su misma moneda y luego usa conversiones
+  explícitas en el orden revisado por la persona;
 - una liquidación parcial actualiza el saldo pendiente y ambas superficies sin
   crear otro gasto o ingreso operacional;
+- un pago parcial conserva el resto en la moneda de la obligación y un
+  sobrepago superior a una unidad menor se rechaza;
+- una liquidación confirmada se revierte de forma explícita y no se edita;
 - ignorar una deuda derivada no borra el movimiento del espacio ni altera su historial.
 
 Una decisión pendiente de `Agregar a Mi Finp` no es una deuda. Sólo existe
@@ -186,6 +206,8 @@ Decision actual:
 - cobrar deuda no es ingreso operacional;
 - las deudas de espacios pueden ignorarse y restaurarse;
 - liquidar desde Espacios o Deudas representa la misma intención financiera;
+- las deudas derivadas mantienen autoridad por moneda y no admiten neteo
+  multimoneda silencioso;
 - los pendientes de impacto personal no pertenecen a Deudas;
 - el modulo debe mostrar posicion neta y relacion por persona;
 - la fuente del saldo importa: manual no significa lo mismo que `space`.

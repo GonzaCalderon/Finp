@@ -69,6 +69,9 @@ export async function GET(
             actorUserId: session.user.id,
             cursor: searchParams.get('cursor'),
             limit: searchParams.get('limit'),
+            originalCurrencies: searchParams.getAll('originalCurrency'),
+            paidCurrencies: searchParams.getAll('paidCurrency'),
+            debtCurrencies: searchParams.getAll('debtCurrency'),
         })
         return NextResponse.json({ data: payload })
     } catch (error) {

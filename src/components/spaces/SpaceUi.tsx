@@ -511,6 +511,7 @@ export function SpaceMetricCard({
     accent,
     footer,
     compact = false,
+    amountContent,
 }: {
     label: string
     amount: number
@@ -520,6 +521,7 @@ export function SpaceMetricCard({
     accent?: string
     footer?: ReactNode
     compact?: boolean
+    amountContent?: ReactNode
 }) {
     return (
         <div
@@ -537,16 +539,18 @@ export function SpaceMetricCard({
             >
                 {label}
             </p>
-            <ResponsiveAmount
-                amount={amount}
-                currency={currency}
-                hidden={hidden}
-                color={accent}
-                className={cn(
-                    'font-semibold tracking-tight',
-                    compact ? 'mt-2 text-[1.35rem] md:text-[1.45rem]' : 'mt-3 text-[1.7rem]'
-                )}
-            />
+            {amountContent ?? (
+                <ResponsiveAmount
+                    amount={amount}
+                    currency={currency}
+                    hidden={hidden}
+                    color={accent}
+                    className={cn(
+                        'font-semibold tracking-tight',
+                        compact ? 'mt-2 text-[1.35rem] md:text-[1.45rem]' : 'mt-3 text-[1.7rem]'
+                    )}
+                />
+            )}
             {footer ? (
                 <div
                     className={cn(

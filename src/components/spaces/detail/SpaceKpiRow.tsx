@@ -2,15 +2,18 @@
 
 import { SpaceAmountInline, SpaceMetricCard } from '@/components/spaces/SpaceUi'
 import type { SpaceSummarySnapshot } from '@/types'
+import { SpaceCurrencyComposition } from '@/components/spaces/detail/SpaceCurrencyComposition'
 
 export function SpaceKpiRow({
     summary,
     reportingCurrency,
     hidden,
+    onFilterCurrency,
 }: {
     summary: SpaceSummarySnapshot
     reportingCurrency: string
     hidden: boolean
+    onFilterCurrency?: (currency: string) => void
 }) {
     const items = [
         {
@@ -63,13 +66,24 @@ export function SpaceKpiRow({
                         <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {item.label}
                         </p>
-                        <SpaceAmountInline
-                            amount={item.amount}
-                            currency={reportingCurrency}
-                            hidden={hidden}
-                            color={item.accent}
-                            className="mt-1 block text-lg font-semibold tracking-tight"
-                        />
+                        {item.label === 'Gastado' ? (
+                            <SpaceCurrencyComposition
+                                amount={item.amount}
+                                reportingCurrency={reportingCurrency}
+                                hidden={hidden}
+                                composition={summary.composition}
+                                className="mt-1 space-y-1 text-lg font-semibold tracking-tight"
+                                onFilterCurrency={onFilterCurrency}
+                            />
+                        ) : (
+                            <SpaceAmountInline
+                                amount={item.amount}
+                                currency={reportingCurrency}
+                                hidden={hidden}
+                                color={item.accent}
+                                className="mt-1 block text-lg font-semibold tracking-tight"
+                            />
+                        )}
                         <p className="mt-1 truncate text-[11px] text-muted-foreground">
                             {item.footer}
                         </p>
@@ -88,6 +102,16 @@ export function SpaceKpiRow({
                         accent={item.accent}
                         footer={item.desktopFooter}
                         compact
+                        amountContent={item.label === 'Gastado' ? (
+                            <SpaceCurrencyComposition
+                                amount={item.amount}
+                                reportingCurrency={reportingCurrency}
+                                hidden={hidden}
+                                composition={summary.composition}
+                                className="mt-2 space-y-1 text-[1.35rem] font-semibold tracking-tight md:text-[1.45rem]"
+                                onFilterCurrency={onFilterCurrency}
+                            />
+                        ) : undefined}
                     />
                 ))}
             </div>

@@ -56,4 +56,50 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             }),
         ]))
     })
+
+    test('explica el total multimoneda, filtra USD y revisa una liquidación ARS+USD', async ({ page }) => {
+        await loginAsTestUser(page)
+        await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
+
+        await expect(page.getByText(/Cotizaciones de referencia/).first()).toBeVisible()
+        const compositionTrigger = page.getByRole('button', { name: /Incluye USD/i }).first()
+        await expect(compositionTrigger).toBeVisible()
+        await compositionTrigger.click()
+        await expect(page.getByText('Composición del total')).toBeVisible()
+        await expect(page.getByText(/1 USD = 1300 ARS/)).toBeVisible()
+
+        const viewMovementButtons = page.getByRole('button', { name: /Ver movimientos/i })
+        await viewMovementButtons.last().click()
+        await expect(page.getByText('Hotel en USD')).toBeVisible()
+        await expect(page.getByText('Moneda original')).toBeVisible()
+        await expect(page.getByText('Moneda pagada')).toBeVisible()
+        await expect(page.getByText('Moneda de deuda')).toBeVisible()
+
+        await page.getByRole('button', { name: 'Balance' }).first().click()
+        await page.getByRole('button', { name: 'Registrar pago' }).click()
+        const dialog = page.getByRole('dialog', { name: 'Liquidar saldo por moneda' })
+        await expect(dialog.getByText('Deuda en ARS')).toBeVisible()
+        await expect(dialog.getByText('Deuda en USD')).toBeVisible()
+
+        await dialog.getByLabel('Monto efectivamente pagado').first().fill('100')
+        await dialog.getByRole('button', { name: /Agregar tramo/i }).click()
+        const amountInputs = dialog.getByLabel('Monto efectivamente pagado')
+        await amountInputs.nth(1).fill('1')
+        await dialog.getByRole('combobox', { name: 'Moneda' }).nth(1).click()
+        await page.getByRole('option', { name: /USD/ }).click()
+        await dialog.getByRole('button', { name: 'Cambiar cotización' }).click()
+        await dialog.getByLabel('Cotización manual USD/ARS').fill('1300')
+
+        await expect(dialog.getByText(/Tramo en ARS → deuda en ARS/)).toBeVisible()
+        await expect(dialog.getByText(/Tramo en USD → deuda en USD/)).toBeVisible()
+        await expect(dialog.getByText(/diferencia de cambio queda trazada/i)).toBeVisible()
+
+        const responsePromise = page.waitForResponse((response) =>
+            response.request().method() === 'POST' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/settlements`)
+        )
+        await dialog.getByRole('button', { name: 'Confirmar liquidación' }).click()
+        expect((await responsePromise).status()).toBe(201)
+        await expect(dialog).not.toBeVisible()
+    })
 })

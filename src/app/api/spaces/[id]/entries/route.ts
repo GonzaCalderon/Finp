@@ -33,14 +33,19 @@ import {
 } from '@/lib/server/space-api-contract'
 import { createSpaceEntryV2 } from '@/lib/server/space-entry-service-v2'
 import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
+import { conversionSnapshotSchema, moneyDtoSchema } from '@/lib/validations/space-money-v2'
 
 const spaceEntryV2RequestSchema = z.object({
     expectedRevision: z.number().int().nonnegative(),
     title: z.string().trim().min(1).max(200),
     description: z.string().trim().max(1000).optional(),
     amount: z.number().finite().positive(),
+    money: moneyDtoSchema.optional(),
     currency: z.string().min(1).max(12),
     exchangeRate: z.number().finite().positive().optional(),
+    exchangeRateDecimal: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+    conversionSnapshot: conversionSnapshotSchema.optional(),
+    expectedQuoteFingerprint: z.string().min(8).max(64).optional(),
     dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     paidByParticipantId: z.string().min(1),
     sharedWithParticipantIds: z.array(z.string().min(1)).min(1).max(100),
@@ -86,6 +91,9 @@ export async function GET(
             actorUserId: session.user.id,
             cursor: searchParams.get('cursor'),
             limit: searchParams.get('limit'),
+            originalCurrencies: searchParams.getAll('originalCurrency'),
+            paidCurrencies: searchParams.getAll('paidCurrency'),
+            debtCurrencies: searchParams.getAll('debtCurrency'),
         })
         return NextResponse.json({
             data: detail.movements,
@@ -132,8 +140,12 @@ export async function POST(
                 title: parsedV2.data.title,
                 description: parsedV2.data.description,
                 amount: parsedV2.data.amount,
+                money: parsedV2.data.money,
                 currency: parsedV2.data.currency,
                 exchangeRate: parsedV2.data.exchangeRate,
+                exchangeRateDecimal: parsedV2.data.exchangeRateDecimal,
+                conversionSnapshot: parsedV2.data.conversionSnapshot,
+                expectedQuoteFingerprint: parsedV2.data.expectedQuoteFingerprint,
                 dateKey: parsedV2.data.dateKey,
                 paidByParticipantId: parsedV2.data.paidByParticipantId,
                 sharedWithParticipantIds: parsedV2.data.sharedWithParticipantIds,

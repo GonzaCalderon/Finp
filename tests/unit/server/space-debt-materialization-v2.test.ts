@@ -14,7 +14,7 @@ vi.mock('@/lib/models', () => ({
         create: mocks.debtCreate,
         updateOne: mocks.debtUpdateOne,
     },
-    DebtMovement: { create: mocks.movementCreate },
+    DebtMovement: { insertMany: mocks.movementCreate },
 }))
 
 import { materializeSpaceDebtsV2 } from '@/lib/server/space-debt-materialization-v2'
@@ -83,9 +83,9 @@ describe('space debt materialization v2', () => {
             _id: new Types.ObjectId(), ...data,
         }])
         mocks.debtUpdateOne.mockResolvedValue({ modifiedCount: 1 })
-        mocks.movementCreate.mockImplementation(async ([data]: [Record<string, unknown>]) => [{
+        mocks.movementCreate.mockImplementation(async (rows: Record<string, unknown>[]) => rows.map((data) => ({
             _id: new Types.ObjectId(), ...data,
-        }])
+        })))
     })
 
     it('usa el balance que ya contiene settlement y no descuenta pagos otra vez', async () => {

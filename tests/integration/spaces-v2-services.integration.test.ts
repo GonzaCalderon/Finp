@@ -31,6 +31,8 @@ import {
 import { settleSpaceDebtV2 } from '@/lib/server/space-settlement-service-v2'
 import { getSpaceDetailV2 } from '@/lib/server/space-read-service-v2'
 import { resolveE2EEnvironment } from '../e2e/helpers/environment'
+import { buildManualConversionSnapshot } from '@/lib/server/space-quote-service'
+import { moneyFromDecimal } from '@/lib/utils/money'
 
 describe.sequential('spaces v2 application services — Mongo transaction integration', () => {
     const runId = new Types.ObjectId().toHexString()
@@ -306,6 +308,84 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         expect(updated.value).toMatchObject({ currencies: ['ARS', 'USD'], revision: 1 })
     })
 
+    it('conserva deudas separadas por moneda y liquida varios tramos sin compensarlas', async () => {
+        const usdArs = buildManualConversionSnapshot({
+            sourceCurrency: 'USD',
+            targetCurrency: 'ARS',
+            rate: '1300',
+            actorUserId: ownerUserId,
+            now: new Date('2026-08-24T15:00:00.000Z'),
+        })
+        await createSpaceEntryV2({
+            actorUserId: ownerUserId,
+            spaceId,
+            idempotencyKey: `create-usd-${runId}`,
+            expectedRevision: 1,
+            title: 'Gasto compartido en USD',
+            amount: 100,
+            money: moneyFromDecimal('USD', 100),
+            currency: 'USD',
+            exchangeRateDecimal: '1300',
+            conversionSnapshot: usdArs,
+            dateKey: '2026-08-25',
+            paidByParticipantId: ownerParticipantId,
+            sharedWithParticipantIds: [ownerParticipantId, memberParticipantId],
+            splitMode: 'equal',
+        })
+        const before = await Debt.find({
+            userId: ownerUserId,
+            spaceId,
+            direction: 'receivable',
+            status: 'active',
+        }).sort({ currency: 1 }).lean()
+        expect(before.map((debt) => [debt.currency, debt.remainingAmount])).toEqual([
+            ['ARS', 90],
+            ['USD', 50],
+        ])
+
+        const settlement = await settleSpaceDebtV2({
+            mode: 'represented',
+            actorUserId: ownerUserId,
+            spaceId,
+            payerParticipantId: memberParticipantId,
+            receiverParticipantId: ownerParticipantId,
+            idempotencyKey: `settle-multicurrency-${runId}`,
+            expectedRevision: 1,
+            originSurface: 'spaces',
+            dateKey: '2026-08-26',
+            components: [
+                { currency: 'ARS', money: moneyFromDecimal('ARS', 10), order: 0 },
+                { currency: 'USD', money: moneyFromDecimal('USD', 20), order: 1 },
+            ],
+            legs: [
+                { id: 'ars', currency: 'ARS', money: moneyFromDecimal('ARS', 10) },
+                { id: 'usd', currency: 'USD', money: moneyFromDecimal('USD', 20), reportingSnapshot: usdArs },
+            ],
+        })
+        expect(settlement.value!.remainingByCurrency).toEqual([
+            moneyFromDecimal('ARS', 0),
+            moneyFromDecimal('USD', 0),
+        ])
+        const entry = await SpaceEntry.findById(settlement.resultRefs.spaceEntryId).lean()
+        expect(entry?.settlementLegs).toHaveLength(2)
+        expect(entry?.settlementLegs?.flatMap((leg) => leg.applications).map((application) => application.debtCurrency)).toEqual(['ARS', 'USD'])
+        expect(await Transaction.countDocuments({ spaceEntryId: settlement.resultRefs.spaceEntryId })).toBe(0)
+        expect(await SpaceEntryPersonalImpact.countDocuments({
+            entryId: settlement.resultRefs.spaceEntryId,
+            status: 'pending',
+        })).toBe(2)
+        const after = await Debt.find({
+            userId: ownerUserId,
+            spaceId,
+            direction: 'receivable',
+            status: 'active',
+        }).sort({ currency: 1 }).lean()
+        expect(after.map((debt) => [debt.currency, debt.remainingAmount])).toEqual([
+            ['ARS', 80],
+            ['USD', 30],
+        ])
+    })
+
     it('cambia el modo sin dejar claves activas anteriores y liquida igual desde ambas superficies', async () => {
         const mode = await changeSpaceDebtModeV2({
             actorUserId: ownerUserId,
@@ -321,9 +401,10 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             spaceId,
             originMode: 'simplified',
             direction: 'receivable',
+            currency: 'ARS',
             status: 'active',
         }).lean()
-        expect(debt?.remainingAmount).toBe(90)
+        expect(debt?.remainingAmount).toBe(80)
 
         await settleSpaceDebtV2({
             actorUserId: ownerUserId,
@@ -338,7 +419,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             accountId: ownerAccountId,
         })
         debt = await Debt.findById(debt!._id).lean()
-        expect(debt?.remainingAmount).toBe(70)
+        expect(debt?.remainingAmount).toBe(60)
 
         const transactionCountBeforeRepresented = await Transaction.countDocuments({ spaceId })
         const represented = await settleSpaceDebtV2({
@@ -354,14 +435,21 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             currency: 'ARS',
             dateKey: '2026-08-27',
         })
-        expect(represented.value).toMatchObject({ represented: true, remainingAmount: 60 })
+        expect(represented.value).toMatchObject({
+            represented: true,
+            remainingByCurrency: [
+                moneyFromDecimal('ARS', 50),
+                moneyFromDecimal('USD', 30),
+            ],
+        })
+        expect(represented.value!.remainingAmount).toBeUndefined()
         expect(await Transaction.countDocuments({ spaceId })).toBe(transactionCountBeforeRepresented)
         expect(await SpaceEntryPersonalImpact.countDocuments({
             entryId: represented.resultRefs.spaceEntryId,
             status: 'pending',
         })).toBe(2)
         debt = await Debt.findById(debt!._id).lean()
-        expect(debt?.remainingAmount).toBe(60)
+        expect(debt?.remainingAmount).toBe(50)
 
         await settleSpaceDebtV2({
             actorUserId: ownerUserId,
@@ -370,7 +458,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             idempotencyKey: `settle-debts-${runId}`,
             expectedRevision: 2,
             originSurface: 'debts',
-            amount: 60,
+            amount: 50,
             currency: 'ARS',
             dateKey: '2026-08-27',
             accountId: ownerAccountId,
@@ -378,7 +466,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         debt = await Debt.findById(debt!._id).lean()
         expect(debt).toMatchObject({ remainingAmount: 0, status: 'paid' })
         const settlements = await SpaceEntry.find({ spaceId, type: 'settlement', contractVersion: 2 }).lean()
-        expect(settlements).toHaveLength(3)
+        expect(settlements).toHaveLength(4)
         const settlementTransactions = await Transaction.find({
             userId: ownerUserId,
             spaceEntryId: { $in: settlements.map((entry) => entry._id) },
@@ -457,7 +545,8 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         const debt = await Debt.findOne({
             userId: ownerUserId,
             spaceId,
-            direction: 'payable',
+            currency: 'ARS',
+            remainingAmount: 25,
             status: 'active',
         }).lean()
         expect(debt?.remainingAmount).toBe(25)

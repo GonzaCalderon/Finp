@@ -2,15 +2,16 @@ import { Types, type ClientSession } from 'mongoose'
 
 import { Debt, DebtMovement } from '@/lib/models'
 import type { ISpace, ISpaceEntry, ISpaceParticipant } from '@/types'
-import type { IDebt } from '@/types/debt'
+import type { IDebt, IDebtMovement } from '@/types/debt'
 import {
     calculateSpaceDebtProjectionsV2,
     type SpaceDebtProjectionV2,
     type SpaceLedgerEntryV2,
 } from '@/lib/utils/space-financial-v2'
 import { extractId } from '@/lib/utils/spaces'
+import { moneyFromDecimal, moneyToNumber } from '@/lib/utils/money'
 
-function requireV2Entry(entry: ISpaceEntry): SpaceLedgerEntryV2 {
+function requireV2Entries(entry: ISpaceEntry): SpaceLedgerEntryV2[] {
     if (
         entry.contractVersion !== 2 ||
         (entry.status !== 'recorded' && entry.status !== 'voided')
@@ -19,12 +20,10 @@ function requireV2Entry(entry: ISpaceEntry): SpaceLedgerEntryV2 {
     }
     const entryId = extractId(entry._id)
     if (!entryId) throw new Error('SPACE_V2_ENTRY_ID_MISSING')
-    return {
+    const base = {
         entryId,
         status: entry.status,
         type: entry.type,
-        amount: entry.amount,
-        reportingAmount: entry.reportingAmount,
         paidByParticipantId: extractId(entry.paidByParticipantId),
         sharedWithParticipantIds: (entry.sharedWithParticipantIds ?? [])
             .map(extractId)
@@ -36,6 +35,34 @@ function requireV2Entry(entry: ISpaceEntry): SpaceLedgerEntryV2 {
             amount: allocation.amount,
         })),
     }
+    if (entry.type === 'settlement' && entry.settlementLegs?.length) {
+        return entry.settlementLegs.flatMap((leg) => leg.applications.map((application, index) => ({
+            ...base,
+            entryId: `${entryId}:${leg.legId}:${index}`,
+            amount: moneyToNumber(application.appliedMoney),
+            reportingAmount: moneyToNumber(application.appliedMoney),
+            currency: application.debtCurrency,
+            reportingCurrency: application.debtCurrency,
+        })))
+    }
+    return [{
+        ...base,
+        amount: entry.amount,
+        reportingAmount: entry.reportingAmount,
+        currency: entry.currency,
+        reportingCurrency: inputReportingCurrency(entry),
+    }]
+}
+
+function inputReportingCurrency(entry: ISpaceEntry) {
+    return entry.reportingMoney?.currency ?? entry.currency
+}
+
+async function createDebtMovementDocuments(
+    payloads: Array<Record<string, unknown>>,
+    session: ClientSession
+) {
+    return DebtMovement.insertMany(payloads as unknown as IDebtMovement[], { session })
 }
 
 function buildDebtKey(input: {
@@ -56,6 +83,7 @@ interface MaterializedDebtItem {
     counterpartyNameSnapshot: string
     direction: 'payable' | 'receivable'
     amount: number
+    currency: string
 }
 
 function expandProjections(
@@ -80,6 +108,7 @@ function expandProjections(
                 counterpartyNameSnapshot: creditor.displayName,
                 direction: 'payable',
                 amount: projection.amount,
+                currency: projection.currency ?? '',
             })
         }
         if (creditorUserId && debtor) {
@@ -91,6 +120,7 @@ function expandProjections(
                 counterpartyNameSnapshot: debtor.displayName,
                 direction: 'receivable',
                 amount: projection.amount,
+                currency: projection.currency ?? '',
             })
         }
     }
@@ -123,7 +153,7 @@ export async function materializeSpaceDebtsV2(input: {
     const spaceId = extractId(input.space._id)
     if (!spaceId) throw new Error('SPACE_V2_ID_MISSING')
     const mode = input.space.debtMode ?? 'simplified'
-    const ledgerEntries = input.entries.map(requireV2Entry)
+    const ledgerEntries = input.entries.flatMap(requireV2Entries)
     const ledgerParticipants = input.participants.map((participant) => ({
         participantId: extractId(participant._id) ?? '',
         userId: extractId(participant.userId),
@@ -157,13 +187,19 @@ export async function materializeSpaceDebtsV2(input: {
     }
     const calculatedAt = new Date()
     const sourceEntryIds = ledgerEntries.map((entry) => entry.entryId)
+    const triggeringSettlement = input.triggeringEntryId
+        ? input.entries.find((entry) => extractId(entry._id) === input.triggeringEntryId?.toString())
+        : undefined
+    const settlementApplications = triggeringSettlement?.settlementLegs?.flatMap((leg) =>
+        leg.applications.map((application) => ({ ...application, leg }))
+    ) ?? []
 
     for (const item of desiredItems) {
         const key = buildDebtKey({
             userId: item.userId,
             spaceId,
             counterpartyParticipantId: item.counterpartyParticipantId,
-            currency: input.space.reportingCurrency,
+            currency: item.currency || input.space.reportingCurrency,
             mode,
         })
         desiredKeys.add(key)
@@ -180,7 +216,9 @@ export async function materializeSpaceDebtsV2(input: {
                 counterpartyNameSnapshot: item.counterpartyNameSnapshot,
                 amount: item.amount,
                 remainingAmount: item.amount,
-                currency: input.space.reportingCurrency,
+                currency: item.currency || input.space.reportingCurrency,
+                amountMoney: moneyFromDecimal(item.currency || input.space.reportingCurrency, item.amount),
+                remainingMoney: moneyFromDecimal(item.currency || input.space.reportingCurrency, item.amount),
                 status: 'active',
                 originMode: mode,
                 spaceDebtKey: key,
@@ -201,7 +239,8 @@ export async function materializeSpaceDebtsV2(input: {
                 debtId: debt._id,
                 type: 'creation',
                 amount: item.amount,
-                currency: input.space.reportingCurrency,
+                currency: item.currency || input.space.reportingCurrency,
+                appliedMoney: moneyFromDecimal(item.currency || input.space.reportingCurrency, item.amount),
                 spaceId,
                 spaceOperationId: input.operationId,
                 spaceEntryId: input.triggeringEntryId,
@@ -230,6 +269,8 @@ export async function materializeSpaceDebtsV2(input: {
                     counterpartyNameSnapshot: item.counterpartyNameSnapshot,
                     amount: item.amount,
                     remainingAmount: item.amount,
+                    amountMoney: moneyFromDecimal(item.currency || input.space.reportingCurrency, item.amount),
+                    remainingMoney: moneyFromDecimal(item.currency || input.space.reportingCurrency, item.amount),
                     status,
                     spaceOperationId: input.operationId,
                     'metadata.sourceEntryIds': sourceEntryIds,
@@ -245,19 +286,38 @@ export async function materializeSpaceDebtsV2(input: {
         )
         result.debtIds.push(current._id.toString())
         if (changed) {
-            const [movement] = await DebtMovement.create([{
+            const applied = settlementApplications.filter((application) =>
+                application.debtCurrency === (item.currency || input.space.reportingCurrency)
+            )
+            const movements = await createDebtMovementDocuments((applied.length ? applied.map((application) => ({
+                userId: item.userId,
+                debtId: current._id,
+                type: current.direction === 'payable' ? 'payment' : 'collect',
+                amount: moneyToNumber(application.appliedMoney),
+                currency: application.debtCurrency,
+                paymentMoney: application.paidMoney,
+                appliedMoney: application.appliedMoney,
+                conversionSnapshot: application.conversionSnapshot,
+                spaceId,
+                spaceOperationId: input.operationId,
+                spaceEntryId: input.triggeringEntryId,
+                balanceBefore,
+                balanceAfter: item.amount,
+                date: calculatedAt,
+            })) : [{
                 userId: item.userId,
                 debtId: current._id,
                 type: 'sync_update',
                 amount: Math.abs(item.amount - balanceBefore),
-                currency: input.space.reportingCurrency,
+                currency: item.currency || input.space.reportingCurrency,
+                appliedMoney: moneyFromDecimal(item.currency || input.space.reportingCurrency, Math.abs(item.amount - balanceBefore)),
                 spaceId,
                 spaceOperationId: input.operationId,
                 balanceBefore,
                 balanceAfter: item.amount,
                 date: calculatedAt,
-            }], { session: input.session })
-            result.movementIds.push(movement._id.toString())
+            }]), input.session)
+            result.movementIds.push(...movements.map((movement) => movement._id.toString()))
             result.updated += 1
         }
     }
@@ -271,6 +331,8 @@ export async function materializeSpaceDebtsV2(input: {
                 $set: {
                     amount: 0,
                     remainingAmount: 0,
+                    amountMoney: moneyFromDecimal(debt.currency, 0),
+                    remainingMoney: moneyFromDecimal(debt.currency, 0),
                     status: debt.status === 'ignored' ? 'ignored' : 'paid',
                     spaceOperationId: input.operationId,
                     'metadata.balanceSnapshot': {
@@ -282,21 +344,38 @@ export async function materializeSpaceDebtsV2(input: {
             },
             { session: input.session }
         )
-        const [movement] = await DebtMovement.create([{
+        const applied = settlementApplications.filter((application) => application.debtCurrency === debt.currency)
+        const movements = await createDebtMovementDocuments((applied.length ? applied.map((application) => ({
             userId: debt.userId,
             debtId: debt._id,
-            type: 'sync_update',
-            amount: balanceBefore,
-            currency: input.space.reportingCurrency,
+            type: debt.direction === 'payable' ? 'payment' : 'collect',
+            amount: moneyToNumber(application.appliedMoney),
+            currency: debt.currency,
+            paymentMoney: application.paidMoney,
+            appliedMoney: application.appliedMoney,
+            conversionSnapshot: application.conversionSnapshot,
             spaceId,
             spaceOperationId: input.operationId,
             spaceEntryId: input.triggeringEntryId,
             balanceBefore,
             balanceAfter: 0,
             date: calculatedAt,
-        }], { session: input.session })
+        })) : [{
+            userId: debt.userId,
+            debtId: debt._id,
+            type: 'sync_update',
+            amount: balanceBefore,
+            currency: debt.currency,
+            appliedMoney: moneyFromDecimal(debt.currency, balanceBefore),
+            spaceId,
+            spaceOperationId: input.operationId,
+            spaceEntryId: input.triggeringEntryId,
+            balanceBefore,
+            balanceAfter: 0,
+            date: calculatedAt,
+        }]), input.session)
         result.debtIds.push(debt._id.toString())
-        result.movementIds.push(movement._id.toString())
+        result.movementIds.push(...movements.map((movement) => movement._id.toString()))
         result.settled += 1
     }
 

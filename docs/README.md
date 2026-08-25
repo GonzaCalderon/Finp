@@ -114,6 +114,7 @@ Decisiones vigentes:
 - [`0006 — Período, clasificación y lectura de Proyección`](decisiones/0006-periodo-clasificacion-y-lectura-de-proyeccion.md).
 - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](decisiones/0007-autoridad-espacios-finp-deudas.md).
 - [`0008 — Modelo y consistencia financiera de Espacios`](decisiones/0008-modelo-consistencia-financiera-espacios.md).
+- [`0009 — Autoridad multimoneda de Espacios`](decisiones/0009-autoridad-multimoneda-espacios.md).
 
 Una decisión se documenta cuando:
 

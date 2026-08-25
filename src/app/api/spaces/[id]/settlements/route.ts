@@ -9,22 +9,58 @@ import {
     toSpaceMutationResult,
 } from '@/lib/server/space-api-contract'
 import { settleSpaceDebtV2 } from '@/lib/server/space-settlement-service-v2'
+import { conversionSnapshotSchema, moneyDtoSchema } from '@/lib/validations/space-money-v2'
+
+const componentSchema = z.object({
+    debtId: z.string().min(1).optional(),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    amount: z.number().finite().positive().optional(),
+    money: moneyDtoSchema.optional(),
+    order: z.number().int().nonnegative(),
+}).strict().refine((value) => value.amount !== undefined || value.money !== undefined, {
+    message: 'El componente necesita un monto.',
+})
+
+const legSchema = z.object({
+    id: z.string().min(1).max(80),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    amount: z.number().finite().positive().optional(),
+    money: moneyDtoSchema.optional(),
+    accountId: z.string().min(1).optional(),
+    linkedTransactionId: z.string().min(1).optional(),
+    reportingSnapshot: conversionSnapshotSchema.optional(),
+    expectedQuoteFingerprint: z.string().min(8).max(64).optional(),
+    conversions: z.array(z.object({
+        targetCurrency: z.string().regex(/^[A-Z]{3}$/),
+        snapshot: conversionSnapshotSchema,
+        expectedQuoteFingerprint: z.string().min(8).max(64).optional(),
+    }).strict()).max(20).optional(),
+}).strict().superRefine((value, context) => {
+    if (value.amount === undefined && value.money === undefined) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: 'El tramo necesita un monto.' })
+    }
+    if (value.accountId && value.linkedTransactionId) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: 'Elegí una cuenta o una transacción vinculada.' })
+    }
+})
 
 const common = {
     expectedRevision: z.number().int().nonnegative(),
-    amount: z.number().finite().positive(),
-    currency: z.string().min(1).max(12),
+    amount: z.number().finite().positive().optional(),
+    currency: z.string().min(1).max(12).optional(),
     exchangeRate: z.number().finite().positive().optional(),
     dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     description: z.string().trim().max(200).optional(),
+    components: z.array(componentSchema).min(1).max(50).optional(),
+    legs: z.array(legSchema).min(1).max(20).optional(),
 }
 
 const settlementSchema = z.discriminatedUnion('mode', [
     z.object({
         ...common,
         mode: z.literal('own'),
-        debtId: z.string().min(1),
-        accountId: z.string().min(1),
+        debtId: z.string().min(1).optional(),
+        accountId: z.string().min(1).optional(),
     }).strict(),
     z.object({
         ...common,
@@ -32,7 +68,18 @@ const settlementSchema = z.discriminatedUnion('mode', [
         payerParticipantId: z.string().min(1),
         receiverParticipantId: z.string().min(1),
     }).strict(),
-])
+]).superRefine((value, context) => {
+    const legacyComplete = value.amount !== undefined && value.currency !== undefined
+    if (!legacyComplete && (!value.components?.length || !value.legs?.length)) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'La liquidación necesita componentes y tramos completos.',
+        })
+    }
+    if (value.mode === 'own' && !value.debtId && !value.components?.some((component) => component.debtId)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: 'Elegí la deuda que querés liquidar.' })
+    }
+})
 
 export async function POST(
     request: Request,

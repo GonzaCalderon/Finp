@@ -16,6 +16,7 @@ import {
     type SpaceShareV2,
 } from '@/lib/utils/space-financial-v2'
 import { extractId } from '@/lib/utils/spaces'
+import { moneyFromDecimal, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
 
 export type SpaceLegacyWarningCode =
     | 'LEGACY_ENTRY_STATUS_NORMALIZED'
@@ -55,6 +56,10 @@ export interface SpaceEntryReadV2 {
     reportingAmount: number
     reportingCurrency: string
     exchangeRate?: number
+    originalMoney: MoneyDto
+    reportingMoney: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
+    settlementLegs?: ISpaceEntry['settlementLegs']
     dateKey: string
     timezone: string
     date: Date
@@ -167,6 +172,8 @@ export function adaptSpaceEntryToV2(input: {
         shares = calculateSpaceSharesV2({
             amount: input.entry.amount,
             reportingAmount: input.entry.reportingAmount,
+            currency: input.entry.currency,
+            reportingCurrency: input.space.reportingCurrency,
             splitMode: input.entry.splitMode,
             participantIds: shared.participantIds,
             allocations: splitAllocations,
@@ -193,6 +200,10 @@ export function adaptSpaceEntryToV2(input: {
             reportingAmount: input.entry.reportingAmount,
             reportingCurrency: input.space.reportingCurrency,
             exchangeRate: input.entry.exchangeRate,
+            originalMoney: input.entry.originalMoney ?? moneyFromDecimal(input.entry.currency, input.entry.amount),
+            reportingMoney: input.entry.reportingMoney ?? moneyFromDecimal(input.space.reportingCurrency, input.entry.reportingAmount),
+            conversionSnapshot: input.entry.conversionSnapshot,
+            settlementLegs: input.entry.settlementLegs,
             dateKey,
             timezone,
             date: new Date(input.entry.date),

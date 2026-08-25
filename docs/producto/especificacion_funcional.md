@@ -444,6 +444,25 @@ del usuario.
 
 El Espacio puede mostrar deudas directas o una simplificación de pagos. La representación no cambia el historial de movimientos.
 
+### Monedas y cotizaciones
+
+Un Espacio puede operar integralmente con varias monedas. Cada gasto conserva
+importe original, equivalente histórico de reporte y snapshot de la conversión.
+Los agregados identifican las monedas incluidas y permiten abrir su composición;
+las posiciones abiertas pueden mostrar además una equivalencia actual sin
+reescribir historia.
+
+La deuda y su simplificación mantienen saldos independientes por moneda. Una
+liquidación puede elegir varios componentes y combinar varios tramos de pago;
+primero aplica la misma moneda y luego las conversiones explícitas revisadas por
+la persona. El dinero pagado, el aplicado y la diferencia de cambio no se
+confunden con gasto operacional.
+
+Las referencias automáticas pueden reemplazarse manualmente. Una cotización
+vencida o cambiada exige revisión y conserva el borrador. La tira de referencias
+y el detalle `Incluye…` informan fuente, antigüedad y composición sin sobrecargar
+el monto principal.
+
 ### Impacto personal
 
 Cada participante decide si registra su parte en Mi Finp. `Agregar a Mi Finp`
@@ -484,6 +503,9 @@ El contrato completo de autoridad, recorridos y verificación vive en
 [`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md). La solución
 técnica integral se define en la decisión
 [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md).
+La autoridad por moneda, las cotizaciones y las liquidaciones multitramos se
+definen en la decisión
+[`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md).
 
 ## 12. Deudas
 
@@ -505,6 +527,10 @@ Pagar o cobrar:
 - no se clasifica como gasto o ingreso operacional;
 - actualiza deuda y movimiento de manera atómica;
 - evita duplicar obligaciones provenientes de Espacios.
+
+En deudas derivadas, el saldo permanece expresado por moneda. Un pago en otra
+moneda sólo reduce la obligación mediante una aplicación y un snapshot
+explícitos; los saldos restantes conservan la moneda original.
 
 ## 13. Notificaciones, pendientes e insights
 

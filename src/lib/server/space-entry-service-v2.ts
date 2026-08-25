@@ -31,6 +31,12 @@ import {
     type SpaceSplitAllocationV2,
 } from '@/lib/utils/space-financial-v2'
 import { extractId } from '@/lib/utils/spaces'
+import {
+    assertConversionSnapshotConfirmable,
+    buildManualConversionSnapshot,
+    resolveSpaceReferenceQuote,
+} from '@/lib/server/space-quote-service'
+import { assertMoneyDto, moneyToNumber, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
 import type { ISpaceEntry, ISpaceParticipant, ITransaction } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
 
@@ -42,8 +48,12 @@ export interface CreateSpaceEntryV2Input {
     title: string
     description?: string
     amount: number
+    money?: MoneyDto
     currency: string
     exchangeRate?: number
+    exchangeRateDecimal?: string
+    conversionSnapshot?: ConversionSnapshot
+    expectedQuoteFingerprint?: string
     dateKey: string
     paidByParticipantId: string
     sharedWithParticipantIds: string[]
@@ -122,6 +132,8 @@ async function createPersonalImpactsForEntry(input: {
     const shares = calculateSpaceSharesV2({
         amount: input.entry.amount,
         reportingAmount: input.entry.reportingAmount,
+        currency: input.entry.currency,
+        reportingCurrency: input.space.reportingCurrency,
         splitMode: input.entry.splitMode,
         participantIds: (input.entry.sharedWithParticipantIds ?? []).map((id) => id.toString()),
         allocations: (input.entry.splitAllocations ?? []).map((allocation) => ({
@@ -354,15 +366,46 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
             }
             const dateKey = normalizeFinancialDateKey(input.dateKey)
             const date = financialDateKeyToInstant(dateKey, context.space.timezone)
+            const conversionSnapshot = input.currency === context.space.reportingCurrency
+                ? undefined
+                : input.conversionSnapshot ?? buildManualConversionSnapshot({
+                    sourceCurrency: input.currency,
+                    targetCurrency: context.space.reportingCurrency,
+                    rate: input.exchangeRateDecimal ?? input.exchangeRate?.toString() ?? '',
+                    actorUserId: input.actorUserId,
+                })
+            if (conversionSnapshot) assertConversionSnapshotConfirmable(conversionSnapshot)
+            if (conversionSnapshot && conversionSnapshot.source !== 'manual') {
+                const currentQuote = await resolveSpaceReferenceQuote({
+                    sourceCurrency: input.currency,
+                    targetCurrency: context.space.reportingCurrency,
+                })
+                if (!currentQuote || !input.expectedQuoteFingerprint || currentQuote.fingerprint !== input.expectedQuoteFingerprint) {
+                    throw new ServiceError(409, 'SPACE_QUOTE_CHANGED', 'La cotización cambió. Revisá el nuevo importe antes de confirmar.', {
+                        currentQuote,
+                    })
+                }
+            }
             const conversion = convertSpaceAmountV2({
                 amount: input.amount,
                 currency: input.currency,
                 reportingCurrency: context.space.reportingCurrency,
                 exchangeRate: input.exchangeRate,
+                exchangeRateDecimal: input.exchangeRateDecimal ?? conversionSnapshot?.rate,
+                direction: conversionSnapshot?.direction,
+                snapshot: conversionSnapshot,
             })
+            if (input.money) {
+                const exact = assertMoneyDto(input.money)
+                if (exact.currency !== input.currency || moneyToNumber(exact) !== input.amount) {
+                    throw new ServiceError(400, 'SPACE_MONEY_MISMATCH', 'El monto exacto no coincide con el movimiento.')
+                }
+            }
             calculateSpaceSharesV2({
                 amount: input.amount,
                 reportingAmount: conversion.reportingAmount,
+                currency: input.currency,
+                reportingCurrency: context.space.reportingCurrency,
                 splitMode: input.splitMode,
                 participantIds: sharedWithParticipantIds,
                 allocations: input.splitAllocations,
@@ -391,6 +434,9 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 currency: input.currency,
                 reportingAmount: conversion.reportingAmount,
                 exchangeRate: conversion.exchangeRate,
+                originalMoney: input.money ?? conversion.originalMoney,
+                reportingMoney: conversion.reportingMoney,
+                conversionSnapshot,
                 date,
                 dateKey,
                 timezone: context.space.timezone,

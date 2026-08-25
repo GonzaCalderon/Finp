@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose'
 import type { IDebtMovement } from '@/types/debt'
 import { DEBT_MOVEMENT_TYPES } from '@/lib/constants'
+import { conversionSnapshotSchema, moneySchema } from '@/lib/models/space-money.schemas'
 
 const DebtMovementSchema = new Schema<IDebtMovement>(
     {
@@ -10,6 +11,9 @@ const DebtMovementSchema = new Schema<IDebtMovement>(
 
         amount: { type: Number, required: true, min: 0 },
         currency: { type: String, required: true, trim: true },
+        paymentMoney: { type: moneySchema },
+        appliedMoney: { type: moneySchema },
+        conversionSnapshot: { type: conversionSnapshotSchema },
 
         // Registros relacionados
         accountId: { type: Schema.Types.ObjectId, ref: 'Account' },
@@ -36,7 +40,8 @@ const needsDebtMovementSchemaRefresh = Boolean(
     existingDebtMovementModel &&
     (!existingDebtMovementModel.schema.path('spaceOperationId') ||
         !existingDebtMovementModel.schema.path('balanceBefore') ||
-        !existingDebtMovementModel.schema.path('balanceAfter'))
+        !existingDebtMovementModel.schema.path('balanceAfter') ||
+        !existingDebtMovementModel.schema.path('paymentMoney'))
 )
 
 if (needsDebtMovementSchemaRefresh) delete mongoose.models.DebtMovement

@@ -35,6 +35,7 @@ import type {
     ISpaceParticipant,
     ITransaction,
     SpaceEntryPreviewDto,
+    SpaceQuotesDto,
 } from '@/types'
 import {
     Dialog,
@@ -307,6 +308,7 @@ export function SpaceEntryDialog({
     initialData,
     initialHasSubsequentSettlement,
     contractVersion,
+    quotes,
 }: DialogProps & {
     onSubmit: (data: SpaceEntryFormData) => Promise<ISpaceEntry>
     onEditComplete?: (entry: ISpaceEntry) => void
@@ -323,6 +325,7 @@ export function SpaceEntryDialog({
     initialData?: ISpaceEntry
     initialHasSubsequentSettlement?: boolean
     contractVersion?: 2
+    quotes?: SpaceQuotesDto | null
 }) {
     const { categories } = useSpaceCategories(spaceId)
     const { categories: personalCategories } = useCategories()
@@ -357,6 +360,7 @@ export function SpaceEntryDialog({
     const [recentTransactions, setRecentTransactions] = useState<ITransaction[]>([])
     const attachmentsRef = useRef<SpaceAttachmentDraft[]>([])
     const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const previousCurrencyRef = useRef(form.currency)
 
     const draftStorageKey = draftKey ? `finp:space-entry-draft:${draftKey}` : undefined
 
@@ -501,6 +505,31 @@ export function SpaceEntryDialog({
         }))
     }, [form.currency, reportingCurrency, spaceCurrencies])
 
+    const activeQuote = useMemo(
+        () => quotes?.quotes.find((quote) =>
+            quote.sourceCurrency === form.currency &&
+            quote.targetCurrency === reportingCurrency
+        ),
+        [form.currency, quotes?.quotes, reportingCurrency]
+    )
+    const automaticQuoteSelected = Boolean(
+        activeQuote?.status === 'current' && Number(activeQuote.rate) === form.exchangeRate
+    )
+
+    useEffect(() => {
+        const currencyChanged = previousCurrencyRef.current !== form.currency
+        previousCurrencyRef.current = form.currency
+        if (form.currency === reportingCurrency) {
+            if (form.exchangeRate !== undefined) {
+                setForm((previous) => ({ ...previous, exchangeRate: undefined }))
+            }
+            return
+        }
+        if (activeQuote?.status !== 'current') return
+        if (!currencyChanged && form.exchangeRate !== undefined) return
+        setForm((previous) => ({ ...previous, exchangeRate: Number(activeQuote.rate) }))
+    }, [activeQuote?.rate, activeQuote?.status, form.currency, form.exchangeRate, reportingCurrency])
+
     const paidByParticipant = activeParticipants.find(
         (participant) => extractId(participant._id) === form.paidByParticipantId
     )
@@ -562,6 +591,16 @@ export function SpaceEntryDialog({
                             amount: form.amount,
                             currency: form.currency,
                             exchangeRate: form.exchangeRate,
+                            exchangeRateDecimal: automaticQuoteSelected ? activeQuote?.rate : undefined,
+                            conversionSnapshot: automaticQuoteSelected && activeQuote ? {
+                                rate: activeQuote.rate,
+                                direction: activeQuote.direction,
+                                source: activeQuote.source,
+                                observedAt: activeQuote.observedAt,
+                                capturedAt: activeQuote.capturedAt,
+                                expiresAt: activeQuote.expiresAt,
+                                path: activeQuote.path,
+                            } : undefined,
                             paidByParticipantId: form.paidByParticipantId,
                             sharedWithParticipantIds: sharedParticipantIds,
                             splitMode: form.splitMode,
@@ -586,6 +625,8 @@ export function SpaceEntryDialog({
         }
     }, [
         contractVersion,
+        activeQuote,
+        automaticQuoteSelected,
         form.amount,
         form.currency,
         form.exchangeRate,
@@ -1294,6 +1335,13 @@ export function SpaceEntryDialog({
                                                         clearFieldError('exchangeRate')
                                                     }}
                                                 />
+                                            ) : null}
+                                            {form.currency !== reportingCurrency ? (
+                                                <p className="text-xs text-muted-foreground" aria-live="polite">
+                                                    {automaticQuoteSelected && activeQuote
+                                                        ? `Referencia automática · ${activeQuote.source === 'dolarapi_official' ? 'DolarAPI oficial' : 'Frankfurter'} · ${activeQuote.status === 'current' ? 'actualizada' : 'desactualizada'}`
+                                                        : 'Cotización manual: Finp guardará este valor, su autor y el momento de confirmación.'}
+                                                </p>
                                             ) : null}
                                         </div>
                                     </SpaceDialogPanel>

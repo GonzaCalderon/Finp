@@ -28,6 +28,7 @@ import {
 import { extractId } from '@/lib/utils/spaces'
 import type { ISpace, ISpaceEntry, ISpaceParticipant } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
+import { buildManualConversionSnapshot } from '@/lib/server/space-quote-service'
 
 export interface EditSpaceEntryV2Input {
     actorUserId: string
@@ -59,6 +60,9 @@ function entrySnapshot(entry: ISpaceEntry, actorUserId: string) {
         currency: entry.currency,
         reportingAmount: entry.reportingAmount,
         exchangeRate: entry.exchangeRate,
+        originalMoney: entry.originalMoney,
+        reportingMoney: entry.reportingMoney,
+        conversionSnapshot: entry.conversionSnapshot,
         date: entry.date,
         dateKey: entry.dateKey,
         timezone: entry.timezone,
@@ -126,6 +130,8 @@ async function reconcileImpactsForChangedEntry(input: {
     const shares = input.entry.status === 'voided' ? [] : calculateSpaceSharesV2({
         amount: input.entry.amount,
         reportingAmount: input.entry.reportingAmount,
+        currency: input.entry.currency,
+        reportingCurrency: input.space.reportingCurrency,
         splitMode: input.entry.splitMode,
         participantIds: (input.entry.sharedWithParticipantIds ?? []).map((id) => id.toString()),
         allocations: (input.entry.splitAllocations ?? []).map((allocation) => ({
@@ -273,6 +279,13 @@ export async function editSpaceEntryV2(input: EditSpaceEntryV2Input) {
             if (current.status !== 'recorded') {
                 throw new ServiceError(409, 'SPACE_ENTRY_NOT_EDITABLE', 'El movimiento anulado no puede editarse.')
             }
+            if (current.type === 'settlement') {
+                throw new ServiceError(
+                    409,
+                    'SPACE_SETTLEMENT_IMMUTABLE',
+                    'Una liquidación confirmada no se edita: anulala y registrá una nueva.'
+                )
+            }
             assertCanMutateEntry({ ...context, entry: current, actorUserId: input.actorUserId, action: 'edit' })
             if (!context.space.timezone) throw new ServiceError(409, 'SPACE_TIMEZONE_REQUIRED', 'El Espacio necesita zona horaria.')
             if (!context.space.currencies.includes(input.currency)) {
@@ -287,15 +300,27 @@ export async function editSpaceEntryV2(input: EditSpaceEntryV2Input) {
             await validateCategory(input.spaceId, input.spaceCategoryId, session)
             const dateKey = normalizeFinancialDateKey(input.dateKey)
             const date = financialDateKeyToInstant(dateKey, context.space.timezone)
+            const conversionSnapshot = input.currency === context.space.reportingCurrency
+                ? undefined
+                : buildManualConversionSnapshot({
+                    sourceCurrency: input.currency,
+                    targetCurrency: context.space.reportingCurrency,
+                    rate: input.exchangeRate?.toString() ?? '',
+                    actorUserId: input.actorUserId,
+                })
             const conversion = convertSpaceAmountV2({
                 amount: input.amount,
                 currency: input.currency,
                 reportingCurrency: context.space.reportingCurrency,
                 exchangeRate: input.exchangeRate,
+                exchangeRateDecimal: conversionSnapshot?.rate,
+                snapshot: conversionSnapshot,
             })
             calculateSpaceSharesV2({
                 amount: input.amount,
                 reportingAmount: conversion.reportingAmount,
+                currency: input.currency,
+                reportingCurrency: context.space.reportingCurrency,
                 splitMode: input.splitMode,
                 participantIds: sharedIds,
                 allocations: input.splitAllocations,
@@ -326,6 +351,9 @@ export async function editSpaceEntryV2(input: EditSpaceEntryV2Input) {
                         currency: input.currency,
                         reportingAmount: conversion.reportingAmount,
                         exchangeRate: conversion.exchangeRate,
+                        originalMoney: conversion.originalMoney,
+                        reportingMoney: conversion.reportingMoney,
+                        conversionSnapshot,
                         date,
                         dateKey,
                         timezone: context.space.timezone,

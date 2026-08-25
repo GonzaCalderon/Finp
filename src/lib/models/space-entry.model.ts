@@ -5,12 +5,37 @@ import {
     SPACE_ENTRY_TYPES,
     SPACE_SPLIT_MODES,
 } from '@/lib/constants'
+import { conversionSnapshotSchema, moneySchema } from '@/lib/models/space-money.schemas'
 
 const splitAllocationSchema = new Schema(
     {
         participantId: { type: Schema.Types.ObjectId, ref: 'SpaceParticipant', required: true },
         percentage: { type: Number },
         amount: { type: Number },
+    },
+    { _id: false }
+)
+
+const settlementApplicationSchema = new Schema(
+    {
+        debtId: { type: Schema.Types.ObjectId, ref: 'Debt' },
+        debtCurrency: { type: String, required: true, uppercase: true },
+        paidMoney: { type: moneySchema, required: true },
+        appliedMoney: { type: moneySchema, required: true },
+        conversionSnapshot: { type: conversionSnapshotSchema },
+    },
+    { _id: false }
+)
+
+const settlementLegSchema = new Schema(
+    {
+        legId: { type: String, required: true },
+        paidMoney: { type: moneySchema, required: true },
+        reportingMoney: { type: moneySchema, required: true },
+        accountId: { type: Schema.Types.ObjectId, ref: 'Account' },
+        linkedTransactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
+        conversionSnapshot: { type: conversionSnapshotSchema },
+        applications: { type: [settlementApplicationSchema], required: true, default: [] },
     },
     { _id: false }
 )
@@ -25,6 +50,9 @@ const entrySnapshotSchema = new Schema(
         currency: { type: String, required: true },
         reportingAmount: { type: Number, required: true },
         exchangeRate: { type: Number },
+        originalMoney: { type: moneySchema },
+        reportingMoney: { type: moneySchema },
+        conversionSnapshot: { type: conversionSnapshotSchema },
         date: { type: Date, required: true },
         dateKey: { type: String, trim: true },
         timezone: { type: String, trim: true },
@@ -70,6 +98,10 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         currency: { type: String, required: true },
         reportingAmount: { type: Number, required: true },
         exchangeRate: { type: Number },
+        originalMoney: { type: moneySchema },
+        reportingMoney: { type: moneySchema },
+        conversionSnapshot: { type: conversionSnapshotSchema },
+        settlementLegs: { type: [settlementLegSchema], default: undefined },
         date: { type: Date, required: true },
         dateKey: { type: String, trim: true },
         timezone: { type: String, trim: true },
@@ -130,7 +162,9 @@ const needsSchemaRefresh =
         !existingSpaceEntryModel.schema.path('dateKey') ||
         !existingSpaceEntryModel.schema.path('timezone') ||
         !existingSpaceEntryModel.schema.path('revision') ||
-        !existingSpaceEntryModel.schema.path('operationId'))
+        !existingSpaceEntryModel.schema.path('operationId') ||
+        !existingSpaceEntryModel.schema.path('originalMoney') ||
+        !existingSpaceEntryModel.schema.path('settlementLegs'))
 
 if (needsSchemaRefresh) {
     delete mongoose.models.SpaceEntry

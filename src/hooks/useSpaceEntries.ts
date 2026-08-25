@@ -10,6 +10,7 @@ import type {
     SpaceDetailDto,
     SpaceMovementPageDto,
     SpaceMutationResultDto,
+    SpaceQuotesDto,
 } from '@/types'
 import type { SpaceEntryFormData } from '@/lib/validations'
 import {
@@ -17,20 +18,28 @@ import {
     clientDateToDateKey,
 } from '@/lib/client/space-api-adapter'
 
-type Filters = {
+export type SpaceMovementFilters = {
     type?: string
     status?: string
+    originalCurrencies?: string[]
+    paidCurrencies?: string[]
+    debtCurrencies?: string[]
 }
 
 export function useSpaceEntries(
     spaceId?: string,
-    filters: Filters = {},
-    spaceApi?: SpaceDetailDto
+    filters: SpaceMovementFilters = {},
+    spaceApi?: SpaceDetailDto,
+    quotes?: SpaceQuotesDto | null
 ) {
+    const originalCurrenciesKey = (filters.originalCurrencies ?? []).join(',')
+    const paidCurrenciesKey = (filters.paidCurrencies ?? []).join(',')
+    const debtCurrenciesKey = (filters.debtCurrencies ?? []).join(',')
     const [entries, setEntries] = useState<ISpaceEntry[]>([])
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [subtotalByCurrency, setSubtotalByCurrency] = useState<SpaceMovementPageDto['subtotalByCurrency']>({})
     const pendingKeys = useRef(new Map<string, string>())
 
     const fetchEntries = useCallback(async (options?: { silent?: boolean }) => {
@@ -47,6 +56,9 @@ export function useSpaceEntries(
             const params = new URLSearchParams()
             if (filters.type) params.set('type', filters.type)
             if (filters.status) params.set('status', filters.status)
+            for (const currency of originalCurrenciesKey.split(',').filter(Boolean)) params.append('originalCurrency', currency)
+            for (const currency of paidCurrenciesKey.split(',').filter(Boolean)) params.append('paidCurrency', currency)
+            for (const currency of debtCurrenciesKey.split(',').filter(Boolean)) params.append('debtCurrency', currency)
 
             const query = params.toString()
             const data = await apiJson<{
@@ -59,13 +71,22 @@ export function useSpaceEntries(
             setEntries(data.data && spaceApi
                 ? data.data.items.map((entry) => adaptSpaceEntryDtoForUi(entry, spaceApi))
                 : data.entries ?? [])
+            setSubtotalByCurrency(data.data?.subtotalByCurrency ?? {})
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar movimientos')
         } finally {
             setLoading(false)
             setRefreshing(false)
         }
-    }, [filters.status, filters.type, spaceApi, spaceId])
+    }, [
+        debtCurrenciesKey,
+        originalCurrenciesKey,
+        paidCurrenciesKey,
+        filters.status,
+        filters.type,
+        spaceApi,
+        spaceId,
+    ])
 
     const createEntry = useCallback(async (body: SpaceEntryFormData) => {
         if (!spaceId) {
@@ -77,6 +98,21 @@ export function useSpaceEntries(
             const idempotencyKey = pendingKeys.current.get(intention) ?? crypto.randomUUID()
             pendingKeys.current.set(intention, idempotencyKey)
             const isSettlement = body.type === 'settlement'
+            const quote = quotes?.quotes.find((candidate) =>
+                candidate.sourceCurrency === body.currency &&
+                candidate.targetCurrency === spaceApi.space.reportingCurrency &&
+                candidate.status === 'current' &&
+                Number(candidate.rate) === body.exchangeRate
+            )
+            const conversionSnapshot = quote ? {
+                rate: quote.rate,
+                direction: quote.direction,
+                source: quote.source,
+                observedAt: quote.observedAt,
+                capturedAt: quote.capturedAt,
+                expiresAt: quote.expiresAt,
+                path: quote.path,
+            } : undefined
             const endpoint = isSettlement
                 ? `/api/spaces/${spaceId}/settlements`
                 : `/api/spaces/${spaceId}/entries`
@@ -97,6 +133,9 @@ export function useSpaceEntries(
                 amount: body.amount,
                 currency: body.currency,
                 exchangeRate: body.exchangeRate,
+                exchangeRateDecimal: quote?.rate,
+                conversionSnapshot,
+                expectedQuoteFingerprint: quote?.fingerprint,
                 dateKey: clientDateToDateKey(body.date),
                 paidByParticipantId: body.paidByParticipantId,
                 sharedWithParticipantIds: body.sharedWithParticipantIds?.length
@@ -149,7 +188,7 @@ export function useSpaceEntries(
 
         invalidateData(SPACE_INVALIDATION_TAGS)
         return data.entry
-    }, [spaceApi, spaceId])
+    }, [quotes, spaceApi, spaceId])
 
     useEffect(() => {
         if (!spaceId) return
@@ -166,6 +205,7 @@ export function useSpaceEntries(
         loading,
         refreshing,
         error,
+        subtotalByCurrency,
         fetchEntries,
         createEntry,
     }

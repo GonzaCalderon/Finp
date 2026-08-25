@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { spaceApiErrorResponse } from '@/lib/server/space-api-contract'
 import { previewSpaceEntryV2 } from '@/lib/server/space-financial-preview-v2'
+import { conversionSnapshotSchema, moneyDtoSchema } from '@/lib/validations/space-money-v2'
 
 const allocationSchema = z.object({
     participantId: z.string().min(1),
@@ -14,8 +15,11 @@ const allocationSchema = z.object({
 
 const previewSchema = z.object({
     amount: z.number().finite().positive(),
+    money: moneyDtoSchema.optional(),
     currency: z.string().min(1).max(12),
     exchangeRate: z.number().finite().positive().optional(),
+    exchangeRateDecimal: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+    conversionSnapshot: conversionSnapshotSchema.optional(),
     paidByParticipantId: z.string().min(1),
     sharedWithParticipantIds: z.array(z.string().min(1)).min(1).max(100),
     splitMode: z.enum(['none', 'equal', 'percentage', 'fixed']),

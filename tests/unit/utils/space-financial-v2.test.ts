@@ -20,10 +20,10 @@ describe('space financial v2 — reparto estricto', () => {
             splitMode: 'equal',
             participantIds: ['a', 'b', 'c'],
         })
-        expect(shares).toEqual([
-            { participantId: 'a', amount: 33.33, reportingAmount: 33.33 },
+        expect(shares.map(({ participantId, amount, reportingAmount }) => ({ participantId, amount, reportingAmount }))).toEqual([
+            { participantId: 'a', amount: 33.34, reportingAmount: 33.34 },
             { participantId: 'b', amount: 33.33, reportingAmount: 33.33 },
-            { participantId: 'c', amount: 33.34, reportingAmount: 33.34 },
+            { participantId: 'c', amount: 33.33, reportingAmount: 33.33 },
         ])
     })
 
@@ -94,7 +94,12 @@ describe('space financial v2 — moneda y día financiero', () => {
             currency: 'USD',
             reportingCurrency: 'ARS',
             exchangeRate: 1_234.567,
-        })).toEqual({ reportingAmount: 12_345.67, exchangeRate: 1_234.567 })
+        })).toMatchObject({
+            reportingAmount: 12_345.67,
+            exchangeRate: 1_234.567,
+            originalMoney: { currency: 'USD', minorUnits: '1000', scale: 2 },
+            reportingMoney: { currency: 'ARS', minorUnits: '1234567', scale: 2 },
+        })
         expect(() => convertSpaceAmountV2({
             amount: 10,
             currency: 'USD',

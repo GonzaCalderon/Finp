@@ -163,6 +163,13 @@ Casos especializados:
 - parte propia y total de Espacio;
 - compromiso fijo/variable;
 - snapshot histórico.
+- escalas ISO 0, 2 y 3, límites, redondeo y reparto por restos mayores;
+- cotización directa, derivada por USD/EUR, oficial compra/venta, manual,
+  cambiada y vencida;
+- deuda y simplificación independientes por moneda;
+- liquidación con varios componentes y tramos, pagos parciales, sobrepago,
+  rollback, replay y reversión;
+- composición histórica y revaluación actual sin presentar totales parciales.
 
 ## 7. APIs y seguridad
 
@@ -244,6 +251,10 @@ Un flujo no está cerrado si sólo funciona en desktop.
 - deuda;
 - impacto personal de Espacio;
 - permisos de invitación.
+- Espacio ARS/USD/EUR con composición y filtros;
+- pago de deuda sólo ARS, sólo USD y combinado ARS+USD;
+- referencia manual, automática, vencida y proveedor caído;
+- liquidación propia o representada y continuidad hacia Mi Finp.
 
 ### CI
 
@@ -386,15 +397,15 @@ Una versión puede promoverse cuando:
 Checks base, contratos y recorridos financieros de Espacios verificados el
 2026-08-24:
 
-- 864 pruebas unitarias aprobadas en 112 archivos;
-- 9 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+- 881 pruebas unitarias aprobadas en 117 archivos;
+- 10 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
   sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
   deuda, configuración monetaria, lifecycle, ownership, participantes inactivos
   y liquidaciones propias o representadas;
 - build, typecheck, lint y validación documental aprobados;
-- 64 de 64 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
+- 66 de 66 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
   de producción;
-- 64 de 64 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
+- 66 de 66 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
   ni altas fallidas después de una ejecución larga;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
@@ -406,7 +417,7 @@ Checks base, contratos y recorridos financieros de Espacios verificados el
 - cobertura no bloqueante;
 - fixture contractual v2 y recorrido de gasto en tres pasos con preview e
   impacto vinculado aprobados en desktop y mobile;
-- historia de 1.000 movimientos medida en 31.766 bytes y 440 ms para una página
+- historia de 1.000 movimientos medida en 45.987 bytes y 859 ms para una página
   de 50 elementos, sin cache, colas ni dependencias nuevas;
 - el smoke financiero conserva datos representativos de dos períodos y volvió a
   quedar verde sin depender de cuentas residuales;
@@ -423,6 +434,10 @@ Checks base, contratos y recorridos financieros de Espacios verificados el
   `NO-GO` para migración automática y habilitan la etapa de modelo compatible.
 - los 10 índices v2 parciales se aplicaron y reaplicaron sólo en `finp-e2e`;
   development fue validado en `dry-run` y no recibió escrituras.
+- el checkpoint multimoneda agrega cobertura focal de dinero exacto, registro
+  ISO, cotizaciones, composición accesible y asignación de liquidaciones por
+  moneda; la matriz E2E usa un Espacio ARS/USD/EUR y conserva el rollout
+  exclusivamente en `finp-e2e`.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

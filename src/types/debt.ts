@@ -6,6 +6,7 @@ import type {
     DebtSourceType,
     DebtStatus,
 } from '@/lib/constants'
+import type { ConversionSnapshot, MoneyDto } from '@/lib/utils/money'
 
 export interface IDebtMetadata {
     sourceEntryIds?: string[]
@@ -39,6 +40,8 @@ export interface IDebt {
     amount: number
     remainingAmount: number
     currency: string
+    amountMoney?: MoneyDto
+    remainingMoney?: MoneyDto
 
     // Estado
     status: DebtStatus
@@ -65,6 +68,9 @@ export interface IDebtMovement {
 
     amount: number
     currency: string
+    paymentMoney?: MoneyDto
+    appliedMoney?: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
 
     // Registros relacionados
     accountId?: Types.ObjectId

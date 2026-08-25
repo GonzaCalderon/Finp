@@ -6,6 +6,7 @@ import {
     DEBT_SOURCE_TYPES,
     DEBT_STATUSES,
 } from '@/lib/constants'
+import { moneySchema } from '@/lib/models/space-money.schemas'
 
 const DebtSchema = new Schema<IDebt>(
     {
@@ -25,6 +26,8 @@ const DebtSchema = new Schema<IDebt>(
         amount: { type: Number, required: true, min: 0 },
         remainingAmount: { type: Number, required: true, min: 0 },
         currency: { type: String, required: true, trim: true },
+        amountMoney: { type: moneySchema },
+        remainingMoney: { type: moneySchema },
 
         // Estado
         status: {
@@ -70,7 +73,8 @@ const needsDebtSchemaRefresh = Boolean(
     existingDebtModel &&
     (!existingDebtModel.schema.path('contractVersion') ||
         !existingDebtModel.schema.path('spaceOperationId') ||
-        !existingDebtModel.schema.path('metadata.balanceSnapshot.operationId'))
+        !existingDebtModel.schema.path('metadata.balanceSnapshot.operationId') ||
+        !existingDebtModel.schema.path('remainingMoney'))
 )
 
 if (needsDebtSchemaRefresh) delete mongoose.models.Debt

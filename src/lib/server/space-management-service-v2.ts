@@ -23,6 +23,7 @@ import { assertIanaTimezone } from '@/lib/utils/space-financial-v2'
 import type { ISpace, ISpaceEntry, ISpaceParticipant } from '@/types'
 import type { SpaceParticipantRole, SpaceStatus } from '@/lib/constants'
 import { SPACE_INVITE_TYPES } from '@/lib/constants'
+import { isActiveLegalTenderCurrency } from '@/lib/constants/iso-currencies'
 
 export async function addSpaceParticipantV2(input: {
     actorUserId: string
@@ -219,8 +220,14 @@ export async function updateSpaceSettingsV2(input: {
             })
             const name = input.name.trim()
             if (!name) throw new ServiceError(400, 'SPACE_NAME_REQUIRED', 'El Espacio necesita un nombre.')
-            const currencies = Array.from(new Set(input.currencies.map((currency) => currency.trim()).filter(Boolean)))
-            if (!currencies.includes(input.reportingCurrency) || currencies.length === 0) {
+            const currencies = Array.from(new Set(
+                input.currencies.map((currency) => currency.trim().toUpperCase()).filter(Boolean)
+            ))
+            if (currencies.some((currency) => !isActiveLegalTenderCurrency(currency))) {
+                throw new ServiceError(400, 'SPACE_CURRENCY_INVALID', 'Todas las monedas deben ser ISO 4217 de curso legal.')
+            }
+            const reportingCurrency = input.reportingCurrency.trim().toUpperCase()
+            if (!currencies.includes(reportingCurrency) || currencies.length === 0) {
                 throw new ServiceError(400, 'SPACE_CURRENCY_INVALID', 'La moneda de reporte debe estar habilitada.')
             }
             const usedCurrencies = await SpaceEntry.distinct('currency', { spaceId: input.spaceId }).session(session)
@@ -233,7 +240,7 @@ export async function updateSpaceSettingsV2(input: {
                 )
             }
             const hasMovements = usedCurrencies.length > 0
-            if (hasMovements && input.reportingCurrency !== context.space.reportingCurrency) {
+            if (hasMovements && reportingCurrency !== context.space.reportingCurrency) {
                 throw new ServiceError(
                     409,
                     'SPACE_REPORTING_CURRENCY_LOCKED',
@@ -248,7 +255,7 @@ export async function updateSpaceSettingsV2(input: {
                         name,
                         description: input.description?.trim() || undefined,
                         currencies,
-                        reportingCurrency: input.reportingCurrency,
+                        reportingCurrency,
                         defaultSplitMode: context.space.mode === 'solo' ? 'none' : input.defaultSplitMode,
                         timezone,
                     },

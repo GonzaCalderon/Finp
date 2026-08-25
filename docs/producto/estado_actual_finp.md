@@ -50,17 +50,17 @@ Checks base verificados localmente el 2026-08-24 sobre
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
 - autenticación con NextAuth;
-- 98 rutas API;
+- 99 rutas API;
 - typecheck limpio;
 - ESLint limpio;
 - validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
-- 864 unit tests aprobados en 112 archivos, sin tests en `todo`;
-- 9 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+- 881 unit tests aprobados en 117 archivos, sin tests en `todo`;
+- 10 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
   sesiones MongoDB reales;
-- 64 de 64 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
+- 66 de 66 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
   sobre el build de producción;
-- 64 de 64 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
+- 66 de 66 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
   ni altas fallidas después de una ejecución larga;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
@@ -294,7 +294,17 @@ elige el usuario.
 - liquidación propia o representada compartida por Espacios y Deudas, con
   decisión personal separada para cada contraparte;
 - configuración v2 con moneda de reporte inmutable desde el primer movimiento,
-  preservación de monedas usadas y continuidad histórica de participantes.
+  preservación de monedas usadas y continuidad histórica de participantes;
+- dinero v2 exacto en unidades menores y registro ISO activo con escalas 0, 2
+  y 3;
+- gastos, partes y equivalencias históricas con snapshot inmutable, más
+  revaluación separada de posiciones abiertas;
+- referencias DolarAPI/Frankfurter en lote, reemplazo manual y recuperación
+  segura ante cambio, vencimiento o proveedor caído;
+- balances y deudas independientes por moneda, con liquidaciones atómicas de
+  varios componentes y tramos;
+- tira de cotizaciones, composición `Incluye…` y filtros combinables por moneda
+  original, pagada o de deuda.
 
 ### Brechas verificadas
 
@@ -342,9 +352,11 @@ La base compatible v2 completada el 2026-08-24 incorpora:
 - 10 índices compatibles aplicados sólo en E2E y una prueba de integración real
   de rollback, concurrencia, replay, historia y ambas superficies de liquidación.
 
-Esta base todavía no está expuesta por rutas ni interfaz. No hubo backfill,
-cutover ni escritura en development; por eso no cambia aún el comportamiento
-disponible para el usuario ni levanta el `NO-GO` de migración.
+Las etapas 2 y 3 ya están conectadas a las rutas e interfaz existentes, y el
+checkpoint multimoneda amplía ese mismo contrato sin crear rutas paralelas. La
+activación de escrituras permanece limitada a fixtures v2 en `finp-e2e`. No
+hubo backfill, cutover ni escritura en development o producción; por eso no se
+levanta el `NO-GO` de migración.
 
 Los detalles con identificadores permanecen locales en
 `test-results/audits/spaces/` y no se versionan.
@@ -452,8 +464,8 @@ Mobile web sigue siendo la superficie prioritaria.
 - auditoría legacy de Espacios cubierta con detectores puros, barreras de
   entorno, adaptador Mongo sin primitivas de escritura y prueba E2E contra el
   seed aislado;
-- modelo financiero v2 de Espacios cubierto dentro de 864 unitarias globales y
-  9 recorridos de integración sobre transacciones MongoDB reales;
+- modelo financiero v2 de Espacios cubierto dentro de 881 unitarias globales y
+  10 recorridos de integración sobre transacciones MongoDB reales;
 
 ### Brechas
 
@@ -474,7 +486,9 @@ Mobile web sigue siendo la superficie prioritaria.
 - Los recorridos v2 de Espacios cumplen el contrato de parte propia, autonomía,
   consistencia y permisos definido en las decisiones
   [`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md) y
-  [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md), pero
+  [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md), y la
+  autoridad multimoneda definida en
+  [`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md), pero
   su activación sigue limitada a `finp-e2e`: los datos legacy no se migran ni
   se habilitan para escritura v2 hasta aprobar backfill y cutover.
 - La auditoría de Espacios mantiene un `NO-GO` explícito para backfill y cutover
@@ -492,17 +506,27 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Contratos, API y recorridos financieros de Espacios v2, 2026-08-24:
+Soporte multimoneda integral sobre contratos y recorridos financieros de
+Espacios v2, 2026-08-24:
 
 - contratos y cálculos puros nuevos con adaptación de lectura legacy;
 - servicios de aplicación atómicos, idempotentes y con control de concurrencia;
 - una sola autoridad de deuda derivada y liquidación compartida por Espacios y
   Deudas;
+- dinero exacto, registro ISO y snapshots históricos o manuales sin usar punto
+  flotante como autoridad;
+- referencias DolarAPI/Frankfurter cacheadas y solicitadas en lote, con
+  conflicto recuperable por cambio o vencimiento;
+- saldo de deuda por moneda y liquidación atómica con varios componentes y
+  tramos, sin neteo silencioso;
+- composición de totales, tira de referencias y filtros multimoneda en mobile y
+  desktop;
 - 10 índices parciales reaplicados idempotentemente sobre `finp-e2e`, con
   development limitado a `dry-run`;
-- 864 unitarias globales, 9 recorridos de integración v2 y 64 E2E globales en
+- 881 unitarias globales, 10 recorridos de integración v2 y 66 E2E globales en
   desarrollo y producción aprobados;
-- lectura de 1.000 movimientos medida en 31.766 bytes y 440 ms para una página
+- lectura de 1.000 movimientos medida en 45.987 bytes y 859 ms para una página
   de 50 elementos;
-- etapas 2 y 3 completas; backfill, comparación legacy, rollback de migración y
-  cutover continúan pendientes, por lo que el P0 permanece `en curso`.
+- etapas 2 y 3 y checkpoint multimoneda implementados; backfill, comparación
+  legacy, rollback de migración y cutover continúan pendientes, por lo que el P0
+  permanece `en curso`.

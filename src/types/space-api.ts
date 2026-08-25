@@ -10,6 +10,7 @@ import type {
     SpaceStatus,
     SpaceType,
 } from '@/lib/constants'
+import type { ConversionSnapshot, MoneyDto } from '@/lib/utils/money'
 
 export type SpaceApiCapability =
     | 'view'
@@ -49,6 +50,8 @@ export interface SpaceShareDto {
     participantId: string
     amount: number
     reportingAmount: number
+    amountMoney?: MoneyDto
+    reportingMoney?: MoneyDto
 }
 
 export interface SpacePersonalImpactDto {
@@ -81,6 +84,10 @@ export interface SpaceEntryDto {
     reportingAmount: number
     reportingCurrency: string
     exchangeRate?: number
+    originalMoney?: MoneyDto
+    reportingMoney?: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
+    settlementLegs?: SpaceSettlementLegDto[]
     dateKey: string
     timezone: string
     paidByParticipantId?: string
@@ -99,6 +106,12 @@ export interface SpaceMovementPageDto {
     items: SpaceEntryDto[]
     nextCursor: string | null
     limit: number
+    filter?: {
+        originalCurrencies: string[]
+        paidCurrencies: string[]
+        debtCurrencies: string[]
+    }
+    subtotalByCurrency?: Record<string, MoneyDto>
 }
 
 export interface SpaceSummaryDto {
@@ -111,6 +124,26 @@ export interface SpaceSummaryDto {
     participantCount: number
     pendingEntryCount: number
     totalEntryCount: number
+    totalReportingMoney?: MoneyDto
+    includedCurrencies?: string[]
+    composition?: Array<{
+        currency: string
+        original: MoneyDto
+        historicalReporting: MoneyDto
+        currentReporting?: MoneyDto
+        difference?: MoneyDto
+        snapshots: ConversionSnapshot[]
+        currentSnapshot?: ConversionSnapshot
+    }>
+    balancesByCurrency?: Array<{
+        participantId: string
+        currency: string
+        paid: MoneyDto
+        share: MoneyDto
+        balance: MoneyDto
+        currentReporting?: MoneyDto
+        currentSnapshot?: ConversionSnapshot
+    }>
     balances: Array<{
         participantId: string
         displayName: string
@@ -152,6 +185,10 @@ export interface SpaceDetailDto {
         simplifyDebts?: boolean | null
         timezone: string
         revision: number
+        currencyPolicy?: {
+            reportingCurrencyLocked: boolean
+            usedCurrencies: string[]
+        }
         createdAt: string
         updatedAt: string
     }
@@ -200,6 +237,9 @@ export interface SpaceEntryPreviewDto {
     recoverableAdvanceAmount: number
     debtDeltaReporting: number
     personalAction: 'optional' | 'account_required' | 'not_applicable'
+    originalMoney?: MoneyDto
+    reportingMoney?: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
     linkExisting?: {
         transactionId: string
         compatible: boolean
@@ -217,7 +257,57 @@ export interface SpaceSettlementPreviewDto {
     actorMovesPersonalAccount: boolean
     actorAccountImpactAmount: number
     actorOperationalAmount: 0
-    remainingBalanceReporting: number
+    remainingBalanceReporting?: number
+    components?: SpaceSettlementComponentDto[]
+    legs?: SpaceSettlementLegDto[]
+    applications?: SpaceSettlementApplicationDto[]
+    remainingByCurrency?: MoneyDto[]
+}
+
+export interface SpaceSettlementComponentDto {
+    debtId?: string
+    currency: string
+    amount: MoneyDto
+    order: number
+}
+
+export interface SpaceSettlementLegDto {
+    id: string
+    paid: MoneyDto
+    reporting: MoneyDto
+    accountId?: string
+    linkedTransactionId?: string
+    conversionSnapshots: ConversionSnapshot[]
+    applications: SpaceSettlementApplicationDto[]
+}
+
+export interface SpaceSettlementApplicationDto {
+    legId: string
+    debtId?: string
+    debtCurrency: string
+    paid: MoneyDto
+    applied: MoneyDto
+    conversionSnapshot?: ConversionSnapshot
+}
+
+export interface SpaceQuoteDto {
+    fingerprint: string
+    sourceCurrency: string
+    targetCurrency: string
+    rate: string
+    direction: 'multiply'
+    source: 'dolarapi_official' | 'frankfurter' | 'manual' | 'identity'
+    status: 'current' | 'stale' | 'unavailable'
+    observedAt: string
+    capturedAt: string
+    expiresAt?: string
+    path: ConversionSnapshot['path']
+}
+
+export interface SpaceQuotesDto {
+    reportingCurrency: string
+    fetchedAt: string
+    quotes: SpaceQuoteDto[]
 }
 
 export interface SpaceDebtDto {
@@ -231,4 +321,6 @@ export interface SpaceDebtDto {
     status: 'active' | 'partially_paid' | 'paid' | 'ignored' | 'cancelled'
     contractVersion: 2
     spaceRevision: number
+    amountMoney?: MoneyDto
+    remainingMoney?: MoneyDto
 }

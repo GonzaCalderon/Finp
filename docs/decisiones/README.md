@@ -97,3 +97,6 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0008 — Modelo y consistencia financiera de Espacios`](0008-modelo-consistencia-financiera-espacios.md):
   modelo discriminado, servicios de aplicación, atomicidad, idempotencia,
   permisos, migración y retiro del legado.
+- [`0009 — Autoridad multimoneda de Espacios`](0009-autoridad-multimoneda-espacios.md):
+  dinero exacto, snapshots, cotizaciones, saldos por moneda, liquidaciones
+  multitramos y presentación de composiciones.

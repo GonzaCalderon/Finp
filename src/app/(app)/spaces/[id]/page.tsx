@@ -13,7 +13,8 @@ import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useSpace } from '@/hooks/useSpace'
 import { useSpaceActivity } from '@/hooks/useSpaceActivity'
-import { useSpaceEntries } from '@/hooks/useSpaceEntries'
+import { useSpaceEntries, type SpaceMovementFilters } from '@/hooks/useSpaceEntries'
+import { useSpaceQuotes } from '@/hooks/useSpaceQuotes'
 import { useSpaceParticipants } from '@/hooks/useSpaceParticipants'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -47,6 +48,7 @@ import {
 import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
 import { SpaceDetailMobileHeader } from '@/components/spaces/detail/SpaceDetailMobileHeader'
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
+import { SpaceQuoteTicker } from '@/components/spaces/detail/SpaceQuoteTicker'
 import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobileSettingsSheet'
 import { SpaceEntryDetailSheet } from '@/components/spaces/detail/SpaceEntryDetailSheet'
 import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
@@ -223,7 +225,9 @@ function SpaceDetailPageInner() {
     const { success, error: toastError } = useToast()
     const { data, loading, error, updateSpace } = useSpace(spaceId)
     const spaceActivity = useSpaceActivity(spaceId)
-    const entriesApi = useSpaceEntries(spaceId, {}, data?.api)
+    const quotesApi = useSpaceQuotes(spaceId, (data?.space.currencies.length ?? 0) > 1)
+    const [currencyFilters, setCurrencyFilters] = useState<SpaceMovementFilters>({})
+    const entriesApi = useSpaceEntries(spaceId, currencyFilters, data?.api, quotesApi.data)
     const participantsApi = useSpaceParticipants(spaceId, data?.api)
     const [activeTab, setActiveTab] = useState<SpaceTab>(() => focusEntryId ? 'entries' : 'summary')
     const [entryFilter, setEntryFilter] = useState<SpaceEntryFilter>('all')
@@ -601,6 +605,15 @@ function SpaceDetailPageInner() {
                 </div>
                 <div className="hidden border-t border-border/70 md:block" />
 
+                {data.space.currencies.length > 1 ? (
+                    <SpaceQuoteTicker
+                        data={quotesApi.data}
+                        loading={quotesApi.loading}
+                        error={quotesApi.error}
+                        onRefresh={() => void quotesApi.refresh()}
+                    />
+                ) : null}
+
                 {/* Mobile tab bar (3 tabs) */}
                 <MobileTabBar
                     activeTab={activeTab}
@@ -679,6 +692,11 @@ function SpaceDetailPageInner() {
                             summary={data.summary}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
+                            onFilterCurrency={(currency) => {
+                                setCurrencyFilters({ originalCurrencies: [currency] })
+                                setEntryFilter('all')
+                                setActiveTab('entries')
+                            }}
                         />
 
                         <SpaceSettlementPanel
@@ -716,7 +734,7 @@ function SpaceDetailPageInner() {
                             hidden={hidden}
                         />
                         <SpaceMovementsPanel
-                            entries={data.entries}
+                            entries={entriesApi.loading ? data.entries : entriesApi.entries}
                             participants={data.participants}
                             currentUserId={currentUserId}
                             personalImpactsByEntryId={data.personalImpactsByEntryId}
@@ -728,6 +746,10 @@ function SpaceDetailPageInner() {
                             }}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
+                            currencies={data.space.currencies}
+                            currencyFilters={currencyFilters}
+                            subtotalByCurrency={entriesApi.subtotalByCurrency}
+                            onCurrencyFiltersChange={setCurrencyFilters}
                             focusEntryId={focusedEntryId}
                             onCreate={canCreateEntry ? () => {
                                 setFocusedEntryId(null)
@@ -803,6 +825,7 @@ function SpaceDetailPageInner() {
                 spaceMode={data.space.mode}
                 contractVersion={data.space.contractVersion}
                 draftKey={spaceId}
+                quotes={quotesApi.data}
             />
 
             <SpaceParticipantDialog
@@ -823,6 +846,10 @@ function SpaceDetailPageInner() {
                 reportingCurrency={data.space.reportingCurrency}
                 prefill={settlementPrefill}
                 suggestedPayments={suggestedPayments}
+                spaceCurrencies={data.space.currencies}
+                quotes={quotesApi.data}
+                balancesByCurrency={data.summary.balancesByCurrency}
+                onQuotesRefresh={quotesApi.refresh}
                 v2={data.space.contractVersion === 2 ? {
                     spaceId,
                     expectedRevision: data.space.revision ?? 0,
@@ -867,6 +894,8 @@ function SpaceDetailPageInner() {
                         simplifyDebts: data.space.simplifyDebts,
                         debtMode: data.space.debtMode,
                     }}
+                    reportingCurrencyLocked={data.api.space.currencyPolicy?.reportingCurrencyLocked}
+                    lockedCurrencies={data.api.space.currencyPolicy?.usedCurrencies}
                 />
             ) : null}
 
@@ -938,6 +967,7 @@ function SpaceDetailPageInner() {
                 mode="edit"
                 initialData={editingEntry ?? undefined}
                 initialHasSubsequentSettlement={editEntryHasSubsequentSettlement}
+                quotes={quotesApi.data}
             />
 
             {/* Dialog anulación rápida desde MovementCard */}
