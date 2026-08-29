@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-08-24
+> Última actualización: 2026-08-29
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -103,3 +103,7 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0010 — Migración progresiva de Espacios v2`](0010-migracion-progresiva-espacios-v2.md):
   clasificación cerrada, copia sanitizada, manifiesto privado, backfill por
   Espacio, verificación y rollback exacto.
+- [`0011 — Cutover de Espacios v2 en development`](0011-cutover-espacios-v2-en-development.md):
+  autorización explícita, transformación in-place sobre `finm`, corte único de
+  los 11 Espacios, respaldo local y límites frente a producción y al fallback
+  global.

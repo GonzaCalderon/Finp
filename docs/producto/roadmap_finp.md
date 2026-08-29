@@ -81,7 +81,8 @@ Los principios de producto y de trabajo viven en
   - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
   - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
   - [`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md);
-  - [`0010 — Migración progresiva de Espacios v2`](../decisiones/0010-migracion-progresiva-espacios-v2.md).
+  - [`0010 — Migración progresiva de Espacios v2`](../decisiones/0010-migracion-progresiva-espacios-v2.md);
+  - [`0011 — Cutover de Espacios v2 en development`](../decisiones/0011-cutover-espacios-v2-en-development.md).
 - Regla de entrega: es un cierre indivisible. Puede avanzar mediante commits y
   verificaciones internas, pero no pasa a `validación` ni se presenta como
   terminado hasta completar dominio, datos, API, UI afectada, migración,
@@ -236,8 +237,8 @@ Los principios de producto y de trabajo viven en
     dinero y deuda exactos por moneda, privacidad, replay estable y rollback
     probado; un Espacio no elegible queda en sólo lectura sin totales parciales;
   - desarrollo y producción no recibieron escrituras, backfill ni cutover. La
-    etapa 4 continúa abierta hasta revisar el checkpoint y autorizar la ventana
-    progresiva; el `NO-GO` productivo no cambia;
+    etapa 4 continúa abierta hasta ejecutar el cutover autorizado; el `NO-GO`
+    productivo no cambia;
   - reproducido de punta a punta el 2026-08-29 por Gonzalo Calderon en un
     entorno local, fuera de la máquina del checkpoint original: plan (11
     Espacios; 56 automáticos, 33 de revisión y 8 manuales, idéntico),
@@ -245,7 +246,13 @@ Los principios de producto y de trabajo viven en
     apply (11 migrados, 0 bloqueados) y verify (válido, 0 incompatibilidades de
     balance, deuda o vínculo privado, ledger personal invariante) sobre
     `finp-e2e-migration-checkpoint`; confirma que el ensayo es reproducible
-    fuera del entorno original.
+    fuera del entorno original;
+  - cutover sobre `finm` autorizado el 2026-08-29 por la decisión 0011: corte
+    único de los 11 Espacios, in-place, sin ventana de mantenimiento por
+    ausencia de uso concurrente y con `mongodump` como respaldo externo. Falta
+    construir el modo de cutover del CLI y habilitar los índices v2 en
+    development; producción y el retiro global del fallback siguen fuera de
+    alcance.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;
