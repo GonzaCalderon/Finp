@@ -270,11 +270,14 @@ Los principios de producto y de trabajo viven en
     ensayos: su `verify` dio válido con una de las ocho resoluciones aprobadas
     sin aplicar. `verify` comprueba ahora el efecto de cada resolución contra los
     datos y expone `unappliedResolutions`;
-  - queda pendiente el registro huérfano de `spaceparticipants` que esa
-    resolución debía poner en cuarentena: sigue inerte, tal como estaba antes de
-    migrar, y aplicarlo exige una corrida nueva porque la actual cortocircuita
-    por idempotencia. Producción y el retiro global del fallback siguen fuera de
-    alcance.
+  - el registro huérfano quedó en cuarentena el 2026-08-29 mediante el
+    subcomando `resolve`, que aplica sólo las resoluciones aprobadas cuyo efecto
+    falta, dentro de su corrida y sin recorrer Espacios. Una corrida nueva quedó
+    descartada: auditar una base ya migrada con criterios legacy clasifica 32
+    tramos de liquidación como manuales, y sus resoluciones por omisión habrían
+    dejado Espacios v2 sanos en sólo lectura. `verify` cierra con 11 Espacios,
+    0 bloqueados y 0 resoluciones sin aplicar. Producción y el retiro global del
+    fallback siguen fuera de alcance.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;

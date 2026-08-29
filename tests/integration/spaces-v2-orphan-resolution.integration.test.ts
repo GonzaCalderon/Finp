@@ -7,6 +7,7 @@ import {
     fingerprintSpaceMigrationDatabase,
 } from '@/lib/server/migrations/space-v2-migration-data'
 import {
+    applyPendingResolutions,
     applySpaceMigrationRun,
     registerClonedMigrationRun,
     verifySpaceMigrationRun,
@@ -177,5 +178,29 @@ describe.sequential('space v2 migration — manual sobre un Espacio inexistente'
 
         const regression = await verifySpaceMigrationRun({ db, plan, manifest, persist: false })
         expect(regression).toMatchObject({ valid: false, unresolvedManualIssues: 0, unappliedResolutions: 1 })
+
+        // `resolve` cierra lo pendiente sin recorrer Espacios ni re-transformar.
+        const simulated = await applyPendingResolutions({
+            db,
+            clientSession: () => client.startSession(),
+            plan,
+            manifest,
+            execute: false,
+        })
+        expect(simulated).toMatchObject({ dryRun: true, pending: 1, applied: 0 })
+        expect(await db.collection('spaceparticipants').countDocuments({ _id: orphanParticipantId })).toBe(1)
+
+        const resolved = await applyPendingResolutions({
+            db,
+            clientSession: () => client.startSession(),
+            plan,
+            manifest,
+            execute: true,
+        })
+        expect(resolved).toMatchObject({ dryRun: false, pending: 1, applied: 1 })
+        expect(await db.collection('spaceparticipants').countDocuments({ _id: orphanParticipantId })).toBe(0)
+
+        const closed = await verifySpaceMigrationRun({ db, plan, manifest, persist: false })
+        expect(closed).toMatchObject({ valid: true, unappliedResolutions: 0 })
     })
 })

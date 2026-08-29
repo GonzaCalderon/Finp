@@ -20,6 +20,7 @@ import {
     fingerprintSpaceMigrationDatabase,
 } from '@/lib/server/migrations/space-v2-migration-data'
 import {
+    applyPendingResolutions,
     applySpaceMigrationRun,
     registerClonedMigrationRun,
     registerInPlaceMigrationRun,
@@ -39,6 +40,7 @@ Uso:
   npm run migrate:spaces:v2 -- plan --run-id <id> --confirm-database finm --target-database <e2e-migration-db>
   npm run migrate:spaces:v2 -- clone|apply|verify|rollback [opciones anteriores] [--execute]
   npm run migrate:spaces:v2 -- prepare|apply|verify|rollback --run-id <id> --confirm-database <db> --target-database <db> --cutover [--execute]
+  npm run migrate:spaces:v2 -- resolve [opciones de la corrida] [--execute]
 
 Todos los subcomandos son dry-run por defecto. Sólo --execute habilita escrituras y las barreras
 rechazan cualquier destino sin marcador e2e-migration. Development se abre read-only por snapshot.
@@ -46,6 +48,9 @@ rechazan cualquier destino sin marcador e2e-migration. Development se abre read-
 Opciones:
   --approve-safe-defaults --approved-by <identidad>  Completa el manifiesto privado con las
                                                     resoluciones fijadas en el plan aprobado.
+  resolve                                           Aplica las resoluciones manuales aprobadas de una
+                                                    corrida ya aplicada cuyo efecto falta en la base.
+                                                    No recorre Espacios ni vuelve a transformar.
   --cutover                                         Modo in-place autorizado por la decisión 0011.
                                                     Escribe sobre la misma base de development, que
                                                     hay que confirmar dos veces por su nombre exacto.
@@ -193,6 +198,20 @@ async function main() {
     const targetClient = new MongoClient(targetUri, { serverSelectionTimeoutMS: 10_000 })
     const phaseStartedAt = Date.now()
     try {
+        if (options.command === 'resolve') {
+            const { plan, manifest } = await readArtifacts(cwd, options.runId)
+            await targetClient.connect()
+            const result = await applyPendingResolutions({
+                db: targetClient.db(options.targetDatabase),
+                clientSession: () => targetClient.startSession(),
+                plan,
+                manifest,
+                execute: options.execute,
+            })
+            console.log(`Resoluciones pendientes: ${result.pending}; aplicadas ${options.execute ? 'de verdad' : 'en simulación'}: ${result.applied}.`)
+            return
+        }
+
         if (options.command === 'rollback') {
             const { plan, manifest } = await readArtifacts(cwd, options.runId)
             await targetClient.connect()
