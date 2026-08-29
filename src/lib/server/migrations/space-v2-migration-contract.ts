@@ -98,6 +98,8 @@ export interface MigrationVerificationResult {
     sourceFingerprintMatches: boolean
     replayProducesChanges: boolean
     unresolvedManualIssues: number
+    /** Resoluciones aprobadas cuyo efecto no está presente en la base. */
+    unappliedResolutions: number
     unapprovedCriticalOrHigh: number
     spaces: Array<{
         spaceId: string

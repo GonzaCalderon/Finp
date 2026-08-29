@@ -143,7 +143,7 @@ async function reportVerify(input: {
     persist: boolean
 }) {
     const verification = await verifySpaceMigrationRun(input)
-    console.log(`Verify: válido=${verification.valid}; Espacios=${verification.spaces.length}; replay con cambios=${verification.replayProducesChanges}; duración=${verification.elapsedMs}ms.`)
+    console.log(`Verify: válido=${verification.valid}; Espacios=${verification.spaces.length}; replay con cambios=${verification.replayProducesChanges}; manuales sin resolver=${verification.unresolvedManualIssues}; resoluciones sin aplicar=${verification.unappliedResolutions}; duración=${verification.elapsedMs}ms.`)
     console.log(`Detalle seguro: bloqueados=${verification.spaces.filter((space) => space.state === 'blocked').length}; balances incompatibles=${verification.spaces.filter((space) => !space.balancesMatch).length}; deudas incompatibles=${verification.spaces.filter((space) => !space.debtsMatch).length}; vínculos privados incompatibles=${verification.spaces.reduce((sum, space) => sum + space.crossUserLinks, 0)}; ledger personal invariante=${verification.spaces.every((space) => space.personalLedgerUnchanged)}.`)
     if (!verification.valid) process.exitCode = 2
 }
