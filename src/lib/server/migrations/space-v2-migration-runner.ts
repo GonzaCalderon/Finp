@@ -293,12 +293,23 @@ export async function applySpaceMigrationRun(input: {
         }
     )
 
-    const globalManualIssues = input.plan.issues.filter((issue) => issue.disposition === 'manual' && !issue.spaceId)
-    if (globalManualIssues.length) {
+    const spaces = await input.db.collection('spaces').find({}, { projection: { _id: 1 } }).sort({ _id: 1 }).toArray()
+    const existingSpaceIds = new Set(spaces.map((space) => id(space._id)!))
+
+    /**
+     * El recorrido por Espacio sólo visita los que existen, así que un manual
+     * cuyo `spaceId` referencia un Espacio inexistente —el caso del huérfano
+     * global— quedaría sin aplicar en silencio. Se resuelve junto a los que no
+     * tienen `spaceId`, que comparten exactamente el mismo problema.
+     */
+    const detachedManualIssues = input.plan.issues.filter((issue) =>
+        issue.disposition === 'manual' && (!issue.spaceId || !existingSpaceIds.has(issue.spaceId))
+    )
+    if (detachedManualIssues.length) {
         const session = input.clientSession()
         try {
             await session.withTransaction(async () => {
-                for (const issue of globalManualIssues) {
+                for (const issue of detachedManualIssues) {
                     await applyResolution({
                         db: input.db,
                         runId: input.plan.runId,
@@ -313,7 +324,6 @@ export async function applySpaceMigrationRun(input: {
         }
     }
 
-    const spaces = await input.db.collection('spaces').find({}, { projection: { _id: 1 } }).sort({ _id: 1 }).toArray()
     let spacesMigrated = 0
     let spacesBlocked = 0
     let documentsInserted = 0
@@ -470,6 +480,47 @@ async function verifySpace(db: Db, space: Document) {
     }
 }
 
+/**
+ * Comprueba el efecto de una resolución contra la base, no su presencia en el
+ * manifiesto: una aprobación registrada no demuestra que la escritura ocurrió.
+ */
+async function resolutionPending(db: Db, issue: MigrationIssue, resolution: MigrationResolution) {
+    if (resolution.action === 'retain_legacy_quarantine') {
+        for (const recordId of issue.recordIds) {
+            if (!ObjectId.isValid(recordId)) continue
+            const remaining = await db.collection(issue.collection).findOne(
+                { _id: new ObjectId(recordId) },
+                { projection: { _id: 1 } }
+            )
+            if (remaining) return true
+        }
+        return false
+    }
+    if (resolution.action === 'detach_preserve_personal_transaction') {
+        for (const recordId of issue.recordIds) {
+            if (!ObjectId.isValid(recordId)) continue
+            const attached = await db.collection('transactions').findOne(
+                {
+                    _id: new ObjectId(recordId),
+                    $or: [{ spaceId: { $exists: true } }, { spaceEntryId: { $exists: true } }],
+                },
+                { projection: { _id: 1 } }
+            )
+            if (attached) return true
+        }
+        return false
+    }
+    if (resolution.action === 'exclude_space_from_cutover') {
+        if (!issue.spaceId || !ObjectId.isValid(issue.spaceId)) return false
+        const space = await db.collection('spaces').findOne(
+            { _id: new ObjectId(issue.spaceId) },
+            { projection: { migration: 1 } }
+        )
+        return Boolean(space) && space?.migration?.state !== 'blocked'
+    }
+    return false
+}
+
 export async function verifySpaceMigrationRun(input: {
     db: Db
     plan: MigrationPlan
@@ -491,6 +542,16 @@ export async function verifySpaceMigrationRun(input: {
     const unresolvedManualIssues = input.plan.issues.filter((issue) =>
         issue.disposition === 'manual' && !input.manifest.resolutions.some((resolution) => resolution.issueFingerprint === issue.fingerprint)
     ).length
+    const approvedByFingerprint = new Map(
+        input.manifest.resolutions.map((resolution) => [resolution.issueFingerprint, resolution])
+    )
+    let unappliedResolutions = 0
+    for (const issue of input.plan.issues) {
+        if (issue.disposition !== 'manual') continue
+        const resolution = approvedByFingerprint.get(issue.fingerprint)
+        if (!resolution) continue
+        if (await resolutionPending(input.db, issue, resolution)) unappliedResolutions += 1
+    }
     const unapprovedCriticalOrHigh = input.plan.issues.filter((issue) =>
         (issue.severity === 'critical' || issue.severity === 'high') && issue.disposition === 'manual' &&
         !input.manifest.resolutions.some((resolution) => resolution.issueFingerprint === issue.fingerprint)
@@ -500,10 +561,12 @@ export async function verifySpaceMigrationRun(input: {
     )
     const result: MigrationVerificationResult = {
         runId: input.plan.runId,
-        valid: !replayProducesChanges && personalLedgerUnchanged && unresolvedManualIssues === 0 && unapprovedCriticalOrHigh === 0,
+        valid: !replayProducesChanges && personalLedgerUnchanged && unresolvedManualIssues === 0
+            && unappliedResolutions === 0 && unapprovedCriticalOrHigh === 0,
         sourceFingerprintMatches: run.sourceFingerprint === input.plan.sourceDatabaseFingerprint,
         replayProducesChanges,
         unresolvedManualIssues,
+        unappliedResolutions,
         unapprovedCriticalOrHigh,
         spaces: results,
         elapsedMs: Date.now() - startedAt,

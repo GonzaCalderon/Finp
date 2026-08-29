@@ -125,6 +125,29 @@ function approveManifest(plan: MigrationPlan, approvedBy: string): MigrationReso
     }
 }
 
+async function reportApply(input: {
+    db: Db
+    clientSession: () => ClientSession
+    plan: MigrationPlan
+    manifest: MigrationResolutionManifest
+    execute: boolean
+}) {
+    const result = await applySpaceMigrationRun(input)
+    console.log(`Apply ${input.execute ? 'ejecutado' : 'simulado'}: ${result.spacesMigrated} migrados, ${result.spacesBlocked} bloqueados; replay: ${result.replayed}.`)
+}
+
+async function reportVerify(input: {
+    db: Db
+    plan: MigrationPlan
+    manifest: MigrationResolutionManifest
+    persist: boolean
+}) {
+    const verification = await verifySpaceMigrationRun(input)
+    console.log(`Verify: válido=${verification.valid}; Espacios=${verification.spaces.length}; replay con cambios=${verification.replayProducesChanges}; manuales sin resolver=${verification.unresolvedManualIssues}; resoluciones sin aplicar=${verification.unappliedResolutions}; duración=${verification.elapsedMs}ms.`)
+    console.log(`Detalle seguro: bloqueados=${verification.spaces.filter((space) => space.state === 'blocked').length}; balances incompatibles=${verification.spaces.filter((space) => !space.balancesMatch).length}; deudas incompatibles=${verification.spaces.filter((space) => !space.debtsMatch).length}; vínculos privados incompatibles=${verification.spaces.reduce((sum, space) => sum + space.crossUserLinks, 0)}; ledger personal invariante=${verification.spaces.every((space) => space.personalLedgerUnchanged)}.`)
+    if (!verification.valid) process.exitCode = 2
+}
+
 function assertSamePlan(expected: MigrationPlan, current: MigrationPlan) {
     if (
         expected.runId !== current.runId ||
@@ -184,6 +207,49 @@ async function main() {
             return
         }
 
+        /**
+         * En el cutover in-place la fuente es el propio destino: volver a
+         * inspeccionarla después de transformar nunca podría coincidir con el
+         * plan. Las garantías las dan los fingerprints que ya guarda la corrida.
+         */
+        if (options.cutover && options.command !== 'plan') {
+            const { plan, manifest } = await readArtifacts(cwd, options.runId)
+            await targetClient.connect()
+            const targetDb = targetClient.db(options.targetDatabase)
+            if (options.command === 'prepare') {
+                if (plan.sourceCommit !== currentCommit(cwd)) {
+                    throw new Error('SPACE_MIGRATION_SOURCE_OR_PLAN_CHANGED')
+                }
+                const baselineFingerprint = await fingerprintSpaceMigrationDatabase(targetDb)
+                if (baselineFingerprint !== plan.sourceDatabaseFingerprint) {
+                    throw new Error('SPACE_MIGRATION_INPLACE_BASELINE_MISMATCH')
+                }
+                if (options.execute) {
+                    await registerInPlaceMigrationRun({
+                        db: targetDb,
+                        plan,
+                        manifest,
+                        targetDatabaseName: options.targetDatabase,
+                        baselineFingerprint,
+                    })
+                }
+                console.log(`Cutover ${options.execute ? 'registrado' : 'simulado'}: base intacta, sin copia y fingerprint idéntico al del plan.`)
+                return
+            }
+            if (options.command === 'apply') {
+                await reportApply({
+                    db: targetDb,
+                    clientSession: () => targetClient.startSession(),
+                    plan,
+                    manifest,
+                    execute: options.execute,
+                })
+                return
+            }
+            await reportVerify({ db: targetDb, plan, manifest, persist: options.execute })
+            return
+        }
+
         await sourceClient.connect()
         const sourceDb = sourceClient.db(sourceTarget.databaseName)
         const sourceSession = sourceClient.startSession()
@@ -225,25 +291,6 @@ async function main() {
             await targetClient.connect()
             const targetDb = targetClient.db(options.targetDatabase)
 
-            if (options.command === 'prepare') {
-                await sourceSession.abortTransaction()
-                const baselineFingerprint = await fingerprintSpaceMigrationDatabase(targetDb)
-                if (baselineFingerprint !== plan.sourceDatabaseFingerprint) {
-                    throw new Error('SPACE_MIGRATION_INPLACE_BASELINE_MISMATCH')
-                }
-                if (options.execute) {
-                    await registerInPlaceMigrationRun({
-                        db: targetDb,
-                        plan,
-                        manifest,
-                        targetDatabaseName: options.targetDatabase,
-                        baselineFingerprint,
-                    })
-                }
-                console.log(`Cutover ${options.execute ? 'registrado' : 'simulado'}: base intacta, sin copia y fingerprint idéntico al del plan.`)
-                return
-            }
-
             if (options.command === 'clone') {
                 const counts = await cloneSpaceMigrationDatabase({
                     source: sourceDb,
@@ -272,25 +319,16 @@ async function main() {
 
             await sourceSession.abortTransaction()
             if (options.command === 'apply') {
-                const result = await applySpaceMigrationRun({
+                await reportApply({
                     db: targetDb,
                     clientSession: () => targetClient.startSession(),
                     plan,
                     manifest,
                     execute: options.execute,
                 })
-                console.log(`Apply ${options.execute ? 'ejecutado' : 'simulado'}: ${result.spacesMigrated} migrados, ${result.spacesBlocked} bloqueados; replay: ${result.replayed}.`)
                 return
             }
-            const verification = await verifySpaceMigrationRun({
-                db: targetDb,
-                plan,
-                manifest,
-                persist: options.execute,
-            })
-            console.log(`Verify: válido=${verification.valid}; Espacios=${verification.spaces.length}; replay con cambios=${verification.replayProducesChanges}; duración=${verification.elapsedMs}ms.`)
-            console.log(`Detalle seguro: bloqueados=${verification.spaces.filter((space) => space.state === 'blocked').length}; balances incompatibles=${verification.spaces.filter((space) => !space.balancesMatch).length}; deudas incompatibles=${verification.spaces.filter((space) => !space.debtsMatch).length}; vínculos privados incompatibles=${verification.spaces.reduce((sum, space) => sum + space.crossUserLinks, 0)}; ledger personal invariante=${verification.spaces.every((space) => space.personalLedgerUnchanged)}.`)
-            if (!verification.valid) process.exitCode = 2
+            await reportVerify({ db: targetDb, plan, manifest, persist: options.execute })
         } finally {
             if (sourceSession.inTransaction()) await sourceSession.abortTransaction()
             await sourceSession.endSession()
