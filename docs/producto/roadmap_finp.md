@@ -236,9 +236,8 @@ Los principios de producto y de trabajo viven en
   - el criterio de elegibilidad por Espacio exige cero manuales pendientes,
     dinero y deuda exactos por moneda, privacidad, replay estable y rollback
     probado; un Espacio no elegible queda en sólo lectura sin totales parciales;
-  - desarrollo y producción no recibieron escrituras, backfill ni cutover. La
-    etapa 4 continúa abierta hasta ejecutar el cutover autorizado; el `NO-GO`
-    productivo no cambia;
+  - producción no recibió escrituras, backfill ni cutover; el `NO-GO` productivo
+    no cambia;
   - reproducido de punta a punta el 2026-08-29 por Gonzalo Calderon en un
     entorno local, fuera de la máquina del checkpoint original: plan (11
     Espacios; 56 automáticos, 33 de revisión y 8 manuales, idéntico),
@@ -253,10 +252,29 @@ Los principios de producto y de trabajo viven en
   - mecanismo de cutover construido: `migrate:spaces:v2 --cutover` reemplaza
     `clone` por `prepare` in-place, exige repetir el nombre exacto de la base y
     registra la corrida como no-ensayo; `indexes:spaces:v2 --cutover` es la
-    única puerta a un apply de índices en development. Verificado en dry-run
-    contra `finm`: plan idéntico de 11 Espacios y fingerprint in-place igual al
-    del plan. Falta ejecutar la ventana; producción y el retiro global del
-    fallback siguen fuera de alcance.
+    única puerta a un apply de índices en development;
+  - cutover ejecutado sobre `finm` el 2026-08-29, con respaldo `mongodump`
+    verificado por lectura y los 10 índices v2 creados sin violaciones de
+    unicidad: 11 Espacios migrados, 0 bloqueados, 354 preimágenes guardadas y
+    `verify` válido con 0 incompatibilidades de balance, deuda o vínculo
+    privado. Las 736 transacciones personales y las 33 cuentas quedaron con el
+    mismo conteo previo y el ledger personal invariante;
+  - la ejecución destapó dos defectos, ya corregidos: `verify` y el replay
+    abortaban en modo in-place al reinspeccionar una fuente que es el propio
+    destino; y un manual cuyo `spaceId` referencia un Espacio inexistente nunca
+    se aplicaba, porque el recorrido de `apply` sólo visita los Espacios que
+    existen y la vía de manuales globales sólo atrapaba los que no tienen
+    `spaceId`. `verify` tampoco lo detectaba, porque contaba cobertura del
+    manifiesto en lugar del efecto en la base;
+  - ese segundo defecto es anterior al cutover y corrige la evidencia de los dos
+    ensayos: su `verify` dio válido con una de las ocho resoluciones aprobadas
+    sin aplicar. `verify` comprueba ahora el efecto de cada resolución contra los
+    datos y expone `unappliedResolutions`;
+  - queda pendiente el registro huérfano de `spaceparticipants` que esa
+    resolución debía poner en cuarentena: sigue inerte, tal como estaba antes de
+    migrar, y aplicarlo exige una corrida nueva porque la actual cortocircuita
+    por idempotencia. Producción y el retiro global del fallback siguen fuera de
+    alcance.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;

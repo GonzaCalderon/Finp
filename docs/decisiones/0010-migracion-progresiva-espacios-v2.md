@@ -159,3 +159,8 @@ apply, verify y rollback por debajo de 30 segundos por fase.
 El rollback restauró exactamente el fingerprint previo. Esta evidencia mantiene
 FINP-P0-006 `en curso`: aún faltan revisión del checkpoint, ventana de cutover y
 autorización explícita antes de escribir development o producción.
+
+> Actualización: [`0011`](0011-cutover-espacios-v2-en-development.md) autorizó y
+> ejecutó el cutover de development el 2026-08-29, y corrige esta evidencia en
+> un punto: el `verify` del ensayo daba válido sin comprobar que las
+> resoluciones manuales aprobadas se hubieran aplicado.

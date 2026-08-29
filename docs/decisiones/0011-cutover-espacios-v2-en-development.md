@@ -148,6 +148,12 @@ Espacio al migrarlo, como ya ocurre.
   observación que permita retirar el fallback global.
 - Decidir la purga de preimágenes sólo después de usar la aplicación sobre datos
   migrados con resultado satisfactorio.
+- Poner en cuarentena el registro huérfano de `spaceparticipants` que la octava
+  resolución no llegó a aplicar. Exige una corrida nueva: la de la ejecución
+  quedó en estado aplicado y cortocircuita por idempotencia.
+- El estado persistido de la corrida `cutover-20260829` dice `verified` desde
+  antes de corregir la detección. No se reescribió: `failed` describiría mal un
+  resultado de 11 Espacios migrados y correctos con un huérfano pendiente.
 
 ## 6. Verificación
 
@@ -166,6 +172,32 @@ Criterios de aborto, cualquiera de ellos suficiente:
 - un índice único falla al crearse, señal de un duplicado no clasificado;
 - `verify` no es válido;
 - el volcado previo no se completó o no se puede leer.
+
+### Resultado de la ejecución, 2026-08-29
+
+El cutover se ejecutó el mismo día de esta decisión y cumplió los criterios:
+respaldo `mongodump` verificado por lectura contra conteos conocidos, 10 índices
+v2 creados sin violaciones de unicidad, 11 Espacios migrados y 0 bloqueados con
+354 preimágenes guardadas, `verify` válido con cero incompatibilidades de
+balance, deuda y vínculo privado, y ledger personal invariante. Las 736
+transacciones personales y las 33 cuentas conservaron su conteo previo. Ningún
+criterio de aborto se activó.
+
+La ejecución destapó dos defectos en el mecanismo, corregidos después:
+
+1. `verify` y el replay abortaban en modo in-place, porque el script
+   reinspeccionaba una fuente que es el propio destino y exigía que coincidiera
+   con el plan previo a transformar.
+2. Un manual cuyo `spaceId` referencia un Espacio inexistente nunca se aplicaba:
+   el recorrido de `apply` sólo visita los Espacios que existen y la vía de
+   manuales globales sólo atrapaba los que no tienen `spaceId`.
+
+El segundo es anterior a esta decisión y obliga a corregir la evidencia citada
+en §1: el `verify` de los dos ensayos dio válido con una de las ocho
+resoluciones aprobadas sin aplicar, porque contaba cobertura del manifiesto y no
+efecto en la base. `verify` comprueba ahora cada resolución contra los datos y
+expone `unappliedResolutions`. La conclusión sobre los 11 Espacios no cambia; lo
+que cambia es que la verificación de resoluciones manuales no era demostrativa.
 
 ## 7. Referencias
 
