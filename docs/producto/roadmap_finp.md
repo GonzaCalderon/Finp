@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-25
+> Última actualización: 2026-08-29
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -237,7 +237,15 @@ Los principios de producto y de trabajo viven en
     probado; un Espacio no elegible queda en sólo lectura sin totales parciales;
   - desarrollo y producción no recibieron escrituras, backfill ni cutover. La
     etapa 4 continúa abierta hasta revisar el checkpoint y autorizar la ventana
-    progresiva; el `NO-GO` productivo no cambia.
+    progresiva; el `NO-GO` productivo no cambia;
+  - reproducido de punta a punta el 2026-08-29 por Gonzalo Calderon en un
+    entorno local, fuera de la máquina del checkpoint original: plan (11
+    Espacios; 56 automáticos, 33 de revisión y 8 manuales, idéntico),
+    aprobación registrada de los 8 casos manuales, clone (1.660 documentos),
+    apply (11 migrados, 0 bloqueados) y verify (válido, 0 incompatibilidades de
+    balance, deuda o vínculo privado, ledger personal invariante) sobre
+    `finp-e2e-migration-checkpoint`; confirma que el ensayo es reproducible
+    fuera del entorno original.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;
