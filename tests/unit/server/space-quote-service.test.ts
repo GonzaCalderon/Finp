@@ -45,6 +45,39 @@ describe('cotizaciones de referencia de Espacios', () => {
         expect(quote?.path.map((step) => `${step.fromCurrency}/${step.toCurrency}`)).toEqual(['GBP/USD', 'USD/ARS'])
     })
 
+    it('mantiene vigente la última observación con el mercado cerrado y la vence recién al abandonarse', async () => {
+        const dolarApi = (fechaActualizacion: string) => vi.fn(async () => jsonResponse([{
+            moneda: 'USD', casa: 'oficial', compra: 1300, venta: 1350, fechaActualizacion,
+        }])) as unknown as typeof fetch
+
+        // Fin de semana largo: la última publicación es del jueves y sigue siendo la vigente.
+        const afterLongWeekend = await resolveSpaceReferenceQuote({
+            sourceCurrency: 'USD',
+            targetCurrency: 'ARS',
+            now,
+            fetcher: dolarApi('2026-08-20T20:00:00.000Z'),
+        })
+        expect(afterLongWeekend).toMatchObject({ status: 'current', source: 'dolarapi_official' })
+
+        // Más allá de la ventana, la referencia deja de ser confiable.
+        const abandoned = await resolveSpaceReferenceQuote({
+            sourceCurrency: 'USD',
+            targetCurrency: 'ARS',
+            now,
+            fetcher: dolarApi('2026-08-18T20:00:00.000Z'),
+        })
+        expect(abandoned?.status).toBe('stale')
+        expect(() => assertConversionSnapshotConfirmable({
+            rate: abandoned!.rate,
+            direction: abandoned!.direction,
+            source: abandoned!.source,
+            observedAt: abandoned!.observedAt,
+            capturedAt: abandoned!.capturedAt,
+            expiresAt: abandoned!.expiresAt,
+            path: abandoned!.path,
+        }, now)).toThrow('venció')
+    })
+
     it('exige actualizar una referencia vencida pero permite override manual trazable', () => {
         const stale = {
             rate: '1300', direction: 'multiply' as const, source: 'frankfurter' as const,
