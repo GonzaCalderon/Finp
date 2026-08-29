@@ -1,4 +1,4 @@
-export type SpaceMigrationCommand = 'plan' | 'clone' | 'prepare' | 'apply' | 'verify' | 'rollback'
+export type SpaceMigrationCommand = 'plan' | 'clone' | 'prepare' | 'apply' | 'resolve' | 'verify' | 'rollback'
 
 export interface SpaceMigrationCliOptions {
     command: SpaceMigrationCommand
@@ -12,7 +12,7 @@ export interface SpaceMigrationCliOptions {
     help: boolean
 }
 
-const COMMANDS = new Set<SpaceMigrationCommand>(['plan', 'clone', 'prepare', 'apply', 'verify', 'rollback'])
+const COMMANDS = new Set<SpaceMigrationCommand>(['plan', 'clone', 'prepare', 'apply', 'resolve', 'verify', 'rollback'])
 
 function takeValue(args: string[], index: number, option: string) {
     const value = args[index + 1]

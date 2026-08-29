@@ -580,6 +580,62 @@ export async function verifySpaceMigrationRun(input: {
     return result
 }
 
+/**
+ * Aplica las resoluciones manuales aprobadas cuyo efecto no llegó a la base.
+ * Existe porque el recorrido de `apply` es legacy→v2 y no sirve para retocar una
+ * base ya migrada: una corrida nueva volvería a auditar datos v2 con criterios
+ * legacy. Escribe dentro de la corrida original, de modo que sus preimágenes
+ * quedan cubiertas por el mismo rollback.
+ */
+export async function applyPendingResolutions(input: {
+    db: Db
+    clientSession: () => ClientSession
+    plan: MigrationPlan
+    manifest: MigrationResolutionManifest
+    execute: boolean
+}) {
+    const resolutions = validateMigrationManifest(input.plan, input.manifest)
+    const run = await readAndAssertRun(input)
+    if (run.status !== 'applied' && run.status !== 'verified') {
+        throw new Error('SPACE_MIGRATION_RUN_NOT_APPLIED')
+    }
+    const pending: MigrationIssue[] = []
+    for (const issue of input.plan.issues) {
+        if (issue.disposition !== 'manual') continue
+        const resolution = resolutions.get(issue.fingerprint)
+        if (!resolution) continue
+        if (await resolutionPending(input.db, issue, resolution)) pending.push(issue)
+    }
+    if (!input.execute || !pending.length) {
+        return { dryRun: !input.execute, pending: pending.length, applied: 0 }
+    }
+
+    const session = input.clientSession()
+    try {
+        await session.withTransaction(async () => {
+            for (const issue of pending) {
+                await applyResolution({
+                    db: input.db,
+                    runId: input.plan.runId,
+                    issue,
+                    resolution: resolutions.get(issue.fingerprint)!,
+                    session,
+                })
+            }
+        })
+    } finally {
+        await session.endSession()
+    }
+
+    const documentsBackedUp = await input.db.collection(SPACE_MIGRATION_BACKUP_COLLECTION)
+        .countDocuments({ runId: input.plan.runId })
+    await input.db.collection(SPACE_MIGRATION_RUN_COLLECTION).updateOne(
+        { runId: input.plan.runId },
+        { $set: { 'counts.documentsBackedUp': documentsBackedUp } }
+    )
+    return { dryRun: false, pending: pending.length, applied: pending.length }
+}
+
 export async function rollbackMigrationRun(input: {
     db: Db
     clientSession: () => ClientSession

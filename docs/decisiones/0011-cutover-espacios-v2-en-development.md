@@ -148,12 +148,9 @@ Espacio al migrarlo, como ya ocurre.
   observación que permita retirar el fallback global.
 - Decidir la purga de preimágenes sólo después de usar la aplicación sobre datos
   migrados con resultado satisfactorio.
-- Poner en cuarentena el registro huérfano de `spaceparticipants` que la octava
-  resolución no llegó a aplicar. Exige una corrida nueva: la de la ejecución
-  quedó en estado aplicado y cortocircuita por idempotencia.
-- El estado persistido de la corrida `cutover-20260829` dice `verified` desde
-  antes de corregir la detección. No se reescribió: `failed` describiría mal un
-  resultado de 11 Espacios migrados y correctos con un huérfano pendiente.
+- El registro huérfano de `spaceparticipants` quedó en cuarentena el 2026-08-29,
+  dentro de la corrida `cutover-20260829` y con su preimagen guardada. Su
+  `verify` es ahora válido con cero resoluciones sin aplicar.
 
 ## 6. Verificación
 
@@ -198,6 +195,19 @@ resoluciones aprobadas sin aplicar, porque contaba cobertura del manifiesto y no
 efecto en la base. `verify` comprueba ahora cada resolución contra los datos y
 expone `unappliedResolutions`. La conclusión sobre los 11 Espacios no cambia; lo
 que cambia es que la verificación de resoluciones manuales no era demostrativa.
+
+Cerrar esa resolución pendiente descartó la vía de una corrida nueva. Auditar
+una base ya migrada con criterios legacy produce hallazgos que no describen un
+defecto sino el contrato nuevo: 32 tramos de liquidación quedaron clasificados
+como manuales, y sus resoluciones por omisión habrían excluido del cutover a
+Espacios v2 sanos, dejándolos en sólo lectura. `plan` y `apply` sirven para ir
+de legacy a v2, no para retocar lo ya migrado.
+
+Por eso se agregó el subcomando `resolve`, que aplica únicamente las
+resoluciones aprobadas cuyo efecto falta, dentro de la corrida a la que
+pertenecen y sin recorrer Espacios. El huérfano se cerró así el 2026-08-29: 1
+pendiente detectada, 1 aplicada, preimagen guardada bajo `cutover-20260829` y
+`verify` válido con cero resoluciones sin aplicar.
 
 ## 7. Referencias
 
