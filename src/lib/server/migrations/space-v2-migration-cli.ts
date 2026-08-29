@@ -1,4 +1,4 @@
-export type SpaceMigrationCommand = 'plan' | 'clone' | 'apply' | 'verify' | 'rollback'
+export type SpaceMigrationCommand = 'plan' | 'clone' | 'prepare' | 'apply' | 'verify' | 'rollback'
 
 export interface SpaceMigrationCliOptions {
     command: SpaceMigrationCommand
@@ -6,12 +6,13 @@ export interface SpaceMigrationCliOptions {
     confirmDatabase: string
     targetDatabase: string
     execute: boolean
+    cutover: boolean
     approveSafeDefaults: boolean
     approvedBy?: string
     help: boolean
 }
 
-const COMMANDS = new Set<SpaceMigrationCommand>(['plan', 'clone', 'apply', 'verify', 'rollback'])
+const COMMANDS = new Set<SpaceMigrationCommand>(['plan', 'clone', 'prepare', 'apply', 'verify', 'rollback'])
 
 function takeValue(args: string[], index: number, option: string) {
     const value = args[index + 1]
@@ -31,6 +32,7 @@ export function parseSpaceMigrationCliArguments(args: string[]): SpaceMigrationC
         confirmDatabase: '',
         targetDatabase: '',
         execute: false,
+        cutover: false,
         approveSafeDefaults: false,
         help: false,
     }
@@ -46,6 +48,10 @@ export function parseSpaceMigrationCliArguments(args: string[]): SpaceMigrationC
         }
         if (argument === '--approve-safe-defaults') {
             options.approveSafeDefaults = true
+            continue
+        }
+        if (argument === '--cutover') {
+            options.cutover = true
             continue
         }
         if (argument === '--run-id') {
@@ -81,6 +87,15 @@ export function parseSpaceMigrationCliArguments(args: string[]): SpaceMigrationC
     }
     if (options.approveSafeDefaults && !options.approvedBy?.trim()) {
         throw new Error('--approve-safe-defaults exige --approved-by.')
+    }
+    if (options.cutover && options.targetDatabase !== options.confirmDatabase) {
+        throw new Error('El cutover es in-place: --target-database debe repetir el nombre de --confirm-database.')
+    }
+    if (options.command === 'prepare' && !options.cutover) {
+        throw new Error('prepare pertenece al cutover in-place y exige --cutover.')
+    }
+    if (options.command === 'clone' && options.cutover) {
+        throw new Error('El cutover in-place no clona: usá prepare.')
     }
     return options
 }

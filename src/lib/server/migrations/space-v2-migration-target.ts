@@ -24,6 +24,30 @@ export function replaceMongoDatabaseName(uri: string, databaseName: string) {
     return result
 }
 
+/**
+ * Cutover autorizado por la decisión 0011: la transformación ocurre in-place
+ * sobre la misma base de development, de modo que fuente y destino deben ser
+ * idénticos. La barrera del ensayo no se relaja; ésta es una segunda puerta que
+ * sólo se abre con el modo explícito y con el nombre confirmado dos veces.
+ */
+export function assertSpaceCutoverTarget(input: {
+    sourceUri: string
+    sourceDatabaseName: string
+    targetDatabaseName: string
+}) {
+    const source = parseMongoDatabaseTarget(input.sourceUri, 'Base de cutover')
+    if (source.databaseName !== input.sourceDatabaseName) {
+        throw new Error('La confirmación de la base no coincide con la URI.')
+    }
+    if (input.targetDatabaseName !== input.sourceDatabaseName) {
+        throw new Error('El cutover es in-place: el destino debe ser la misma base confirmada.')
+    }
+    if (isProductionLikeDatabaseName(source.databaseName)) {
+        throw new Error('El cutover rechaza una base con nombre productivo.')
+    }
+    return { source, target: source }
+}
+
 export function assertSpaceMigrationTargets(input: {
     sourceUri: string
     sourceDatabaseName: string

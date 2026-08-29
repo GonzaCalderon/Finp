@@ -158,7 +158,7 @@ El cutover se considera correcto cuando, sobre `finm`:
 - `verify` devuelve válido, con cero incompatibilidades de balance, deuda o
   vínculo privado y cero manuales sin resolver;
 - el fingerprint del ledger personal es idéntico antes y después;
-- los 12 índices v2 existen y ninguno de los 6 únicos falló por duplicados.
+- los 10 índices v2 existen y ninguno de los 6 únicos falló por duplicados.
 
 Criterios de aborto, cualquiera de ellos suficiente:
 

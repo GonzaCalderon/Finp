@@ -173,6 +173,7 @@ function newRun(input: {
     targetDatabaseName: string
     cloneFingerprint: string
     status: MigrationRun['status']
+    rehearsal: boolean
 }): MigrationRun {
     return {
         runId: input.plan.runId,
@@ -184,7 +185,7 @@ function newRun(input: {
         cloneFingerprint: input.cloneFingerprint,
         sourceCommit: input.plan.sourceCommit,
         targetDatabaseName: input.targetDatabaseName,
-        rehearsal: true,
+        rehearsal: input.rehearsal,
         status: input.status,
         startedAt: new Date(),
         counts: {
@@ -205,7 +206,35 @@ export async function registerClonedMigrationRun(input: {
     targetDatabaseName: string
     cloneFingerprint: string
 }) {
-    const run = newRun({ ...input, status: 'cloned' })
+    const run = newRun({ ...input, status: 'cloned', rehearsal: true })
+    await input.db.collection(SPACE_MIGRATION_RUN_COLLECTION).updateOne(
+        { runId: input.plan.runId },
+        { $setOnInsert: run },
+        { upsert: true }
+    )
+    return run
+}
+
+/**
+ * Registro equivalente para el cutover in-place de la decisión 0011. No hay
+ * copia: la base ya es el destino, así que su fingerprint actual cumple el rol
+ * de `cloneFingerprint` y `apply` sigue abortando si algo se mueve después.
+ */
+export async function registerInPlaceMigrationRun(input: {
+    db: Db
+    plan: MigrationPlan
+    manifest: MigrationResolutionManifest
+    targetDatabaseName: string
+    baselineFingerprint: string
+}) {
+    const run = newRun({
+        plan: input.plan,
+        manifest: input.manifest,
+        targetDatabaseName: input.targetDatabaseName,
+        cloneFingerprint: input.baselineFingerprint,
+        status: 'cloned',
+        rehearsal: false,
+    })
     await input.db.collection(SPACE_MIGRATION_RUN_COLLECTION).updateOne(
         { runId: input.plan.runId },
         { $setOnInsert: run },

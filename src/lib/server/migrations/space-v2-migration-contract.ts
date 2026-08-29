@@ -76,7 +76,8 @@ export interface MigrationRun {
     preApplyPersonalLedgerFingerprint?: string
     sourceCommit: string
     targetDatabaseName: string
-    rehearsal: true
+    /** `false` sólo en el cutover in-place autorizado por la decisión 0011. */
+    rehearsal: boolean
     status: 'planned' | 'cloned' | 'applying' | 'applied' | 'verified' | 'rolled_back' | 'failed'
     startedAt: Date
     finishedAt?: Date

@@ -249,10 +249,14 @@ Los principios de producto y de trabajo viven en
     fuera del entorno original;
   - cutover sobre `finm` autorizado el 2026-08-29 por la decisión 0011: corte
     único de los 11 Espacios, in-place, sin ventana de mantenimiento por
-    ausencia de uso concurrente y con `mongodump` como respaldo externo. Falta
-    construir el modo de cutover del CLI y habilitar los índices v2 en
-    development; producción y el retiro global del fallback siguen fuera de
-    alcance.
+    ausencia de uso concurrente y con `mongodump` como respaldo externo;
+  - mecanismo de cutover construido: `migrate:spaces:v2 --cutover` reemplaza
+    `clone` por `prepare` in-place, exige repetir el nombre exacto de la base y
+    registra la corrida como no-ensayo; `indexes:spaces:v2 --cutover` es la
+    única puerta a un apply de índices en development. Verificado en dry-run
+    contra `finm`: plan idéntico de 11 Espacios y fingerprint in-place igual al
+    del plan. Falta ejecutar la ventana; producción y el retiro global del
+    fallback siguen fuera de alcance.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;

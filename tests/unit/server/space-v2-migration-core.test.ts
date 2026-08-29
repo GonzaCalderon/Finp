@@ -9,6 +9,7 @@ import {
 import { migrationFingerprint } from '@/lib/server/migrations/space-v2-migration-fingerprint'
 import { sanitizeSpaceMigrationDocument } from '@/lib/server/migrations/space-v2-migration-sanitizer'
 import {
+    assertSpaceCutoverTarget,
     assertSpaceMigrationTargets,
     replaceMongoDatabaseName,
 } from '@/lib/server/migrations/space-v2-migration-target'
@@ -132,6 +133,45 @@ describe('space v2 migration core', () => {
             targetDatabaseName: 'finp-e2e-migration-run-1',
         }).target.databaseName).toBe('finp-e2e-migration-run-1')
         expect(() => replaceMongoDatabaseName(baseUri, 'finm')).toThrow(/e2e-migration/)
+    })
+
+    it('el cutover in-place exige la misma base y rechaza nombres productivos', () => {
+        expect(assertSpaceCutoverTarget({
+            sourceUri: 'mongodb://migration-test.invalid:27017/finm',
+            sourceDatabaseName: 'finm',
+            targetDatabaseName: 'finm',
+        }).target.databaseName).toBe('finm')
+        expect(() => assertSpaceCutoverTarget({
+            sourceUri: 'mongodb://migration-test.invalid:27017/finm',
+            sourceDatabaseName: 'finm',
+            targetDatabaseName: 'finp-e2e-migration-run-1',
+        })).toThrow(/in-place/)
+        expect(() => assertSpaceCutoverTarget({
+            sourceUri: 'mongodb://migration-test.invalid:27017/finm-production',
+            sourceDatabaseName: 'finm-production',
+            targetDatabaseName: 'finm-production',
+        })).toThrow(/productivo/)
+        expect(() => assertSpaceCutoverTarget({
+            sourceUri: 'mongodb://migration-test.invalid:27017/otra',
+            sourceDatabaseName: 'finm',
+            targetDatabaseName: 'finm',
+        })).toThrow(/no coincide/)
+    })
+
+    it('el modo cutover exige repetir el nombre, reemplaza clone por prepare y sigue en dry-run', () => {
+        const cutover = ['--run-id', 'cutover-test', '--confirm-database', 'finm', '--target-database', 'finm']
+        expect(parseSpaceMigrationCliArguments(['prepare', ...cutover, '--cutover'])).toMatchObject({
+            command: 'prepare', cutover: true, execute: false,
+        })
+        expect(() => parseSpaceMigrationCliArguments(['prepare', ...cutover]))
+            .toThrow(/--cutover/)
+        expect(() => parseSpaceMigrationCliArguments(['clone', ...cutover, '--cutover']))
+            .toThrow(/no clona/)
+        expect(() => parseSpaceMigrationCliArguments([
+            'apply', '--run-id', 'cutover-test', '--confirm-database', 'finm',
+            '--target-database', 'finp-e2e-migration-test', '--cutover',
+        ])).toThrow(/in-place/)
+        expect(parseSpaceMigrationCliArguments(['apply', ...cutover]).cutover).toBe(false)
     })
 
     it('mantiene todos los subcomandos en dry-run salvo --execute explícito', () => {

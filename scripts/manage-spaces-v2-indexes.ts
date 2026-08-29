@@ -13,8 +13,10 @@ Uso:
   npm run indexes:spaces:v2 -- --env test
   npm run indexes:spaces:v2 -- --env test --apply
   npm run indexes:spaces:v2 -- --env development --confirm-database <nombre>
+  npm run indexes:spaces:v2 -- --env development --confirm-database <nombre> --apply --cutover
 
-Sin --apply sólo valida el destino y muestra el plan. --apply se rechaza fuera de E2E.`
+Sin --apply sólo valida el destino y muestra el plan. --apply se rechaza fuera de E2E
+salvo con --cutover, la puerta explícita que abrió la decisión 0011 para development.`
 
 async function main() {
     const options = parseSpaceV2IndexCliArguments(process.argv.slice(2))
@@ -29,7 +31,7 @@ async function main() {
         })()
         : resolveDevelopmentAuditTarget({ confirmDatabase: options.confirmDatabase! })
 
-    console.log(`Destino validado: ${options.env} / ${target.databaseName}.`)
+    console.log(`Destino validado: ${options.env} / ${target.databaseName}${options.cutover ? ' (cutover)' : ''}.`)
     console.log(`Índices planificados: ${SPACE_V2_INDEXES.length}. Modo: ${options.apply ? 'apply' : 'dry-run'}.`)
     for (const definition of SPACE_V2_INDEXES) {
         console.log(`- ${definition.collection}.${definition.options.name}: ${definition.purpose}`)

@@ -117,6 +117,7 @@ export type SpaceV2IndexEnvironment = 'test' | 'development'
 export interface SpaceV2IndexCliOptions {
     env: SpaceV2IndexEnvironment
     apply: boolean
+    cutover: boolean
     confirmDatabase?: string
     help: boolean
 }
@@ -128,13 +129,15 @@ function takeValue(args: string[], index: number, option: string) {
 }
 
 export function parseSpaceV2IndexCliArguments(args: string[]): SpaceV2IndexCliOptions {
-    const options: SpaceV2IndexCliOptions = { env: 'test', apply: false, help: false }
+    const options: SpaceV2IndexCliOptions = { env: 'test', apply: false, cutover: false, help: false }
     for (let index = 0; index < args.length; index += 1) {
         const argument = args[index]
         if (argument === '--help' || argument === '-h') {
             options.help = true
         } else if (argument === '--apply') {
             options.apply = true
+        } else if (argument === '--cutover') {
+            options.cutover = true
         } else if (argument === '--env') {
             const value = takeValue(args, index, argument)
             if (value !== 'test' && value !== 'development') {
@@ -155,8 +158,11 @@ export function parseSpaceV2IndexCliArguments(args: string[]): SpaceV2IndexCliOp
     if (options.env === 'test' && options.confirmDatabase) {
         throw new Error('--confirm-database sólo corresponde a development.')
     }
-    if (options.env === 'development' && options.apply) {
+    if (options.env === 'development' && options.apply && !options.cutover) {
         throw new Error('Los índices v2 sólo pueden aplicarse en el entorno E2E aislado.')
+    }
+    if (options.cutover && (options.env !== 'development' || !options.apply)) {
+        throw new Error('--cutover sólo corresponde a un apply de development.')
     }
     return options
 }
