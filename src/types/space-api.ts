@@ -165,6 +165,11 @@ export interface SpaceDetailDto {
     readMode: SpaceReadMode
     readOnlyReason?: string
     warnings: Array<{ code: string; recordType: string; recordId?: string }>
+    migration: {
+        state: 'legacy' | 'blocked' | 'ready' | 'migrated'
+        readOnly: boolean
+        reason?: 'legacy_not_migrated' | 'manual_review_required' | 'migration_verified'
+    }
     currentUserId: string
     currentParticipantId: string
     capabilities: SpaceApiCapability[]

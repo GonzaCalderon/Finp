@@ -16,7 +16,7 @@ const conversionPathStepSchema = new Schema(
         rate: { type: String, required: true },
         source: {
             type: String,
-            enum: ['dolarapi_official', 'frankfurter', 'manual', 'identity'],
+            enum: ['dolarapi_official', 'frankfurter', 'manual', 'identity', 'legacy'],
             required: true,
         },
     },
@@ -29,7 +29,7 @@ export const conversionSnapshotSchema = new Schema(
         direction: { type: String, enum: ['multiply', 'divide'], required: true },
         source: {
             type: String,
-            enum: ['dolarapi_official', 'frankfurter', 'manual', 'identity'],
+            enum: ['dolarapi_official', 'frankfurter', 'manual', 'identity', 'legacy'],
             required: true,
         },
         manualAuthorUserId: { type: String },

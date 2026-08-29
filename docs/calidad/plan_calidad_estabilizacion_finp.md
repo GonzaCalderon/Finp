@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-08-24
+> Última actualización: 2026-08-25
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -379,6 +379,13 @@ Para FINP-P0-006 el comando canónico es `npm run audit:spaces:legacy`; su uso y
 sus garantías están documentados en
 [`../tecnico/guia_desarrollo.md`](../tecnico/guia_desarrollo.md#auditoría-legacy-de-espacios).
 
+La etapa de migración agrega `npm run migrate:spaces:v2`. La calidad mínima
+exige clasificación fail-closed, sanitización, fingerprint estable, manifiesto
+aprobado, transacción por Espacio, invariancia del ledger personal, replay sin
+cambios y rollback al fingerprint previo. La integración usa una base única
+`e2e-migration` y prueba también una historia de 1.000 movimientos con límite de
+30 segundos por fase.
+
 ## 14. Criterio de release
 
 Una versión puede promoverse cuando:
@@ -394,18 +401,19 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Checks base, contratos y recorridos financieros de Espacios verificados el
-2026-08-24:
+Checks base, contratos y recorridos financieros de Espacios verificados hasta
+el 2026-08-25:
 
-- 881 pruebas unitarias aprobadas en 117 archivos;
-- 10 recorridos de integración de Espacios v2 aprobados contra `finp-e2e` con
+- 895 pruebas unitarias aprobadas en 119 archivos;
+- 12 recorridos de integración de Espacios v2 aprobados contra bases E2E con
   sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
   deuda, configuración monetaria, lifecycle, ownership, participantes inactivos
-  y liquidaciones propias o representadas;
+  y liquidaciones propias o representadas; los dos recorridos de migración
+  agregan apply, replay, verify, rollback y una historia de 1.000 movimientos;
 - build, typecheck, lint y validación documental aprobados;
-- 66 de 66 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
+- 68 de 68 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
   de producción;
-- 66 de 66 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
+- 68 de 68 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
   ni altas fallidas después de una ejecución larga;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
@@ -438,6 +446,17 @@ Checks base, contratos y recorridos financieros de Espacios verificados el
   ISO, cotizaciones, composición accesible y asignación de liquidaciones por
   moneda; la matriz E2E usa un Espacio ARS/USD/EUR y conserva el rollout
   exclusivamente en `finp-e2e`.
+- la clasificación crítica/alta de development quedó cerrada en 56 reparaciones
+  automáticas, 33 representaciones `needs_review` y 8 resoluciones manuales;
+- el ensayo sanitizado sobre copia `e2e-migration` migró 11 de 11 Espacios, sin
+  balances, deudas o vínculos privados incompatibles y con ledger personal
+  invariante; replay no produjo cambios y rollback recuperó el fingerprint
+  previo exacto;
+- el apply real del ensayo quedó por debajo de 30 segundos y verify alrededor
+  de 3,3 segundos; una integración sintética de 1.000 movimientos ejecutó
+  apply, verify y rollback por debajo de 30 segundos por fase;
+- development y producción no recibieron escrituras, backfill ni cutover; la
+  evidencia mantiene el `NO-GO` productivo hasta revisar el checkpoint.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

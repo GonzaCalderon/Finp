@@ -68,6 +68,13 @@ export interface ISpace {
     contractVersion?: 2
     timezone?: string
     revision?: number
+    migration?: {
+        state: 'blocked' | 'ready' | 'migrated'
+        runId: string
+        sourceFingerprint: string
+        reason?: 'manual_review_required' | 'verification_failed' | 'migration_verified'
+        migratedAt?: Date
+    }
     createdAt: Date
     updatedAt: Date
 }

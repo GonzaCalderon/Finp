@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-08-25
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -206,6 +206,7 @@ Servicios relevantes en `src/lib/server/`:
 | `space-legacy-adapter.ts` | lectura determinista del estado legacy sin convertir ambigüedad en autoridad v2 |
 | `space-read-service-v2.ts` y `space-api-contract.ts` | DTOs JSON, capacidades y paginación por cursor; errores y mutaciones normalizados |
 | `space-v2-write-gate.ts` y `space-legacy-write-facade.ts` | activación exclusiva en `finp-e2e` y frontera que impide fallback v2 hacia escrituras legacy |
+| `migrations/space-v2-migration-*.ts` | contratos, clasificación fail-closed, fingerprint, sanitización, copia por lotes, preimágenes, backfill por Espacio, verificación y rollback del ensayo v2 |
 | `debt-sync.ts` | materialización idempotente desde Espacios |
 | `debt-settlement.ts` | pago/cobro atómico |
 | `notifications.ts` | creación, dedupe y resolución |
@@ -457,6 +458,24 @@ Toda migración:
 - conserva compatibilidad durante el despliegue;
 - documenta retiro del legado.
 
+Para Espacios, `migrate:spaces:v2` concentra `plan`, `clone`, `apply`, `verify`
+y `rollback`. Cada subcomando es `dry-run` por defecto y sólo admite escritura
+con `--execute` contra una base nueva con marcador `e2e-migration`. La fuente de
+development se lee dentro de un snapshot abortado y exige confirmación exacta.
+
+El plan vincula commit, auditoría, snapshot, copia y manifiesto mediante
+fingerprints. La copia conserva IDs, importes, monedas, fechas y relaciones,
+pero anonimiza identidad, texto libre, credenciales, tokens, adjuntos y URLs.
+Cada Espacio se transforma en su propia transacción; sus preimágenes tienen
+checksum y el rollback restaura por lotes el fingerprint anterior exacto.
+
+La activación futura es por Espacio. `contractVersion: 2` se confirma al final
+de la transacción verificada y desde entonces la fachada legacy no es una salida
+válida. Un agregado no elegible queda en sólo lectura, sin balances parciales.
+El contrato público sólo expone estado y motivo seguro; nunca metadata interna
+de migración. La autoridad completa está en la
+[`decisión 0010`](../decisiones/0010-migracion-progresiva-espacios-v2.md).
+
 Compatibilidad conocida:
 
 - campos legacy de vinculación en Espacios;
@@ -464,8 +483,9 @@ Compatibilidad conocida:
 - relaciones incompletas entre transacciones y cuotas.
 
 Los campos monetarios exactos y los índices multimoneda permanecen limitados a
-`contractVersion: 2` en `finp-e2e`. Development no recibe cutover y producción
-no recibe backfill hasta aprobar la migración definida para FINP-P0-006.
+`contractVersion: 2` en `finp-e2e`. El ensayo `e2e-migration` no modifica esta
+regla: development no recibió backfill ni cutover y producción permanece fuera
+de alcance hasta aprobar FINP-P0-006.
 
 El roadmap contiene la prioridad de limpieza.
 

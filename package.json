@@ -20,6 +20,7 @@
         "test:seed": "tsx tests/e2e/helpers/seed.ts",
         "typecheck": "tsc --noEmit",
         "audit:spaces:legacy": "tsx scripts/audit-spaces-legacy.ts",
+        "migrate:spaces:v2": "tsx scripts/migrate-spaces-v2.ts",
         "indexes:spaces:v2": "tsx scripts/manage-spaces-v2-indexes.ts",
         "backfill:commitments": "tsx scripts/backfill-commitments.ts",
         "repair:payment-groups": "tsx scripts/repair-payment-groups.ts"
