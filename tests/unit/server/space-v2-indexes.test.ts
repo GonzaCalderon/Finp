@@ -7,7 +7,7 @@ import {
 
 describe('space v2 indexes', () => {
     it('dry-run de E2E es el default y apply sólo se admite ahí', () => {
-        expect(parseSpaceV2IndexCliArguments([])).toEqual({ env: 'test', apply: false, help: false })
+        expect(parseSpaceV2IndexCliArguments([])).toEqual({ env: 'test', apply: false, cutover: false, help: false })
         expect(parseSpaceV2IndexCliArguments(['--env', 'test', '--apply'])).toMatchObject({
             env: 'test', apply: true,
         })
@@ -18,6 +18,17 @@ describe('space v2 indexes', () => {
         expect(() => parseSpaceV2IndexCliArguments([
             '--env', 'development', '--confirm-database', 'finm', '--apply',
         ])).toThrow('sólo pueden aplicarse')
+    })
+
+    it('el cutover de la decisión 0011 es la única puerta a un apply en development', () => {
+        expect(parseSpaceV2IndexCliArguments([
+            '--env', 'development', '--confirm-database', 'finm', '--apply', '--cutover',
+        ])).toMatchObject({ env: 'development', apply: true, cutover: true, confirmDatabase: 'finm' })
+        expect(() => parseSpaceV2IndexCliArguments([
+            '--env', 'development', '--confirm-database', 'finm', '--cutover',
+        ])).toThrow('sólo corresponde a un apply')
+        expect(() => parseSpaceV2IndexCliArguments(['--env', 'test', '--apply', '--cutover']))
+            .toThrow('sólo corresponde a un apply')
     })
 
     it('todos los índices únicos nuevos están acotados a v2 o a operationId', () => {

@@ -22,20 +22,23 @@ import {
 import {
     applySpaceMigrationRun,
     registerClonedMigrationRun,
+    registerInPlaceMigrationRun,
     rollbackMigrationRun,
     verifySpaceMigrationRun,
 } from '@/lib/server/migrations/space-v2-migration-runner'
 import {
+    assertSpaceCutoverTarget,
     assertSpaceMigrationTargets,
     replaceMongoDatabaseName,
 } from '@/lib/server/migrations/space-v2-migration-target'
 import { resolveE2EEnvironment } from '../tests/e2e/helpers/environment'
 
-const HELP = `Migración compatible v2 de Espacios (ensayo aislado)
+const HELP = `Migración compatible v2 de Espacios (ensayo aislado y cutover in-place)
 
 Uso:
   npm run migrate:spaces:v2 -- plan --run-id <id> --confirm-database finm --target-database <e2e-migration-db>
   npm run migrate:spaces:v2 -- clone|apply|verify|rollback [opciones anteriores] [--execute]
+  npm run migrate:spaces:v2 -- prepare|apply|verify|rollback --run-id <id> --confirm-database <db> --target-database <db> --cutover [--execute]
 
 Todos los subcomandos son dry-run por defecto. Sólo --execute habilita escrituras y las barreras
 rechazan cualquier destino sin marcador e2e-migration. Development se abre read-only por snapshot.
@@ -43,6 +46,10 @@ rechazan cualquier destino sin marcador e2e-migration. Development se abre read-
 Opciones:
   --approve-safe-defaults --approved-by <identidad>  Completa el manifiesto privado con las
                                                     resoluciones fijadas en el plan aprobado.
+  --cutover                                         Modo in-place autorizado por la decisión 0011.
+                                                    Escribe sobre la misma base de development, que
+                                                    hay que confirmar dos veces por su nombre exacto.
+                                                    Reemplaza clone por prepare.
   --help                                            Mostrar ayuda.`
 
 const MAX_PHASE_MS = 30_000
@@ -140,14 +147,24 @@ async function main() {
         cwd,
         confirmDatabase: options.confirmDatabase,
     })
-    const e2e = resolveE2EEnvironment({ cwd })
-    const targetUri = replaceMongoDatabaseName(e2e.variables.MONGODB_URI, options.targetDatabase)
-    assertSpaceMigrationTargets({
-        sourceUri: sourceTarget.uri,
-        sourceDatabaseName: sourceTarget.databaseName,
-        targetUri,
-        targetDatabaseName: options.targetDatabase,
-    })
+    let targetUri: string
+    if (options.cutover) {
+        assertSpaceCutoverTarget({
+            sourceUri: sourceTarget.uri,
+            sourceDatabaseName: sourceTarget.databaseName,
+            targetDatabaseName: options.targetDatabase,
+        })
+        targetUri = sourceTarget.uri
+    } else {
+        const e2e = resolveE2EEnvironment({ cwd })
+        targetUri = replaceMongoDatabaseName(e2e.variables.MONGODB_URI, options.targetDatabase)
+        assertSpaceMigrationTargets({
+            sourceUri: sourceTarget.uri,
+            sourceDatabaseName: sourceTarget.databaseName,
+            targetUri,
+            targetDatabaseName: options.targetDatabase,
+        })
+    }
 
     const sourceClient = new MongoClient(sourceTarget.uri, { serverSelectionTimeoutMS: 10_000 })
     const targetClient = new MongoClient(targetUri, { serverSelectionTimeoutMS: 10_000 })
@@ -207,6 +224,25 @@ async function main() {
             assertSamePlan(plan, sourceInspection.plan)
             await targetClient.connect()
             const targetDb = targetClient.db(options.targetDatabase)
+
+            if (options.command === 'prepare') {
+                await sourceSession.abortTransaction()
+                const baselineFingerprint = await fingerprintSpaceMigrationDatabase(targetDb)
+                if (baselineFingerprint !== plan.sourceDatabaseFingerprint) {
+                    throw new Error('SPACE_MIGRATION_INPLACE_BASELINE_MISMATCH')
+                }
+                if (options.execute) {
+                    await registerInPlaceMigrationRun({
+                        db: targetDb,
+                        plan,
+                        manifest,
+                        targetDatabaseName: options.targetDatabase,
+                        baselineFingerprint,
+                    })
+                }
+                console.log(`Cutover ${options.execute ? 'registrado' : 'simulado'}: base intacta, sin copia y fingerprint idéntico al del plan.`)
+                return
+            }
 
             if (options.command === 'clone') {
                 const counts = await cloneSpaceMigrationDatabase({
