@@ -94,6 +94,14 @@ diarias. DolarAPI se cachea 15 minutos y Frankfurter durante su frecuencia
 diaria; el cliente recupera el lote al volver a foco y cada 15 minutos sólo si
 la pestaña está visible. Nunca consulta una cotización por cada movimiento.
 
+El caché no determina la validez de la referencia. Ambos proveedores publican
+sólo en días hábiles, de modo que fuera del horario de mercado la última
+observación puede tener días y seguir siendo la vigente. Una referencia se
+considera actual mientras su observación no supere los cinco días, ventana que
+cubre un fin de semana largo; más allá se lee como desactualizada. Derivar la
+validez del caché dejaba vencida toda cotización de noche y los fines de
+semana, e impedía tanto el autocompletado como la confirmación en servidor.
+
 La persona puede reemplazar una referencia automática. La revisión compara el
 valor y el snapshot queda marcado como manual con autor y momento. Una
 referencia vencida se puede leer como desactualizada, pero confirmar exige

@@ -7,8 +7,19 @@ import type { SpaceQuoteDto, SpaceQuotesDto } from '@/types'
 
 const DOLAR_API_URL = 'https://dolarapi.com/v1/cotizaciones'
 const FRANKFURTER_URL = 'https://api.frankfurter.dev/v2/rates'
-const DOLAR_TTL_MS = 15 * 60 * 1000
-const FRANKFURTER_TTL_MS = 36 * 60 * 60 * 1000
+const DOLAR_CACHE_TTL_S = 15 * 60
+const FRANKFURTER_CACHE_TTL_S = 24 * 60 * 60
+
+/**
+ * Antigüedad máxima aceptable de la observación, distinta del caché. Los
+ * proveedores publican sólo en días hábiles: fuera del horario de mercado la
+ * última observación puede tener días y seguir siendo la referencia vigente,
+ * así que derivar la validez del caché dejaba toda cotización vencida de noche
+ * y los fines de semana. La ventana cubre un fin de semana largo; más allá, la
+ * referencia se marca desactualizada y confirmar exige actualizarla o adoptarla
+ * explícitamente como manual.
+ */
+const QUOTE_REFERENCE_MAX_AGE_MS = 5 * 24 * 60 * 60 * 1000
 
 interface DirectQuote {
     rate: string
@@ -93,7 +104,7 @@ async function fetchDolarApiDirect(
     const foreignCurrency = sourceCurrency === 'ARS' ? targetCurrency : sourceCurrency
     const response = await fetcher(DOLAR_API_URL, {
         headers: { Accept: 'application/json' },
-        next: { revalidate: 15 * 60 },
+        next: { revalidate: DOLAR_CACHE_TTL_S },
         signal: AbortSignal.timeout(5_000),
     })
     if (!response.ok) return undefined
@@ -117,7 +128,7 @@ async function fetchDolarApiDirect(
         rate,
         source: 'dolarapi_official',
         observedAt: observed.toISOString(),
-        expiresAt: new Date(observed.getTime() + DOLAR_TTL_MS).toISOString(),
+        expiresAt: new Date(observed.getTime() + QUOTE_REFERENCE_MAX_AGE_MS).toISOString(),
     }
 }
 
@@ -149,7 +160,7 @@ async function fetchFrankfurterDirect(
     const query = new URLSearchParams({ base: sourceCurrency, quotes: targetCurrency })
     const response = await fetcher(`${FRANKFURTER_URL}?${query}`, {
         headers: { Accept: 'application/json' },
-        next: { revalidate: 24 * 60 * 60 },
+        next: { revalidate: FRANKFURTER_CACHE_TTL_S },
         signal: AbortSignal.timeout(5_000),
     })
     if (!response.ok) return undefined
@@ -160,7 +171,7 @@ async function fetchFrankfurterDirect(
         rate: parsed.rate,
         source: 'frankfurter',
         observedAt: observed.toISOString(),
-        expiresAt: new Date(observed.getTime() + FRANKFURTER_TTL_MS).toISOString(),
+        expiresAt: new Date(observed.getTime() + QUOTE_REFERENCE_MAX_AGE_MS).toISOString(),
     }
 }
 
