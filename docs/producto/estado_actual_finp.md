@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-25
+> Última actualización: 2026-08-30
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -309,7 +309,13 @@ elige el usuario.
 - balances y deudas independientes por moneda, con liquidaciones atómicas de
   varios componentes y tramos;
 - tira de cotizaciones, composición `Incluye…` y filtros combinables por moneda
-  original, pagada o de deuda.
+  original, pagada o de deuda;
+- alta de `Nuevo gasto` unificada entre portada y detalle sobre contrato v2,
+  dinero exacto por escala ISO, fecha civil, preview e idempotencia;
+- consumo privado de tarjeta ARS/USD en un pago por el total real, con parte
+  propia operacional y sin crear `InstallmentPlan`;
+- revisión final sin abreviar montos, bloqueo mientras calcula y edición que
+  preserva participantes históricos inactivos en su rol original.
 - clasificación cerrada de los 97 hallazgos críticos/altos, contratos internos
   de plan, run, issue, disposición y resolución, y estado público seguro de
   migración;
@@ -337,6 +343,24 @@ equivale todavía a un recorrido confiable de punta a punta:
 - mobile y desktop divergen en navegación, densidad y ubicación de acciones;
 - faltan estados de recuperación, foco y accesibilidad consistentes en flujos
   principales y secundarios.
+
+La etapa 1 de la auditoría específica de `Nuevo gasto` se implementó y verificó
+el 2026-08-30 en Chromium desktop y Pixel 7. Cerró tarjeta `1/1`, contrato v2
+único, dinero exacto, fecha civil, revisión vigente y preservación histórica.
+Permanecen estas brechas para las etapas 2 a 4:
+
+- el borrador usa almacenamiento de sesión, se pierde al cerrar y no aparece
+  como card privada en Movimientos;
+- la edición no tiene todavía la misma revisión financiera completa del alta;
+- los adjuntos se cargan después de confirmar el movimiento, con riesgo de
+  éxito parcial sin borrador recuperable;
+- carga, error, vacío, candidatos de transacción, foco, labels y stepper mobile
+  todavía no forman un recorrido accesible y coherente de punta a punta.
+
+Las resoluciones aprobadas viven en las decisiones
+[`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md) y
+[`0013`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
+Su secuencia de implementación está absorbida por FINP-P0-006 y FINP-P1-013.
 
 La caracterización de datos, actualizada mediante snapshot el 2026-08-25,
 confirmó:
@@ -382,6 +406,7 @@ FINP-P1-013 en [`roadmap_finp.md`](roadmap_finp.md).
 
 ### No disponible todavía
 
+- borrador privado persistente de nuevo gasto, listado sólo para su autor;
 - cuotas dentro de Espacios;
 - compromisos de Espacios;
 - reintegros avanzados;

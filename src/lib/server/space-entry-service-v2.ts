@@ -36,7 +36,7 @@ import {
     buildManualConversionSnapshot,
     resolveSpaceReferenceQuote,
 } from '@/lib/server/space-quote-service'
-import { assertMoneyDto, moneyToNumber, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
+import { moneyFromDecimal, moneyMatchesDecimal, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
 import type { ISpaceEntry, ISpaceParticipant, ITransaction } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
 
@@ -155,6 +155,7 @@ async function createPersonalImpactsForEntry(input: {
             entryType: input.entry.type,
             entryAmount: input.entry.amount,
             ownShareAmount,
+            currency: input.entry.currency,
             isPayer: extractId(input.entry.paidByParticipantId) === participantId,
         })
         if (amounts.action === 'none') continue
@@ -220,10 +221,14 @@ async function createPersonalImpactsForEntry(input: {
                 : amounts.ownShareAmount
             if (
                 !transaction ||
-                transaction.type !== expectedType ||
+                (transaction.type !== expectedType && !(
+                    expectedType === 'expense' && transaction.type === 'credit_card_expense'
+                )) ||
                 transaction.currency !== input.entry.currency ||
-                Math.abs(transaction.amount - expectedAmount) > 0.01 ||
-                Math.abs((transaction.operationalAmount ?? transaction.amount) - amounts.operationalAmount) > 0.01 ||
+                moneyFromDecimal(input.entry.currency, transaction.amount).minorUnits !==
+                    moneyFromDecimal(input.entry.currency, expectedAmount).minorUnits ||
+                moneyFromDecimal(input.entry.currency, transaction.operationalAmount ?? transaction.amount).minorUnits !==
+                    moneyFromDecimal(input.entry.currency, amounts.operationalAmount).minorUnits ||
                 financialDateKeyFromInstant(transaction.date, input.entry.timezone!) !== input.entry.dateKey
             ) {
                 throw new ServiceError(
@@ -396,8 +401,7 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 snapshot: conversionSnapshot,
             })
             if (input.money) {
-                const exact = assertMoneyDto(input.money)
-                if (exact.currency !== input.currency || moneyToNumber(exact) !== input.amount) {
+                if (!moneyMatchesDecimal(input.money, input.currency, input.amount)) {
                     throw new ServiceError(400, 'SPACE_MONEY_MISMATCH', 'El monto exacto no coincide con el movimiento.')
                 }
             }

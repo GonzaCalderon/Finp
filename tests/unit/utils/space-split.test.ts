@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { applySmartFixed, applySmartPercentage, round2 } from '@/lib/utils/space-split'
+import {
+    applySmartFixed,
+    applySmartPercentage,
+    round2,
+    sumCurrencyAmounts,
+} from '@/lib/utils/space-split'
 
 // ── round2 ────────────────────────────────────────────────────────────────────
 
@@ -9,6 +14,24 @@ describe('round2', () => {
         expect(round2(66.666666)).toBe(66.67)
         expect(round2(100)).toBe(100)
         expect(round2(0.005)).toBe(0.01)
+    })
+})
+
+describe('montos fijos por escala monetaria', () => {
+    it('respeta escalas 0 y 3 al calcular el residual', () => {
+        expect(applySmartFixed(['a', 'b'], [], 'a', 40.6, 100.6, 'JPY')).toEqual([
+            { participantId: 'a', amount: 41 },
+            { participantId: 'b', amount: 60 },
+        ])
+        expect(applySmartFixed(['a', 'b'], [], 'a', 0.3336, 1.2344, 'KWD')).toEqual([
+            { participantId: 'a', amount: 0.334 },
+            { participantId: 'b', amount: 0.9 },
+        ])
+    })
+
+    it('suma cada asignación en unidades menores antes de comparar', () => {
+        expect(sumCurrencyAmounts([50.4, 50.4], 'JPY')).toBe(100)
+        expect(sumCurrencyAmounts([0.333, 0.668], 'KWD')).toBe(1.001)
     })
 })
 

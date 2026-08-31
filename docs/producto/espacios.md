@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-08-25
+> Última actualización: 2026-08-30
 > Fuente de verdad: reglas funcionales y experiencia esperada de Espacios
 
 ## Índice
@@ -144,6 +144,10 @@ El flujo principal registra gastos compartidos. Cada movimiento conserva:
 - adjuntos y actividad;
 - versiones, edición y anulación lógica.
 
+El método de pago personal no forma parte del movimiento compartido. Cuenta,
+tarjeta, categoría personal y estado de su resumen pertenecen exclusivamente al
+impacto privado de cada usuario y nunca se exponen al Espacio.
+
 Repartos admitidos:
 
 - partes iguales;
@@ -220,6 +224,27 @@ Contrato exacto:
 - repetir la misma acción no crea otra transacción;
 - un fallo parcial no puede dejar una transacción huérfana ni un vínculo sin
   transacción.
+
+### Gasto pagado con tarjeta en un pago
+
+Si el usuario autenticado es el pagador, puede elegir una tarjeta propia para
+registrar su impacto personal. El movimiento del Espacio sigue siendo un gasto
+compartido común; Mi Finp crea un `credit_card_expense` privado sin
+`InstallmentPlan`:
+
+- el cargo real de la tarjeta es el total pagado;
+- el gasto operacional es la parte propia vigente;
+- la diferencia positiva es adelanto recuperable, no gasto;
+- el pago total o parcial de la tarjeta reduce su pendiente por período y
+  moneda, sin modificar el gasto histórico ni el balance del Espacio;
+- el día financiero coincide con el `dateKey` civil del movimiento;
+- sólo se ofrecen tarjetas propias en ARS o USD, que son las monedas vigentes de
+  Mi Finp; no existe conversión implícita desde otra moneda del Espacio.
+
+Este recorrido es exclusivamente `1/1`: no muestra ni acepta cantidad de cuotas.
+Las cuotas en Espacios requieren un contrato futuro separado. La decisión
+completa vive en
+[`0012 — Gasto de Espacio pagado con tarjeta en un pago`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
 
 Estados privados relevantes:
 
@@ -329,7 +354,37 @@ El recorrido principal usa tres decisiones breves:
 
 La categoría, los adjuntos y las opciones infrecuentes son progresivos. La
 confirmación permanece visible sobre la `safe area`, conserva el borrador ante
-errores y lleva al primer campo inválido.
+errores y lleva al primer campo inválido. El preview no presenta ausencia como
+error mientras todavía calcula y la revisión final nunca abrevia el monto que
+se va a confirmar.
+
+Crear desde la portada o desde el detalle del Espacio invoca el mismo contrato
+v2, con dinero exacto, `dateKey`, revisión esperada, cotizaciones e idempotencia.
+No existe una variante rápida que envíe un payload legacy o omita la preview.
+
+### Borrador personal persistente
+
+Cada usuario puede tener un solo borrador activo de nuevo gasto por Espacio. Se
+persiste como recurso privado separado del movimiento y sobrevive al cierre del
+diálogo, navegación, sesión y cambio de dispositivo.
+
+- Movimientos lo muestra únicamente a su autor, con etiqueta `Borrador`, última
+  edición y acción `Continuar`;
+- abrir `Nuevo gasto` reanuda el borrador activo; descartarlo exige confirmación
+  antes de comenzar otro;
+- guardado, preview y publicación comparten el contrato v2 y la misma escala de
+  moneda;
+- hasta publicarse no crea actividad, balances, deuda, impacto personal,
+  pendiente ni notificación;
+- los adjuntos permanecen privados y asociados al borrador hasta que una
+  publicación exitosa los relacione con el movimiento;
+- publicar valida la última revisión y es atómico e idempotente; un fallo
+  conserva el borrador y sus adjuntos para reintentar.
+
+El diálogo comunica `Guardando…`, `Guardado` y `No se pudo guardar`, conserva
+los cambios locales recuperables y resuelve conflictos entre clientes sin
+sobrescribir una versión más nueva. La decisión completa vive en
+[`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 
 ### Detalle y liquidación
 
@@ -352,6 +407,12 @@ Cada recorrido cubre:
 - éxito que describa el resultado financiero;
 - confirmación y recuperación para edición, anulación, cierre, cambio de rol y
   remoción de Mi Finp.
+
+En el alta guiada, la preview distingue `calculando`, `disponible`, `incompleta`
+y `error`; sólo el último comunica un fallo. La edición usa la misma preview
+financiera antes de confirmar. Crear una transacción personal o vincular una
+existente son intenciones excluyentes y sólo se ofrecen candidatos que el
+servidor pueda validar.
 
 Requisitos transversales:
 
@@ -459,6 +520,11 @@ aislamiento por usuario y Espacio. La matriz mínima incluye:
 - pagador que adelanta por otras personas;
 - participante que debe su parte pero no pagó;
 - pagador con parte propia cero y adelanto recuperable;
+- pagador con tarjeta ARS y USD, total real distinto de la parte propia y sin
+  `InstallmentPlan`;
+- pago parcial y total de esa tarjeta sin alterar el gasto ni el balance del
+  Espacio;
+- rechazo temprano de tarjeta incompatible y de cualquier cantidad de cuotas;
 - no pagador con parte propia cero y sin acción financiera;
 - reparto igual, único, porcentual y por monto;
 - liquidación parcial y total iniciada desde Espacios y desde Deudas;
@@ -473,7 +539,13 @@ aislamiento por usuario y Espacio. La matriz mínima incluye:
 - deudas independientes por moneda y pagos sólo ARS, sólo USD y ARS+USD;
 - composición, filtros y revaluación de posiciones abiertas;
 - permisos, aislamiento, carga, vacío, error, recuperación y accesibilidad
-  básica.
+  básica;
+- borrador único que sobrevive a cierre, sesión y cambio de dispositivo, sólo
+  visible al autor y reemplazado por un único movimiento al publicar;
+- autosave fallido, conflicto entre clientes, adjunto recuperable, descarte y
+  limpieza idempotente;
+- fecha civil y monto exacto iguales en cada paso, preview y resultado final;
+- edición histórica con participantes inactivos preservados.
 
 Las cuentas deben reflejar dinero real; Dashboard y reportes, gasto operacional
 propio; Espacios y Deudas, saldos derivados coherentes. Las cuatro lecturas se
@@ -492,13 +564,17 @@ Decisiones consolidadas:
   cada gasto;
 - un Espacio usa deuda directa o simplificada, no ambas a la vez;
 - adjuntos y datos privados requieren autenticación y autorización;
-- edición y anulación conservan historia y disparan revisión cuando corresponde.
+- edición y anulación conservan historia y disparan revisión cuando corresponde;
+- una tarjeta privada registra un consumo `1/1` por el total real y reporting
+  por la parte propia, sin crear un plan de cuotas;
+- el borrador de nuevo gasto es privado, persistente y no tiene efectos
+  compartidos antes de publicarse;
 - la deuda conserva autoridad por moneda y toda conversión aplicada tiene un
   snapshot explícito;
 - el cutover es por Espacio, falla cerrado y exige rollback exacto antes de
-  retirar su fallback legacy;
+  retirar su fallback legacy.
 
-Cuotas, compromisos, realtime, slugs, reintegros y otras extensiones se
+Cuotas múltiples, compromisos, realtime, slugs, reintegros y otras extensiones se
 priorizan únicamente en [`roadmap_finp.md`](roadmap_finp.md). No se amplía el
 dominio hasta estabilizar exactitud, recorridos principales y coordinación con
 Mi Finp y Deudas.

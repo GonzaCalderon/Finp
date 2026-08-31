@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-08-25
+> Última actualización: 2026-08-30
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -179,6 +179,7 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Regla | `TransactionRule` | Servicio compartido resuelve coincidencia y acciones. |
 | Aprendizaje | perfil, eventos, alias y control de patrones | Menor autoridad que entrada explícita y reglas. |
 | Espacio | `Space`, participantes y `SpaceEntry` | En contrato v2, el movimiento contiene sólo contexto compartido, dinero exacto, día financiero y snapshots. La moneda de reporte no reemplaza la original. |
+| Borrador de movimiento de Espacio | `SpaceEntryDraft` | Recurso privado del autor, separado de `SpaceEntry`; no participa en balances ni actividad hasta publicarse. Diseñado en 0013, pendiente de implementación. |
 | Impacto personal | `SpaceEntryPersonalImpact` | Privado por usuario; parte propia, impacto real y operacional son magnitudes explícitas. No usar estado global `linked`. |
 | Deuda | `Debt` + `DebtMovement` | Manual o derivada; el ledger de Espacios por moneda manda sobre la derivada. El dinero pagado y el aplicado se conservan separados y no tienen impacto operacional. |
 | Notificación | `Notification` | Información y presentación. |
@@ -240,6 +241,25 @@ En desarrollo, Mongoose puede conservar modelos compilados. Al agregar campos se
 
 Los adjuntos persistentes usan Vercel Blob. La base conserva metadata y relación, no el archivo binario.
 
+Los adjuntos de un nuevo gasto de Espacio se preparan bajo la identidad privada
+del borrador. La metadata cambia a la relación confirmada sólo cuando la
+publicación crea el movimiento; un fallo conserva el borrador recuperable y un
+descarte limpia la relación de forma idempotente. La descarga autoriza al autor
+antes de publicar y aplica los permisos del movimiento después.
+
+### Borrador privado de movimiento de Espacio
+
+FINP-P1-013 incorporará `SpaceEntryDraft` con índice único parcial para un
+borrador `active` por `creatorUserId + spaceId + intent`. El recurso usa el mismo
+contrato v2 de dinero, fecha, reparto y cotizaciones, pero admite campos
+incompletos y agrega `revision` para concurrencia optimista.
+
+Las rutas de borrador filtran siempre por autor y Espacio. Listar Movimientos
+compone su card privada sólo para ese autor; no consulta ni serializa borradores
+de otros participantes. `owner` y `admin` no adquieren acceso por su rol. Los
+estados terminales `published` y `discarded` impiden reactivación o segunda
+publicación.
+
 ### Fechas
 
 - Guardar fechas de forma consistente.
@@ -263,6 +283,18 @@ escrituras financieras se confirman en la misma sesión MongoDB. Un reintento co
 la misma carga devuelve las referencias confirmadas; la misma clave con otra
 carga produce conflicto. Alta, edición, anulación, impacto personal, liquidación,
 deuda, actividad y pendientes no usan compensación manual.
+
+Publicar un `SpaceEntryDraft` reutiliza ese ejecutor con una clave estable del
+borrador y la última `revision` esperada. Movimiento, impacto privado,
+transacción, balances, deuda, actividad y cierre del borrador se confirman en la
+misma sesión. Preparar el binario en Blob no confirma el movimiento; si la sesión
+falla, el borrador y su metadata siguen disponibles para reintentar.
+
+Cuando el pagador registra una tarjeta propia, la transacción privada es
+`credit_card_expense`, `amount` conserva el total real y `operationalAmount` la
+parte propia. No crea `InstallmentPlan`; los pagos de tarjeta reducen el resumen
+derivado por tarjeta, período y moneda. Tarjeta, cuenta y estado del resumen no
+se copian a `SpaceEntry`.
 
 Las notificaciones son presentación posterior al commit: se derivan de impactos
 `pending` o `needs_review`, admiten reconciliación observable y no repiten la
@@ -324,6 +356,8 @@ No confiar en IDs enviados por cliente sin comprobar propiedad.
 
 - El cliente recibe sólo datos necesarios.
 - Datos personales de un participante no se exponen al Espacio.
+- Un borrador y sus adjuntos sólo son legibles por su autor; los roles del
+  Espacio no conceden acceso a contenido incompleto privado.
 - Telemetría de aprendizaje evita frase, monto, fecha y notas.
 - Tokens de invitación se almacenan hasheados.
 - Errores y logs no incluyen secretos ni datos financieros libres.
@@ -342,7 +376,11 @@ Reglas:
 - conservar borradores ante errores recuperables;
 - no guardar datos financieros sensibles en URLs.
 
-Los borradores entre funciones usan `sessionStorage`, versión y un ID opaco en la URL.
+Los handoffs efímeros entre funciones usan `sessionStorage`, versión y un ID
+opaco en la URL. El borrador de nuevo gasto de Espacio es una excepción
+deliberada: persistirá en servidor mediante `SpaceEntryDraft` porque debe
+sobrevivir a sesión y dispositivo, aparecer sólo al autor en Movimientos y
+coordinar adjuntos y publicación idempotente.
 
 ## 13. Errores y observabilidad
 

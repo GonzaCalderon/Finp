@@ -17,6 +17,7 @@ import {
     adaptSpaceEntryDtoForUi,
     clientDateToDateKey,
 } from '@/lib/client/space-api-adapter'
+import { moneyFromDecimal } from '@/lib/utils/money'
 
 export type SpaceMovementFilters = {
     type?: string
@@ -26,10 +27,14 @@ export type SpaceMovementFilters = {
     debtCurrencies?: string[]
 }
 
+export type SpaceEntryCreateContext = Pick<SpaceDetailDto, 'sourceContract' | 'currentUserId'> & {
+    space: Pick<SpaceDetailDto['space'], 'id' | 'revision' | 'reportingCurrency'>
+}
+
 export function useSpaceEntries(
     spaceId?: string,
     filters: SpaceMovementFilters = {},
-    spaceApi?: SpaceDetailDto,
+    spaceApi?: SpaceEntryCreateContext,
     quotes?: SpaceQuotesDto | null
 ) {
     const originalCurrenciesKey = (filters.originalCurrencies ?? []).join(',')
@@ -131,6 +136,7 @@ export function useSpaceEntries(
                 title: body.title,
                 description: body.description,
                 amount: body.amount,
+                money: moneyFromDecimal(body.currency, body.amount),
                 currency: body.currency,
                 exchangeRate: body.exchangeRate,
                 exchangeRateDecimal: quote?.rate,

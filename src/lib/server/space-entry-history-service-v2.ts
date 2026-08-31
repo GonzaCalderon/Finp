@@ -29,6 +29,7 @@ import { extractId } from '@/lib/utils/spaces'
 import type { ISpace, ISpaceEntry, ISpaceParticipant } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
 import { buildManualConversionSnapshot } from '@/lib/server/space-quote-service'
+import { moneyMatchesDecimal, type MoneyDto } from '@/lib/utils/money'
 
 export interface EditSpaceEntryV2Input {
     actorUserId: string
@@ -39,6 +40,7 @@ export interface EditSpaceEntryV2Input {
     title: string
     description?: string
     amount: number
+    money?: MoneyDto
     currency: string
     exchangeRate?: number
     dateKey: string
@@ -151,6 +153,7 @@ async function reconcileImpactsForChangedEntry(input: {
             entryType: input.entry.type,
             entryAmount: input.entry.amount,
             ownShareAmount,
+            currency: input.entry.currency,
             isPayer: extractId(input.entry.paidByParticipantId) === participantId,
         })
 
@@ -292,10 +295,21 @@ export async function editSpaceEntryV2(input: EditSpaceEntryV2Input) {
                 throw new ServiceError(400, 'SPACE_CURRENCY_UNSUPPORTED', 'La moneda no está habilitada.')
             }
             const activeIds = new Set(context.participants.filter((participant) => participant.isActive).map((participant) => extractId(participant._id)))
+            const historicalPayerId = extractId(current.paidByParticipantId)
+            const historicalSharedIds = new Set(
+                (current.sharedWithParticipantIds ?? []).map((participantId) => extractId(participantId))
+            )
             const payerId = requireObjectId(input.paidByParticipantId)
             const sharedIds = input.sharedWithParticipantIds.map((id) => requireObjectId(id))
-            if (!activeIds.has(payerId) || sharedIds.some((id) => !activeIds.has(id))) {
-                throw new ServiceError(409, 'SPACE_PARTICIPANT_INACTIVE', 'El nuevo reparto sólo admite participantes activos.')
+            if (
+                (!activeIds.has(payerId) && payerId !== historicalPayerId) ||
+                sharedIds.some((id) => !activeIds.has(id) && !historicalSharedIds.has(id))
+            ) {
+                throw new ServiceError(
+                    409,
+                    'SPACE_PARTICIPANT_INACTIVE',
+                    'Sólo podés conservar participantes históricos inactivos; no agregarlos a un reparto nuevo.'
+                )
             }
             await validateCategory(input.spaceId, input.spaceCategoryId, session)
             const dateKey = normalizeFinancialDateKey(input.dateKey)
@@ -316,6 +330,11 @@ export async function editSpaceEntryV2(input: EditSpaceEntryV2Input) {
                 exchangeRateDecimal: conversionSnapshot?.rate,
                 snapshot: conversionSnapshot,
             })
+            if (input.money) {
+                if (!moneyMatchesDecimal(input.money, input.currency, input.amount)) {
+                    throw new ServiceError(400, 'SPACE_MONEY_MISMATCH', 'El monto exacto no coincide con el movimiento.')
+                }
+            }
             calculateSpaceSharesV2({
                 amount: input.amount,
                 reportingAmount: conversion.reportingAmount,
@@ -351,7 +370,7 @@ export async function editSpaceEntryV2(input: EditSpaceEntryV2Input) {
                         currency: input.currency,
                         reportingAmount: conversion.reportingAmount,
                         exchangeRate: conversion.exchangeRate,
-                        originalMoney: conversion.originalMoney,
+                        originalMoney: input.money ?? conversion.originalMoney,
                         reportingMoney: conversion.reportingMoney,
                         conversionSnapshot,
                         date,

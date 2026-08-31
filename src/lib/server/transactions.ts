@@ -592,6 +592,7 @@ export async function createInternalSpaceTransaction(
     const sourceAccountId = 'sourceAccountId' in input ? input.sourceAccountId : undefined
     const destinationAccountId = 'destinationAccountId' in input ? input.destinationAccountId : undefined
     const accountId = sourceAccountId ?? destinationAccountId
+    let accountType: IAccount['type'] | undefined
     if (accountId) {
         const account = await Account.findOne({ _id: accountId, userId: input.userId }).session(session)
         if (!account) {
@@ -600,12 +601,17 @@ export async function createInternalSpaceTransaction(
         if (account.isActive === false) {
             throw new ServiceError(400, 'ACCOUNT_INACTIVE', 'La cuenta seleccionada está inactiva.')
         }
-        if (!isSimpleTransactionAccountType(account.type)) {
+        const isSpaceCardExpense =
+            account.type === 'credit_card' &&
+            sourceAccountId === accountId &&
+            (input.variant === 'payer_expense' || input.variant === 'advance')
+        if (!isSimpleTransactionAccountType(account.type) && !isSpaceCardExpense) {
             throw new ServiceError(400, 'SPECIAL_ACCOUNT_REQUIRES_FULL_FLOW', 'La cuenta seleccionada requiere otro flujo.')
         }
         if (!supportsCurrency(account, input.currency)) {
             throw new ServiceError(400, 'SPACE_ACCOUNT_CURRENCY_UNSUPPORTED', 'La cuenta no opera en la moneda del impacto.')
         }
+        accountType = account.type
     }
 
     if (input.categoryId) {
@@ -619,7 +625,9 @@ export async function createInternalSpaceTransaction(
         ? 'personal_debt_payment'
         : input.variant === 'settlement_received'
             ? 'personal_debt_collect'
-            : 'expense'
+            : accountType === 'credit_card'
+                ? 'credit_card_expense'
+                : 'expense'
     const [transaction] = await Transaction.create([{
         userId: input.userId,
         type,

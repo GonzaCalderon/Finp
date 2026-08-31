@@ -571,12 +571,14 @@ export function SpaceAmountInline({
     hidden,
     className,
     color,
+    exact = false,
 }: {
     amount: number
     currency: string
     hidden: boolean
     className?: string
     color?: string
+    exact?: boolean
 }) {
     return (
         <ResponsiveAmount
@@ -585,6 +587,7 @@ export function SpaceAmountInline({
             hidden={hidden}
             className={className}
             color={color}
+            abbreviateOnMobile={!exact}
         />
     )
 }

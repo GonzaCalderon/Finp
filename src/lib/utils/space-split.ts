@@ -3,8 +3,39 @@
  * Extracted from SpaceSplitConfigurator for testability.
  */
 
+import { moneyFromDecimal, moneyToNumber } from '@/lib/utils/money'
+
 export function round2(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+export function roundCurrency(value: number, currency: string): number {
+    try {
+        return moneyToNumber(moneyFromDecimal(currency, value))
+    } catch {
+        return round2(value)
+    }
+}
+
+export function currencyAmountsEqual(left: number, right: number, currency: string): boolean {
+    try {
+        return moneyFromDecimal(currency, left).minorUnits === moneyFromDecimal(currency, right).minorUnits
+    } catch {
+        return Math.abs(left - right) <= 0.01
+    }
+}
+
+export function sumCurrencyAmounts(amounts: number[], currency: string): number {
+    try {
+        const zero = moneyFromDecimal(currency, 0)
+        const minorUnits = amounts.reduce(
+            (sum, amount) => sum + BigInt(moneyFromDecimal(currency, amount).minorUnits),
+            BigInt(0)
+        )
+        return moneyToNumber({ ...zero, minorUnits: minorUnits.toString() })
+    } catch {
+        return round2(amounts.reduce((sum, amount) => sum + amount, 0))
+    }
 }
 
 export interface PercentageAllocation {
@@ -89,7 +120,8 @@ export function applySmartFixed(
     currentAllocations: FixedAllocation[],
     editedId: string,
     rawValue: number,
-    totalAmount: number
+    totalAmount: number,
+    currency = 'ARS'
 ): FixedAllocation[] | null {
     const count = participantIds.length
     if (count === 0) return null
@@ -98,7 +130,7 @@ export function applySmartFixed(
     if (index < 0) return null
 
     if (count === 1) {
-        return [{ participantId: editedId, amount: round2(totalAmount) }]
+        return [{ participantId: editedId, amount: roundCurrency(totalAmount, currency) }]
     }
 
     const current = participantIds.map((id) => ({
@@ -107,30 +139,30 @@ export function applySmartFixed(
     }))
 
     if (count === 2) {
-        const clamped = round2(Math.max(0, Math.min(totalAmount, rawValue)))
+        const clamped = roundCurrency(Math.max(0, Math.min(totalAmount, rawValue)), currency)
         const otherIndex = index === 0 ? 1 : 0
         return participantIds.map((id, i) => ({
             participantId: id,
-            amount: i === index ? clamped : i === otherIndex ? round2(totalAmount - clamped) : 0,
+            amount: i === index ? clamped : i === otherIndex ? roundCurrency(totalAmount - clamped, currency) : 0,
         }))
     }
 
     // 3+ participants: last slot is residual, not directly editable
     if (index === count - 1) return null
 
-    const upperSum = round2(current.slice(0, index).reduce((acc, item) => acc + item.amount, 0))
-    const maxAllowed = round2(Math.max(0, totalAmount - upperSum))
-    const clamped = round2(Math.max(0, Math.min(maxAllowed, rawValue)))
-    const remaining = round2(totalAmount - upperSum - clamped)
+    const upperSum = roundCurrency(current.slice(0, index).reduce((acc, item) => acc + item.amount, 0), currency)
+    const maxAllowed = roundCurrency(Math.max(0, totalAmount - upperSum), currency)
+    const clamped = roundCurrency(Math.max(0, Math.min(maxAllowed, rawValue)), currency)
+    const remaining = roundCurrency(totalAmount - upperSum - clamped, currency)
     const lowerCount = count - index - 1
-    const lowerBase = lowerCount > 0 ? round2(remaining / lowerCount) : 0
+    const lowerBase = lowerCount > 0 ? roundCurrency(remaining / lowerCount, currency) : 0
     let lowerAssigned = 0
 
     return current.map((item, i) => {
         if (i < index) return item
         if (i === index) return { ...item, amount: clamped }
-        if (i === count - 1) return { ...item, amount: round2(remaining - lowerAssigned) }
-        lowerAssigned = round2(lowerAssigned + lowerBase)
+        if (i === count - 1) return { ...item, amount: roundCurrency(remaining - lowerAssigned, currency) }
+        lowerAssigned = roundCurrency(lowerAssigned + lowerBase, currency)
         return { ...item, amount: lowerBase }
     })
 }

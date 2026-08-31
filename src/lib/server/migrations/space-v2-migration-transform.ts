@@ -224,6 +224,7 @@ async function transformImpacts(input: {
                 entryType: entry.type,
                 entryAmount: entry.amount,
                 ownShareAmount: share,
+                currency: entry.currency,
                 isPayer: entry.paidByParticipantId === participantId,
                 isReceiver: entry.type === 'settlement' && entry.sharedWithParticipantIds[0] === participantId,
             })

@@ -7,7 +7,16 @@ import { SpaceDialogChoice, SpaceDialogField, SpaceDialogPanel, SpaceDialogSecti
 import { Input } from '@/components/ui/input'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { SPACE_ROLE_LABELS, extractId } from '@/lib/utils/spaces'
-import { applySmartFixed, applySmartPercentage, round2 } from '@/lib/utils/space-split'
+import {
+    applySmartFixed,
+    applySmartPercentage,
+    currencyAmountsEqual,
+    round2,
+    roundCurrency,
+    sumCurrencyAmounts,
+} from '@/lib/utils/space-split'
+import { calculateSpaceSharesV2 } from '@/lib/utils/space-financial-v2'
+import { getCurrencyScale } from '@/lib/constants/iso-currencies'
 import { cn } from '@/lib/utils'
 import type { ISpaceParticipant } from '@/types'
 import type { SpaceEntryFormData } from '@/lib/validations'
@@ -24,6 +33,14 @@ function getPercentage(allocations: SpaceEntryFormData['splitAllocations'], part
 
 function getAmount(allocations: SpaceEntryFormData['splitAllocations'], participantId: string) {
     return allocations?.find((item) => item.participantId === participantId)?.amount ?? 0
+}
+
+function formatAmount(value: number, currency: string) {
+    const scale = getCurrencyScale(currency) ?? 2
+    return value.toLocaleString('es-AR', {
+        minimumFractionDigits: scale,
+        maximumFractionDigits: scale,
+    })
 }
 
 function resolvePreviewValue({
@@ -94,22 +111,41 @@ export function SpaceSplitPreviewBar({
 
     const paidByParticipant = participants.find((p) => getParticipantId(p) === paidByParticipantId)
     const responsibleParticipant = selectedParticipants[0]
+    const exactShares = useMemo(() => {
+        try {
+            return new Map(calculateSpaceSharesV2({
+                amount,
+                reportingAmount: amount,
+                currency,
+                reportingCurrency: currency,
+                splitMode,
+                participantIds: splitMode === 'none'
+                    ? responsibleParticipantId ? [responsibleParticipantId] : []
+                    : selectedParticipantIds,
+                allocations,
+            }).map((share) => [share.participantId, share.amount]))
+        } catch {
+            return new Map<string, number>()
+        }
+    }, [allocations, amount, currency, responsibleParticipantId, selectedParticipantIds, splitMode])
 
     const configuredTotal =
         splitMode === 'percentage'
             ? round2((allocations ?? []).reduce((acc, item) => acc + (item.percentage ?? 0), 0))
             : splitMode === 'fixed'
-                ? round2((allocations ?? []).reduce((acc, item) => acc + (item.amount ?? 0), 0))
+                ? sumCurrencyAmounts((allocations ?? []).map((item) => item.amount ?? 0), currency)
                 : 100
 
     const difference =
         splitMode === 'percentage'
             ? round2(configuredTotal - 100)
             : splitMode === 'fixed'
-                ? round2(configuredTotal - amount)
+                ? roundCurrency(configuredTotal - amount, currency)
                 : 0
 
-    const complete = Math.abs(difference) < 0.01
+    const complete = splitMode === 'fixed'
+        ? currencyAmountsEqual(configuredTotal, amount, currency)
+        : Math.abs(difference) < 0.01
 
     const statusLabel =
         splitMode === 'none' && responsibleParticipant
@@ -121,8 +157,8 @@ export function SpaceSplitPreviewBar({
                 ? complete
                     ? 'Reparto completo'
                     : difference < 0
-                        ? `Falta asignar ${currency} ${Math.abs(difference).toFixed(2)}`
-                        : `Excede ${currency} ${difference.toFixed(2)}`
+                        ? `Falta asignar ${currency} ${formatAmount(Math.abs(difference), currency)}`
+                        : `Excede ${currency} ${formatAmount(difference, currency)}`
                 : complete
                     ? 'Reparto completo: 100%'
                     : difference < 0
@@ -138,7 +174,7 @@ export function SpaceSplitPreviewBar({
                 </div>
                 <SpaceTonePill positive={complete}>
                     {splitMode === 'fixed'
-                        ? `${configuredTotal.toFixed(2)} ${currency}`
+                        ? `${formatAmount(configuredTotal, currency)} ${currency}`
                         : `${configuredTotal.toFixed(2)}%`}
                 </SpaceTonePill>
             </div>
@@ -176,19 +212,23 @@ export function SpaceSplitPreviewBar({
                         selectedParticipantIds,
                         allocations,
                     })
+                    const previewAmount = exactShares.get(participantId) ?? preview.amount
                     return (
                         <div key={participantId} className="flex items-center justify-between gap-3 text-sm">
                             <div className="flex min-w-0 items-center gap-2">
                                 <SpaceInitialsAvatar name={participant.displayName} className="h-7 w-7 text-[10px]" />
                                 <div className="min-w-0">
-                                    <p className="truncate font-medium text-foreground">{participant.displayName}</p>
+                                    <p className="truncate font-medium text-foreground">
+                                        {participant.displayName}{!participant.isActive ? ' · inactivo' : ''}
+                                    </p>
                                     <p className="text-xs text-muted-foreground">{preview.percentage.toFixed(2)}%</p>
                                 </div>
                             </div>
                             <SpaceAmountInline
-                                amount={preview.amount}
+                                amount={previewAmount}
                                 currency={currency}
                                 hidden={false}
+                                exact
                                 className="shrink-0 text-sm font-semibold"
                             />
                         </div>
@@ -241,14 +281,14 @@ export function SpaceSplitConfigurator({
         splitMode === 'percentage'
             ? round2((allocations ?? []).reduce((acc, item) => acc + (item.percentage ?? 0), 0))
             : splitMode === 'fixed'
-                ? round2((allocations ?? []).reduce((acc, item) => acc + (item.amount ?? 0), 0))
+                ? roundCurrency((allocations ?? []).reduce((acc, item) => acc + (item.amount ?? 0), 0), currency)
                 : 100
 
     const splitInvalid =
         splitMode === 'percentage'
             ? Math.abs(configuredTotal - 100) > 0.01
             : splitMode === 'fixed'
-                ? Math.abs(configuredTotal - amount) > 0.01
+                ? !currencyAmountsEqual(configuredTotal, amount, currency)
                 : false
 
     const applyPreset = (preset: SpaceEntryFormData['splitMode']) => {
@@ -301,7 +341,8 @@ export function SpaceSplitConfigurator({
             currentAllocations,
             participantId,
             rawValue,
-            amount
+            amount,
+            currency
         )
         if (!result) return
 
@@ -391,7 +432,9 @@ export function SpaceSplitConfigurator({
                                                     {participant.displayName}
                                                 </p>
                                                 <p className="text-xs text-muted-foreground">
-                                                    {SPACE_ROLE_LABELS[participant.role]}
+                                                    {participant.isActive
+                                                        ? SPACE_ROLE_LABELS[participant.role]
+                                                        : 'Inactivo · sólo historial'}
                                                 </p>
                                             </div>
                                         </div>
@@ -443,8 +486,10 @@ export function SpaceSplitConfigurator({
                                                     <p className="truncate font-medium text-foreground">
                                                         {participant.displayName}
                                                     </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {SPACE_ROLE_LABELS[participant.role]}
+                                                <p className="text-xs text-muted-foreground">
+                                                    {participant.isActive
+                                                        ? SPACE_ROLE_LABELS[participant.role]
+                                                        : 'Inactivo · sólo historial'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -570,7 +615,7 @@ export function SpaceSplitConfigurator({
                 {splitInvalid ? (
                     <p className="rounded-[18px] border border-destructive/15 bg-destructive/5 px-3 py-2 text-sm text-destructive">
                         {splitMode === 'fixed'
-                            ? `El reparto tiene que cerrar en ${currency} ${amount.toFixed(2)} antes de guardar.`
+                            ? `El reparto tiene que cerrar en ${currency} ${formatAmount(amount, currency)} antes de guardar.`
                             : 'El reparto tiene que cerrar en 100% antes de guardar.'}
                     </p>
                 ) : null}

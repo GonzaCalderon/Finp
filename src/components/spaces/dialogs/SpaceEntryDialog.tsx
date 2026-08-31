@@ -26,7 +26,7 @@ import {
 } from '@/lib/client/data-sync'
 import { spaceEntryEditSchema, spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
-import type { AccountType } from '@/lib/constants'
+import type { AccountType, Currency } from '@/lib/constants'
 import type {
     IAccount,
     ICategory,
@@ -62,7 +62,6 @@ import {
 } from '@/components/spaces/SpaceUi'
 import {
     DialogProps,
-    formatDateInput,
     SpaceDialogField,
     SpaceDialogPanel,
     SpaceDialogSectionEyebrow,
@@ -76,7 +75,9 @@ import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitCo
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { CurrencySelector } from '@/components/shared/CurrencySelector'
-import { clientDateToDateKey } from '@/lib/client/space-api-adapter'
+import { clientDateToDateKey, dateKeyToClientDate } from '@/lib/client/space-api-adapter'
+import { moneyFromDecimal } from '@/lib/utils/money'
+import { supportsCurrency } from '@/lib/utils/accounts'
 
 // ── Account type helpers ──────────────────────────────────────────────────────
 
@@ -101,6 +102,13 @@ function getAccountTypeMeta(type: AccountType): { label: string; icon: LucideIco
 
 type EntryDraftPayload = Omit<SpaceEntryFormData, 'date'> & {
     date: string
+}
+
+function parseDraftDate(value: string, fallback: Date) {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? dateKeyToClientDate(value)
+        : new Date(value)
+    return Number.isNaN(date.getTime()) ? fallback : date
 }
 
 function buildDefaultSplitAllocations(
@@ -258,7 +266,7 @@ function sanitizeDraft({
             type: 'expense',
             amount: typeof parsed.amount === 'number' && Number.isFinite(parsed.amount) ? parsed.amount : defaults.amount,
             currency: parsed.currency ?? defaults.currency,
-            date: parsed.date ? new Date(parsed.date) : defaults.date,
+            date: parsed.date ? parseDraftDate(parsed.date, defaults.date) : defaults.date,
             paidByParticipantId:
                 parsed.paidByParticipantId && activeParticipantIds.has(parsed.paidByParticipantId)
                     ? parsed.paidByParticipantId
@@ -286,6 +294,21 @@ function revokeAttachment(attachment: SpaceAttachmentDraft) {
     if (attachment.previewUrl) {
         URL.revokeObjectURL(attachment.previewUrl)
     }
+}
+
+function formatFinancialDate(date: Date) {
+    return new Intl.DateTimeFormat('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(date)
+}
+
+function formatFinancialAmount(currency: string, amount: number) {
+    return new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency,
+    }).format(amount)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -329,12 +352,42 @@ export function SpaceEntryDialog({
 }) {
     const { categories } = useSpaceCategories(spaceId)
     const { categories: personalCategories } = useCategories()
-    const { accounts } = useAccounts()
+    const { accounts, loading: accountsLoading } = useAccounts()
     const { success, warning } = useToast()
 
     const activeParticipants = useMemo(
         () => participants.filter((participant) => participant.isActive),
         [participants]
+    )
+    const historicalPayerId = extractId(initialData?.paidByParticipantId)
+    const historicalSharedParticipantIds = useMemo(() => new Set([
+        ...(initialData?.sharedWithParticipantIds ?? []).map((participantId) => extractId(participantId)),
+        ...(initialData?.splitAllocations ?? []).map((allocation) => extractId(allocation.participantId)),
+    ].filter((participantId): participantId is string => Boolean(participantId))), [initialData])
+    const historicalParticipantIds = useMemo(() => new Set([
+        historicalPayerId,
+        ...historicalSharedParticipantIds,
+    ].filter((participantId): participantId is string => Boolean(participantId))), [
+        historicalPayerId,
+        historicalSharedParticipantIds,
+    ])
+    const availableParticipants = useMemo(
+        () => participants.filter((participant) =>
+            participant.isActive || historicalParticipantIds.has(extractId(participant._id) ?? '')
+        ),
+        [historicalParticipantIds, participants]
+    )
+    const payerParticipants = useMemo(
+        () => participants.filter((participant) =>
+            participant.isActive || extractId(participant._id) === historicalPayerId
+        ),
+        [historicalPayerId, participants]
+    )
+    const splitParticipants = useMemo(
+        () => participants.filter((participant) =>
+            participant.isActive || historicalSharedParticipantIds.has(extractId(participant._id) ?? '')
+        ),
+        [historicalSharedParticipantIds, participants]
     )
 
     const [form, setForm] = useState<SpaceEntryFormData>(
@@ -396,7 +449,7 @@ export function SpaceEntryDialog({
 
         // Edit mode: pre-populate form from initialData
         if (mode === 'edit' && initialData) {
-            const activeIds = new Set(activeParticipants.map((p) => extractId(p._id) ?? ''))
+            const knownIds = new Set(availableParticipants.map((p) => extractId(p._id) ?? ''))
             setForm({
                 type: 'expense',
                 title: initialData.title,
@@ -404,12 +457,16 @@ export function SpaceEntryDialog({
                 amount: initialData.amount,
                 currency: initialData.currency,
                 exchangeRate: initialData.exchangeRate,
-                date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
+                date: initialData.dateKey
+                    ? dateKeyToClientDate(initialData.dateKey)
+                    : initialData.date instanceof Date
+                        ? initialData.date
+                        : new Date(initialData.date),
                 spaceCategoryId: extractId(initialData.spaceCategoryId) ?? undefined,
                 paidByParticipantId: extractId(initialData.paidByParticipantId) ?? undefined,
                 sharedWithParticipantIds: (initialData.sharedWithParticipantIds ?? [])
                     .map((id) => extractId(id) ?? '')
-                    .filter((id) => id && activeIds.has(id)),
+                    .filter((id) => id && knownIds.has(id)),
                 splitMode: spaceMode === 'solo' ? 'none' : initialData.splitMode,
                 splitAllocations: (initialData.splitAllocations ?? [])
                     .map((a) => ({
@@ -458,6 +515,7 @@ export function SpaceEntryDialog({
         })
     }, [
         activeParticipants,
+        availableParticipants,
         currentUserId,
         defaultCurrency,
         defaultSplitMode,
@@ -530,24 +588,37 @@ export function SpaceEntryDialog({
         setForm((previous) => ({ ...previous, exchangeRate: Number(activeQuote.rate) }))
     }, [activeQuote?.rate, activeQuote?.status, form.currency, form.exchangeRate, reportingCurrency])
 
-    const paidByParticipant = activeParticipants.find(
+    const paidByParticipant = availableParticipants.find(
         (participant) => extractId(participant._id) === form.paidByParticipantId
     )
     const isCurrentUserPayer = extractId(paidByParticipant?.userId) === currentUserId
     const initialLinkedTransactionImpactsCurrentUser = Boolean(
         initialData?.linkedTransactionId &&
         currentUserId &&
-        extractId(activeParticipants.find(
+        extractId(availableParticipants.find(
             (participant) => extractId(participant._id) === extractId(initialData.paidByParticipantId)
         )?.userId) === currentUserId
     )
     const filteredAccounts = useMemo(
         () =>
-            accounts.filter((account) =>
-                (account.supportedCurrencies ?? [account.currency]).includes(form.currency as never)
+            accounts.filter((account) => account.isActive !== false &&
+                supportsCurrency(account, form.currency as Currency)
             ),
         [accounts, form.currency]
     )
+    const selectedPersonalAccount = useMemo(
+        () => filteredAccounts.find((account) => extractId(account._id) === form.personalAccountId),
+        [filteredAccounts, form.personalAccountId]
+    )
+
+    useEffect(() => {
+        if (accountsLoading || !form.personalAccountId || selectedPersonalAccount) return
+        setForm((previous) => ({
+            ...previous,
+            personalAccountId: undefined,
+            categoryId: undefined,
+        }))
+    }, [accountsLoading, form.personalAccountId, selectedPersonalAccount])
     const filteredCategories = useMemo(
         () => categories.filter((category) => category.type === 'expense'),
         [categories]
@@ -562,7 +633,10 @@ export function SpaceEntryDialog({
     )
 
     useEffect(() => {
-        if (!open || mode !== 'create' || step !== 3 || contractVersion !== 2) return
+        if (!open || mode !== 'create' || step !== 3 || contractVersion !== 2) {
+            setPreviewLoading(false)
+            return
+        }
         const sharedParticipantIds = form.sharedWithParticipantIds?.length
             ? form.sharedWithParticipantIds
             : form.paidByParticipantId
@@ -575,12 +649,14 @@ export function SpaceEntryDialog({
             form.amount <= 0
         ) {
             setPreview(null)
+            setPreviewLoading(false)
             return
         }
         let cancelled = false
+        setPreview(null)
+        setPreviewLoading(true)
+        setPreviewError(null)
         const timer = window.setTimeout(async () => {
-            setPreviewLoading(true)
-            setPreviewError(null)
             try {
                 const response = await apiJson<{ data: SpaceEntryPreviewDto }>(
                     `/api/spaces/${spaceId}/entries/preview`,
@@ -589,6 +665,7 @@ export function SpaceEntryDialog({
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             amount: form.amount,
+                            money: moneyFromDecimal(form.currency, form.amount),
                             currency: form.currency,
                             exchangeRate: form.exchangeRate,
                             exchangeRateDecimal: automaticQuoteSelected ? activeQuote?.rate : undefined,
@@ -738,7 +815,7 @@ export function SpaceEntryDialog({
     }
 
     const applySplitPreset = (preset: SpaceEntryFormData['splitMode']) => {
-        const allParticipantIds = activeParticipants
+        const allParticipantIds = splitParticipants
             .map((participant) => extractId(participant._id) ?? '')
             .filter(Boolean)
 
@@ -817,7 +894,7 @@ export function SpaceEntryDialog({
         const payload: EntryDraftPayload = {
             ...form,
             amount: Number.isFinite(form.amount) ? form.amount : 0,
-            date: form.date.toISOString(),
+            date: clientDateToDateKey(form.date),
         }
 
         window.sessionStorage.setItem(draftStorageKey, JSON.stringify(payload))
@@ -933,6 +1010,7 @@ export function SpaceEntryDialog({
                         title: form.title,
                         description: form.description || undefined,
                         amount: form.amount,
+                        money: moneyFromDecimal(form.currency, form.amount),
                         currency: form.currency,
                         exchangeRate: form.exchangeRate,
                         dateKey: clientDateToDateKey(form.date),
@@ -1065,7 +1143,7 @@ export function SpaceEntryDialog({
             return
         }
 
-        if (contractVersion === 2 && !preview) {
+        if (contractVersion === 2 && (previewLoading || !preview)) {
             setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
             return
         }
@@ -1244,7 +1322,7 @@ export function SpaceEntryDialog({
                                                             setForm((previous) => {
                                                                 const nextIsCurrentUser =
                                                                     extractId(
-                                                                        activeParticipants.find(
+                                                                        availableParticipants.find(
                                                                             (participant) =>
                                                                                 extractId(participant._id) === value
                                                                         )?.userId
@@ -1272,7 +1350,7 @@ export function SpaceEntryDialog({
                                                             <SelectValue placeholder="Elegí un participante" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {activeParticipants.map((participant) => (
+                                                            {payerParticipants.map((participant) => (
                                                                 <SelectItem
                                                                     key={extractId(participant._id)}
                                                                     value={extractId(participant._id) ?? ''}
@@ -1282,7 +1360,10 @@ export function SpaceEntryDialog({
                                                                             name={participant.displayName}
                                                                             className="h-6 w-6 text-[10px]"
                                                                         />
-                                                                        <span>{participant.displayName}</span>
+                                                                        <span>
+                                                                            {participant.displayName}
+                                                                            {!participant.isActive ? ' · inactivo' : ''}
+                                                                        </span>
                                                                     </span>
                                                                 </SelectItem>
                                                             ))}
@@ -1351,7 +1432,7 @@ export function SpaceEntryDialog({
                                     {(mode === 'edit' || step === 2) && spaceMode !== 'solo' ? (
                                         <div>
                                             <SpaceSplitConfigurator
-                                                participants={activeParticipants}
+                                                participants={splitParticipants}
                                                 amount={Number.isFinite(form.amount) ? form.amount : 0}
                                                 currency={form.currency}
                                                 paidByParticipantId={form.paidByParticipantId}
@@ -1401,7 +1482,7 @@ export function SpaceEntryDialog({
                                                     {form.currency} · reporte en {reportingCurrency}
                                                 </SpaceMetaBadge>
                                                 <SpaceMetaBadge icon={CalendarRange}>
-                                                    {formatDateInput(form.date)}
+                                                    {formatFinancialDate(form.date)}
                                                 </SpaceMetaBadge>
                                             </div>
 
@@ -1414,6 +1495,7 @@ export function SpaceEntryDialog({
                                                     currency={form.currency}
                                                     hidden={false}
                                                     className="mt-2 text-2xl font-semibold"
+                                                    exact
                                                 />
                                                 <p className="mt-2 text-sm text-muted-foreground">
                                                     {paidByParticipant
@@ -1452,14 +1534,19 @@ export function SpaceEntryDialog({
                                                                         amount={amount as number}
                                                                         currency={label === 'Cambio en deuda' ? preview.reportingCurrency : preview.currency}
                                                                         hidden={false}
+                                                                        exact
                                                                     />
                                                                 </dd>
                                                             </div>
                                                         ))}
                                                     </dl>
-                                                ) : (
+                                                ) : previewError ? (
                                                     <p className="rounded-xl border border-destructive/15 bg-destructive/5 p-3 text-sm text-destructive">
-                                                        {previewError ?? 'No hay una revisión financiera disponible.'}
+                                                        {previewError}
+                                                    </p>
+                                                ) : (
+                                                    <p className="rounded-xl border border-foreground/[0.07] bg-muted/35 p-3 text-sm text-muted-foreground">
+                                                        Completá monto, pagador y reparto para calcular la revisión.
                                                     </p>
                                                 )}
                                             </div>
@@ -1572,7 +1659,9 @@ export function SpaceEntryDialog({
                                                 ) : null}
 
                                                 <p className="text-xs text-muted-foreground">
-                                                    Elegí una cuenta o tarjeta si querés impactarlo también en tu Finp personal.
+                                                    {selectedPersonalAccount?.type === 'credit_card'
+                                                        ? `Se registrará un consumo en un pago por ${formatFinancialAmount(form.currency, form.amount)} en la tarjeta. Tu gasto personal seguirá siendo tu parte.`
+                                                        : 'Elegí una cuenta o tarjeta si querés impactarlo también en tu Finp personal.'}
                                                 </p>
                                             </div>
                                         </SpaceDialogPanel>
@@ -1701,7 +1790,10 @@ export function SpaceEntryDialog({
                                 if (mode === 'create' && step < 3) handleNextStep()
                                 else void handleSubmit()
                             }}
-                            disabled={submitting || (mode === 'create' && step === 3 && previewLoading)}
+                            disabled={
+                                submitting ||
+                                (mode === 'create' && step === 3 && contractVersion === 2 && (previewLoading || !preview))
+                            }
                         >
                             {submitting
                                 ? (mode === 'edit' ? 'Guardando cambios...' : 'Guardando...')

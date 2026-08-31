@@ -28,7 +28,9 @@ export function clientDateToDateKey(date: Date) {
 
 export function adaptSpaceEntryDtoForUi(
     entry: SpaceEntryDto,
-    detail: Pick<SpaceDetailDto, 'space' | 'currentUserId'>
+    detail: Pick<SpaceDetailDto, 'currentUserId'> & {
+        space: Pick<SpaceDetailDto['space'], 'id'>
+    }
 ): ISpaceEntry {
     const currentUserCanMutate = entry.capabilities.length > 0
     return {

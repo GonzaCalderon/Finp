@@ -6,6 +6,7 @@ import {
     convertMoneyExact,
     decimalToMinorUnits,
     moneyFromDecimal,
+    moneyMatchesDecimal,
 } from '@/lib/utils/money'
 
 describe('dinero exacto e ISO 4217', () => {
@@ -34,6 +35,19 @@ describe('dinero exacto e ISO 4217', () => {
             targetCurrency: 'ARS',
             rate: '1300.5',
         })).toEqual({ currency: 'ARS', minorUnits: '-136553', scale: 2 })
+    })
+
+    it('compara el DTO exacto contra el decimal en la escala de la moneda', () => {
+        expect(moneyMatchesDecimal(
+            { currency: 'KWD', minorUnits: '1001', scale: 3 },
+            'KWD',
+            '1.001'
+        )).toBe(true)
+        expect(moneyMatchesDecimal(
+            { currency: 'KWD', minorUnits: '1001', scale: 3 },
+            'KWD',
+            '1.002'
+        )).toBe(false)
     })
 
     it('reparte por restos mayores con desempate estable', () => {

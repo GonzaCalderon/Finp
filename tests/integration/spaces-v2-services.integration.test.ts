@@ -5,6 +5,7 @@ import {
     Account,
     Category,
     Debt,
+    InstallmentPlan,
     Notification,
     Space,
     SpaceActivityEvent,
@@ -40,6 +41,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
     let ownerUserId: string
     let memberUserId: string
     let ownerAccountId: string
+    let ownerCreditCardId: string
     let ownerCategoryId: string
     let spaceId: string
     let ownerParticipantId: string
@@ -77,7 +79,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         trackedUserIds.push(owner._id, member._id)
         ownerUserId = owner._id.toString()
         memberUserId = member._id.toString()
-        const [account, category] = await Promise.all([
+        const [account, creditCard, category] = await Promise.all([
             Account.create({
                 userId: owner._id,
                 name: `Cuenta v2 ${runId}`,
@@ -87,6 +89,16 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
                 isActive: true,
                 includeInNetWorth: true,
                 initialBalance: 1_000,
+            }),
+            Account.create({
+                userId: owner._id,
+                name: `Tarjeta v2 ${runId}`,
+                type: 'credit_card',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS', 'USD'],
+                isActive: true,
+                includeInNetWorth: true,
+                initialBalance: 0,
             }),
             Category.create({
                 userId: owner._id,
@@ -98,6 +110,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             }),
         ])
         ownerAccountId = account._id.toString()
+        ownerCreditCardId = creditCard._id.toString()
         ownerCategoryId = category._id.toString()
         const space = await Space.create({
             contractVersion: 2,
@@ -207,6 +220,79 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
 
         await expect(createSpaceEntryV2({ ...request, amount: 101 }))
             .rejects.toMatchObject({ code: 'IDEMPOTENCY_PAYLOAD_CONFLICT' })
+    })
+
+    it('registra un gasto compartido con tarjeta como consumo único y sin plan de cuotas', async () => {
+        const cardSpace = await Space.create({
+            contractVersion: 2,
+            ownerUserId,
+            name: `Tarjeta v2 ${runId}`,
+            type: 'personal',
+            mode: 'solo',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'none',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        const participant = await SpaceParticipant.create({
+            spaceId: cardSpace._id,
+            kind: 'finp_user',
+            userId: ownerUserId,
+            displayName: 'Owner tarjeta v2',
+            role: 'owner',
+            inviteStatus: 'accepted',
+            isActive: true,
+            revision: 0,
+        })
+
+        try {
+            const created = await createSpaceEntryV2({
+                actorUserId: ownerUserId,
+                spaceId: cardSpace._id.toString(),
+                idempotencyKey: `card-single-payment-${runId}`,
+                expectedRevision: 0,
+                title: 'Compra compartida con tarjeta',
+                amount: 80,
+                money: moneyFromDecimal('ARS', 80),
+                currency: 'ARS',
+                dateKey: '2026-08-24',
+                paidByParticipantId: participant._id.toString(),
+                sharedWithParticipantIds: [participant._id.toString()],
+                splitMode: 'none',
+                actorPersonalImpact: {
+                    accountId: ownerCreditCardId,
+                    categoryId: ownerCategoryId,
+                },
+            })
+            const transaction = await Transaction.findOne({
+                spaceEntryId: created.resultRefs.spaceEntryId,
+                sourceAccountId: ownerCreditCardId,
+            }).lean()
+
+            expect(transaction).toMatchObject({
+                type: 'credit_card_expense',
+                amount: 80,
+                operationalAmount: 80,
+                createdFrom: 'space',
+            })
+            expect(transaction?.installmentPlanId).toBeUndefined()
+            expect(await InstallmentPlan.countDocuments({ accountId: ownerCreditCardId })).toBe(0)
+        } finally {
+            await Promise.all([
+                SpaceActivityEvent.deleteMany({ spaceId: cardSpace._id }),
+                SpaceEntryPersonalImpact.deleteMany({ spaceId: cardSpace._id }),
+                Transaction.deleteMany({ spaceId: cardSpace._id }),
+                Debt.deleteMany({ spaceId: cardSpace._id }),
+                SpaceOperation.deleteMany({ spaceId: cardSpace._id }),
+                SpaceEntry.deleteMany({ spaceId: cardSpace._id }),
+                SpaceParticipant.deleteMany({ spaceId: cardSpace._id }),
+                InstallmentPlan.deleteMany({ accountId: ownerCreditCardId }),
+            ])
+            await Space.deleteOne({ _id: cardSpace._id })
+        }
     })
 
     it('serializa reintentos concurrentes y revierte por completo un fallo inyectado', async () => {
@@ -519,7 +605,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
     })
 
     it('una persona removida conserva historia, impacto privado y liquidación propia', async () => {
-        await createSpaceEntryV2({
+        const historicalEntry = await createSpaceEntryV2({
             actorUserId: memberUserId,
             spaceId,
             idempotencyKey: `inactive-origin-${runId}`,
@@ -542,6 +628,38 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         })
         expect(await SpaceParticipant.findById(ownerParticipantId).lean())
             .toMatchObject({ isActive: false, revision: 2 })
+        const historicalEntryId = historicalEntry.resultRefs.spaceEntryId!.toString()
+        const edited = await editSpaceEntryV2({
+            actorUserId: memberUserId,
+            spaceId,
+            entryId: historicalEntryId,
+            idempotencyKey: `edit-preserve-inactive-${runId}`,
+            expectedRevision: 0,
+            title: 'Saldo histórico conservado',
+            amount: 50,
+            money: moneyFromDecimal('ARS', 50),
+            currency: 'ARS',
+            dateKey: '2026-08-29',
+            paidByParticipantId: memberParticipantId,
+            sharedWithParticipantIds: [ownerParticipantId, memberParticipantId],
+            splitMode: 'equal',
+        })
+        expect(edited.value).toMatchObject({ revision: 1 })
+        await expect(editSpaceEntryV2({
+            actorUserId: memberUserId,
+            spaceId,
+            entryId: historicalEntryId,
+            idempotencyKey: `edit-add-inactive-role-${runId}`,
+            expectedRevision: 1,
+            title: 'No debe cambiar pagador',
+            amount: 50,
+            money: moneyFromDecimal('ARS', 50),
+            currency: 'ARS',
+            dateKey: '2026-08-29',
+            paidByParticipantId: ownerParticipantId,
+            sharedWithParticipantIds: [ownerParticipantId, memberParticipantId],
+            splitMode: 'equal',
+        })).rejects.toMatchObject({ code: 'SPACE_PARTICIPANT_INACTIVE' })
         const debt = await Debt.findOne({
             userId: ownerUserId,
             spaceId,

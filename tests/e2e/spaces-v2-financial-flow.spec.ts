@@ -4,6 +4,69 @@ import { loginAsTestUser } from './helpers/auth'
 import { SPACE_V2_E2E } from './helpers/spaces-v2'
 
 test.describe('Espacios v2 — recorrido financiero', () => {
+    test('crea desde inicio con contrato v2 y registra la tarjeta como un pago', async ({ page }, testInfo) => {
+        testInfo.setTimeout(60_000)
+        const description = `Tarjeta desde inicio ${testInfo.project.name}`
+        await loginAsTestUser(page)
+        await page.goto('/spaces')
+
+        await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+        await page.locator('[data-fab-action="space-action"]:visible').click()
+        const picker = page.getByRole('dialog', { name: 'Elegir espacio' })
+        await expect(picker).toBeVisible()
+        await picker.getByRole('button', { name: new RegExp(SPACE_V2_E2E.name) }).click()
+
+        const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
+        await dialog.locator('#entry-amount').fill('80,01')
+        await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
+
+        await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
+        await page.getByRole('option', { name: /^Tarjeta E2E Tarjeta de crédito/ }).click()
+        await expect(dialog.getByText(/consumo en un pago por/)).toBeVisible()
+
+        const responsePromise = page.waitForResponse((response) =>
+            response.request().method() === 'POST' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entries`)
+        )
+        const saveButton = dialog.getByRole('button', { name: 'Guardar y agregar a Mi Finp' })
+        await expect(saveButton).toBeEnabled()
+        await saveButton.click()
+        const response = await responsePromise
+        expect(response.status()).toBe(201)
+        await expect(dialog).not.toBeVisible()
+
+        const detail = await page.request.get(`/api/spaces/${SPACE_V2_E2E.spaceId}`)
+        const body = await detail.json() as {
+            data: {
+                movements: {
+                    items: Array<{
+                        title: string
+                        originalMoney?: { minorUnits: string; scale: number }
+                        currentUserImpact?: { transactionId?: string }
+                    }>
+                }
+            }
+        }
+        const entry = body.data.movements.items.find((item) => item.title === description)
+        expect(entry).toMatchObject({ originalMoney: { minorUnits: '8001', scale: 2 } })
+        expect(entry?.currentUserImpact?.transactionId).toBeTruthy()
+
+        const transactionResponse = await page.request.get(
+            `/api/transactions/${entry!.currentUserImpact!.transactionId}`
+        )
+        expect(transactionResponse.ok()).toBe(true)
+        const transactionBody = await transactionResponse.json() as {
+            transaction: { type: string; amount: number; installmentPlanId?: unknown }
+        }
+        expect(transactionBody.transaction).toMatchObject({
+            type: 'credit_card_expense',
+            amount: 80.01,
+        })
+        expect(transactionBody.transaction.installmentPlanId).toBeUndefined()
+    })
+
     test('revisa el impacto exacto y crea el gasto también en Mi Finp', async ({ page }, testInfo) => {
         const description = `Cena compartida ${testInfo.project.name}`
         await loginAsTestUser(page)

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-08-30
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -280,6 +280,35 @@ La revisión final explica:
 - en qué cuenta o contexto;
 - qué saldo o estado cambia;
 - qué regla, compromiso o sugerencia intervino.
+
+El monto que autoriza una acción financiera se muestra completo, con moneda y
+escala correctas. Puede abreviarse en una visualización secundaria, nunca en la
+revisión final, el CTA, un error ni el resultado confirmado. La fecha civil se
+presenta igual en todos los pasos y no cambia de formato o día al revisar.
+
+### Borradores recuperables
+
+Un formulario financiero que persiste borrador comunica su estado junto al
+encabezado o la acción de cierre, sin competir con el CTA:
+
+- `Guardando…`: cambio local pendiente de confirmación;
+- `Guardado`: versión persistida;
+- `No se pudo guardar`: conserva la edición y ofrece reintento;
+- `Conflicto`: existe una versión más nueva y debe revisarse antes de continuar.
+
+Cerrar no equivale a descartar. El descarte es una acción separada, explícita y
+confirmada. Al reanudar, el formulario vuelve al último paso útil y restaura el
+foco sin saltar directamente sobre un error antiguo.
+
+En Movimientos, un borrador usa una card diferenciada por etiqueta y texto, no
+sólo por color. Muestra información parcial disponible, última edición y
+`Continuar`, pero no usa iconos o copy de movimiento confirmado ni participa en
+totales. Sólo su autor puede verlo.
+
+Una preview asíncrona reserva el espacio necesario y distingue `Calculando`,
+`Lista para revisar`, `Faltan datos` y `No se pudo calcular`. No muestra un error
+durante el debounce ni reemplaza silenciosamente una revisión anterior con una
+respuesta obsoleta.
 
 ## 10. Estados y feedback
 

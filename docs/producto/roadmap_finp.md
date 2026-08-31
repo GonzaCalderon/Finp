@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-29
+> Última actualización: 2026-08-30
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -72,6 +72,32 @@ Los principios de producto y de trabajo viven en
 - no iniciar una expansión grande con P0 abiertos evitables;
 - una prioridad nueva no desplaza P0/P1 sin una decisión explícita.
 
+### Secuencia aceptada para `Nuevo gasto` de Espacios
+
+La auditoría del diálogo se implementa en etapas verificables sin crear un
+backlog paralelo:
+
+0. **Contratos y documentación — completada el 2026-08-30.** Decisiones 0012 y
+   0013 aceptadas; especificación, dominio, arquitectura, diseño, calidad,
+   estado y roadmap alineados.
+1. **Exactitud financiera — completada el 2026-08-30 dentro de FINP-P0-006.**
+   Tarjeta `1/1`, fecha civil, dinero exacto por escala, una sola alta v2 desde
+   portada o detalle, monto final sin abreviar y preservación de participantes
+   históricos inactivos.
+2. **Borrador privado persistente — FINP-P1-013.** Un recurso activo por usuario
+   y Espacio, autosave, revisión optimista, card privada en Movimientos y
+   publicación atómica e idempotente.
+3. **Adjuntos recuperables — FINP-P1-013.** Preparación privada sobre el
+   borrador, validación, reintento, finalización al publicar y limpieza
+   idempotente al descartar.
+4. **Experiencia y accesibilidad — FINP-P1-013.** Preview y edición completas,
+   estados reales, selección personal coherente, candidatos válidos, foco,
+   labels, teclado, stepper mobile, `safe area`, dark mode y recuperación.
+
+La etapa 1 precede al modelo de borrador para no persistir un contrato financiero
+que deba migrarse inmediatamente. El diálogo mantiene `NO-GO` de cierre hasta
+completar y verificar las etapas 1 a 4 en mobile y desktop.
+
 ## 3. Prioridad P0 — confianza financiera y cierre operativo
 
 ### FINP-P0-006 — Exactitud financiera de Espacios, Mi Finp y Deudas
@@ -82,7 +108,8 @@ Los principios de producto y de trabajo viven en
   - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
   - [`0009 — Autoridad multimoneda de Espacios`](../decisiones/0009-autoridad-multimoneda-espacios.md);
   - [`0010 — Migración progresiva de Espacios v2`](../decisiones/0010-migracion-progresiva-espacios-v2.md);
-  - [`0011 — Cutover de Espacios v2 en development`](../decisiones/0011-cutover-espacios-v2-en-development.md).
+  - [`0011 — Cutover de Espacios v2 en development`](../decisiones/0011-cutover-espacios-v2-en-development.md);
+  - [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
 - Regla de entrega: es un cierre indivisible. Puede avanzar mediante commits y
   verificaciones internas, pero no pasa a `validación` ni se presenta como
   terminado hasta completar dominio, datos, API, UI afectada, migración,
@@ -119,7 +146,29 @@ Los principios de producto y de trabajo viven en
   - admitir liquidaciones atómicas con varios componentes y tramos de pago,
     distinguiendo dinero pagado, dinero aplicado y diferencia de cambio;
   - mostrar composición, referencias y filtros multimoneda sin reemplazar la
-    autoridad histórica por la cotización actual.
+    autoridad histórica por la cotización actual;
+  - registrar para el pagador un consumo privado de tarjeta `1/1` por el total
+    real, con parte propia operacional y sin `InstallmentPlan`;
+  - mantener ARS/USD como límite de Mi Finp, rechazar cuotas y monedas de tarjeta
+    incompatibles antes de confirmar, sin impedir el gasto autónomo del Espacio;
+  - unificar portada y detalle sobre la misma alta v2, con `MoneyDto`, escala ISO,
+    `dateKey`, cotizaciones, preview e idempotencia;
+  - conservar participantes históricos inactivos en edición y mostrar sin
+    abreviar el monto que se confirma.
+- Checkpoint de `Nuevo gasto`, etapa 1 — completado el 2026-08-30:
+  - portada y detalle crean mediante el mismo contrato v2 con `MoneyDto`,
+    `dateKey`, preview, cotizaciones e idempotencia;
+  - una tarjeta privada ARS/USD crea `credit_card_expense` por el total real,
+    conserva la parte propia operacional y no crea `InstallmentPlan`; los pagos
+    de liquidación con tarjeta continúan rechazados;
+  - escalas ISO 0, 2 y 3 se aplican en entrada, reparto, validación, preview y
+    persistencia; la revisión final no abrevia el monto;
+  - la fecha se transporta como día civil local y la edición preserva a cada
+    participante histórico inactivo sólo en su rol previo;
+  - la revisión financiera bloquea desde que comienza el cálculo, invalida
+    resultados anteriores y no permite confirmar sin un preview vigente;
+  - evidencia: 909 unitarias, 14 integraciones MongoDB focales y 6 recorridos
+    E2E de Espacios v2 en Chromium desktop y Pixel 7.
 - Secuencia interna obligatoria:
   1. caracterización de comportamiento y datos legacy, más reporte `dry-run`
      — completada el 2026-08-24;
@@ -328,8 +377,11 @@ Los principios de producto y de trabajo viven en
 
 ### FINP-P1-013 — Cierre integral de experiencia de Espacios
 
-- Estado: `bloqueado`.
-- Bloqueado por: FINP-P0-006.
+- Estado: `pendiente`.
+- Dependencia de cierre: FINP-P0-006. El checkpoint de exactitud de `Nuevo
+  gasto` ya habilita las etapas 2 a 4; el ítem no puede cerrarse antes que el P0.
+- Decisión:
+  [`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 - Regla de entrega: es un único cierre de producto. Los recorridos pueden
   implementarse por bloques seguros, pero el ítem permanece abierto hasta que
   la experiencia principal, secundaria y transversal sea coherente.
@@ -340,6 +392,14 @@ Los principios de producto y de trabajo viven en
     mobile y desktop;
   - gasto guiado en tres pasos con categoría, adjuntos y opciones avanzadas por
     complejidad progresiva;
+  - un borrador activo por usuario y Espacio, privado, persistente, reanudable y
+    visible sólo a su autor en Movimientos;
+  - adjuntos asociados al borrador antes de publicar, recuperables ante error y
+    finalizados o limpiados de manera idempotente;
+  - preview con estados `calculando`, `disponible`, `incompleta` y `error`, más
+    la misma revisión financiera al editar;
+  - crear una transacción personal o vincular una existente como intenciones
+    excluyentes, con candidatos que el servidor pueda aceptar;
   - detalle que prioriza total, pagador, parte propia, adelanto y efecto en Mi
     Finp antes de metadata y actividad;
   - balances y liquidación con una intención y una operación compartida con
@@ -369,6 +429,15 @@ Los principios de producto y de trabajo viven en
     de monto, rol, estado, consecuencia o siguiente acción;
   - configuración y casos infrecuentes no compiten con el uso cotidiano;
   - las acciones ofrecidas coinciden con las capacidades del servidor.
+- Criterio específico de borrador:
+  - cerrar diálogo, navegar, cerrar sesión o cambiar de dispositivo no pierde la
+    última versión persistida;
+  - un participante, `admin` u `owner` ajeno no puede enumerar, leer, editar,
+    publicar ni descargar sus adjuntos;
+  - publicar reemplaza la card privada por un único movimiento y no confirma
+    parcialmente dinero, actividad o relaciones;
+  - un conflicto entre clientes se revisa y un fallo conserva datos y adjuntos
+    para reintentar.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.
@@ -524,7 +593,10 @@ Los principios de producto y de trabajo viven en
 
 - Estado: `en discovery`.
 - Dependencias: FINP-P0-006 y FINP-P1-013.
-- Criterio previo: definir reconocimiento, balances, settlements e impacto personal.
+- Límite: no incluye el consumo privado `1/1` de la decisión 0012.
+- Criterio previo: definir plan compartido, reconocimiento por período,
+  balances, edición, settlements e impacto personal antes de admitir más de una
+  cuota.
 
 ### FINP-P3-008 — Reintegros avanzados
 

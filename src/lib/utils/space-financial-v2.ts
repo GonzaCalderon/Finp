@@ -311,11 +311,13 @@ export function derivePersonalImpactAmountsV2(input: {
     entryType: 'expense' | 'income' | 'adjustment' | 'settlement'
     entryAmount: number
     ownShareAmount: number
+    currency?: string
     isPayer: boolean
     isReceiver?: boolean
 }): PersonalImpactAmountsV2 {
-    const entryAmount = fromMinorUnits(toMinorUnits(input.entryAmount))
-    const ownShareAmount = fromMinorUnits(toMinorUnits(input.ownShareAmount))
+    const currency = input.currency ?? 'ARS'
+    const entryAmount = fromMinorUnits(toMinorUnits(input.entryAmount, currency), currency)
+    const ownShareAmount = fromMinorUnits(toMinorUnits(input.ownShareAmount, currency), currency)
 
     if (input.entryType === 'settlement') {
         if (input.isPayer) {

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-08-29
+> Última actualización: 2026-08-30
 > Fuente de verdad: índice canónico de documentación
 
 ## Índice
@@ -117,6 +117,8 @@ Decisiones vigentes:
 - [`0009 — Autoridad multimoneda de Espacios`](decisiones/0009-autoridad-multimoneda-espacios.md).
 - [`0010 — Migración progresiva de Espacios v2`](decisiones/0010-migracion-progresiva-espacios-v2.md).
 - [`0011 — Cutover de Espacios v2 en development`](decisiones/0011-cutover-espacios-v2-en-development.md).
+- [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
+- [`0013 — Borrador privado persistente de movimiento de Espacio`](decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 
 Una decisión se documenta cuando:
 
