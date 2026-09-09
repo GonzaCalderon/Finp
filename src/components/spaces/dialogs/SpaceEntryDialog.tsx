@@ -2195,7 +2195,7 @@ export function SpaceEntryDialog({
                     </div>
 
                     {/* ── Footer ── */}
-                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
+                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 safe-area-pb sm:px-6">
                         <Button
                             className="min-h-11 rounded-full"
                             onClick={() => {
