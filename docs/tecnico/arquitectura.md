@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-09
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -249,7 +249,7 @@ antes de publicar y aplica los permisos del movimiento después.
 
 ### Borrador privado de movimiento de Espacio
 
-FINP-P1-013 incorporará `SpaceEntryDraft` con índice único parcial para un
+FINP-P1-013 incorpora `SpaceEntryDraft` con índice único parcial para un
 borrador `active` por `creatorUserId + spaceId + intent`. El recurso usa el mismo
 contrato v2 de dinero, fecha, reparto y cotizaciones, pero admite campos
 incompletos y agrega `revision` para concurrencia optimista.
@@ -259,6 +259,12 @@ compone su card privada sólo para ese autor; no consulta ni serializa borradore
 de otros participantes. `owner` y `admin` no adquieren acceso por su rol. Los
 estados terminales `published` y `discarded` impiden reactivación o segunda
 publicación.
+
+El cliente serializa los autosaves para que una respuesta anterior no pueda
+pisar una revisión posterior. La base es la autoridad; `localStorage` conserva
+una copia versionada únicamente cuando falla la persistencia y se elimina al
+confirmarse el siguiente guardado. Publicar detiene nuevos autosaves, espera la
+cola vigente y envía la revisión persistida al ejecutor transaccional.
 
 ### Fechas
 

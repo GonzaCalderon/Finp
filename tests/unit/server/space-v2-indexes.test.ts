@@ -38,5 +38,8 @@ describe('space v2 indexes', () => {
         expect(SPACE_V2_INDEXES.some((definition) =>
             definition.options.name === 'v2_unique_personal_impact_per_user_entry'
         )).toBe(true)
+        expect(SPACE_V2_INDEXES.some((definition) =>
+            definition.options.name === 'v2_unique_active_space_entry_draft'
+        )).toBe(true)
     })
 })

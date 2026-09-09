@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-09
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -315,7 +315,12 @@ elige el usuario.
 - consumo privado de tarjeta ARS/USD en un pago por el total real, con parte
   propia operacional y sin crear `InstallmentPlan`;
 - revisión final sin abreviar montos, bloqueo mientras calcula y edición que
-  preserva participantes históricos inactivos en su rol original.
+  preserva participantes históricos inactivos en su rol original;
+- borrador de nuevo gasto separado del movimiento, único por autor y Espacio,
+  persistente, reanudable y visible sólo para ese autor en Movimientos;
+- autosave serializado con revisión optimista, estado accesible, fallback local
+  ante error, descarte confirmado y publicación atómica e idempotente sin
+  afectar balances, deuda, actividad ni Mi Finp antes de confirmar.
 - clasificación cerrada de los 97 hallazgos críticos/altos, contratos internos
   de plan, run, issue, disposición y resolución, y estado público seguro de
   migración;
@@ -344,13 +349,13 @@ equivale todavía a un recorrido confiable de punta a punta:
 - faltan estados de recuperación, foco y accesibilidad consistentes en flujos
   principales y secundarios.
 
-La etapa 1 de la auditoría específica de `Nuevo gasto` se implementó y verificó
-el 2026-08-30 en Chromium desktop y Pixel 7. Cerró tarjeta `1/1`, contrato v2
-único, dinero exacto, fecha civil, revisión vigente y preservación histórica.
-Permanecen estas brechas para las etapas 2 a 4:
+Las etapas 1 y 2 de la auditoría específica de `Nuevo gasto` están
+implementadas y verificadas. La primera cerró tarjeta `1/1`, contrato v2 único,
+dinero exacto, fecha civil, revisión vigente y preservación histórica. La
+segunda, cerrada el 2026-09-09, incorporó el borrador privado persistente, su
+card personal y la publicación transaccional. Permanecen estas brechas para las
+etapas 3 y 4:
 
-- el borrador usa almacenamiento de sesión, se pierde al cerrar y no aparece
-  como card privada en Movimientos;
 - la edición no tiene todavía la misma revisión financiera completa del alta;
 - los adjuntos se cargan después de confirmar el movimiento, con riesgo de
   éxito parcial sin borrador recuperable;
@@ -406,7 +411,6 @@ FINP-P1-013 en [`roadmap_finp.md`](roadmap_finp.md).
 
 ### No disponible todavía
 
-- borrador privado persistente de nuevo gasto, listado sólo para su autor;
 - cuotas dentro de Espacios;
 - compromisos de Espacios;
 - reintegros avanzados;
@@ -549,17 +553,19 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Preparación de migración compatible de Espacios v2, 2026-08-25:
+Borrador privado persistente de `Nuevo gasto`, 2026-09-09:
 
-- clasificación 56/33/8 y contratos internos fail-closed;
-- CLI único, copia sanitizada por lotes, fingerprints, manifiesto privado,
-  preimágenes, transformación transaccional por Espacio y estado público seguro;
-- ensayo real sobre copia: 11/11 migrados, invariantes financieras y privadas
-  aprobadas, replay estable y rollback al fingerprint exacto;
-- apply bajo 30 segundos, verify cercano a 3,3 segundos y prueba de 1.000
-  movimientos bajo 30 segundos en apply, verify y rollback;
-- 895 unitarias y 12 recorridos de integración aprobados; la regresión global
-  suma la convivencia migrado/bloqueado y pasa 68 E2E en desarrollo y
-  producción;
-- sin escrituras en development o producción; cutover y retiro global del
-  fallback continúan pendientes, por lo que FINP-P0-006 permanece `en curso`.
+- colección y contrato parcial separados de `SpaceEntry`, con un activo por
+  autor, Espacio e intención y sin efecto financiero antes de publicar;
+- lectura, guardado, descarte y publicación filtrados por autor, con revisión
+  optimista y clave estable de idempotencia;
+- publicación en la misma transacción MongoDB que movimiento, impacto privado,
+  actividad y relaciones derivadas; un fallo revierte todo y conserva el
+  borrador activo;
+- autosave agrupado y serializado, recuperación del paso, estado accesible,
+  conflicto explícito y copia local sólo como contingencia;
+- card `Borrador privado` fuera de contadores y totales, reanudación y descarte
+  confirmado;
+- integración real aprobada y recorrido de navegador completo aprobado en
+  Chromium desktop y Pixel 7. Los adjuntos recuperables continúan en la etapa
+  3 de FINP-P1-013.

@@ -21,7 +21,7 @@ import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyStack, SpaceEntrySt
 import { Badge } from '@/components/ui/badge'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
-import type { ISpace, ISpaceEntry, ISpaceEntryPersonalImpact, ISpaceEntryPersonalImpactByEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
+import type { ISpace, ISpaceEntry, ISpaceEntryPersonalImpact, ISpaceEntryPersonalImpactByEntry, ISpaceParticipant, SpaceEntryDraftDto, SpaceSummarySnapshot } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
 import type { SpaceParticipantRole } from '@/lib/constants'
 import type { SpaceMovementFilters } from '@/hooks/useSpaceEntries'
@@ -408,8 +408,65 @@ function MovementCard({
     )
 }
 
+function SpaceEntryDraftCard({
+    draft,
+    hidden,
+    reportingCurrency,
+    onContinue,
+}: {
+    draft: SpaceEntryDraftDto
+    hidden: boolean
+    reportingCurrency: string
+    onContinue?: () => void
+}) {
+    const amount = draft.fields.amount ?? 0
+    const currency = draft.fields.currency ?? reportingCurrency
+
+    return (
+        <div className="rounded-[22px] border border-dashed border-primary/30 bg-primary/[0.045] p-4" data-testid="space-entry-draft-card">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="rounded-full border border-primary/15 bg-primary/10 text-primary">
+                            <FileBadge2 className="h-3.5 w-3.5" />
+                            Borrador privado
+                        </Badge>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <Lock className="h-3 w-3" />
+                            Sólo vos podés verlo
+                        </span>
+                    </div>
+                    <div>
+                        <p className="truncate font-medium text-foreground">
+                            {draft.fields.title?.trim() || 'Nuevo gasto sin descripción'}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Último cambio {formatSpaceDate(new Date(draft.updatedAt))} · Paso {draft.step} de 3
+                        </p>
+                    </div>
+                </div>
+                {amount > 0 ? (
+                    <SpaceAmountInline
+                        amount={amount}
+                        currency={currency}
+                        hidden={hidden}
+                        className="shrink-0 text-sm font-semibold"
+                    />
+                ) : null}
+            </div>
+            {onContinue ? (
+                <Button type="button" variant="outline" size="sm" className="mt-3 rounded-full" onClick={onContinue}>
+                    Continuar borrador
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+            ) : null}
+        </div>
+    )
+}
+
 export function SpaceMovementsPanel({
     entries,
+    draft,
     participants,
     currentUserId,
     personalImpactsByEntryId = {},
@@ -424,6 +481,7 @@ export function SpaceMovementsPanel({
     onCurrencyFiltersChange,
     focusEntryId,
     onCreate,
+    onDraftContinue,
     onEntryClick,
     onEdit,
     onVoid,
@@ -431,6 +489,7 @@ export function SpaceMovementsPanel({
     onPersonalImpact,
 }: {
     entries: ISpaceEntry[]
+    draft?: SpaceEntryDraftDto
     participants: ISpaceParticipant[]
     currentUserId?: string
     personalImpactsByEntryId?: Record<string, ISpaceEntryPersonalImpactByEntry>
@@ -445,6 +504,7 @@ export function SpaceMovementsPanel({
     onCurrencyFiltersChange: (filters: SpaceMovementFilters) => void
     focusEntryId?: string | null
     onCreate?: () => void
+    onDraftContinue?: () => void
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
@@ -474,6 +534,7 @@ export function SpaceMovementsPanel({
 
         return new Date(b.date).getTime() - new Date(a.date).getTime()
     })
+    const showDraft = Boolean(draft && (entryFilter === 'all' || entryFilter === 'expense'))
 
     return (
         <SpaceSurface>
@@ -568,7 +629,15 @@ export function SpaceMovementsPanel({
             </div>
 
             <div className="mt-5 space-y-2">
-                {sortedEntries.length === 0 ? (
+                {draft && showDraft ? (
+                    <SpaceEntryDraftCard
+                        draft={draft}
+                        hidden={hidden}
+                        reportingCurrency={reportingCurrency}
+                        onContinue={onDraftContinue}
+                    />
+                ) : null}
+                {sortedEntries.length === 0 && !showDraft ? (
                     <EmptyState
                         icon={Sparkles}
                         title="Todavía no hay movimientos"

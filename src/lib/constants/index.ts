@@ -299,6 +299,17 @@ export const SPACE_OPERATION_TYPES = {
     RESPOND_INVITE: 'respond_invite',
 } as const
 
+export const SPACE_ENTRY_DRAFT_INTENTS = {
+    NEW_EXPENSE: 'new_expense',
+} as const
+
+export const SPACE_ENTRY_DRAFT_STATUSES = {
+    ACTIVE: 'active',
+    PUBLISHING: 'publishing',
+    PUBLISHED: 'published',
+    DISCARDED: 'discarded',
+} as const
+
 export const SPACE_OPERATION_STATUSES = {
     PENDING: 'pending',
     COMMITTED: 'committed',
@@ -473,6 +484,10 @@ export type SpacePersonalImpactSourceType =
     typeof SPACE_PERSONAL_IMPACT_SOURCE_TYPES[keyof typeof SPACE_PERSONAL_IMPACT_SOURCE_TYPES]
 export type SpaceOperationType =
     typeof SPACE_OPERATION_TYPES[keyof typeof SPACE_OPERATION_TYPES]
+export type SpaceEntryDraftIntent =
+    typeof SPACE_ENTRY_DRAFT_INTENTS[keyof typeof SPACE_ENTRY_DRAFT_INTENTS]
+export type SpaceEntryDraftStatus =
+    typeof SPACE_ENTRY_DRAFT_STATUSES[keyof typeof SPACE_ENTRY_DRAFT_STATUSES]
 export type SpaceOperationStatus =
     typeof SPACE_OPERATION_STATUSES[keyof typeof SPACE_OPERATION_STATUSES]
 export type DebtDirection = typeof DEBT_DIRECTIONS[keyof typeof DEBT_DIRECTIONS]

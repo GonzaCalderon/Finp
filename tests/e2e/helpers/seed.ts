@@ -50,6 +50,7 @@ async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
         db.collection('transactions').deleteMany({ userId }),
         db.collection('installmentplans').deleteMany({ userId }),
         db.collection('spaceentrypersonalimpacts').deleteMany({ userId }),
+        db.collection('spaceentrydrafts').deleteMany({ creatorUserId: userId }),
         db.collection('spaceentries').deleteMany({ createdByUserId: userId }),
         db.collection('spaceparticipants').deleteMany({ userId }),
         db.collection('spaces').deleteMany({ ownerUserId: userId }),

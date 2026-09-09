@@ -17,6 +17,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await picker.getByRole('button', { name: new RegExp(SPACE_V2_E2E.name) }).click()
 
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
         await dialog.locator('#entry-amount').fill('80,01')
         await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
         await dialog.getByRole('button', { name: 'Continuar' }).click()
@@ -28,13 +29,14 @@ test.describe('Espacios v2 — recorrido financiero', () => {
 
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'POST' &&
-            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entries`)
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft/publish`)
         )
         const saveButton = dialog.getByRole('button', { name: 'Guardar y agregar a Mi Finp' })
         await expect(saveButton).toBeEnabled()
         await saveButton.click()
         const response = await responsePromise
-        expect(response.status()).toBe(201)
+        const responseBody = await response.text()
+        expect(response.status(), responseBody).toBe(201)
         await expect(dialog).not.toBeVisible()
 
         const detail = await page.request.get(`/api/spaces/${SPACE_V2_E2E.spaceId}`)
@@ -81,6 +83,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             await page.getByRole('button', { name: 'Agregar movimiento' }).click()
         }
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
         await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Datos')
         await dialog.locator('#entry-amount').fill('1000')
         await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
@@ -101,10 +104,11 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'POST' &&
-            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entries`)
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft/publish`)
         )
         await dialog.getByRole('button', { name: 'Guardar y agregar a Mi Finp' }).click()
-        expect((await responsePromise).status()).toBe(201)
+        const response = await responsePromise
+        expect(response.status(), await response.text()).toBe(201)
         await expect(dialog).not.toBeVisible()
 
         const detail = await page.request.get(`/api/spaces/${SPACE_V2_E2E.spaceId}`)
@@ -118,6 +122,56 @@ test.describe('Espacios v2 — recorrido financiero', () => {
                 currentUserImpact: expect.objectContaining({ status: 'linked' }),
             }),
         ]))
+    })
+
+    test('persiste, reanuda y descarta el borrador privado', async ({ page }, testInfo) => {
+        const description = `Borrador privado ${testInfo.project.name}`
+        await loginAsTestUser(page)
+        await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
+
+        const directCreate = page.getByRole('button', { name: /nuevo movimiento/i }).first()
+        if (await directCreate.isVisible()) {
+            await directCreate.click()
+        } else {
+            await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+            await page.getByRole('button', { name: 'Agregar movimiento' }).click()
+        }
+
+        const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        const saveResponse = page.waitForResponse((response) =>
+            response.request().method() === 'PUT' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft`) &&
+            response.status() === 200
+        )
+        await dialog.locator('#entry-amount').fill('345,67')
+        await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
+        await saveResponse
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText('Guardado de forma privada')
+        await dialog.getByRole('button', { name: 'Cancelar' }).click()
+        await expect(dialog).not.toBeVisible()
+
+        await page.getByRole('button', { name: 'Movimientos' }).first().click()
+        const draftCard = page.getByTestId('space-entry-draft-card')
+        await expect(draftCard).toContainText('Borrador privado')
+        await expect(draftCard).toContainText(description)
+
+        await page.reload()
+        await page.getByRole('button', { name: 'Movimientos' }).first().click()
+        await expect(page.getByTestId('space-entry-draft-card')).toContainText(description)
+        await page.getByRole('button', { name: 'Continuar borrador' }).click()
+        await expect(dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago')).toHaveValue(description)
+        await expect(dialog.locator('#entry-amount')).toHaveValue('345,67')
+
+        await dialog.getByRole('button', { name: 'Descartar borrador' }).click()
+        const discardResponse = page.waitForResponse((response) =>
+            response.request().method() === 'DELETE' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft`)
+        )
+        await page.getByRole('alertdialog').getByRole('button', { name: 'Descartar' }).click()
+        expect((await discardResponse).status()).toBe(200)
+        await expect(dialog).not.toBeVisible()
+        await expect(page.getByTestId('space-entry-draft-card')).toHaveCount(0)
     })
 
     test('explica el total multimoneda, filtra USD y revisa una liquidación ARS+USD', async ({ page }) => {

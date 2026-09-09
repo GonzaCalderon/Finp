@@ -19,6 +19,8 @@ import type {
     SpacePersonalPendingActionType,
     SpaceOperationStatus,
     SpaceOperationType,
+    SpaceEntryDraftIntent,
+    SpaceEntryDraftStatus,
     SpaceSplitMode,
     SpaceStatus,
     SpaceType,
@@ -215,6 +217,47 @@ export interface ISpaceEntry {
     previousVersions?: ISpaceEntrySnapshot[]
     revision?: number
     operationId?: Types.ObjectId
+    createdAt: Date
+    updatedAt: Date
+}
+
+export interface ISpaceEntryDraft {
+    _id: Types.ObjectId
+    contractVersion: 2
+    spaceId: Types.ObjectId
+    creatorUserId: Types.ObjectId
+    intent: SpaceEntryDraftIntent
+    status: SpaceEntryDraftStatus
+    revision: number
+    step: 1 | 2 | 3
+    expectedSpaceRevision: number
+    publishIdempotencyKey: string
+    title?: string
+    description?: string
+    amount?: number
+    money?: MoneyDto
+    currency?: string
+    exchangeRate?: number
+    exchangeRateDecimal?: string
+    conversionSnapshot?: ConversionSnapshot
+    expectedQuoteFingerprint?: string
+    dateKey?: string
+    timezone?: string
+    paidByParticipantId?: Types.ObjectId
+    sharedWithParticipantIds?: Types.ObjectId[]
+    splitMode?: SpaceSplitMode
+    splitAllocations?: ISpaceEntrySplitAllocation[]
+    spaceCategoryId?: Types.ObjectId
+    notes?: string
+    actorPersonalImpact?: {
+        accountId?: Types.ObjectId
+        categoryId?: Types.ObjectId
+        description?: string
+        linkedTransactionId?: Types.ObjectId
+    }
+    publishedEntryId?: Types.ObjectId
+    publishedAt?: Date
+    discardedAt?: Date
     createdAt: Date
     updatedAt: Date
 }

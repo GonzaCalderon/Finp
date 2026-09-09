@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-09
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -84,8 +84,9 @@ backlog paralelo:
    Tarjeta `1/1`, fecha civil, dinero exacto por escala, una sola alta v2 desde
    portada o detalle, monto final sin abreviar y preservación de participantes
    históricos inactivos.
-2. **Borrador privado persistente — FINP-P1-013.** Un recurso activo por usuario
-   y Espacio, autosave, revisión optimista, card privada en Movimientos y
+2. **Borrador privado persistente — completada el 2026-09-09 dentro de
+   FINP-P1-013.** Un recurso activo por usuario y Espacio, autosave serializado,
+   revisión optimista, card privada en Movimientos, descarte confirmado y
    publicación atómica e idempotente.
 3. **Adjuntos recuperables — FINP-P1-013.** Preparación privada sobre el
    borrador, validación, reintento, finalización al publicar y limpieza
@@ -377,7 +378,7 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P1-013 — Cierre integral de experiencia de Espacios
 
-- Estado: `pendiente`.
+- Estado: `en curso`.
 - Dependencia de cierre: FINP-P0-006. El checkpoint de exactitud de `Nuevo
   gasto` ya habilita las etapas 2 a 4; el ítem no puede cerrarse antes que el P0.
 - Decisión:
@@ -438,6 +439,11 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     parcialmente dinero, actividad o relaciones;
   - un conflicto entre clientes se revisa y un fallo conserva datos y adjuntos
     para reintentar.
+- Evidencia de etapa 2: modelo separado con índice único parcial, rutas privadas
+  por autor, revisión optimista, publicación dentro de la misma transacción del
+  movimiento, fallback local sólo ante error, card fuera de totales y 8
+  recorridos E2E aprobados en Chromium desktop/mobile. Los adjuntos del
+  borrador permanecen para la etapa 3.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.

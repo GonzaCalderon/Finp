@@ -170,8 +170,11 @@ function SpacesQuickEntryFlow({
 
     if (!item || !spaceId) return null
 
-    const handleCreateEntry = async (payload: SpaceEntryFormData) => {
-        const entry = await entriesApi.createEntry(payload)
+    const handleCreateEntry = async (
+        payload: SpaceEntryFormData,
+        options?: Parameters<typeof entriesApi.createEntry>[1]
+    ) => {
+        const entry = await entriesApi.createEntry(payload, options)
         onSaved()
         return entry
     }
@@ -190,6 +193,7 @@ function SpacesQuickEntryFlow({
             defaultSplitMode={item.space.defaultSplitMode}
             spaceMode={item.space.mode}
             contractVersion={item.space.contractVersion}
+            spaceRevision={item.space.revision ?? 0}
             draftKey={spaceId}
             quotes={quotesApi.data}
         />

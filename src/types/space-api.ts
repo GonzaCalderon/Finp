@@ -104,6 +104,7 @@ export interface SpaceEntryDto {
 
 export interface SpaceMovementPageDto {
     items: SpaceEntryDto[]
+    draft?: SpaceEntryDraftDto
     nextCursor: string | null
     limit: number
     filter?: {
@@ -112,6 +113,44 @@ export interface SpaceMovementPageDto {
         debtCurrencies: string[]
     }
     subtotalByCurrency?: Record<string, MoneyDto>
+}
+
+export interface SpaceEntryDraftDto {
+    id: string
+    contractVersion: 2
+    intent: 'new_expense'
+    status: 'active' | 'publishing' | 'published' | 'discarded'
+    revision: number
+    step: 1 | 2 | 3
+    expectedSpaceRevision: number
+    fields: {
+        title?: string
+        description?: string
+        amount?: number
+        money?: MoneyDto
+        currency?: string
+        exchangeRate?: number
+        exchangeRateDecimal?: string
+        conversionSnapshot?: ConversionSnapshot
+        expectedQuoteFingerprint?: string
+        dateKey?: string
+        timezone?: string
+        paidByParticipantId?: string
+        sharedWithParticipantIds?: string[]
+        splitMode?: SpaceSplitMode
+        splitAllocations?: Array<{ participantId: string; percentage?: number; amount?: number }>
+        spaceCategoryId?: string
+        notes?: string
+        personalImpact?: {
+            accountId?: string
+            categoryId?: string
+            description?: string
+            linkedTransactionId?: string
+        }
+    }
+    publishedEntryId?: string
+    createdAt: string
+    updatedAt: string
 }
 
 export interface SpaceSummaryDto {

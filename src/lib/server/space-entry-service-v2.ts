@@ -3,6 +3,7 @@ import { Types, type ClientSession } from 'mongoose'
 import {
     SpaceCategory,
     SpaceEntry,
+    SpaceEntryDraft,
     SpaceEntryPersonalImpact,
     Transaction,
 } from '@/lib/models'
@@ -66,6 +67,10 @@ export interface CreateSpaceEntryV2Input {
         categoryId?: string
         description?: string
         linkedTransactionId?: string
+    }
+    draftPublication?: {
+        draftId: string
+        expectedRevision: number
     }
 }
 
@@ -320,6 +325,24 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
         idempotencyKey: input.idempotencyKey,
         payload,
         run: async (session, operationId) => {
+            if (input.draftPublication) {
+                const draft = await SpaceEntryDraft.findOne({
+                    _id: input.draftPublication.draftId,
+                    creatorUserId: input.actorUserId,
+                    spaceId: input.spaceId,
+                    contractVersion: 2,
+                    intent: 'new_expense',
+                    status: 'active',
+                    revision: input.draftPublication.expectedRevision,
+                }).session(session)
+                if (!draft) {
+                    throw new ServiceError(
+                        409,
+                        'SPACE_DRAFT_VERSION_CONFLICT',
+                        'El borrador cambió antes de comenzar la publicación.'
+                    )
+                }
+            }
             const context = await loadSpaceApplicationContextV2({
                 spaceId: input.spaceId,
                 actorUserId: input.actorUserId,
@@ -488,6 +511,33 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 participants: context.participants,
                 session,
             })
+            if (input.draftPublication) {
+                const draftUpdate = await SpaceEntryDraft.updateOne(
+                    {
+                        _id: input.draftPublication.draftId,
+                        creatorUserId: input.actorUserId,
+                        spaceId: input.spaceId,
+                        status: 'active',
+                        revision: input.draftPublication.expectedRevision,
+                    },
+                    {
+                        $set: {
+                            status: 'published',
+                            publishedEntryId: entry._id,
+                            publishedAt: new Date(),
+                        },
+                        $inc: { revision: 1 },
+                    },
+                    { session }
+                )
+                if (draftUpdate.modifiedCount !== 1) {
+                    throw new ServiceError(
+                        409,
+                        'SPACE_DRAFT_VERSION_CONFLICT',
+                        'El borrador cambió durante la publicación.'
+                    )
+                }
+            }
             return {
                 value: { entryId: entry._id.toString() },
                 resultRefs: {

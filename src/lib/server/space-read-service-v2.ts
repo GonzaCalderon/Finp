@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import {
     Space,
     SpaceEntry,
+    SpaceEntryDraft,
     SpaceEntryPersonalImpact,
     SpaceParticipant,
     User,
@@ -36,8 +37,10 @@ import type {
     SpaceEntryDto,
     SpacePersonalImpactDto,
     SpaceSummaryDto,
+    ISpaceEntryDraft,
 } from '@/types'
 import { getSpaceMigrationPublicStatus } from '@/lib/server/migrations/space-v2-migration-public'
+import { toSpaceEntryDraftDto } from '@/lib/server/space-entry-draft-service-v2'
 
 const DEFAULT_MOVEMENT_LIMIT = 50
 const MAX_MOVEMENT_LIMIT = 100
@@ -461,9 +464,18 @@ export async function getSpaceDetailV2(input: {
     const owner = space.timezone
         ? null
         : await User.findById(space.ownerUserId, { timezone: 1 }).lean<{ timezone?: string } | null>()
-    const rawEntries = await SpaceEntry.find({ spaceId: input.spaceId })
-        .sort({ dateKey: -1, _id: -1, date: -1 })
-        .lean<ISpaceEntry[]>()
+    const [rawEntries, activeDraft] = await Promise.all([
+        SpaceEntry.find({ spaceId: input.spaceId })
+            .sort({ dateKey: -1, _id: -1, date: -1 })
+            .lean<ISpaceEntry[]>(),
+        SpaceEntryDraft.findOne({
+            contractVersion: 2,
+            spaceId: input.spaceId,
+            creatorUserId: input.actorUserId,
+            intent: 'new_expense',
+            status: 'active',
+        }).lean<ISpaceEntryDraft | null>(),
+    ])
     const warnings: SpaceDetailDto['warnings'] = []
     let readMode: SpaceDetailDto['readMode'] = 'full'
     let readOnlyReason: string | undefined
@@ -602,6 +614,7 @@ export async function getSpaceDetailV2(input: {
                 actorUserId: input.actorUserId,
                 capabilities: capabilitySet,
             })),
+            draft: activeDraft ? toSpaceEntryDraftDto(activeDraft) : undefined,
             nextCursor: hasMore && lastVisible
                 ? encodeCursor({ dateKey: lastVisible.dateKey, id: lastVisible.id, filterHash })
                 : null,

@@ -165,6 +165,12 @@ recuperables y cierre de experiencia dentro de FINP-P1-013. FINP-P2-007 puede
 mostrar borradores en una futura bandeja diaria, pero no es dependencia ni
 fuente de verdad de este recorrido.
 
+La persistencia base se implementó el 2026-09-09: modelo separado, unicidad,
+aislamiento por autor, autosave con revisión, reanudación, card privada,
+descarte y publicación transaccional. La metadata y el ciclo recuperable de
+adjuntos continúan en la etapa 3; hasta entonces los archivos conservan el flujo
+posterior a la creación del movimiento y no forman parte del borrador.
+
 Nivel de aprendizaje: `no aplica`. Finp observa estados técnicos de guardado,
 pero no aprende ni completa monto, moneda, fecha, pagador, reparto o impacto.
 
