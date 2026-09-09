@@ -202,6 +202,10 @@ function toEntryDto(input: {
         splitMode: entry.splitMode,
         splitAllocations: entry.splitAllocations,
         shares: entry.shares,
+        attachments: entry.attachments.map((attachment) => ({
+            ...attachment,
+            createdAt: attachment.createdAt.toISOString(),
+        })),
         currentUserImpact: impact ? toImpactDto(impact) : undefined,
         capabilities: [
             ...(canEdit && entry.status === 'recorded' && entry.type !== 'settlement' ? ['edit' as const] : []),

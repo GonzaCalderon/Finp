@@ -4,6 +4,11 @@ import { SpaceEntryDraft } from '@/lib/models'
 import { ServiceError, isDuplicateKeyError } from '@/lib/server/errors'
 import { loadSpaceApplicationContextV2 } from '@/lib/server/space-application-context-v2'
 import { createSpaceEntryV2 } from '@/lib/server/space-entry-service-v2'
+import {
+    cleanupDiscardedDraftAttachments,
+    publishedAttachmentsFromDraft,
+    visibleDraftAttachments,
+} from '@/lib/server/space-entry-draft-attachment-service'
 import { assertSpaceV2WriteEnabled } from '@/lib/server/space-v2-write-gate'
 import { moneyMatchesDecimal } from '@/lib/utils/money'
 import { extractId } from '@/lib/utils/spaces'
@@ -68,6 +73,7 @@ export function toSpaceEntryDraftDto(draft: ISpaceEntryDraft): SpaceEntryDraftDt
                 linkedTransactionId: extractId(draft.actorPersonalImpact.linkedTransactionId),
             } : undefined,
         },
+        attachments: visibleDraftAttachments(draft),
         publishedEntryId: extractId(draft.publishedEntryId),
         createdAt: draft.createdAt.toISOString(),
         updatedAt: draft.updatedAt.toISOString(),
@@ -279,13 +285,42 @@ export async function discardSpaceEntryDraftV2(input: {
     if (draft.status !== 'active' || draft.revision !== input.expectedRevision) {
         throw new ServiceError(409, 'SPACE_DRAFT_VERSION_CONFLICT', 'El borrador cambió antes de descartarse.')
     }
+    const hasVisibleAttachments = (draft.attachments ?? []).some((attachment) =>
+        attachment.status === 'preparing' || attachment.status === 'ready' || attachment.status === 'upload_failed'
+    )
     const updated = await SpaceEntryDraft.findOneAndUpdate(
         { _id: draft._id, creatorUserId: input.actorUserId, status: 'active', revision: input.expectedRevision },
-        { $set: { status: 'discarded', discardedAt: new Date() }, $inc: { revision: 1 } },
-        { new: true }
+        {
+            $set: {
+                status: 'discarded',
+                discardedAt: new Date(),
+                ...(hasVisibleAttachments ? {
+                    'attachments.$[visible].status': 'cleanup_pending',
+                    'attachments.$[visible].deletedAt': new Date(),
+                    'attachments.$[visible].lastAttemptAt': new Date(),
+                } : {}),
+            },
+            $inc: { revision: 1 },
+        },
+        {
+            new: true,
+            ...(hasVisibleAttachments ? {
+                arrayFilters: [{ 'visible.status': { $in: ['preparing', 'ready', 'upload_failed'] } }],
+            } : {}),
+        }
     ).lean<ISpaceEntryDraft | null>()
     if (!updated) throw new ServiceError(409, 'SPACE_DRAFT_VERSION_CONFLICT', 'El borrador cambió antes de descartarse.')
-    return toSpaceEntryDraftDto(updated)
+    try {
+        await cleanupDiscardedDraftAttachments({ draft: updated })
+    } catch (error) {
+        console.error('[space-draft-attachment]', {
+            draftId: updated._id.toString(),
+            transition: 'discard_cleanup_pending',
+            code: error instanceof Error ? error.name : 'UNKNOWN',
+        })
+    }
+    const finalDraft = await SpaceEntryDraft.findById(updated._id).lean<ISpaceEntryDraft | null>()
+    return toSpaceEntryDraftDto(finalDraft ?? updated)
 }
 
 function requirePublishableDraft(draft: ISpaceEntryDraft) {
@@ -297,6 +332,7 @@ function requirePublishableDraft(draft: ISpaceEntryDraft) {
             'Completá monto, descripción, fecha, pagador y reparto antes de publicar.'
         )
     }
+    publishedAttachmentsFromDraft(draft)
 }
 
 export async function publishSpaceEntryDraftV2(input: {

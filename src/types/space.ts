@@ -114,7 +114,34 @@ export interface ISpaceEntryAttachment {
     size: number
     storageProvider: 'vercel_blob'
     storageKey: string
+    contentSha256?: string
     createdAt: Date
+}
+
+export type SpaceEntryDraftAttachmentStatus =
+    | 'preparing'
+    | 'ready'
+    | 'upload_failed'
+    | 'cleanup_pending'
+    | 'deleted'
+
+export interface ISpaceEntryDraftAttachment {
+    _id: Types.ObjectId
+    uploadedByUserId: Types.ObjectId
+    uploadIdempotencyKey: string
+    status: SpaceEntryDraftAttachmentStatus
+    fileName?: string
+    declaredMimeType?: string
+    mimeType?: string
+    size?: number
+    contentSha256?: string
+    storageProvider: 'vercel_blob'
+    storageKey?: string
+    createdAt: Date
+    lastAttemptAt: Date
+    confirmedAt?: Date
+    deletedAt?: Date
+    lastErrorCode?: string
 }
 
 export interface ISpaceEntrySplitAllocation {
@@ -255,6 +282,7 @@ export interface ISpaceEntryDraft {
         description?: string
         linkedTransactionId?: Types.ObjectId
     }
+    attachments?: ISpaceEntryDraftAttachment[]
     publishedEntryId?: Types.ObjectId
     publishedAt?: Date
     discardedAt?: Date

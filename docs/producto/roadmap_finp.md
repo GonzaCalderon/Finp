@@ -88,7 +88,7 @@ backlog paralelo:
    FINP-P1-013.** Un recurso activo por usuario y Espacio, autosave serializado,
    revisión optimista, card privada en Movimientos, descarte confirmado y
    publicación atómica e idempotente.
-3. **Adjuntos recuperables — contrato aprobado, implementación pendiente en
+3. **Adjuntos recuperables — completada el 2026-09-09 dentro de
    FINP-P1-013.** Preparación privada sobre el borrador, cinco archivos de hasta
    10 MB, validación real, reintento, transferencia transaccional de metadata y
    limpieza idempotente según la
@@ -444,9 +444,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 - Evidencia de etapa 2: modelo separado con índice único parcial, rutas privadas
   por autor, revisión optimista, publicación dentro de la misma transacción del
   movimiento, fallback local sólo ante error, card fuera de totales y 8
-  recorridos E2E aprobados en Chromium desktop/mobile. Los adjuntos del
-  borrador permanecen para la etapa 3.
-- Contrato previo de etapa 3, aprobado el 2026-09-09:
+  recorridos E2E aprobados en Chromium desktop/mobile.
+- Evidencia de etapa 3, completada el 2026-09-09:
   - MongoDB autoriza y conserva metadata; Vercel Blob mantiene sólo el binario
     privado y no participa de la transacción financiera;
   - cada preparación tiene identidad idempotente y estados recuperables; una
@@ -455,6 +454,12 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     acotado resuelve preparaciones antiguas y limpiezas pendientes;
   - el cierre exige aislamiento del autor, validación de firma/tamaño/formato,
     fallos inyectados, reanudación, reintento y publicación en mobile y desktop.
+  - unitarias de validación, uploader y reconciliador; integración MongoDB real
+    con fallos de Blob y borrado inyectados; y E2E aprobado en Chromium desktop
+    y Pixel 7 para preparar, cerrar, reanudar, publicar y leer el adjunto.
+  - La suite de integración completa posterior al último endurecimiento no pudo
+    abrir MongoDB Atlas desde este entorno por EACCES/whitelist; queda como
+    verificación operativa pendiente fuera de este entorno.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.

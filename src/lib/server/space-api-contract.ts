@@ -36,7 +36,11 @@ function failureStateFor(error: ServiceError): SpaceMutationFailureState {
     return 'not_started'
 }
 
-export function spaceApiErrorResponse(error: unknown, fallbackMessage: string) {
+export function spaceApiErrorResponse(
+    error: unknown,
+    fallbackMessage: string,
+    fallbackCode: SpaceApiErrorDto['code'] = 'SPACE_INTERNAL_ERROR'
+) {
     if (isServiceError(error)) {
         const body: SpaceApiErrorDto = {
             error: error.message,
@@ -53,7 +57,7 @@ export function spaceApiErrorResponse(error: unknown, fallbackMessage: string) {
     console.error('[spaces-api]', error)
     return NextResponse.json<SpaceApiErrorDto>({
         error: fallbackMessage,
-        code: 'SPACE_INTERNAL_ERROR',
+        code: fallbackCode,
         failureState: 'not_started',
         retryable: true,
     }, { status: 500 })

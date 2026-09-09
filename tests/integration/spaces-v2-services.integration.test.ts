@@ -41,6 +41,13 @@ import {
     publishSpaceEntryDraftV2,
     saveSpaceEntryDraftV2,
 } from '@/lib/server/space-entry-draft-service-v2'
+import {
+    prepareSpaceEntryDraftAttachment,
+    readSpaceEntryDraftAttachment,
+    reconcileSpaceEntryDraftAttachments,
+    removeSpaceEntryDraftAttachment,
+} from '@/lib/server/space-entry-draft-attachment-service'
+import { createMemorySpaceAttachmentStorage } from '@/lib/server/space-attachment-storage'
 
 describe.sequential('spaces v2 application services — Mongo transaction integration', () => {
     const runId = new Types.ObjectId().toHexString()
@@ -395,32 +402,121 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             fields: ownerFields,
         })).rejects.toMatchObject({ code: 'SPACE_DRAFT_VERSION_CONFLICT' })
 
-        const published = await publishSpaceEntryDraftV2({
+        const attachmentStorage = createMemorySpaceAttachmentStorage()
+        const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+        const prepared = await prepareSpaceEntryDraftAttachment({
             actorUserId: ownerUserId,
             spaceId: draftSpaceId,
             draftId: first.id,
             expectedRevision: 1,
+            idempotencyKey: `attachment-${runId}`,
+            file: new File([pngBytes], 'ticket.png', { type: 'image/png' }),
+            storage: attachmentStorage,
+        })
+        expect(prepared).toMatchObject({ draftRevision: 3, attachment: { status: 'ready', fileName: 'ticket.png' } })
+        const attachmentId = prepared.attachment!.id
+        const replayedAttachment = await prepareSpaceEntryDraftAttachment({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 1,
+            idempotencyKey: `attachment-${runId}`,
+            file: new File([pngBytes], 'ticket.png', { type: 'image/png' }),
+            storage: attachmentStorage,
+        })
+        expect(replayedAttachment).toMatchObject({ draftRevision: 3, attachment: { id: attachmentId } })
+        await expect(readSpaceEntryDraftAttachment({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            attachmentId,
+            storage: attachmentStorage,
+        })).rejects.toMatchObject({ status: 404 })
+
+        const published = await publishSpaceEntryDraftV2({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 3,
         })
         expect(published.replayed).toBe(false)
         const publishedEntryId = published.resultRefs.spaceEntryId?.toString()
         expect(await SpaceEntry.countDocuments({ _id: publishedEntryId, title: 'Borrador privado actualizado' })).toBe(1)
+        const publishedEntry = await SpaceEntry.findById(publishedEntryId).lean()
+        expect(publishedEntry?.attachments).toHaveLength(1)
+        expect(publishedEntry?.attachments?.[0]).toMatchObject({
+            fileName: 'ticket.png',
+            mimeType: 'image/png',
+            storageProvider: 'vercel_blob',
+        })
+        expect(publishedEntry?.attachments?.[0]?.contentSha256).toMatch(/^[a-f\d]{64}$/)
         expect(await getActiveSpaceEntryDraftV2({ actorUserId: ownerUserId, spaceId: draftSpaceId })).toBeNull()
 
         const replay = await publishSpaceEntryDraftV2({
             actorUserId: ownerUserId,
             spaceId: draftSpaceId,
             draftId: first.id,
-            expectedRevision: 1,
+            expectedRevision: 3,
         })
         expect(replay.replayed).toBe(true)
         expect(replay.resultRefs.spaceEntryId?.toString()).toBe(publishedEntryId)
         expect(await SpaceEntry.countDocuments({ _id: publishedEntryId })).toBe(1)
 
-        const discarded = await discardSpaceEntryDraftV2({
+        const failingStorage = {
+            ...createMemorySpaceAttachmentStorage(),
+            put: async () => { throw new Error('INJECTED_BLOB_FAILURE') },
+        }
+        await expect(prepareSpaceEntryDraftAttachment({
             actorUserId: memberUserId,
             spaceId: draftSpaceId,
             draftId: memberDraft.id,
             expectedRevision: 0,
+            idempotencyKey: `failed-attachment-${runId}`,
+            file: new File([pngBytes], 'fallo.png', { type: 'image/png' }),
+            storage: failingStorage,
+        })).rejects.toMatchObject({ status: 503, code: 'STORAGE_UNAVAILABLE' })
+        const failedDraft = await SpaceEntryDraft.findById(memberDraft.id).lean()
+        expect(failedDraft).toMatchObject({ revision: 2 })
+        expect(failedDraft?.attachments?.[0]?.status).toBe('upload_failed')
+
+        const recoveryStorage = createMemorySpaceAttachmentStorage()
+        const failedAttachmentId = failedDraft!.attachments![0]._id.toString()
+        const retried = await prepareSpaceEntryDraftAttachment({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            draftId: memberDraft.id,
+            attachmentId: failedAttachmentId,
+            expectedRevision: 2,
+            idempotencyKey: `retry-attachment-${runId}`,
+            file: new File([pngBytes], 'fallo.png', { type: 'image/png' }),
+            storage: recoveryStorage,
+        })
+        expect(retried).toMatchObject({ draftRevision: 4, attachment: { status: 'ready' } })
+
+        const deleteFailingStorage = {
+            ...recoveryStorage,
+            delete: async () => { throw new Error('INJECTED_DELETE_FAILURE') },
+        }
+        const removal = await removeSpaceEntryDraftAttachment({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            draftId: memberDraft.id,
+            attachmentId: failedAttachmentId,
+            expectedRevision: 4,
+            storage: deleteFailingStorage,
+        })
+        expect(removal).toEqual({ draftRevision: 5, cleanupPending: true })
+        const reconciliation = await reconcileSpaceEntryDraftAttachments({
+            draftId: memberDraft.id,
+            dryRun: false,
+            storage: recoveryStorage,
+        })
+        expect(reconciliation.deleted).toBe(1)
+
+        const discarded = await discardSpaceEntryDraftV2({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            draftId: memberDraft.id,
+            expectedRevision: 6,
         })
         expect(discarded.status).toBe('discarded')
         expect(await getActiveSpaceEntryDraftV2({ actorUserId: memberUserId, spaceId: draftSpaceId })).toBeNull()

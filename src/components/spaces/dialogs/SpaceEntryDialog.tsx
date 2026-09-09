@@ -73,9 +73,8 @@ import {
     SpaceDialogTextArea,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import {
-    SpaceAttachmentDraft,
-    SpaceAttachmentsUploader,
-} from '@/components/spaces/dialogs/SpaceAttachmentsUploader'
+    SpaceDraftAttachmentsUploader,
+} from '@/components/spaces/dialogs/SpaceDraftAttachmentsUploader'
 import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitConfigurator'
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
@@ -305,12 +304,6 @@ function sanitizeDraft({
     }
 }
 
-function revokeAttachment(attachment: SpaceAttachmentDraft) {
-    if (attachment.previewUrl) {
-        URL.revokeObjectURL(attachment.previewUrl)
-    }
-}
-
 function draftPayloadFromDto(draft: SpaceEntryDraftDto): EntryDraftPayload {
     return {
         type: 'expense',
@@ -493,7 +486,7 @@ export function SpaceEntryDialog({
             spaceMode,
         })
     )
-    const [attachments, setAttachments] = useState<SpaceAttachmentDraft[]>([])
+    const [draftAttachmentsBlocked, setDraftAttachmentsBlocked] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -507,7 +500,6 @@ export function SpaceEntryDialog({
     const [recentTransactions, setRecentTransactions] = useState<ITransaction[]>([])
     const [draftHydrated, setDraftHydrated] = useState(false)
     const [discardDraftOpen, setDiscardDraftOpen] = useState(false)
-    const attachmentsRef = useRef<SpaceAttachmentDraft[]>([])
     const scrollContainerRef = useRef<HTMLDivElement>(null)
     const previousCurrencyRef = useRef(form.currency)
     const draftBaselineRef = useRef<string | null>(null)
@@ -528,26 +520,10 @@ export function SpaceEntryDialog({
         load: loadDraft,
         save: saveDraft,
         discard: discardDraft,
+        uploadAttachment: uploadDraftAttachment,
+        removeAttachment: removeDraftAttachment,
         setDraft: setPersistedDraft,
     } = draftApi
-
-    useEffect(() => {
-        attachmentsRef.current = attachments
-    }, [attachments])
-
-    useEffect(() => {
-        return () => {
-            attachmentsRef.current.forEach(revokeAttachment)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (open) return
-        setAttachments((previous) => {
-            previous.forEach(revokeAttachment)
-            return previous.length > 0 ? [] : previous
-        })
-    }, [open])
 
     useEffect(() => {
         if (!open) {
@@ -602,10 +578,7 @@ export function SpaceEntryDialog({
                 linkedTransactionId: undefined,
             })
             setHasSubsequentSettlementWarning(initialHasSubsequentSettlement ?? false)
-            setAttachments((previous) => {
-                previous.forEach(revokeAttachment)
-                return []
-            })
+            setDraftAttachmentsBlocked(false)
             setDraftHydrated(true)
             return
         }
@@ -618,10 +591,7 @@ export function SpaceEntryDialog({
             spaceMode,
         })
         setForm(defaults)
-        setAttachments((previous) => {
-            previous.forEach(revokeAttachment)
-            return []
-        })
+        setDraftAttachmentsBlocked(false)
 
         if (contractVersion !== 2) {
             const savedDraft =
@@ -1240,45 +1210,17 @@ export function SpaceEntryDialog({
         }
     }
 
-    const handleFilesSelected = (files: File[]) => {
-        const nextAttachments = files.map((file, index) => ({
-            id:
-                typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                    ? crypto.randomUUID()
-                    : `${Date.now()}-${index}`,
-            file,
-            previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-        }))
-        setAttachments((previous) => [...previous, ...nextAttachments])
-    }
-
-    const handleRemoveAttachment = (id: string) => {
-        setAttachments((previous) => {
-            const target = previous.find((attachment) => attachment.id === id)
-            if (target) revokeAttachment(target)
-            return previous.filter((attachment) => attachment.id !== id)
-        })
-    }
-
-    const uploadDraftAttachments = async (entryId: string, draftAttachments: SpaceAttachmentDraft[]) => {
-        if (draftAttachments.length === 0) return true
-
-        let allUploaded = true
-        for (const attachment of draftAttachments) {
-            try {
-                const formData = new FormData()
-                formData.append('file', attachment.file)
-                await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/attachments`, {
-                    method: 'POST',
-                    body: formData,
-                })
-            } catch {
-                allUploaded = false
-            }
+    const handleDraftAttachmentUpload = async (
+        file: File,
+        idempotencyKey: string,
+        attachmentId?: string
+    ) => {
+        let saved = await persistDraftSnapshot(form, step)
+        if (!saved) {
+            saved = await saveDraft(draftFieldsFromForm(form, reportingCurrency, quotes), step)
+            onDraftChange?.(saved)
         }
-
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        return allUploaded
+        await uploadDraftAttachment({ file, idempotencyKey, attachmentId })
     }
 
     const handleEditSubmit = async () => {
@@ -1505,7 +1447,7 @@ export function SpaceEntryDialog({
             if (contractVersion === 2 && !savedDraft) {
                 throw new Error('No pudimos preparar el borrador para publicarlo.')
             }
-            const entry = await onSubmit(
+            await onSubmit(
                 submission,
                 savedDraft ? {
                     draftPublication: {
@@ -1514,18 +1456,7 @@ export function SpaceEntryDialog({
                     },
                 } : undefined
             )
-            const entryId = extractId(entry._id)
-            if (entryId && attachmentsRef.current.length > 0) {
-                const uploaded = await uploadDraftAttachments(entryId, attachmentsRef.current)
-                if (!uploaded) {
-                    warning('El movimiento se guardó, pero algún comprobante no pudo subirse.')
-                }
-            }
             clearDraftCaches()
-            setAttachments((previous) => {
-                previous.forEach(revokeAttachment)
-                return []
-            })
             onOpenChange(false)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No pudimos guardar el gasto.')
@@ -2158,10 +2089,14 @@ export function SpaceEntryDialog({
 
                                     {/* Adjuntos — solo en modo crear */}
                                     {mode === 'create' ? (
-                                        <SpaceAttachmentsUploader
-                                            attachments={attachments}
-                                            onFilesSelected={handleFilesSelected}
-                                            onRemove={handleRemoveAttachment}
+                                        <SpaceDraftAttachmentsUploader
+                                            attachments={persistedDraft?.attachments ?? []}
+                                            disabled={submitting || draftLoading}
+                                            onUpload={handleDraftAttachmentUpload}
+                                            onRemove={async (attachmentId) => {
+                                                await removeDraftAttachment(attachmentId)
+                                            }}
+                                            onBlockingChange={setDraftAttachmentsBlocked}
                                         />
                                     ) : null}
 
@@ -2234,6 +2169,7 @@ export function SpaceEntryDialog({
                             }}
                             disabled={
                                 submitting ||
+                                draftAttachmentsBlocked ||
                                 (mode === 'create' && step === 3 && contractVersion === 2 && (previewLoading || !preview))
                             }
                         >

@@ -415,9 +415,10 @@ fuente de verdad de este recorrido.
 
 La persistencia base se implementó el 2026-09-09: modelo separado, unicidad,
 aislamiento por autor, autosave con revisión, reanudación, card privada,
-descarte y publicación transaccional. La metadata y el ciclo recuperable de
-adjuntos continúan en la etapa 3; hasta entonces los archivos conservan el flujo
-posterior a la creación del movimiento y no forman parte del borrador.
+descarte y publicación transaccional. Ese mismo día la etapa 3 retiró la carga
+posterior del alta: el borrador prepara binarios privados mediante el adapter,
+publica metadata `ready` en la transacción financiera y conserva revocación,
+limpieza y reconciliación idempotentes.
 
 Nivel de aprendizaje: `no aplica`. Finp observa estados técnicos de guardado,
 pero no aprende ni completa monto, moneda, fecha, pagador, reparto o impacto.
@@ -441,6 +442,21 @@ pero no aprende ni completa monto, moneda, fecha, pagador, reparto o impacto.
   único movimiento al publicar.
 - Privacidad: participante, `admin` y `owner` ajenos no pueden enumerar, leer,
   editar, publicar ni descargar adjuntos del borrador.
+
+Evidencia de cierre de etapa 3, 2026-09-09:
+
+- unitarias de firma/hash, saneamiento, CLI y estados/accesibilidad del uploader;
+- integración MongoDB real con replay, aislamiento entre autores, fallo de
+  carga y borrado inyectados, reintento, reconciliación y transferencia de
+  metadata sin duplicar movimiento;
+- E2E independiente aprobado en Chromium desktop y Pixel 7 para preparación,
+  bloqueo del CTA, cierre, reanudación, publicación y lectura autorizada;
+- `typecheck`, `lint`, comprobación documental y preflight E2E aprobados antes
+  del cierre; el build también quedó aprobado. La repetición de la suite de
+  integración completa posterior al último endurecimiento no pudo abrir MongoDB
+  Atlas desde este entorno (EACCES/whitelist); la prueba dirigida de servicios
+  de esta etapa había quedado aprobada 13/13 y la limitación no deja un cambio
+  financiero sin verificar en el código modificado.
 
 ## 10. Referencias
 

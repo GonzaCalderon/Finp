@@ -58,4 +58,15 @@ export const publishSpaceEntryDraftSchema = z.object({
 
 export const discardSpaceEntryDraftSchema = publishSpaceEntryDraftSchema
 
+export const mutateSpaceEntryDraftAttachmentSchema = z.object({
+    draftId: draftObjectIdSchema,
+    expectedRevision: z.coerce.number().int().nonnegative(),
+    idempotencyKey: z.string().trim().min(8).max(200),
+}).strict()
+
+export const deleteSpaceEntryDraftAttachmentSchema = z.object({
+    draftId: draftObjectIdSchema,
+    expectedRevision: z.number().int().nonnegative(),
+}).strict()
+
 export type SpaceEntryDraftFieldsInput = z.infer<typeof spaceEntryDraftFieldsSchema>

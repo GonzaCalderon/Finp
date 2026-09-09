@@ -68,6 +68,13 @@ export interface SpaceEntryReadV2 {
     splitMode: ISpaceEntry['splitMode']
     splitAllocations: Array<{ participantId: string; percentage?: number; amount?: number }>
     shares: SpaceShareV2[]
+    attachments: Array<{
+        id: string
+        fileName: string
+        mimeType: string
+        size: number
+        createdAt: Date
+    }>
     revision: number
     createdAt: Date
     updatedAt: Date
@@ -212,6 +219,13 @@ export function adaptSpaceEntryToV2(input: {
             splitMode: input.entry.splitMode,
             splitAllocations,
             shares,
+            attachments: (input.entry.attachments ?? []).map((attachment) => ({
+                id: requiredId(attachment._id, 'LEGACY_ENTRY_INCOMPATIBLE'),
+                fileName: attachment.fileName,
+                mimeType: attachment.mimeType,
+                size: attachment.size,
+                createdAt: new Date(attachment.createdAt),
+            })),
             revision: input.entry.revision ?? input.entry.editCount ?? 0,
             createdAt: input.entry.createdAt,
             updatedAt: input.entry.updatedAt,

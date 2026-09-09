@@ -9,6 +9,7 @@ import {
 } from '@/lib/models'
 import { ServiceError } from '@/lib/server/errors'
 import { getSpaceCapabilitiesV2 } from '@/lib/server/space-capabilities'
+import { publishedAttachmentsFromDraft } from '@/lib/server/space-entry-draft-attachment-service'
 import {
     buildSpaceImpactOriginSnapshotV2,
     createSpaceActivityEventV2,
@@ -38,7 +39,7 @@ import {
     resolveSpaceReferenceQuote,
 } from '@/lib/server/space-quote-service'
 import { moneyFromDecimal, moneyMatchesDecimal, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
-import type { ISpaceEntry, ISpaceParticipant, ITransaction } from '@/types'
+import type { ISpaceEntry, ISpaceEntryDraft, ISpaceParticipant, ITransaction } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
 
 export interface CreateSpaceEntryV2Input {
@@ -325,6 +326,7 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
         idempotencyKey: input.idempotencyKey,
         payload,
         run: async (session, operationId) => {
+            let publicationDraft: ISpaceEntryDraft | undefined
             if (input.draftPublication) {
                 const draft = await SpaceEntryDraft.findOne({
                     _id: input.draftPublication.draftId,
@@ -334,7 +336,7 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                     intent: 'new_expense',
                     status: 'active',
                     revision: input.draftPublication.expectedRevision,
-                }).session(session)
+                }).session(session).lean<ISpaceEntryDraft | null>()
                 if (!draft) {
                     throw new ServiceError(
                         409,
@@ -342,6 +344,8 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                         'El borrador cambió antes de comenzar la publicación.'
                     )
                 }
+                publishedAttachmentsFromDraft(draft)
+                publicationDraft = draft
             }
             const context = await loadSpaceApplicationContextV2({
                 spaceId: input.spaceId,
@@ -473,6 +477,9 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 splitMode: input.splitMode,
                 splitAllocations: input.splitAllocations,
                 notes: input.notes?.trim() || undefined,
+                attachments: publicationDraft
+                    ? publishedAttachmentsFromDraft(publicationDraft)
+                    : undefined,
                 revision: 0,
                 operationId,
             }], { session })

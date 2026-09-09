@@ -174,6 +174,80 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(page.getByTestId('space-entry-draft-card')).toHaveCount(0)
     })
 
+    test('prepara, recupera y publica un adjunto privado con el borrador', async ({ page }, testInfo) => {
+        testInfo.setTimeout(60_000)
+        const description = `Adjunto recuperable ${testInfo.project.name}`
+        await loginAsTestUser(page)
+        await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
+        const draftLoad = page.waitForResponse((response) =>
+            response.request().method() === 'GET' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft`)
+        )
+        const directCreate = page.getByRole('button', { name: /nuevo movimiento/i }).first()
+        if (await directCreate.isVisible()) await directCreate.click()
+        else {
+            await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+            await page.getByRole('button', { name: 'Agregar movimiento' }).click()
+        }
+        const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
+        expect((await draftLoad).status()).toBe(200)
+        await dialog.locator('#entry-amount').fill('91,25')
+        await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
+        await expect(dialog.getByTestId('space-entry-draft-save-status'))
+            .toContainText('Guardado de forma privada', { timeout: 15_000 })
+
+        await page.route('**/entry-draft/attachments', async (route) => {
+            await new Promise((resolve) => setTimeout(resolve, 1_000))
+            await route.continue()
+        })
+        const uploadResponse = page.waitForResponse((response) =>
+            response.request().method() === 'POST' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft/attachments`)
+        )
+        const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+        await dialog.getByLabel('Elegir comprobantes').setInputFiles({
+            name: 'ticket-e2e.png',
+            mimeType: 'image/png',
+            buffer: png,
+        })
+        await expect(dialog.getByTestId('space-draft-attachment-blocker')).toBeVisible()
+        await expect(dialog.getByRole('button', { name: /^Guardar;/ })).toBeDisabled()
+        expect((await uploadResponse).status()).toBe(201)
+        await page.unroute('**/entry-draft/attachments')
+        await expect(dialog.getByText('ticket-e2e.png', { exact: true })).toBeVisible()
+        await expect(dialog.getByText(/ · Listo$/)).toBeVisible()
+
+        await dialog.getByRole('button', { name: 'Cancelar' }).click()
+        await page.getByRole('button', { name: 'Movimientos' }).first().click()
+        await page.getByRole('button', { name: 'Continuar borrador' }).click()
+        await expect(dialog.getByText('ticket-e2e.png', { exact: true })).toBeVisible()
+        await expect(dialog.getByText(/ · Listo$/)).toBeVisible()
+
+        const publishResponse = page.waitForResponse((response) =>
+            response.request().method() === 'POST' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft/publish`)
+        )
+        await dialog.getByRole('button', { name: /^Guardar;/ }).click()
+        expect((await publishResponse).status()).toBe(201)
+        await expect(dialog).not.toBeVisible()
+
+        const detail = await page.request.get(`/api/spaces/${SPACE_V2_E2E.spaceId}`)
+        const body = await detail.json() as {
+            data: { movements: { items: Array<{ id: string; title: string; attachments?: Array<{ id: string }> }> } }
+        }
+        const entry = body.data.movements.items.find((item) => item.title === description)
+        expect(entry?.attachments).toHaveLength(1)
+        const attachmentId = entry?.attachments?.[0]?.id
+        expect(attachmentId).toBeTruthy()
+        const download = await page.request.get(
+            `/api/spaces/${SPACE_V2_E2E.spaceId}/entries/${entry!.id}/attachments/${attachmentId}`
+        )
+        expect(download.status()).toBe(200)
+        expect(download.headers()['x-content-type-options']).toBe('nosniff')
+    })
+
     test('explica el total multimoneda, filtra USD y revisa una liquidación ARS+USD', async ({ page }) => {
         await loginAsTestUser(page)
         await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)

@@ -32,6 +32,15 @@ export const SPACE_V2_INDEXES: readonly SpaceV2IndexDefinition[] = [
         purpose: 'recuperación privada y estados terminales de borradores',
     },
     {
+        collection: 'spaceentrydrafts',
+        keys: { 'attachments.status': 1, 'attachments.lastAttemptAt': 1 },
+        options: {
+            name: 'v2_draft_attachment_reconciliation',
+            partialFilterExpression: { contractVersion: 2 },
+        },
+        purpose: 'reconciliación acotada de preparaciones y limpiezas pendientes',
+    },
+    {
         collection: 'spaceoperations',
         keys: { actorUserId: 1, spaceId: 1, type: 1, idempotencyKeyHash: 1 },
         options: {

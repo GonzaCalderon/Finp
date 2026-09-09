@@ -3,10 +3,23 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { ApiError, apiJson } from '@/lib/client/auth-client'
-import type { SpaceEntryDraftDto } from '@/types'
+import type {
+    SpaceEntryDraftAttachmentMutationDto,
+    SpaceEntryDraftDto,
+} from '@/types'
 
 type DraftFields = SpaceEntryDraftDto['fields']
 type DraftSaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
+
+export class DraftAttachmentMutationError extends Error {
+    attachmentId?: string
+
+    constructor(message: string, attachmentId?: string) {
+        super(message)
+        this.name = 'DraftAttachmentMutationError'
+        this.attachmentId = attachmentId
+    }
+}
 
 function draftFingerprint(step: 1 | 2 | 3, fields: DraftFields) {
     return JSON.stringify({ step, fields })
@@ -143,6 +156,108 @@ export function useSpaceEntryDraft({
         return operation
     }, [setDraft, spaceId])
 
+    const refreshDraftAfterAttachmentError = useCallback(async () => {
+        const response = await apiJson<{ data: SpaceEntryDraftDto | null }>(
+            `/api/spaces/${spaceId}/entry-draft`
+        )
+        setDraft(response.data)
+        return response.data
+    }, [setDraft, spaceId])
+
+    const uploadAttachment = useCallback((input: {
+        file: File
+        idempotencyKey: string
+        attachmentId?: string
+    }) => {
+        let resolveUpload!: (value: SpaceEntryDraftAttachmentMutationDto) => void
+        let rejectUpload!: (reason?: unknown) => void
+        const result = new Promise<SpaceEntryDraftAttachmentMutationDto>((resolve, reject) => {
+            resolveUpload = resolve
+            rejectUpload = reject
+        })
+        saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(async () => {
+            const current = draftRef.current
+            if (!current) {
+                rejectUpload(new DraftAttachmentMutationError('Guardá el borrador antes de adjuntar archivos.'))
+                return
+            }
+            const formData = new FormData()
+            formData.append('file', input.file)
+            formData.append('draftId', current.id)
+            formData.append('expectedRevision', String(current.revision))
+            formData.append('idempotencyKey', input.idempotencyKey)
+            const path = input.attachmentId
+                ? `/api/spaces/${spaceId}/entry-draft/attachments/${input.attachmentId}`
+                : `/api/spaces/${spaceId}/entry-draft/attachments`
+            try {
+                const response = await fetch(path, { method: input.attachmentId ? 'PUT' : 'POST', body: formData })
+                const payload = await response.json() as SpaceEntryDraftAttachmentMutationDto & {
+                    error?: string
+                    details?: { attachmentId?: string }
+                }
+                if (!response.ok) {
+                    await refreshDraftAfterAttachmentError().catch(() => undefined)
+                    throw new DraftAttachmentMutationError(
+                        payload.error ?? 'No pudimos subir el archivo.',
+                        payload.details?.attachmentId
+                    )
+                }
+                setDraft({
+                    ...current,
+                    revision: payload.draftRevision,
+                    attachments: payload.attachment
+                        ? [
+                            ...current.attachments.filter((item) => item.id !== payload.attachment!.id),
+                            payload.attachment,
+                        ]
+                        : current.attachments,
+                })
+                resolveUpload(payload)
+            } catch (uploadError) {
+                rejectUpload(uploadError instanceof Error
+                    ? uploadError
+                    : new DraftAttachmentMutationError('No pudimos subir el archivo.'))
+            }
+        })
+        return result
+    }, [refreshDraftAfterAttachmentError, setDraft, spaceId])
+
+    const removeAttachment = useCallback((attachmentId: string) => {
+        let resolveRemoval!: (value: SpaceEntryDraftAttachmentMutationDto) => void
+        let rejectRemoval!: (reason?: unknown) => void
+        const result = new Promise<SpaceEntryDraftAttachmentMutationDto>((resolve, reject) => {
+            resolveRemoval = resolve
+            rejectRemoval = reject
+        })
+        saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(async () => {
+            const current = draftRef.current
+            if (!current) {
+                rejectRemoval(new Error('El borrador ya no está disponible.'))
+                return
+            }
+            try {
+                const response = await apiJson<SpaceEntryDraftAttachmentMutationDto>(
+                    `/api/spaces/${spaceId}/entry-draft/attachments/${attachmentId}`,
+                    {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ draftId: current.id, expectedRevision: current.revision }),
+                    }
+                )
+                setDraft({
+                    ...current,
+                    revision: response.draftRevision,
+                    attachments: current.attachments.filter((item) => item.id !== attachmentId),
+                })
+                resolveRemoval(response)
+            } catch (removalError) {
+                await refreshDraftAfterAttachmentError().catch(() => undefined)
+                rejectRemoval(removalError)
+            }
+        })
+        return result
+    }, [refreshDraftAfterAttachmentError, setDraft, spaceId])
+
     return {
         draft,
         loading,
@@ -151,6 +266,8 @@ export function useSpaceEntryDraft({
         load,
         save,
         discard,
+        uploadAttachment,
+        removeAttachment,
         setDraft,
     }
 }

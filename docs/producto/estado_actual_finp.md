@@ -553,7 +553,7 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Borrador privado persistente de `Nuevo gasto`, 2026-09-09:
+Borrador privado y adjuntos recuperables de `Nuevo gasto`, 2026-09-09:
 
 - colección y contrato parcial separados de `SpaceEntry`, con un activo por
   autor, Espacio e intención y sin efecto financiero antes de publicar;
@@ -566,6 +566,16 @@ Borrador privado persistente de `Nuevo gasto`, 2026-09-09:
   conflicto explícito y copia local sólo como contingencia;
 - card `Borrador privado` fuera de contadores y totales, reanudación y descarte
   confirmado;
-- integración real aprobada y recorrido de navegador completo aprobado en
-  Chromium desktop y Pixel 7. Los adjuntos recuperables continúan en la etapa
-  3 de FINP-P1-013.
+- preparación inmediata de hasta cinco archivos privados, validación real de
+  firma, MIME, extensión, tamaño y hash, sin persistir binarios en el navegador;
+- estados accesibles por fila, reintento, remoción con revocación previa y
+  publicación bloqueada mientras exista una carga o fallo sin resolver;
+- metadata `ready` transferida en la misma transacción del movimiento y lectura
+  posterior por permisos, sin URL ni clave interna en DTO públicos;
+- reconciliación `dry-run` por defecto para preparaciones antiguas y limpiezas
+  pendientes, con fallos de carga y borrado inyectados en integración;
+- integración real y recorrido de preparación, cierre, reanudación, publicación
+  y lectura aprobados en Chromium desktop y Pixel 7. FINP-P1-013 continúa abierto
+  por su etapa 4 de experiencia y accesibilidad integral. La última repetición
+  completa de integración quedó impedida por EACCES/whitelist de MongoDB Atlas;
+  la dirigida de servicios de la etapa había aprobado 13/13.

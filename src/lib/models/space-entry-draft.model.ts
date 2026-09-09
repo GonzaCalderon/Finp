@@ -28,6 +28,32 @@ const draftPersonalImpactSchema = new Schema(
     { _id: false }
 )
 
+const draftAttachmentSchema = new Schema(
+    {
+        _id: { type: Schema.Types.ObjectId, required: true },
+        uploadedByUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        uploadIdempotencyKey: { type: String, required: true, maxlength: 200 },
+        status: {
+            type: String,
+            enum: ['preparing', 'ready', 'upload_failed', 'cleanup_pending', 'deleted'],
+            required: true,
+        },
+        fileName: { type: String, trim: true, maxlength: 160 },
+        declaredMimeType: { type: String, trim: true, maxlength: 100 },
+        mimeType: { type: String, trim: true, maxlength: 100 },
+        size: { type: Number, min: 1 },
+        contentSha256: { type: String, minlength: 64, maxlength: 64 },
+        storageProvider: { type: String, enum: ['vercel_blob'], required: true },
+        storageKey: { type: String, trim: true },
+        createdAt: { type: Date, required: true },
+        lastAttemptAt: { type: Date, required: true },
+        confirmedAt: { type: Date },
+        deletedAt: { type: Date },
+        lastErrorCode: { type: String, trim: true, maxlength: 80 },
+    },
+    { _id: false }
+)
+
 const SpaceEntryDraftSchema = new Schema<ISpaceEntryDraft>(
     {
         contractVersion: { type: Number, enum: [2], required: true, immutable: true },
@@ -72,6 +98,7 @@ const SpaceEntryDraftSchema = new Schema<ISpaceEntryDraft>(
         spaceCategoryId: { type: Schema.Types.ObjectId, ref: 'SpaceCategory' },
         notes: { type: String, trim: true, maxlength: 1000 },
         actorPersonalImpact: { type: draftPersonalImpactSchema },
+        attachments: { type: [draftAttachmentSchema], default: undefined },
         publishedEntryId: { type: Schema.Types.ObjectId, ref: 'SpaceEntry' },
         publishedAt: { type: Date },
         discardedAt: { type: Date },
@@ -82,6 +109,17 @@ const SpaceEntryDraftSchema = new Schema<ISpaceEntryDraft>(
     }
 )
 
+SpaceEntryDraftSchema.index(
+    { _id: 1, 'attachments.uploadIdempotencyKey': 1 },
+    { name: 'v2_draft_attachment_idempotency' }
+)
+
+const existingSpaceEntryDraftModel = mongoose.models.SpaceEntryDraft as mongoose.Model<ISpaceEntryDraft> | undefined
+const draftNeedsSchemaRefresh = Boolean(
+    existingSpaceEntryDraftModel && !existingSpaceEntryDraftModel.schema.path('attachments')
+)
+if (draftNeedsSchemaRefresh) delete mongoose.models.SpaceEntryDraft
+
 export const SpaceEntryDraft =
-    (mongoose.models.SpaceEntryDraft as mongoose.Model<ISpaceEntryDraft> | undefined) ||
+    (draftNeedsSchemaRefresh ? undefined : existingSpaceEntryDraftModel) ||
     mongoose.model<ISpaceEntryDraft>('SpaceEntryDraft', SpaceEntryDraftSchema)

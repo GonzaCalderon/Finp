@@ -95,6 +95,13 @@ export interface SpaceEntryDto {
     splitMode: SpaceSplitMode
     splitAllocations: Array<{ participantId: string; percentage?: number; amount?: number }>
     shares: SpaceShareDto[]
+    attachments: Array<{
+        id: string
+        fileName: string
+        mimeType: string
+        size: number
+        createdAt: string
+    }>
     currentUserImpact?: SpacePersonalImpactDto
     capabilities: Array<'edit' | 'void'>
     revision: number
@@ -148,9 +155,26 @@ export interface SpaceEntryDraftDto {
             linkedTransactionId?: string
         }
     }
+    attachments: SpaceEntryDraftAttachmentDto[]
     publishedEntryId?: string
     createdAt: string
     updatedAt: string
+}
+
+export interface SpaceEntryDraftAttachmentDto {
+    id: string
+    fileName: string
+    mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'
+    size: number
+    status: 'preparing' | 'ready' | 'upload_failed'
+    createdAt: string
+    errorCode?: 'UPLOAD_FAILED' | 'RECOVERY_REQUIRED'
+}
+
+export interface SpaceEntryDraftAttachmentMutationDto {
+    draftRevision: number
+    attachment?: SpaceEntryDraftAttachmentDto
+    cleanupPending?: boolean
 }
 
 export interface SpaceSummaryDto {
