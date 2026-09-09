@@ -36,7 +36,7 @@ export function FieldShell({
             ) : null}
             {children}
             {helperText ? <div className="text-xs text-muted-foreground">{helperText}</div> : null}
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive" tabIndex={-1}>{error}</p> : null}
         </div>
     )
 }

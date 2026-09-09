@@ -44,11 +44,13 @@ export function SpaceDialogSectionEyebrow({ children }: { children: ReactNode })
 }
 
 export function SpaceDialogField({
+    id,
     label,
     hint,
     error,
     children,
 }: {
+    id?: string
     label: string
     hint?: string
     error?: string
@@ -57,11 +59,13 @@ export function SpaceDialogField({
     return (
         <div className="space-y-2">
             <div className="space-y-1">
-                <Label className="text-sm font-medium text-foreground">{label}</Label>
+                <Label htmlFor={id} id={id ? `${id}-label` : undefined} className="text-sm font-medium text-foreground">
+                    {label}
+                </Label>
                 {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
             </div>
             {children}
-            {error ? <p className="text-xs font-medium text-destructive">{error}</p> : null}
+            {error ? <p className="text-xs font-medium text-destructive" tabIndex={-1}>{error}</p> : null}
         </div>
     )
 }

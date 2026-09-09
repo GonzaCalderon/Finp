@@ -501,6 +501,13 @@ export function SpaceEntryDialog({
     const [draftHydrated, setDraftHydrated] = useState(false)
     const [discardDraftOpen, setDiscardDraftOpen] = useState(false)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const focusFirstError = () => {
+        requestAnimationFrame(() => {
+            const firstError = scrollContainerRef.current?.querySelector<HTMLElement>('.text-destructive')
+            firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            firstError?.focus()
+        })
+    }
     const previousCurrencyRef = useRef(form.currency)
     const draftBaselineRef = useRef<string | null>(null)
     const initializedOpenRef = useRef(false)
@@ -1266,11 +1273,7 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
-            requestAnimationFrame(() => {
-                scrollContainerRef.current
-                    ?.querySelector<HTMLElement>('.text-destructive')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            })
+            focusFirstError()
             return
         }
 
@@ -1358,6 +1361,7 @@ export function SpaceEntryDialog({
             }
             if (Object.keys(nextErrors).length) {
                 setFieldErrors(nextErrors)
+                focusFirstError()
                 return
             }
             setFieldErrors({})
@@ -1373,6 +1377,7 @@ export function SpaceEntryDialog({
                     if (key && !nextErrors[key]) nextErrors[key] = issue.message
                 }
                 setFieldErrors(nextErrors)
+                focusFirstError()
                 return
             }
             setFieldErrors({})
@@ -1415,21 +1420,18 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
-            // Scroll to first inline error after render
-            requestAnimationFrame(() => {
-                scrollContainerRef.current
-                    ?.querySelector<HTMLElement>('.text-destructive')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            })
+            focusFirstError()
             return
         }
 
         if (contractVersion === 2 && (previewLoading || !preview)) {
             setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
+            focusFirstError()
             return
         }
         if (preview?.linkExisting && !preview.linkExisting.compatible) {
             setError('La transacción elegida no coincide con la revisión financiera. Elegí otra o creá una nueva.')
+            focusFirstError()
             return
         }
 
@@ -1500,7 +1502,7 @@ export function SpaceEntryDialog({
                                         <li key={label}>
                                             <button
                                                 type="button"
-                                                className={`w-full rounded-xl border px-2 py-2 text-xs font-medium transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : complete ? 'border-foreground/10 bg-muted/60 text-foreground' : 'border-foreground/10 text-muted-foreground'}`}
+                                                className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-medium transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : complete ? 'border-foreground/10 bg-muted/60 text-foreground' : 'border-foreground/10 text-muted-foreground'}`}
                                                 onClick={() => complete && setStep(value)}
                                                 aria-current={active ? 'step' : undefined}
                                             >
@@ -1671,8 +1673,9 @@ export function SpaceEntryDialog({
                                                 />
                                             </div>
 
-                                            <SpaceDialogField label="Descripción" error={fieldErrors.title}>
+                                            <SpaceDialogField id="entry-title" label="Descripción" error={fieldErrors.title}>
                                                 <Input
+                                                    id="entry-title"
                                                     value={form.title}
                                                     onChange={(event) => {
                                                         setForm((previous) => ({ ...previous, title: event.target.value }))
@@ -1684,7 +1687,7 @@ export function SpaceEntryDialog({
                                             </SpaceDialogField>
 
                                             <div className="grid gap-4 lg:grid-cols-2">
-                                                <SpaceDialogField label="Pagó" error={fieldErrors.paidByParticipantId}>
+                                                <SpaceDialogField id="entry-paid-by" label="Pagó" error={fieldErrors.paidByParticipantId}>
                                                     <Select
                                                         value={form.paidByParticipantId}
                                                         onValueChange={(value) => {
@@ -1716,7 +1719,11 @@ export function SpaceEntryDialog({
                                                             })
                                                         }}
                                                     >
-                                                        <SelectTrigger className="w-full">
+                                                        <SelectTrigger
+                                                            id="entry-paid-by"
+                                                            aria-labelledby="entry-paid-by-label entry-paid-by"
+                                                            className="w-full"
+                                                        >
                                                             <SelectValue placeholder="Elegí un participante" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -1741,7 +1748,7 @@ export function SpaceEntryDialog({
                                                     </Select>
                                                 </SpaceDialogField>
 
-                                                <SpaceDialogField label="Categoría del espacio">
+                                                <SpaceDialogField id="entry-space-category" label="Categoría del espacio">
                                                     <Select
                                                         value={form.spaceCategoryId ?? 'none'}
                                                         onValueChange={(value) =>
@@ -1751,7 +1758,11 @@ export function SpaceEntryDialog({
                                                             }))
                                                         }
                                                     >
-                                                        <SelectTrigger className="w-full">
+                                                        <SelectTrigger
+                                                            id="entry-space-category"
+                                                            aria-labelledby="entry-space-category-label entry-space-category"
+                                                            className="w-full"
+                                                        >
                                                             <SelectValue placeholder="Sin categoría" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -1825,7 +1836,7 @@ export function SpaceEntryDialog({
                                                 }}
                                             />
                                             {(fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations) ? (
-                                                <p className="mt-2 text-xs font-medium text-destructive">
+                                                <p className="mt-2 text-xs font-medium text-destructive" tabIndex={-1}>
                                                     {fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations}
                                                 </p>
                                             ) : null}
@@ -1911,7 +1922,7 @@ export function SpaceEntryDialog({
                                                         ))}
                                                     </dl>
                                                 ) : previewError ? (
-                                                    <p className="rounded-xl border border-destructive/15 bg-destructive/5 p-3 text-sm text-destructive">
+                                                    <p className="rounded-xl border border-destructive/15 bg-destructive/5 p-3 text-sm text-destructive" tabIndex={-1}>
                                                         {previewError}
                                                     </p>
                                                 ) : (
@@ -1934,7 +1945,7 @@ export function SpaceEntryDialog({
                                                     </h3>
                                                 </div>
 
-                                                <SpaceDialogField label="Cuenta o tarjeta">
+                                                <SpaceDialogField id="entry-personal-account" label="Cuenta o tarjeta">
                                                     <Select
                                                         value={form.personalAccountId ?? 'none'}
                                                         onValueChange={(value) => {
@@ -1952,7 +1963,11 @@ export function SpaceEntryDialog({
                                                             }))
                                                         }}
                                                     >
-                                                        <SelectTrigger className="w-full">
+                                                        <SelectTrigger
+                                                            id="entry-personal-account"
+                                                            aria-labelledby="entry-personal-account-label entry-personal-account"
+                                                            className="w-full"
+                                                        >
                                                             <SelectValue placeholder="Solo registrar en el espacio" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -2003,6 +2018,7 @@ export function SpaceEntryDialog({
 
                                                 {form.personalAccountId ? (
                                                     <SpaceDialogField
+                                                        id="entry-personal-category"
                                                         label="Categoría personal"
                                                         hint="Solo impacta en tu Finp personal. La categoría del espacio se conserva aparte."
                                                     >
@@ -2015,7 +2031,11 @@ export function SpaceEntryDialog({
                                                                 }))
                                                             }
                                                         >
-                                                            <SelectTrigger className="w-full">
+                                                            <SelectTrigger
+                                                                id="entry-personal-category"
+                                                                aria-labelledby="entry-personal-category-label entry-personal-category"
+                                                                className="w-full"
+                                                            >
                                                                 <SelectValue placeholder="Sin categoría" />
                                                             </SelectTrigger>
                                                             <SelectContent>
@@ -2061,7 +2081,7 @@ export function SpaceEntryDialog({
                                                     Vincular una transacción existente (avanzado)
                                                 </button>
                                                 {showAdvancedLink ? (
-                                                    <SpaceDialogField label="Transacción compatible">
+                                                    <SpaceDialogField id="entry-linked-transaction" label="Transacción compatible">
                                                         <Select
                                                             value={form.linkedTransactionId ?? ''}
                                                             onValueChange={(linkedTransactionId) =>
@@ -2073,7 +2093,11 @@ export function SpaceEntryDialog({
                                                                 }))
                                                             }
                                                         >
-                                                            <SelectTrigger className="w-full">
+                                                            <SelectTrigger
+                                                                id="entry-linked-transaction"
+                                                                aria-labelledby="entry-linked-transaction-label entry-linked-transaction"
+                                                                className="w-full"
+                                                            >
                                                                 <SelectValue placeholder="Elegí una transacción" />
                                                             </SelectTrigger>
                                                             <SelectContent>
@@ -2090,7 +2114,7 @@ export function SpaceEntryDialog({
                                                     </SpaceDialogField>
                                                 ) : null}
                                                 {preview?.linkExisting && !preview.linkExisting.compatible ? (
-                                                    <p className="text-xs font-medium text-destructive">
+                                                    <p className="text-xs font-medium text-destructive" tabIndex={-1}>
                                                         La transacción no coincide en monto o moneda con este impacto.
                                                     </p>
                                                 ) : null}
@@ -2163,7 +2187,7 @@ export function SpaceEntryDialog({
                             </div>
 
                             {error ? (
-                                <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                                <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive" tabIndex={-1}>
                                     {error}
                                 </p>
                             ) : null}
@@ -2173,7 +2197,7 @@ export function SpaceEntryDialog({
                     {/* ── Footer ── */}
                     <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
                         <Button
-                            className="rounded-full"
+                            className="min-h-11 rounded-full"
                             onClick={() => {
                                 if (mode === 'create' && step < 3) handleNextStep()
                                 else void handleSubmit()
@@ -2200,7 +2224,7 @@ export function SpaceEntryDialog({
                             <Button
                                 type="button"
                                 variant="outline"
-                                className="rounded-full"
+                                className="min-h-11 rounded-full"
                                 onClick={() => setStep((step - 1) as 1 | 2)}
                                 disabled={submitting}
                             >
@@ -2209,7 +2233,7 @@ export function SpaceEntryDialog({
                         ) : null}
                         <Button
                             variant="ghost"
-                            className="rounded-full"
+                            className="min-h-11 rounded-full"
                             onClick={() => handleDialogOpenChange(false)}
                             disabled={submitting}
                         >

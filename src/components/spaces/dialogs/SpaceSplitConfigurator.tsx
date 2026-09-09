@@ -613,7 +613,7 @@ export function SpaceSplitConfigurator({
 
                 {/* ── Validation message ── */}
                 {splitInvalid ? (
-                    <p className="rounded-[18px] border border-destructive/15 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                    <p className="rounded-[18px] border border-destructive/15 bg-destructive/5 px-3 py-2 text-sm text-destructive" tabIndex={-1}>
                         {splitMode === 'fixed'
                             ? `El reparto tiene que cerrar en ${currency} ${formatAmount(amount, currency)} antes de guardar.`
                             : 'El reparto tiene que cerrar en 100% antes de guardar.'}
