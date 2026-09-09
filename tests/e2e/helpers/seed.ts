@@ -64,6 +64,23 @@ async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
     ])
 }
 
+async function purgeStaleSpaceEntries(
+    db: NonNullable<typeof mongoose.connection.db>,
+    spaceId: mongoose.Types.ObjectId,
+    keepEntryIds: string[],
+    label: string
+) {
+    const result = await db.collection('spaceentries').deleteMany({
+        spaceId,
+        _id: { $nin: keepEntryIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    })
+    if (result.deletedCount > 0) {
+        console.log(
+            `   ${label}: ${result.deletedCount} movimientos de prueba obsoletos eliminados`
+        )
+    }
+}
+
 async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
     const db = mongoose.connection.db
     if (!db) throw new Error('MongoDB no está conectado para sembrar Espacios v2 E2E.')
@@ -71,6 +88,25 @@ async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
     const blockedSpaceId = new mongoose.Types.ObjectId(SPACE_MIGRATION_E2E.blockedSpaceId)
     const now = new Date()
     const timestamps = { createdAt: now, updatedAt: now }
+    // Los tests del recorrido financiero crean movimientos nuevos en cada
+    // corrida (descripciones únicas por proyecto) y nunca los borran. Sin
+    // esta purga, ese Espacio fijo crece sin límite y los movimientos fijos
+    // (arsEntryId/usdEntryId) terminan fuera de la página por defecto de la
+    // lista de movimientos (ordenada por fecha, ver DEFAULT_MOVEMENT_LIMIT en
+    // space-read-service-v2.ts), volviéndolos invisibles en la UI.
+    await purgeStaleSpaceEntries(
+        db,
+        spaceId,
+        [SPACE_V2_E2E.arsEntryId, SPACE_V2_E2E.usdEntryId],
+        'Espacios v2'
+    )
+    // Las fechas de los movimientos fijos se calculan relativas a `now` (en
+    // vez de una fecha fija) para que sigan cerca del tope del orden por
+    // fecha descendente sin depender de qué tan seguido se corre el seed.
+    const arsEntryDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const usdEntryDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+    const arsEntryDateKey = arsEntryDate.toISOString().slice(0, 10)
+    const usdEntryDateKey = usdEntryDate.toISOString().slice(0, 10)
     await Promise.all([
         db.collection('spaces').replaceOne(
             { _id: spaceId },
@@ -188,8 +224,8 @@ async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
                 reportingAmount: 10_000,
                 originalMoney: { currency: 'ARS', minorUnits: '1000000', scale: 2 },
                 reportingMoney: { currency: 'ARS', minorUnits: '1000000', scale: 2 },
-                date: now,
-                dateKey: '2026-08-24',
+                date: arsEntryDate,
+                dateKey: arsEntryDateKey,
                 timezone: 'America/Argentina/Buenos_Aires',
                 paidByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
                 sharedWithParticipantIds: [
@@ -229,8 +265,8 @@ async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
                     capturedAt: now.toISOString(),
                     path: [{ fromCurrency: 'USD', toCurrency: 'ARS', rate: '1300', source: 'manual' }],
                 },
-                date: now,
-                dateKey: '2026-08-23',
+                date: usdEntryDate,
+                dateKey: usdEntryDateKey,
                 timezone: 'America/Argentina/Buenos_Aires',
                 paidByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
                 sharedWithParticipantIds: [
@@ -272,6 +308,13 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
         const normalTransactionId = new mongoose.Types.ObjectId(fixture.normalTransactionId)
         const orphanEntryId = new mongoose.Types.ObjectId(fixture.orphanEntryId)
         const orphanTransactionId = new mongoose.Types.ObjectId(fixture.orphanTransactionId)
+
+        await purgeStaleSpaceEntries(
+            db,
+            spaceId,
+            [fixture.normalEntryId, fixture.orphanEntryId],
+            `Espacios (${fixture.spaceName})`
+        )
 
         await Promise.all([
             db.collection('spaces').replaceOne(
