@@ -95,6 +95,13 @@ export interface SpaceEntryDto {
     splitMode: SpaceSplitMode
     splitAllocations: Array<{ participantId: string; percentage?: number; amount?: number }>
     shares: SpaceShareDto[]
+    attachments: Array<{
+        id: string
+        fileName: string
+        mimeType: string
+        size: number
+        createdAt: string
+    }>
     currentUserImpact?: SpacePersonalImpactDto
     capabilities: Array<'edit' | 'void'>
     revision: number
@@ -104,6 +111,7 @@ export interface SpaceEntryDto {
 
 export interface SpaceMovementPageDto {
     items: SpaceEntryDto[]
+    draft?: SpaceEntryDraftDto
     nextCursor: string | null
     limit: number
     filter?: {
@@ -112,6 +120,61 @@ export interface SpaceMovementPageDto {
         debtCurrencies: string[]
     }
     subtotalByCurrency?: Record<string, MoneyDto>
+}
+
+export interface SpaceEntryDraftDto {
+    id: string
+    contractVersion: 2
+    intent: 'new_expense'
+    status: 'active' | 'publishing' | 'published' | 'discarded'
+    revision: number
+    step: 1 | 2 | 3 | 4
+    expectedSpaceRevision: number
+    fields: {
+        title?: string
+        description?: string
+        amount?: number
+        money?: MoneyDto
+        currency?: string
+        exchangeRate?: number
+        exchangeRateDecimal?: string
+        conversionSnapshot?: ConversionSnapshot
+        expectedQuoteFingerprint?: string
+        dateKey?: string
+        timezone?: string
+        paidByParticipantId?: string
+        sharedWithParticipantIds?: string[]
+        splitMode?: SpaceSplitMode
+        splitAllocations?: Array<{ participantId: string; percentage?: number; amount?: number }>
+        spaceCategoryId?: string
+        notes?: string
+        personalImpact?: {
+            accountId?: string
+            categoryId?: string
+            description?: string
+            linkedTransactionId?: string
+        }
+    }
+    attachments: SpaceEntryDraftAttachmentDto[]
+    publishedEntryId?: string
+    createdAt: string
+    updatedAt: string
+}
+
+export interface SpaceEntryDraftAttachmentDto {
+    id: string
+    fileName: string
+    mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'
+    size: number
+    status: 'preparing' | 'ready' | 'upload_failed'
+    createdAt: string
+    errorCode?: 'UPLOAD_FAILED' | 'RECOVERY_REQUIRED'
+}
+
+export interface SpaceEntryDraftAttachmentMutationDto {
+    draftRevision: number
+    attachment?: SpaceEntryDraftAttachmentDto
+    cleanupPending?: boolean
 }
 
 export interface SpaceSummaryDto {

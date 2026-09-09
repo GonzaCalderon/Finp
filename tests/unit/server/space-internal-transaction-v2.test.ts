@@ -103,6 +103,51 @@ describe('internal space transaction v2', () => {
         ], { session })
     })
 
+    it('registra tarjeta del pagador como consumo 1/1 por el total y sin plan', async () => {
+        mocks.accountFindOne.mockReturnValue(sessionResult({
+            _id: references.accountId,
+            type: 'credit_card',
+            currency: 'ARS',
+            supportedCurrencies: ['ARS', 'USD'],
+            isActive: true,
+        }))
+
+        await createInternalSpaceTransaction({
+            ...base(),
+            variant: 'payer_expense',
+            sourceAccountId: references.accountId,
+            amount: 100,
+            operationalAmount: 40,
+        }, session)
+
+        expect(mocks.transactionCreate).toHaveBeenCalledWith([
+            expect.objectContaining({
+                type: 'credit_card_expense',
+                amount: 100,
+                operationalAmount: 40,
+                sourceAccountId: references.accountId,
+            }),
+        ], { session })
+        expect(mocks.transactionCreate.mock.calls[0]?.[0]?.[0]).not.toHaveProperty('installmentPlanId')
+    })
+
+    it('no usa una tarjeta como cuenta de liquidación', async () => {
+        mocks.accountFindOne.mockReturnValue(sessionResult({
+            _id: references.accountId,
+            type: 'credit_card',
+            currency: 'ARS',
+            supportedCurrencies: ['ARS', 'USD'],
+            isActive: true,
+        }))
+
+        await expect(createInternalSpaceTransaction({
+            ...base(),
+            variant: 'settlement_paid',
+            sourceAccountId: references.accountId,
+            operationalAmount: 0,
+        }, session)).rejects.toMatchObject({ code: 'SPECIAL_ACCOUNT_REQUIRES_FULL_FLOW' })
+    })
+
     it('liquidación exige impacto operacional cero', async () => {
         await expect(createInternalSpaceTransaction({
             ...base(),

@@ -3,11 +3,13 @@ import { Types, type ClientSession } from 'mongoose'
 import {
     SpaceCategory,
     SpaceEntry,
+    SpaceEntryDraft,
     SpaceEntryPersonalImpact,
     Transaction,
 } from '@/lib/models'
 import { ServiceError } from '@/lib/server/errors'
 import { getSpaceCapabilitiesV2 } from '@/lib/server/space-capabilities'
+import { publishedAttachmentsFromDraft } from '@/lib/server/space-entry-draft-attachment-service'
 import {
     buildSpaceImpactOriginSnapshotV2,
     createSpaceActivityEventV2,
@@ -36,8 +38,8 @@ import {
     buildManualConversionSnapshot,
     resolveSpaceReferenceQuote,
 } from '@/lib/server/space-quote-service'
-import { assertMoneyDto, moneyToNumber, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
-import type { ISpaceEntry, ISpaceParticipant, ITransaction } from '@/types'
+import { moneyFromDecimal, moneyMatchesDecimal, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
+import type { ISpaceEntry, ISpaceEntryDraft, ISpaceParticipant, ITransaction } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
 
 export interface CreateSpaceEntryV2Input {
@@ -66,6 +68,10 @@ export interface CreateSpaceEntryV2Input {
         categoryId?: string
         description?: string
         linkedTransactionId?: string
+    }
+    draftPublication?: {
+        draftId: string
+        expectedRevision: number
     }
 }
 
@@ -155,6 +161,7 @@ async function createPersonalImpactsForEntry(input: {
             entryType: input.entry.type,
             entryAmount: input.entry.amount,
             ownShareAmount,
+            currency: input.entry.currency,
             isPayer: extractId(input.entry.paidByParticipantId) === participantId,
         })
         if (amounts.action === 'none') continue
@@ -220,10 +227,14 @@ async function createPersonalImpactsForEntry(input: {
                 : amounts.ownShareAmount
             if (
                 !transaction ||
-                transaction.type !== expectedType ||
+                (transaction.type !== expectedType && !(
+                    expectedType === 'expense' && transaction.type === 'credit_card_expense'
+                )) ||
                 transaction.currency !== input.entry.currency ||
-                Math.abs(transaction.amount - expectedAmount) > 0.01 ||
-                Math.abs((transaction.operationalAmount ?? transaction.amount) - amounts.operationalAmount) > 0.01 ||
+                moneyFromDecimal(input.entry.currency, transaction.amount).minorUnits !==
+                    moneyFromDecimal(input.entry.currency, expectedAmount).minorUnits ||
+                moneyFromDecimal(input.entry.currency, transaction.operationalAmount ?? transaction.amount).minorUnits !==
+                    moneyFromDecimal(input.entry.currency, amounts.operationalAmount).minorUnits ||
                 financialDateKeyFromInstant(transaction.date, input.entry.timezone!) !== input.entry.dateKey
             ) {
                 throw new ServiceError(
@@ -315,6 +326,27 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
         idempotencyKey: input.idempotencyKey,
         payload,
         run: async (session, operationId) => {
+            let publicationDraft: ISpaceEntryDraft | undefined
+            if (input.draftPublication) {
+                const draft = await SpaceEntryDraft.findOne({
+                    _id: input.draftPublication.draftId,
+                    creatorUserId: input.actorUserId,
+                    spaceId: input.spaceId,
+                    contractVersion: 2,
+                    intent: 'new_expense',
+                    status: 'active',
+                    revision: input.draftPublication.expectedRevision,
+                }).session(session).lean<ISpaceEntryDraft | null>()
+                if (!draft) {
+                    throw new ServiceError(
+                        409,
+                        'SPACE_DRAFT_VERSION_CONFLICT',
+                        'El borrador cambió antes de comenzar la publicación.'
+                    )
+                }
+                publishedAttachmentsFromDraft(draft)
+                publicationDraft = draft
+            }
             const context = await loadSpaceApplicationContextV2({
                 spaceId: input.spaceId,
                 actorUserId: input.actorUserId,
@@ -396,8 +428,7 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 snapshot: conversionSnapshot,
             })
             if (input.money) {
-                const exact = assertMoneyDto(input.money)
-                if (exact.currency !== input.currency || moneyToNumber(exact) !== input.amount) {
+                if (!moneyMatchesDecimal(input.money, input.currency, input.amount)) {
                     throw new ServiceError(400, 'SPACE_MONEY_MISMATCH', 'El monto exacto no coincide con el movimiento.')
                 }
             }
@@ -446,6 +477,9 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 splitMode: input.splitMode,
                 splitAllocations: input.splitAllocations,
                 notes: input.notes?.trim() || undefined,
+                attachments: publicationDraft
+                    ? publishedAttachmentsFromDraft(publicationDraft)
+                    : undefined,
                 revision: 0,
                 operationId,
             }], { session })
@@ -484,6 +518,33 @@ export async function createSpaceEntryV2(input: CreateSpaceEntryV2Input) {
                 participants: context.participants,
                 session,
             })
+            if (input.draftPublication) {
+                const draftUpdate = await SpaceEntryDraft.updateOne(
+                    {
+                        _id: input.draftPublication.draftId,
+                        creatorUserId: input.actorUserId,
+                        spaceId: input.spaceId,
+                        status: 'active',
+                        revision: input.draftPublication.expectedRevision,
+                    },
+                    {
+                        $set: {
+                            status: 'published',
+                            publishedEntryId: entry._id,
+                            publishedAt: new Date(),
+                        },
+                        $inc: { revision: 1 },
+                    },
+                    { session }
+                )
+                if (draftUpdate.modifiedCount !== 1) {
+                    throw new ServiceError(
+                        409,
+                        'SPACE_DRAFT_VERSION_CONFLICT',
+                        'El borrador cambió durante la publicación.'
+                    )
+                }
+            }
             return {
                 value: { entryId: entry._id.toString() },
                 resultRefs: {

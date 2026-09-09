@@ -958,6 +958,7 @@ function DesktopFloatingTransactionButton() {
                                                 boxShadow: `0 12px 28px ${tone.shadow}`,
                                             }}
                                             aria-label={action.label}
+                                            data-fab-action={action.id}
                                             disabled={action.disabled}
                                             onClick={() => {
                                                 setOpenState(false)
@@ -1188,6 +1189,7 @@ function MobileContextualFab({
                                             boxShadow: `0 12px 28px ${tone.shadow}`,
                                         }}
                                         aria-label={action.label}
+                                        data-fab-action={action.id}
                                         disabled={action.disabled}
                                         onClick={() => {
                                             setOpenState(false)

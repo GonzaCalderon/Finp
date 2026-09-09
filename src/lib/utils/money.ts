@@ -107,6 +107,14 @@ export function assertMoneyDto(money: MoneyDto): MoneyDto {
     return { ...money, currency: money.currency.toUpperCase() }
 }
 
+export function moneyMatchesDecimal(money: MoneyDto, currency: string, value: string | number) {
+    const exact = assertMoneyDto(money)
+    const expected = moneyFromDecimal(currency, value)
+    return exact.currency === expected.currency &&
+        exact.scale === expected.scale &&
+        exact.minorUnits === expected.minorUnits
+}
+
 function parseRate(rate: string) {
     const normalized = rate.trim().replace(',', '.')
     const match = /^(\d+)(?:\.(\d+))?$/.exec(normalized)

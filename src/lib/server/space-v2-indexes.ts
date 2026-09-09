@@ -13,6 +13,34 @@ export interface SpaceV2IndexDefinition {
 
 export const SPACE_V2_INDEXES: readonly SpaceV2IndexDefinition[] = [
     {
+        collection: 'spaceentrydrafts',
+        keys: { creatorUserId: 1, spaceId: 1, intent: 1 },
+        options: {
+            name: 'v2_unique_active_space_entry_draft',
+            unique: true,
+            partialFilterExpression: { contractVersion: 2, status: 'active' },
+        },
+        purpose: 'un único borrador activo por autor, Espacio e intención',
+    },
+    {
+        collection: 'spaceentrydrafts',
+        keys: { creatorUserId: 1, updatedAt: -1 },
+        options: {
+            name: 'v2_private_space_entry_draft_history',
+            partialFilterExpression: { contractVersion: 2 },
+        },
+        purpose: 'recuperación privada y estados terminales de borradores',
+    },
+    {
+        collection: 'spaceentrydrafts',
+        keys: { 'attachments.status': 1, 'attachments.lastAttemptAt': 1 },
+        options: {
+            name: 'v2_draft_attachment_reconciliation',
+            partialFilterExpression: { contractVersion: 2 },
+        },
+        purpose: 'reconciliación acotada de preparaciones y limpiezas pendientes',
+    },
+    {
         collection: 'spaceoperations',
         keys: { actorUserId: 1, spaceId: 1, type: 1, idempotencyKeyHash: 1 },
         options: {

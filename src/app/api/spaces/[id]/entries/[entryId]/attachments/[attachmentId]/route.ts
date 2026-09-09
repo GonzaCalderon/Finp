@@ -1,10 +1,11 @@
 import { Types } from 'mongoose'
-import { del, get } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceEntry } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
+import { spaceApiErrorResponse } from '@/lib/server/space-api-contract'
+import { resolveSpaceAttachmentStorage } from '@/lib/server/space-attachment-storage'
 import { getAccessibleSpaceContext } from '@/lib/server/spaces'
 import { extractId } from '@/lib/utils/spaces'
 import { sanitizeFileName } from '@/lib/utils/space-categories'
@@ -26,19 +27,9 @@ function canManageAttachment({
     )
 }
 
-function isBlobNotFoundError(error: unknown) {
-    if (!error || typeof error !== 'object') return false
-    const maybeStatus = error as { status?: unknown; statusCode?: unknown; message?: unknown }
-    return (
-        maybeStatus.status === 404 ||
-        maybeStatus.statusCode === 404 ||
-        (typeof maybeStatus.message === 'string' && /404|not found/i.test(maybeStatus.message))
-    )
-}
-
-function buildContentDisposition(fileName: string) {
+function buildAttachmentDisposition(fileName: string, mimeType: string) {
     const safeFileName = sanitizeFileName(fileName).replace(/"/g, '')
-    return `inline; filename="${safeFileName}"`
+    return `${mimeType === 'application/pdf' ? 'attachment' : 'inline'}; filename="${safeFileName}"`
 }
 
 async function getAttachmentContext(spaceId: string, entryId: string, attachmentId: string, userId: string) {
@@ -103,13 +94,6 @@ export async function GET(
         }
 
         const { id, entryId, attachmentId } = await params
-        if (!process.env.BLOB_READ_WRITE_TOKEN) {
-            return NextResponse.json(
-                { error: 'El almacenamiento de comprobantes no está configurado.' },
-                { status: 503 }
-            )
-        }
-
         await connectDB()
 
         const context = await getAttachmentContext(id, entryId, attachmentId, session.user.id)
@@ -118,26 +102,25 @@ export async function GET(
             return NextResponse.json({ error: 'Comprobante no encontrado' }, { status: 404 })
         }
 
-        const result = await get(context.attachment.storageKey, {
-            access: 'private',
-            token: process.env.BLOB_READ_WRITE_TOKEN,
-        })
+        const result = await resolveSpaceAttachmentStorage().read(context.attachment.storageKey)
 
-        if (result?.statusCode !== 200 || !result.stream) {
+        if (!result) {
             return NextResponse.json({ error: 'Comprobante no encontrado' }, { status: 404 })
         }
 
         return new NextResponse(result.stream, {
             headers: {
                 'Content-Type': context.attachment.mimeType,
-                'Content-Disposition': buildContentDisposition(context.attachment.fileName),
+                'Content-Disposition': buildAttachmentDisposition(
+                    context.attachment.fileName,
+                    context.attachment.mimeType
+                ),
                 'Cache-Control': 'private, no-store',
                 'X-Content-Type-Options': 'nosniff',
             },
         })
     } catch (error) {
-        console.error('Error al leer comprobante:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo leer el comprobante.')
     }
 }
 
@@ -152,13 +135,6 @@ export async function DELETE(
         }
 
         const { id, entryId, attachmentId } = await params
-        if (!process.env.BLOB_READ_WRITE_TOKEN) {
-            return NextResponse.json(
-                { error: 'El almacenamiento de comprobantes no está configurado.' },
-                { status: 503 }
-            )
-        }
-
         await connectDB()
 
         const context = await getAttachmentContext(id, entryId, attachmentId, session.user.id)
@@ -180,30 +156,18 @@ export async function DELETE(
             )
         }
 
-        try {
-            await del(context.attachment.storageKey, {
-                token: process.env.BLOB_READ_WRITE_TOKEN,
-            })
-        } catch (error) {
-            if (!isBlobNotFoundError(error)) {
-                console.error('Error al borrar blob de comprobante:', {
-                    spaceId: id,
-                    entryId,
-                    attachmentId,
-                    storageKey: context.attachment.storageKey,
-                    error,
-                })
-                return NextResponse.json(
-                    { error: 'No pudimos borrar el comprobante.' },
-                    { status: 500 }
-                )
-            }
-        }
-
-        await SpaceEntry.updateOne(
+        const revoked = await SpaceEntry.updateOne(
             { _id: entryId, spaceId: id },
             { $pull: { attachments: { _id: new Types.ObjectId(attachmentId) } } }
         )
+        if (revoked.modifiedCount !== 1) {
+            return NextResponse.json({ error: 'Comprobante no encontrado' }, { status: 404 })
+        }
+        try {
+            await resolveSpaceAttachmentStorage().delete(context.attachment.storageKey)
+        } catch {
+            console.error('[space-attachment-cleanup]', { spaceId: id, entryId, attachmentId, code: 'DELETE_FAILED' })
+        }
 
         createSpaceActivityEvent({
             spaceId: id,
@@ -221,7 +185,6 @@ export async function DELETE(
 
         return NextResponse.json({ success: true })
     } catch (error) {
-        console.error('Error al borrar comprobante:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo borrar el comprobante.')
     }
 }

@@ -48,6 +48,7 @@ function amountsForImpact(entry: ISpaceEntry, impact: ISpaceEntryPersonalImpact)
         entryType: entry.type,
         entryAmount: entry.amount,
         ownShareAmount: shares.find((share) => share.participantId === participantId)?.amount ?? 0,
+        currency: entry.currency,
         isPayer: extractId(entry.paidByParticipantId) === participantId,
         isReceiver: entry.type === 'settlement' && extractId(entry.sharedWithParticipantIds?.[0]) === participantId,
     })

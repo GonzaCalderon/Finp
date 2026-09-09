@@ -1,4 +1,17 @@
 import { z } from 'zod'
+import { moneyFromDecimal } from '@/lib/utils/money'
+
+function fixedAllocationsMatchTotal(amounts: number[], total: number, currency: string) {
+    try {
+        const allocatedMinorUnits = amounts.reduce(
+            (sum, amount) => sum + BigInt(moneyFromDecimal(currency, amount).minorUnits),
+            BigInt(0)
+        )
+        return allocatedMinorUnits === BigInt(moneyFromDecimal(currency, total).minorUnits)
+    } catch {
+        return Math.abs(amounts.reduce((sum, amount) => sum + amount, 0) - total) <= 0.01
+    }
+}
 
 const currencySchema = z
     .string()
@@ -198,12 +211,9 @@ export const spaceEntrySchema = z
         }
 
         if (data.splitMode === 'fixed') {
-            const total = (data.splitAllocations ?? []).reduce(
-                (acc, allocation) => acc + (allocation.amount ?? 0),
-                0
-            )
+            const amounts = (data.splitAllocations ?? []).map((allocation) => allocation.amount ?? 0)
 
-            if (Math.abs(total - data.amount) > 0.01) {
+            if (!fixedAllocationsMatchTotal(amounts, data.amount, data.currency)) {
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     message: 'Los montos fijos deben sumar el total del movimiento',
@@ -402,11 +412,8 @@ export const spaceEntryEditSchema = z
         }
 
         if (data.splitMode === 'fixed' && data.splitAllocations && data.amount !== undefined) {
-            const total = data.splitAllocations.reduce(
-                (acc, allocation) => acc + (allocation.amount ?? 0),
-                0
-            )
-            if (Math.abs(total - data.amount) > 0.01) {
+            const amounts = data.splitAllocations.map((allocation) => allocation.amount ?? 0)
+            if (!fixedAllocationsMatchTotal(amounts, data.amount, data.currency ?? 'ARS')) {
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     message: 'Los montos fijos deben sumar el total del movimiento',

@@ -25,12 +25,14 @@ import {
 } from '@/lib/server/space-api-contract'
 import { editSpaceEntryV2 } from '@/lib/server/space-entry-history-service-v2'
 import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
+import { moneyDtoSchema } from '@/lib/validations/space-money-v2'
 
 const spaceEntryEditV2Schema = z.object({
     expectedRevision: z.number().int().nonnegative(),
     title: z.string().trim().min(1).max(200),
     description: z.string().trim().max(1000).optional(),
     amount: z.number().finite().positive(),
+    money: moneyDtoSchema.optional(),
     currency: z.string().min(1).max(12),
     exchangeRate: z.number().finite().positive().optional(),
     dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-25
+> Última actualización: 2026-09-09
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -294,8 +294,9 @@ elige el usuario.
   modo seguro de sólo lectura cuando no se puede demostrar un saldo;
 - movimientos paginados por `dateKey + _id`, capacidades calculadas por servidor
   y mutaciones con idempotencia y revisión esperada;
-- gasto v2 en tres pasos con revisión de total, parte propia, cuenta, gasto
-  operacional, adelanto y deuda antes de confirmar;
+- gasto v2 en cuatro pasos (datos, reparto, extras y revisión) con revisión de
+  total, parte propia, cuenta, gasto operacional, adelanto y deuda antes de
+  confirmar;
 - liquidación propia o representada compartida por Espacios y Deudas, con
   decisión personal separada para cada contraparte;
 - configuración v2 con moneda de reporte inmutable desde el primer movimiento,
@@ -309,7 +310,18 @@ elige el usuario.
 - balances y deudas independientes por moneda, con liquidaciones atómicas de
   varios componentes y tramos;
 - tira de cotizaciones, composición `Incluye…` y filtros combinables por moneda
-  original, pagada o de deuda.
+  original, pagada o de deuda;
+- alta de `Nuevo gasto` unificada entre portada y detalle sobre contrato v2,
+  dinero exacto por escala ISO, fecha civil, preview e idempotencia;
+- consumo privado de tarjeta ARS/USD en un pago por el total real, con parte
+  propia operacional y sin crear `InstallmentPlan`;
+- revisión final sin abreviar montos, bloqueo mientras calcula y edición que
+  preserva participantes históricos inactivos en su rol original;
+- borrador de nuevo gasto separado del movimiento, único por autor y Espacio,
+  persistente, reanudable y visible sólo para ese autor en Movimientos;
+- autosave serializado con revisión optimista, estado accesible, fallback local
+  ante error, descarte confirmado y publicación atómica e idempotente sin
+  afectar balances, deuda, actividad ni Mi Finp antes de confirmar.
 - clasificación cerrada de los 97 hallazgos críticos/altos, contratos internos
   de plan, run, issue, disposición y resolución, y estado público seguro de
   migración;
@@ -337,6 +349,24 @@ equivale todavía a un recorrido confiable de punta a punta:
 - mobile y desktop divergen en navegación, densidad y ubicación de acciones;
 - faltan estados de recuperación, foco y accesibilidad consistentes en flujos
   principales y secundarios.
+
+Las etapas 1 y 2 de la auditoría específica de `Nuevo gasto` están
+implementadas y verificadas. La primera cerró tarjeta `1/1`, contrato v2 único,
+dinero exacto, fecha civil, revisión vigente y preservación histórica. La
+segunda, cerrada el 2026-09-09, incorporó el borrador privado persistente, su
+card personal y la publicación transaccional. Permanecen estas brechas para las
+etapas 3 y 4:
+
+- la edición no tiene todavía la misma revisión financiera completa del alta;
+- los adjuntos se cargan después de confirmar el movimiento, con riesgo de
+  éxito parcial sin borrador recuperable;
+- carga, error, vacío, candidatos de transacción, foco, labels y stepper mobile
+  todavía no forman un recorrido accesible y coherente de punta a punta.
+
+Las resoluciones aprobadas viven en las decisiones
+[`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md) y
+[`0013`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
+Su secuencia de implementación está absorbida por FINP-P0-006 y FINP-P1-013.
 
 La caracterización de datos, actualizada mediante snapshot el 2026-08-25,
 confirmó:
@@ -524,17 +554,29 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Preparación de migración compatible de Espacios v2, 2026-08-25:
+Borrador privado y adjuntos recuperables de `Nuevo gasto`, 2026-09-09:
 
-- clasificación 56/33/8 y contratos internos fail-closed;
-- CLI único, copia sanitizada por lotes, fingerprints, manifiesto privado,
-  preimágenes, transformación transaccional por Espacio y estado público seguro;
-- ensayo real sobre copia: 11/11 migrados, invariantes financieras y privadas
-  aprobadas, replay estable y rollback al fingerprint exacto;
-- apply bajo 30 segundos, verify cercano a 3,3 segundos y prueba de 1.000
-  movimientos bajo 30 segundos en apply, verify y rollback;
-- 895 unitarias y 12 recorridos de integración aprobados; la regresión global
-  suma la convivencia migrado/bloqueado y pasa 68 E2E en desarrollo y
-  producción;
-- sin escrituras en development o producción; cutover y retiro global del
-  fallback continúan pendientes, por lo que FINP-P0-006 permanece `en curso`.
+- colección y contrato parcial separados de `SpaceEntry`, con un activo por
+  autor, Espacio e intención y sin efecto financiero antes de publicar;
+- lectura, guardado, descarte y publicación filtrados por autor, con revisión
+  optimista y clave estable de idempotencia;
+- publicación en la misma transacción MongoDB que movimiento, impacto privado,
+  actividad y relaciones derivadas; un fallo revierte todo y conserva el
+  borrador activo;
+- autosave agrupado y serializado, recuperación del paso, estado accesible,
+  conflicto explícito y copia local sólo como contingencia;
+- card `Borrador privado` fuera de contadores y totales, reanudación y descarte
+  confirmado;
+- preparación inmediata de hasta cinco archivos privados, validación real de
+  firma, MIME, extensión, tamaño y hash, sin persistir binarios en el navegador;
+- estados accesibles por fila, reintento, remoción con revocación previa y
+  publicación bloqueada mientras exista una carga o fallo sin resolver;
+- metadata `ready` transferida en la misma transacción del movimiento y lectura
+  posterior por permisos, sin URL ni clave interna en DTO públicos;
+- reconciliación `dry-run` por defecto para preparaciones antiguas y limpiezas
+  pendientes, con fallos de carga y borrado inyectados en integración;
+- integración real y recorrido de preparación, cierre, reanudación, publicación
+  y lectura aprobados en Chromium desktop y Pixel 7. FINP-P1-013 continúa abierto
+  por su etapa 4 de experiencia y accesibilidad integral. La última repetición
+  completa de integración quedó impedida por EACCES/whitelist de MongoDB Atlas;
+  la dirigida de servicios de la etapa había aprobado 13/13.

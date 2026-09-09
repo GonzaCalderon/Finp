@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-09-09
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -280,6 +280,59 @@ La revisión final explica:
 - en qué cuenta o contexto;
 - qué saldo o estado cambia;
 - qué regla, compromiso o sugerencia intervino.
+
+El monto que autoriza una acción financiera se muestra completo, con moneda y
+escala correctas. Puede abreviarse en una visualización secundaria, nunca en la
+revisión final, el CTA, un error ni el resultado confirmado. La fecha civil se
+presenta igual en todos los pasos y no cambia de formato o día al revisar.
+
+### Borradores recuperables
+
+Un formulario financiero que persiste borrador comunica su estado junto al
+encabezado o la acción de cierre, sin competir con el CTA:
+
+- `Guardando…`: cambio local pendiente de confirmación;
+- `Guardado`: versión persistida;
+- `No se pudo guardar`: conserva la edición y ofrece reintento;
+- `Conflicto`: existe una versión más nueva y debe revisarse antes de continuar.
+
+Cerrar no equivale a descartar. El descarte es una acción separada, explícita y
+confirmada. Al reanudar, el formulario vuelve al último paso útil y restaura el
+foco sin saltar directamente sobre un error antiguo.
+
+En Movimientos, un borrador usa una card diferenciada por etiqueta y texto, no
+sólo por color. Muestra información parcial disponible, última edición y
+`Continuar`, pero no usa iconos o copy de movimiento confirmado ni participa en
+totales. Sólo su autor puede verlo.
+
+### Adjuntos recuperables
+
+Seleccionar un archivo inicia su preparación privada sin esperar la confirmación
+del formulario. La superficie anuncia el límite antes del selector y representa
+cada archivo como una fila estable con nombre saneado, tipo, tamaño y uno de
+estos estados textuales: `Subiendo…`, `Listo`, `No se pudo subir` o `Quitando…`.
+Color y animación pueden acompañar, pero nunca ser la única señal.
+
+Un fallo pertenece a la fila afectada, conserva las demás y ofrece `Reintentar`
+o `Quitar`; no se comunica sólo mediante toast. Mientras haya una carga o error
+sin resolver, el CTA final queda deshabilitado y explica el siguiente paso. La
+escritura del resto del formulario continúa disponible.
+
+Cerrar no cancela ni descarta una preparación ya aceptada por el servidor. Al
+reanudar se reconstruye la lista desde el borrador, sin guardar binarios en el
+navegador. Después de descartar, las filas desaparecen junto con la card privada;
+la limpieza técnica posterior no ocupa la interfaz.
+
+En mobile, las filas mantienen un área táctil mínima de 44 px, acciones con
+nombre accesible y CTA sobre la `safe area`. En desktop no se convierte el
+uploader en una superficie paralela. El foco vuelve a la fila al fallar y pasa a
+la siguiente acción útil al quitarla; los cambios de estado se anuncian mediante
+una región `aria-live` no intrusiva.
+
+Una preview asíncrona reserva el espacio necesario y distingue `Calculando`,
+`Lista para revisar`, `Faltan datos` y `No se pudo calcular`. No muestra un error
+durante el debounce ni reemplaza silenciosamente una revisión anterior con una
+respuesta obsoleta.
 
 ## 10. Estados y feedback
 

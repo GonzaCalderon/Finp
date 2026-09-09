@@ -74,6 +74,7 @@ const attachmentSchema = new Schema(
         size: { type: Number, required: true },
         storageProvider: { type: String, required: true, default: 'vercel_blob' },
         storageKey: { type: String, required: true, trim: true },
+        contentSha256: { type: String, minlength: 64, maxlength: 64 },
         createdAt: { type: Date, required: true, default: () => new Date() },
     },
     { _id: true }
@@ -164,7 +165,8 @@ const needsSchemaRefresh =
         !existingSpaceEntryModel.schema.path('revision') ||
         !existingSpaceEntryModel.schema.path('operationId') ||
         !existingSpaceEntryModel.schema.path('originalMoney') ||
-        !existingSpaceEntryModel.schema.path('settlementLegs'))
+        !existingSpaceEntryModel.schema.path('settlementLegs') ||
+        !existingSpaceEntryModel.schema.path('attachments.contentSha256'))
 
 if (needsSchemaRefresh) {
     delete mongoose.models.SpaceEntry

@@ -1,6 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { getCurrencyScale } from '@/lib/constants/iso-currencies'
 
 interface ResponsiveAmountProps {
     amount: number
@@ -12,6 +13,7 @@ interface ResponsiveAmountProps {
     fullClassName?: string
     compactMaximumFractionDigits?: number
     fullMaximumFractionDigits?: number
+    abbreviateOnMobile?: boolean
     loading?: boolean
 }
 
@@ -23,8 +25,9 @@ export function ResponsiveAmount({
     className,
     compactClassName = 'md:hidden',
     fullClassName = 'hidden md:inline',
-    compactMaximumFractionDigits = 1,
-    fullMaximumFractionDigits = 0,
+    compactMaximumFractionDigits,
+    fullMaximumFractionDigits,
+    abbreviateOnMobile = true,
     loading = false,
 }: ResponsiveAmountProps) {
     if (loading) {
@@ -55,10 +58,11 @@ export function ResponsiveAmount({
         safeCurrency = 'ARS'
     }
 
+    const currencyScale = getCurrencyScale(safeCurrency) ?? 2
     const compact = new Intl.NumberFormat('es-AR', {
         style: 'currency',
         currency: safeCurrency,
-        maximumFractionDigits: compactMaximumFractionDigits,
+        maximumFractionDigits: compactMaximumFractionDigits ?? Math.min(currencyScale, 1),
         minimumFractionDigits: 0,
         notation: 'compact',
     }).format(amount)
@@ -66,8 +70,13 @@ export function ResponsiveAmount({
     const full = new Intl.NumberFormat('es-AR', {
         style: 'currency',
         currency: safeCurrency,
-        maximumFractionDigits: fullMaximumFractionDigits,
+        maximumFractionDigits: fullMaximumFractionDigits ?? currencyScale,
+        minimumFractionDigits: abbreviateOnMobile ? 0 : currencyScale,
     }).format(amount)
+
+    if (!abbreviateOnMobile) {
+        return <span className={className} style={{ color }}>{full}</span>
+    }
 
     return (
         <>

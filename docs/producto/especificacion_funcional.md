@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-08-24
+> Última actualización: 2026-08-30
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -479,6 +479,13 @@ crea una transacción privada cuyo gasto operacional es la parte propia exacta:
 - la decisión privada no cambia el estado compartido ni el impacto de otra
   persona.
 
+Si el usuario autenticado es el pagador y elige una tarjeta propia, Mi Finp
+registra un consumo privado `1/1` sin plan de cuotas. El cargo de la tarjeta usa
+el total real pagado y el gasto operacional conserva la parte propia; los pagos
+de tarjeta reducen el pendiente de la tarjeta, no el gasto histórico ni el
+balance compartido. Mi Finp mantiene ARS/USD y no convierte implícitamente un
+movimiento de otra moneda. Espacios no admite todavía varias cuotas.
+
 Si el movimiento compartido cambia materialmente, el impacto personal pasa a revisión.
 Quitar el movimiento de Mi Finp elimina su transacción personal vinculada y
 marca el impacto privado como removido; no modifica el movimiento compartido.
@@ -498,6 +505,18 @@ Un participante puede:
 
 Esta configuración no es pública para los demás participantes.
 
+### Borrador de nuevo movimiento
+
+Existe como máximo un borrador activo por usuario y Espacio. Es persistente,
+privado y visible en Movimientos sólo para su autor con una etiqueta clara. No
+participa en balances, actividad, deudas, impactos ni notificaciones hasta que
+una publicación atómica e idempotente crea el movimiento compartido.
+
+Cerrar el diálogo conserva el borrador. Abrir `Nuevo gasto` lo reanuda; el autor
+puede descartarlo de forma explícita. Autosave, revisión optimista y adjuntos
+recuperables evitan pérdida o sobrescritura silenciosa. Guardado, preview y
+publicación usan el mismo contrato exacto de dinero, fecha y reparto.
+
 El contrato completo de autoridad, recorridos y verificación vive en
 [`espacios.md`](espacios.md) y en la decisión
 [`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md). La solución
@@ -506,6 +525,9 @@ técnica integral se define en la decisión
 La autoridad por moneda, las cotizaciones y las liquidaciones multitramos se
 definen en la decisión
 [`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md).
+El consumo privado de tarjeta `1/1` y el borrador persistente se definen en las
+decisiones [`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md) y
+[`0013`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 
 ## 12. Deudas
 

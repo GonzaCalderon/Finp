@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo y agentes
-> Última actualización: 2026-07-25
+> Última actualización: 2026-08-30
 > Fuente de verdad: relaciones conceptuales entre dominios
 
 ## Índice
@@ -42,6 +42,13 @@ Ejemplo:
 - la cuenta baja $100.000;
 - el reporte personal debe considerar $40.000;
 - la diferencia se explica via deuda o saldo a favor, no como gasto propio.
+
+Si el pago se hizo con una tarjeta privada, la misma separación se conserva: el
+cargo real es $100.000, el gasto operacional es $40.000 y $60.000 son
+recuperables. Los pagos posteriores de la tarjeta reducen su pendiente, no el
+gasto histórico ni el balance del Espacio. En un consumo `1/1` no hace falta un
+plan de cuotas; el contrato exacto vive en la decisión
+[`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
 
 ## 2. Espacios
 

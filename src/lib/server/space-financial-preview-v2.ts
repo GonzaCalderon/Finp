@@ -26,8 +26,7 @@ import {
     assertConversionSnapshotConfirmable,
     buildManualConversionSnapshot,
 } from '@/lib/server/space-quote-service'
-import { assertMoneyDto, convertMoneyExact, moneyToNumber, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
-import { moneyFromDecimal } from '@/lib/utils/money'
+import { convertMoneyExact, moneyFromDecimal, moneyMatchesDecimal, moneyToNumber, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
 import { applySettlementLegsV2 } from '@/lib/server/space-settlement-allocator-v2'
 
 function previewLedgerEntries(entries: ISpaceEntry[], reportingCurrency: string): SpaceLedgerEntryV2[] {
@@ -119,8 +118,7 @@ export async function previewSpaceEntryV2(input: {
         throw new ServiceError(409, 'SPACE_PARTICIPANT_INACTIVE', 'El reparto incluye una persona inactiva.')
     }
     if (input.money) {
-        const money = assertMoneyDto(input.money)
-        if (money.currency !== input.currency || moneyToNumber(money) !== input.amount) {
+        if (!moneyMatchesDecimal(input.money, input.currency, input.amount)) {
             throw new ServiceError(400, 'SPACE_MONEY_MISMATCH', 'El monto exacto no coincide con el preview.')
         }
     }
@@ -157,6 +155,7 @@ export async function previewSpaceEntryV2(input: {
         entryType: 'expense',
         entryAmount: input.amount,
         ownShareAmount: ownShare?.amount ?? 0,
+        currency: input.currency,
         isPayer: input.paidByParticipantId === currentParticipantId,
     })
     let linkExisting: SpaceEntryPreviewDto['linkExisting']
@@ -172,7 +171,8 @@ export async function previewSpaceEntryV2(input: {
         if (!transaction) issues.push('transaction_not_found')
         if (transaction && transaction.currency !== input.currency) issues.push('currency_mismatch')
         const expectedAmount = amounts.accountImpactAmount || amounts.ownShareAmount
-        if (transaction && Math.abs(transaction.amount - expectedAmount) > 0.01) issues.push('amount_mismatch')
+        if (transaction && moneyFromDecimal(input.currency, transaction.amount).minorUnits !==
+            moneyFromDecimal(input.currency, expectedAmount).minorUnits) issues.push('amount_mismatch')
         linkExisting = {
             transactionId: input.linkedTransactionId,
             compatible: issues.length === 0,

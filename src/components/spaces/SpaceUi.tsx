@@ -90,22 +90,22 @@ export const SPACE_ENTRY_TYPE_META: Record<
     expense: {
         icon: HandCoins,
         accent: 'var(--chart-4)',
-        softAccent: 'rgba(239,68,68,0.12)',
+        softAccent: 'color-mix(in srgb, var(--chart-4) 12%, transparent)',
     },
     income: {
         icon: CircleDollarSign,
         accent: 'var(--chart-3)',
-        softAccent: 'rgba(16,185,129,0.12)',
+        softAccent: 'color-mix(in srgb, var(--chart-3) 12%, transparent)',
     },
     adjustment: {
         icon: Settings2,
         accent: 'var(--chart-2)',
-        softAccent: 'rgba(212,160,23,0.14)',
+        softAccent: 'color-mix(in srgb, var(--chart-2) 14%, transparent)',
     },
     settlement: {
         icon: ArrowDownLeft,
         accent: 'var(--sky)',
-        softAccent: 'rgba(74,158,204,0.14)',
+        softAccent: 'color-mix(in srgb, var(--sky) 14%, transparent)',
     },
 }
 
@@ -571,12 +571,14 @@ export function SpaceAmountInline({
     hidden,
     className,
     color,
+    exact = false,
 }: {
     amount: number
     currency: string
     hidden: boolean
     className?: string
     color?: string
+    exact?: boolean
 }) {
     return (
         <ResponsiveAmount
@@ -585,6 +587,7 @@ export function SpaceAmountInline({
             hidden={hidden}
             className={className}
             color={color}
+            abbreviateOnMobile={!exact}
         />
     )
 }

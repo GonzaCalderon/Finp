@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-08-29
+> Última actualización: 2026-08-30
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -107,3 +107,9 @@ La referencia informa; la decisión sigue siendo propia de Finp.
   autorización explícita, transformación in-place sobre `finm`, corte único de
   los 11 Espacios, respaldo local y límites frente a producción y al fallback
   global.
+- [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](0012-gasto-espacio-tarjeta-un-pago.md):
+  cargo privado por el total real, parte propia operacional, clasificación
+  `1/1`, ARS/USD y separación explícita de las cuotas compartidas futuras.
+- [`0013 — Borrador privado persistente de movimiento de Espacio`](0013-borrador-privado-persistente-movimiento-espacio.md):
+  recurso por autor y Espacio, autosave, listado privado, adjuntos recuperables
+  y publicación atómica e idempotente.

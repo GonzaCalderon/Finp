@@ -17,8 +17,9 @@ import { Button } from '@/components/ui/button'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { useSpaceEntries } from '@/hooks/useSpaceEntries'
+import { useSpaceEntries, type SpaceEntryCreateContext } from '@/hooks/useSpaceEntries'
 import { useSpacePendingActions } from '@/hooks/useSpacePendingActions'
+import { useSpaceQuotes } from '@/hooks/useSpaceQuotes'
 import { useSpaces } from '@/hooks/useSpaces'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -149,12 +150,31 @@ function SpacesQuickEntryFlow({
     onSaved: () => void
 }) {
     const spaceId = item ? extractId(item.space._id) : undefined
-    const entriesApi = useSpaceEntries(spaceId)
+    const entryContext = useMemo<SpaceEntryCreateContext | undefined>(() => {
+        if (!item || !spaceId) return undefined
+        return {
+            sourceContract: item.space.contractVersion === 2 ? 'v2' : 'legacy',
+            currentUserId,
+            space: {
+                id: spaceId,
+                revision: item.space.revision ?? 0,
+                reportingCurrency: item.space.reportingCurrency,
+            },
+        }
+    }, [currentUserId, item, spaceId])
+    const quotesApi = useSpaceQuotes(
+        spaceId,
+        item?.space.contractVersion === 2 && (item.space.currencies?.length ?? 0) > 1
+    )
+    const entriesApi = useSpaceEntries(spaceId, {}, entryContext, quotesApi.data)
 
     if (!item || !spaceId) return null
 
-    const handleCreateEntry = async (payload: SpaceEntryFormData) => {
-        const entry = await entriesApi.createEntry(payload)
+    const handleCreateEntry = async (
+        payload: SpaceEntryFormData,
+        options?: Parameters<typeof entriesApi.createEntry>[1]
+    ) => {
+        const entry = await entriesApi.createEntry(payload, options)
         onSaved()
         return entry
     }
@@ -172,7 +192,10 @@ function SpacesQuickEntryFlow({
             spaceCurrencies={item.space.currencies}
             defaultSplitMode={item.space.defaultSplitMode}
             spaceMode={item.space.mode}
-            draftKey={`spaces-home-${spaceId}`}
+            contractVersion={item.space.contractVersion}
+            spaceRevision={item.space.revision ?? 0}
+            draftKey={spaceId}
+            quotes={quotesApi.data}
         />
     )
 }
@@ -210,6 +233,11 @@ function SpacesPageInner() {
     }, [router, searchParams])
 
     useEffect(() => {
+        if (loading) {
+            clearSpaceAction()
+            return
+        }
+
         setSpaceAction({
             label: 'Nuevo gasto',
             icon: <Plus size={18} color="#fff" />,
@@ -224,7 +252,7 @@ function SpacesPageInner() {
         })
 
         return () => clearSpaceAction()
-    }, [clearSpaceAction, setSpaceAction, spaces.length])
+    }, [clearSpaceAction, loading, setSpaceAction, spaces.length])
 
     const filteredSpaces = useMemo(() => {
         const normalizedSearch = search.trim().toLowerCase()

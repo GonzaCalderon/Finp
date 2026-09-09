@@ -308,9 +308,12 @@ function SpaceDetailPageInner() {
         [data?.api.movements.items]
     )
 
-    const handleCreateEntry = async (payload: Parameters<typeof entriesApi.createEntry>[0]) => {
+    const handleCreateEntry = async (
+        payload: Parameters<typeof entriesApi.createEntry>[0],
+        options?: Parameters<typeof entriesApi.createEntry>[1]
+    ) => {
         setFocusedEntryId(null)
-        const entry = await entriesApi.createEntry(payload)
+        const entry = await entriesApi.createEntry(payload, options)
         success('Movimiento guardado')
         return entry
     }
@@ -732,6 +735,9 @@ function SpaceDetailPageInner() {
                         />
                         <SpaceMovementsPanel
                             entries={entriesApi.loading ? data.entries : entriesApi.entries}
+                            draft={entriesApi.loading
+                                ? data.api.movements.draft
+                                : entriesApi.draft ?? undefined}
                             participants={data.participants}
                             currentUserId={currentUserId}
                             personalImpactsByEntryId={data.personalImpactsByEntryId}
@@ -749,6 +755,10 @@ function SpaceDetailPageInner() {
                             onCurrencyFiltersChange={setCurrencyFilters}
                             focusEntryId={focusedEntryId}
                             onCreate={canCreateEntry ? () => {
+                                setFocusedEntryId(null)
+                                setEntryDialogOpen(true)
+                            } : undefined}
+                            onDraftContinue={canCreateEntry ? () => {
                                 setFocusedEntryId(null)
                                 setEntryDialogOpen(true)
                             } : undefined}
@@ -821,8 +831,10 @@ function SpaceDetailPageInner() {
                 defaultSplitMode={data.space.defaultSplitMode}
                 spaceMode={data.space.mode}
                 contractVersion={data.space.contractVersion}
+                spaceRevision={data.space.revision ?? 0}
                 draftKey={spaceId}
                 quotes={quotesApi.data}
+                onDraftChange={entriesApi.setDraft}
             />
 
             <SpaceParticipantDialog
@@ -961,6 +973,7 @@ function SpaceDetailPageInner() {
                 defaultSplitMode={data.space.defaultSplitMode}
                 spaceMode={data.space.mode}
                 contractVersion={data.space.contractVersion}
+                spaceRevision={data.space.revision ?? 0}
                 mode="edit"
                 initialData={editingEntry ?? undefined}
                 initialHasSubsequentSettlement={editEntryHasSubsequentSettlement}

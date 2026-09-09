@@ -8,6 +8,7 @@ import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import type {
     ISpaceEntry,
     SpaceDetailDto,
+    SpaceEntryDraftDto,
     SpaceMovementPageDto,
     SpaceMutationResultDto,
     SpaceQuotesDto,
@@ -17,6 +18,7 @@ import {
     adaptSpaceEntryDtoForUi,
     clientDateToDateKey,
 } from '@/lib/client/space-api-adapter'
+import { moneyFromDecimal } from '@/lib/utils/money'
 
 export type SpaceMovementFilters = {
     type?: string
@@ -26,10 +28,21 @@ export type SpaceMovementFilters = {
     debtCurrencies?: string[]
 }
 
+export type SpaceEntryCreateContext = Pick<SpaceDetailDto, 'sourceContract' | 'currentUserId'> & {
+    space: Pick<SpaceDetailDto['space'], 'id' | 'revision' | 'reportingCurrency'>
+}
+
+export type SpaceEntryCreateOptions = {
+    draftPublication?: {
+        draftId: string
+        expectedRevision: number
+    }
+}
+
 export function useSpaceEntries(
     spaceId?: string,
     filters: SpaceMovementFilters = {},
-    spaceApi?: SpaceDetailDto,
+    spaceApi?: SpaceEntryCreateContext,
     quotes?: SpaceQuotesDto | null
 ) {
     const originalCurrenciesKey = (filters.originalCurrencies ?? []).join(',')
@@ -40,6 +53,7 @@ export function useSpaceEntries(
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [subtotalByCurrency, setSubtotalByCurrency] = useState<SpaceMovementPageDto['subtotalByCurrency']>({})
+    const [draft, setDraft] = useState<SpaceEntryDraftDto | null>(null)
     const pendingKeys = useRef(new Map<string, string>())
 
     const fetchEntries = useCallback(async (options?: { silent?: boolean }) => {
@@ -72,6 +86,7 @@ export function useSpaceEntries(
                 ? data.data.items.map((entry) => adaptSpaceEntryDtoForUi(entry, spaceApi))
                 : data.entries ?? [])
             setSubtotalByCurrency(data.data?.subtotalByCurrency ?? {})
+            setDraft(data.data?.draft ?? null)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar movimientos')
         } finally {
@@ -88,12 +103,29 @@ export function useSpaceEntries(
         spaceId,
     ])
 
-    const createEntry = useCallback(async (body: SpaceEntryFormData) => {
+    const createEntry = useCallback(async (
+        body: SpaceEntryFormData,
+        options?: SpaceEntryCreateOptions
+    ) => {
         if (!spaceId) {
             throw new Error('Espacio inválido')
         }
 
         if (spaceApi?.sourceContract === 'v2') {
+            if (options?.draftPublication) {
+                const result = await apiJson<SpaceMutationResultDto<{ entryId: string }>>(
+                    `/api/spaces/${spaceId}/entry-draft/publish`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(options.draftPublication),
+                    }
+                )
+                setDraft(null)
+                invalidateData(SPACE_INVALIDATION_TAGS)
+                return { _id: result.data.entryId } as unknown as ISpaceEntry
+            }
+
             const intention = JSON.stringify(body)
             const idempotencyKey = pendingKeys.current.get(intention) ?? crypto.randomUUID()
             pendingKeys.current.set(intention, idempotencyKey)
@@ -131,6 +163,7 @@ export function useSpaceEntries(
                 title: body.title,
                 description: body.description,
                 amount: body.amount,
+                money: moneyFromDecimal(body.currency, body.amount),
                 currency: body.currency,
                 exchangeRate: body.exchangeRate,
                 exchangeRateDecimal: quote?.rate,
@@ -206,6 +239,8 @@ export function useSpaceEntries(
         refreshing,
         error,
         subtotalByCurrency,
+        draft,
+        setDraft,
         fetchEntries,
         createEntry,
     }

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { FieldShell } from '@/components/shared/FieldShell'
 import { cn } from '@/lib/utils'
+import { getCurrencyScale } from '@/lib/constants/iso-currencies'
 
 type FormattedAmountInputProps = {
     id: string
@@ -39,7 +40,7 @@ function formatIntegerPart(value: string) {
     return value.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
 
-function sanitizeRawInput(raw: string, allowNegative = false) {
+function sanitizeRawInput(raw: string, allowNegative = false, scale = 2) {
     const trimmed = raw.trim()
     const isNegative = allowNegative && trimmed.startsWith('-')
     const cleaned = trimmed.replace(/[^\d,.-]/g, '')
@@ -54,7 +55,16 @@ function sanitizeRawInput(raw: string, allowNegative = false) {
     }
 
     const digitsAfterSeparator = unsigned.slice(separatorIndex + 1).replace(/[.,]/g, '')
-    const shouldTreatAsDecimal = digitsAfterSeparator.length <= 2
+    if (scale === 0) {
+        const separatorCount = (unsigned.match(/[.,]/g) ?? []).length
+        const digitsOnly = unsigned.replace(/[.,]/g, '')
+        if (separatorCount > 1 || digitsAfterSeparator.length === 3) {
+            return isNegative ? `-${digitsOnly}` : digitsOnly
+        }
+        const integerPart = unsigned.slice(0, separatorIndex).replace(/[.,]/g, '')
+        return `${isNegative ? '-' : ''}${integerPart}`
+    }
+    const shouldTreatAsDecimal = digitsAfterSeparator.length <= scale
 
     if (!shouldTreatAsDecimal) {
         const digitsOnly = unsigned.replace(/[.,]/g, '')
@@ -62,19 +72,19 @@ function sanitizeRawInput(raw: string, allowNegative = false) {
     }
 
     const integerPart = unsigned.slice(0, separatorIndex).replace(/[.,]/g, '')
-    const decimalPart = digitsAfterSeparator.slice(0, 2)
+    const decimalPart = digitsAfterSeparator.slice(0, scale)
 
     return `${isNegative ? '-' : ''}${integerPart}${separatorIndex >= 0 ? ',' : ''}${decimalPart}`
 }
 
-function displayFromNumber(value?: number) {
+function displayFromNumber(value?: number, scale = 2) {
     if (value === undefined || Number.isNaN(value) || value === 0) return ''
 
     const isNegative = value < 0
-    const fixed = Math.abs(value).toFixed(2)
+    const fixed = Math.abs(value).toFixed(scale)
     const [intPartRaw, decPartRaw] = fixed.split('.')
     const intPart = formatIntegerPart(intPartRaw)
-    const trimmedDecimals = decPartRaw.replace(/0+$/, '')
+    const trimmedDecimals = (decPartRaw ?? '').replace(/0+$/, '')
     const prefix = isNegative ? '-' : ''
 
     return trimmedDecimals ? `${prefix}${intPart},${trimmedDecimals}` : `${prefix}${intPart}`
@@ -130,11 +140,12 @@ export function FormattedAmountInput({
                                          onNegativeInputDetectedAction,
                                          onValueChangeAction,
                                      }: FormattedAmountInputProps) {
-    const [displayValue, setDisplayValue] = useState(displayFromNumber(value))
+    const scale = getCurrencyScale(currency) ?? 2
+    const [displayValue, setDisplayValue] = useState(displayFromNumber(value, scale))
     const [isFocused, setIsFocused] = useState(false)
 
     const currencyLabel = useMemo(() => getCurrencySymbol(currency), [currency])
-    const renderedValue = isFocused ? displayValue : displayFromNumber(value)
+    const renderedValue = isFocused ? displayValue : displayFromNumber(value, scale)
     const compact = density === 'compact'
 
     return (
@@ -174,7 +185,7 @@ export function FormattedAmountInput({
                     placeholder={placeholder}
                     value={renderedValue}
                     onFocus={() => {
-                        setDisplayValue(displayFromNumber(value))
+                        setDisplayValue(displayFromNumber(value, scale))
                         setIsFocused(true)
                     }}
                     onBlur={() => {
@@ -182,7 +193,7 @@ export function FormattedAmountInput({
                         onBlurAction?.()
                     }}
                     onChange={(e) => {
-                        const sanitized = sanitizeRawInput(e.target.value, allowNegative)
+                        const sanitized = sanitizeRawInput(e.target.value, allowNegative, scale)
                         const isNegative = allowNegative && sanitized.startsWith('-')
                         const unsignedSanitized = isNegative ? sanitized.slice(1) : sanitized
                         const [intPartRaw = '', decPartRaw] = unsignedSanitized.split(',')

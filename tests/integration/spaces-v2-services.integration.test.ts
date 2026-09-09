@@ -5,10 +5,12 @@ import {
     Account,
     Category,
     Debt,
+    InstallmentPlan,
     Notification,
     Space,
     SpaceActivityEvent,
     SpaceEntry,
+    SpaceEntryDraft,
     SpaceEntryPersonalImpact,
     SpaceOperation,
     SpaceParticipant,
@@ -33,6 +35,19 @@ import { getSpaceDetailV2 } from '@/lib/server/space-read-service-v2'
 import { resolveE2EEnvironment } from '../e2e/helpers/environment'
 import { buildManualConversionSnapshot } from '@/lib/server/space-quote-service'
 import { moneyFromDecimal } from '@/lib/utils/money'
+import {
+    discardSpaceEntryDraftV2,
+    getActiveSpaceEntryDraftV2,
+    publishSpaceEntryDraftV2,
+    saveSpaceEntryDraftV2,
+} from '@/lib/server/space-entry-draft-service-v2'
+import {
+    prepareSpaceEntryDraftAttachment,
+    readSpaceEntryDraftAttachment,
+    reconcileSpaceEntryDraftAttachments,
+    removeSpaceEntryDraftAttachment,
+} from '@/lib/server/space-entry-draft-attachment-service'
+import { createMemorySpaceAttachmentStorage } from '@/lib/server/space-attachment-storage'
 
 describe.sequential('spaces v2 application services — Mongo transaction integration', () => {
     const runId = new Types.ObjectId().toHexString()
@@ -40,6 +55,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
     let ownerUserId: string
     let memberUserId: string
     let ownerAccountId: string
+    let ownerCreditCardId: string
     let ownerCategoryId: string
     let spaceId: string
     let ownerParticipantId: string
@@ -77,7 +93,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         trackedUserIds.push(owner._id, member._id)
         ownerUserId = owner._id.toString()
         memberUserId = member._id.toString()
-        const [account, category] = await Promise.all([
+        const [account, creditCard, category] = await Promise.all([
             Account.create({
                 userId: owner._id,
                 name: `Cuenta v2 ${runId}`,
@@ -87,6 +103,16 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
                 isActive: true,
                 includeInNetWorth: true,
                 initialBalance: 1_000,
+            }),
+            Account.create({
+                userId: owner._id,
+                name: `Tarjeta v2 ${runId}`,
+                type: 'credit_card',
+                currency: 'ARS',
+                supportedCurrencies: ['ARS', 'USD'],
+                isActive: true,
+                includeInNetWorth: true,
+                initialBalance: 0,
             }),
             Category.create({
                 userId: owner._id,
@@ -98,6 +124,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             }),
         ])
         ownerAccountId = account._id.toString()
+        ownerCreditCardId = creditCard._id.toString()
         ownerCategoryId = category._id.toString()
         const space = await Space.create({
             contractVersion: 2,
@@ -157,6 +184,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
                 mongoose.connection.collection('debtmovements').deleteMany({ spaceId: spaceObjectId }),
                 Debt.deleteMany({ spaceId: spaceObjectId }),
                 SpaceOperation.deleteMany({ spaceId: spaceObjectId }),
+                SpaceEntryDraft.deleteMany({ spaceId: spaceObjectId }),
                 SpaceEntry.deleteMany({ spaceId: spaceObjectId }),
                 SpaceParticipant.deleteMany({ spaceId: spaceObjectId }),
                 Account.deleteMany({ userId: { $in: userObjectIds } }),
@@ -207,6 +235,341 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
 
         await expect(createSpaceEntryV2({ ...request, amount: 101 }))
             .rejects.toMatchObject({ code: 'IDEMPOTENCY_PAYLOAD_CONFLICT' })
+    })
+
+    it('registra un gasto compartido con tarjeta como consumo único y sin plan de cuotas', async () => {
+        const cardSpace = await Space.create({
+            contractVersion: 2,
+            ownerUserId,
+            name: `Tarjeta v2 ${runId}`,
+            type: 'personal',
+            mode: 'solo',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'none',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        const participant = await SpaceParticipant.create({
+            spaceId: cardSpace._id,
+            kind: 'finp_user',
+            userId: ownerUserId,
+            displayName: 'Owner tarjeta v2',
+            role: 'owner',
+            inviteStatus: 'accepted',
+            isActive: true,
+            revision: 0,
+        })
+
+        try {
+            const created = await createSpaceEntryV2({
+                actorUserId: ownerUserId,
+                spaceId: cardSpace._id.toString(),
+                idempotencyKey: `card-single-payment-${runId}`,
+                expectedRevision: 0,
+                title: 'Compra compartida con tarjeta',
+                amount: 80,
+                money: moneyFromDecimal('ARS', 80),
+                currency: 'ARS',
+                dateKey: '2026-08-24',
+                paidByParticipantId: participant._id.toString(),
+                sharedWithParticipantIds: [participant._id.toString()],
+                splitMode: 'none',
+                actorPersonalImpact: {
+                    accountId: ownerCreditCardId,
+                    categoryId: ownerCategoryId,
+                },
+            })
+            const transaction = await Transaction.findOne({
+                spaceEntryId: created.resultRefs.spaceEntryId,
+                sourceAccountId: ownerCreditCardId,
+            }).lean()
+
+            expect(transaction).toMatchObject({
+                type: 'credit_card_expense',
+                amount: 80,
+                operationalAmount: 80,
+                createdFrom: 'space',
+            })
+            expect(transaction?.installmentPlanId).toBeUndefined()
+            expect(await InstallmentPlan.countDocuments({ accountId: ownerCreditCardId })).toBe(0)
+        } finally {
+            await Promise.all([
+                SpaceActivityEvent.deleteMany({ spaceId: cardSpace._id }),
+                SpaceEntryPersonalImpact.deleteMany({ spaceId: cardSpace._id }),
+                Transaction.deleteMany({ spaceId: cardSpace._id }),
+                Debt.deleteMany({ spaceId: cardSpace._id }),
+                SpaceOperation.deleteMany({ spaceId: cardSpace._id }),
+                SpaceEntry.deleteMany({ spaceId: cardSpace._id }),
+                SpaceParticipant.deleteMany({ spaceId: cardSpace._id }),
+                InstallmentPlan.deleteMany({ accountId: ownerCreditCardId }),
+            ])
+            await Space.deleteOne({ _id: cardSpace._id })
+        }
+    })
+
+    it('aísla, versiona y publica un único borrador privado sin duplicar el movimiento', async () => {
+        const draftSpace = await Space.create({
+            contractVersion: 2,
+            ownerUserId,
+            name: `Borradores v2 ${runId}`,
+            type: 'other',
+            mode: 'managed',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'equal',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        const [draftOwner, draftMember] = await SpaceParticipant.create([{
+            spaceId: draftSpace._id,
+            kind: 'finp_user',
+            userId: ownerUserId,
+            displayName: 'Owner borradores',
+            role: 'owner',
+            inviteStatus: 'accepted',
+            isActive: true,
+            revision: 0,
+        }, {
+            spaceId: draftSpace._id,
+            kind: 'finp_user',
+            userId: memberUserId,
+            displayName: 'Member borradores',
+            role: 'participant',
+            inviteStatus: 'accepted',
+            isActive: true,
+            revision: 0,
+        }])
+        const draftSpaceId = draftSpace._id.toString()
+        const ownerFields = {
+            title: 'Borrador privado v2',
+            amount: 75.25,
+            money: moneyFromDecimal('ARS', 75.25),
+            currency: 'ARS',
+            dateKey: '2026-08-24',
+            paidByParticipantId: draftOwner._id.toString(),
+            sharedWithParticipantIds: [draftOwner._id.toString(), draftMember._id.toString()],
+            splitMode: 'equal' as const,
+            personalImpact: { accountId: ownerAccountId, categoryId: ownerCategoryId },
+        }
+        try {
+        const first = await saveSpaceEntryDraftV2({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            expectedSpaceRevision: 0,
+            step: 2,
+            fields: ownerFields,
+        })
+        expect(first).toMatchObject({ revision: 0, step: 2, status: 'active' })
+        expect((await getActiveSpaceEntryDraftV2({ actorUserId: ownerUserId, spaceId: draftSpaceId }))?.id).toBe(first.id)
+        expect(await getActiveSpaceEntryDraftV2({ actorUserId: memberUserId, spaceId: draftSpaceId })).toBeNull()
+
+        const memberDraft = await saveSpaceEntryDraftV2({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            expectedSpaceRevision: 0,
+            step: 1,
+            fields: { title: 'Sólo del participante' },
+        })
+        expect(memberDraft.id).not.toBe(first.id)
+        expect((await getSpaceDetailV2({ spaceId: draftSpaceId, actorUserId: ownerUserId })).movements.draft?.id).toBe(first.id)
+        expect((await getSpaceDetailV2({ spaceId: draftSpaceId, actorUserId: memberUserId })).movements.draft?.id).toBe(memberDraft.id)
+
+        const updated = await saveSpaceEntryDraftV2({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 0,
+            expectedSpaceRevision: 0,
+            step: 3,
+            fields: {
+                ...ownerFields,
+                title: 'Borrador privado actualizado',
+            },
+        })
+        expect(updated).toMatchObject({ revision: 1, step: 3 })
+        await expect(saveSpaceEntryDraftV2({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 0,
+            expectedSpaceRevision: 0,
+            step: 2,
+            fields: ownerFields,
+        })).rejects.toMatchObject({ code: 'SPACE_DRAFT_VERSION_CONFLICT' })
+
+        const attachmentStorage = createMemorySpaceAttachmentStorage()
+        const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+        const prepared = await prepareSpaceEntryDraftAttachment({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 1,
+            idempotencyKey: `attachment-${runId}`,
+            file: new File([pngBytes], 'ticket.png', { type: 'image/png' }),
+            storage: attachmentStorage,
+        })
+        expect(prepared).toMatchObject({ draftRevision: 3, attachment: { status: 'ready', fileName: 'ticket.png' } })
+        const attachmentId = prepared.attachment!.id
+        const replayedAttachment = await prepareSpaceEntryDraftAttachment({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 1,
+            idempotencyKey: `attachment-${runId}`,
+            file: new File([pngBytes], 'ticket.png', { type: 'image/png' }),
+            storage: attachmentStorage,
+        })
+        expect(replayedAttachment).toMatchObject({ draftRevision: 3, attachment: { id: attachmentId } })
+        await expect(readSpaceEntryDraftAttachment({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            attachmentId,
+            storage: attachmentStorage,
+        })).rejects.toMatchObject({ status: 404 })
+
+        const published = await publishSpaceEntryDraftV2({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 3,
+        })
+        expect(published.replayed).toBe(false)
+        const publishedEntryId = published.resultRefs.spaceEntryId?.toString()
+        expect(await SpaceEntry.countDocuments({ _id: publishedEntryId, title: 'Borrador privado actualizado' })).toBe(1)
+        const publishedEntry = await SpaceEntry.findById(publishedEntryId).lean()
+        expect(publishedEntry?.attachments).toHaveLength(1)
+        expect(publishedEntry?.attachments?.[0]).toMatchObject({
+            fileName: 'ticket.png',
+            mimeType: 'image/png',
+            storageProvider: 'vercel_blob',
+        })
+        expect(publishedEntry?.attachments?.[0]?.contentSha256).toMatch(/^[a-f\d]{64}$/)
+        expect(await getActiveSpaceEntryDraftV2({ actorUserId: ownerUserId, spaceId: draftSpaceId })).toBeNull()
+
+        const replay = await publishSpaceEntryDraftV2({
+            actorUserId: ownerUserId,
+            spaceId: draftSpaceId,
+            draftId: first.id,
+            expectedRevision: 3,
+        })
+        expect(replay.replayed).toBe(true)
+        expect(replay.resultRefs.spaceEntryId?.toString()).toBe(publishedEntryId)
+        expect(await SpaceEntry.countDocuments({ _id: publishedEntryId })).toBe(1)
+
+        const failingStorage = {
+            ...createMemorySpaceAttachmentStorage(),
+            put: async () => { throw new Error('INJECTED_BLOB_FAILURE') },
+        }
+        await expect(prepareSpaceEntryDraftAttachment({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            draftId: memberDraft.id,
+            expectedRevision: 0,
+            idempotencyKey: `failed-attachment-${runId}`,
+            file: new File([pngBytes], 'fallo.png', { type: 'image/png' }),
+            storage: failingStorage,
+        })).rejects.toMatchObject({ status: 503, code: 'STORAGE_UNAVAILABLE' })
+        const failedDraft = await SpaceEntryDraft.findById(memberDraft.id).lean()
+        expect(failedDraft).toMatchObject({ revision: 2 })
+        expect(failedDraft?.attachments?.[0]?.status).toBe('upload_failed')
+
+        const recoveryStorage = createMemorySpaceAttachmentStorage()
+        const failedAttachmentId = failedDraft!.attachments![0]._id.toString()
+        const retried = await prepareSpaceEntryDraftAttachment({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            draftId: memberDraft.id,
+            attachmentId: failedAttachmentId,
+            expectedRevision: 2,
+            idempotencyKey: `retry-attachment-${runId}`,
+            file: new File([pngBytes], 'fallo.png', { type: 'image/png' }),
+            storage: recoveryStorage,
+        })
+        expect(retried).toMatchObject({ draftRevision: 4, attachment: { status: 'ready' } })
+
+        const deleteFailingStorage = {
+            ...recoveryStorage,
+            delete: async () => { throw new Error('INJECTED_DELETE_FAILURE') },
+        }
+        const removal = await removeSpaceEntryDraftAttachment({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            draftId: memberDraft.id,
+            attachmentId: failedAttachmentId,
+            expectedRevision: 4,
+            storage: deleteFailingStorage,
+        })
+        expect(removal).toEqual({ draftRevision: 5, cleanupPending: true })
+        const reconciliation = await reconcileSpaceEntryDraftAttachments({
+            draftId: memberDraft.id,
+            dryRun: false,
+            storage: recoveryStorage,
+        })
+        expect(reconciliation.deleted).toBe(1)
+
+        const discarded = await discardSpaceEntryDraftV2({
+            actorUserId: memberUserId,
+            spaceId: draftSpaceId,
+            draftId: memberDraft.id,
+            expectedRevision: 6,
+        })
+        expect(discarded.status).toBe('discarded')
+        expect(await getActiveSpaceEntryDraftV2({ actorUserId: memberUserId, spaceId: draftSpaceId })).toBeNull()
+        } finally {
+            await Promise.all([
+                Notification.deleteMany({ 'entityRefs.spaceId': draftSpace._id }),
+                SpaceActivityEvent.deleteMany({ spaceId: draftSpace._id }),
+                SpaceEntryPersonalImpact.deleteMany({ spaceId: draftSpace._id }),
+                Transaction.deleteMany({ spaceId: draftSpace._id }),
+                mongoose.connection.collection('debtmovements').deleteMany({ spaceId: draftSpace._id }),
+                Debt.deleteMany({ spaceId: draftSpace._id }),
+                SpaceOperation.deleteMany({ spaceId: draftSpace._id }),
+                SpaceEntryDraft.deleteMany({ spaceId: draftSpace._id }),
+                SpaceEntry.deleteMany({ spaceId: draftSpace._id }),
+                SpaceParticipant.deleteMany({ spaceId: draftSpace._id }),
+            ])
+            await Space.deleteOne({ _id: draftSpace._id })
+        }
+    })
+
+    it('revierte una publicación fallida y conserva el borrador activo', async () => {
+        const draft = await saveSpaceEntryDraftV2({
+            actorUserId: memberUserId,
+            spaceId,
+            expectedSpaceRevision: 0,
+            step: 3,
+            fields: {
+                title: 'Publicación que debe revertirse',
+                amount: 22,
+                money: moneyFromDecimal('ARS', 22),
+                currency: 'ARS',
+                dateKey: '2026-08-24',
+                paidByParticipantId: memberParticipantId,
+                sharedWithParticipantIds: [memberParticipantId],
+                splitMode: 'none',
+                personalImpact: { accountId: ownerAccountId },
+            },
+        })
+        await expect(publishSpaceEntryDraftV2({
+            actorUserId: memberUserId,
+            spaceId,
+            draftId: draft.id,
+            expectedRevision: 0,
+        })).rejects.toBeTruthy()
+        expect(await SpaceEntry.countDocuments({ spaceId, title: 'Publicación que debe revertirse' })).toBe(0)
+        expect(await getActiveSpaceEntryDraftV2({ actorUserId: memberUserId, spaceId }))
+            .toMatchObject({ id: draft.id, revision: 0, status: 'active' })
+        await discardSpaceEntryDraftV2({
+            actorUserId: memberUserId,
+            spaceId,
+            draftId: draft.id,
+            expectedRevision: 0,
+        })
     })
 
     it('serializa reintentos concurrentes y revierte por completo un fallo inyectado', async () => {
@@ -519,7 +882,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
     })
 
     it('una persona removida conserva historia, impacto privado y liquidación propia', async () => {
-        await createSpaceEntryV2({
+        const historicalEntry = await createSpaceEntryV2({
             actorUserId: memberUserId,
             spaceId,
             idempotencyKey: `inactive-origin-${runId}`,
@@ -542,6 +905,38 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         })
         expect(await SpaceParticipant.findById(ownerParticipantId).lean())
             .toMatchObject({ isActive: false, revision: 2 })
+        const historicalEntryId = historicalEntry.resultRefs.spaceEntryId!.toString()
+        const edited = await editSpaceEntryV2({
+            actorUserId: memberUserId,
+            spaceId,
+            entryId: historicalEntryId,
+            idempotencyKey: `edit-preserve-inactive-${runId}`,
+            expectedRevision: 0,
+            title: 'Saldo histórico conservado',
+            amount: 50,
+            money: moneyFromDecimal('ARS', 50),
+            currency: 'ARS',
+            dateKey: '2026-08-29',
+            paidByParticipantId: memberParticipantId,
+            sharedWithParticipantIds: [ownerParticipantId, memberParticipantId],
+            splitMode: 'equal',
+        })
+        expect(edited.value).toMatchObject({ revision: 1 })
+        await expect(editSpaceEntryV2({
+            actorUserId: memberUserId,
+            spaceId,
+            entryId: historicalEntryId,
+            idempotencyKey: `edit-add-inactive-role-${runId}`,
+            expectedRevision: 1,
+            title: 'No debe cambiar pagador',
+            amount: 50,
+            money: moneyFromDecimal('ARS', 50),
+            currency: 'ARS',
+            dateKey: '2026-08-29',
+            paidByParticipantId: ownerParticipantId,
+            sharedWithParticipantIds: [ownerParticipantId, memberParticipantId],
+            splitMode: 'equal',
+        })).rejects.toMatchObject({ code: 'SPACE_PARTICIPANT_INACTIVE' })
         const debt = await Debt.findOne({
             userId: ownerUserId,
             spaceId,

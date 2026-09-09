@@ -154,6 +154,31 @@ describe('space financial v2 — matriz de impacto personal', () => {
         })
     })
 
+    it('respeta la escala real de la moneda al derivar el impacto', () => {
+        expect(derivePersonalImpactAmountsV2({
+            entryType: 'expense',
+            entryAmount: 100.6,
+            ownShareAmount: 40.6,
+            currency: 'JPY',
+            isPayer: true,
+        })).toMatchObject({
+            accountImpactAmount: 101,
+            operationalAmount: 41,
+            recoverableAdvanceAmount: 60,
+        })
+        expect(derivePersonalImpactAmountsV2({
+            entryType: 'expense',
+            entryAmount: 1.2344,
+            ownShareAmount: 0.3336,
+            currency: 'KWD',
+            isPayer: true,
+        })).toMatchObject({
+            accountImpactAmount: 1.234,
+            operationalAmount: 0.334,
+            recoverableAdvanceAmount: 0.9,
+        })
+    })
+
     it('liquidaciones mueven cuenta y nunca reporting operacional', () => {
         expect(derivePersonalImpactAmountsV2({
             entryType: 'settlement',

@@ -19,6 +19,8 @@ import type {
     SpacePersonalPendingActionType,
     SpaceOperationStatus,
     SpaceOperationType,
+    SpaceEntryDraftIntent,
+    SpaceEntryDraftStatus,
     SpaceSplitMode,
     SpaceStatus,
     SpaceType,
@@ -112,7 +114,34 @@ export interface ISpaceEntryAttachment {
     size: number
     storageProvider: 'vercel_blob'
     storageKey: string
+    contentSha256?: string
     createdAt: Date
+}
+
+export type SpaceEntryDraftAttachmentStatus =
+    | 'preparing'
+    | 'ready'
+    | 'upload_failed'
+    | 'cleanup_pending'
+    | 'deleted'
+
+export interface ISpaceEntryDraftAttachment {
+    _id: Types.ObjectId
+    uploadedByUserId: Types.ObjectId
+    uploadIdempotencyKey: string
+    status: SpaceEntryDraftAttachmentStatus
+    fileName?: string
+    declaredMimeType?: string
+    mimeType?: string
+    size?: number
+    contentSha256?: string
+    storageProvider: 'vercel_blob'
+    storageKey?: string
+    createdAt: Date
+    lastAttemptAt: Date
+    confirmedAt?: Date
+    deletedAt?: Date
+    lastErrorCode?: string
 }
 
 export interface ISpaceEntrySplitAllocation {
@@ -215,6 +244,48 @@ export interface ISpaceEntry {
     previousVersions?: ISpaceEntrySnapshot[]
     revision?: number
     operationId?: Types.ObjectId
+    createdAt: Date
+    updatedAt: Date
+}
+
+export interface ISpaceEntryDraft {
+    _id: Types.ObjectId
+    contractVersion: 2
+    spaceId: Types.ObjectId
+    creatorUserId: Types.ObjectId
+    intent: SpaceEntryDraftIntent
+    status: SpaceEntryDraftStatus
+    revision: number
+    step: 1 | 2 | 3 | 4
+    expectedSpaceRevision: number
+    publishIdempotencyKey: string
+    title?: string
+    description?: string
+    amount?: number
+    money?: MoneyDto
+    currency?: string
+    exchangeRate?: number
+    exchangeRateDecimal?: string
+    conversionSnapshot?: ConversionSnapshot
+    expectedQuoteFingerprint?: string
+    dateKey?: string
+    timezone?: string
+    paidByParticipantId?: Types.ObjectId
+    sharedWithParticipantIds?: Types.ObjectId[]
+    splitMode?: SpaceSplitMode
+    splitAllocations?: ISpaceEntrySplitAllocation[]
+    spaceCategoryId?: Types.ObjectId
+    notes?: string
+    actorPersonalImpact?: {
+        accountId?: Types.ObjectId
+        categoryId?: Types.ObjectId
+        description?: string
+        linkedTransactionId?: Types.ObjectId
+    }
+    attachments?: ISpaceEntryDraftAttachment[]
+    publishedEntryId?: Types.ObjectId
+    publishedAt?: Date
+    discardedAt?: Date
     createdAt: Date
     updatedAt: Date
 }
