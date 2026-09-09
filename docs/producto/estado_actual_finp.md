@@ -28,6 +28,9 @@ Estado general:
 
 - base personal apta para preproducción controlada; Espacios requiere cerrar su
   exactitud P0 antes de considerarse listo para liberación;
+- Espacios v2 tiene su cutover ejecutado y verificado sobre development
+  (`finm`, 2026-08-29); producción permanece fuera de alcance sin una
+  decisión propia que la autorice;
 - dominio personal amplio;
 - Espacios y Deudas tienen capacidades operativas amplias, con inconsistencias
   de integración y experiencia verificadas;
@@ -45,9 +48,8 @@ La especificación completa está en [`especificacion_funcional.md`](especificac
 ## 2. Estado técnico
 
 El checkpoint multimoneda quedó integrado en `dev` mediante el merge
-`8b31c87`. La etapa de migración se desarrolla sobre
-`codex/spaces-v2-migration`; sus checks focales y ensayo aislado se verificaron
-el 2026-08-25:
+`8b31c87`. Sus checks focales se verificaron el 2026-08-25 y se reejecutaron
+sobre el estado actual el 2026-09-09:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
@@ -57,7 +59,8 @@ el 2026-08-25:
 - ESLint limpio;
 - validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
-- 895 unit tests aprobados en 119 archivos, sin tests en `todo`;
+- 916 unit tests aprobados en 123 archivos, sin tests en `todo` (verificado el
+  2026-09-09, tras integrar el PR 37);
 - 12 recorridos de integración de Espacios v2 aprobados contra bases E2E con
   sesiones MongoDB reales;
 - 68 de 68 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
@@ -71,14 +74,33 @@ el 2026-08-25:
 - el seed recrea todas las cuentas del usuario general, restaura su cuenta
   predeterminada y mantiene usuarios independientes para smoke financiero,
   Proyección e impactos personales de Espacios;
-- CI activo para lint, build y unit tests;
-- job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
-  la rotación.
+- CI activo para lint, build y unit tests; el PR 37 además corrió y aprobó
+  `E2E Critical` contra `finp-e2e` antes de mergear a `dev`;
+- job E2E activo; sigue informando el bloqueo y sin conectar hasta recibir
+  `MONGODB_URI_TEST` después de la rotación (FINP-P1-011, pendiente);
 - auditoría legacy de Espacios disponible como lectura snapshot estrictamente
   read-only para E2E y development, con confirmación de base, códigos estables,
   reportes locales sanitizados y rechazo de producción;
-- CLI único de migración con `plan`, `clone`, `apply`, `verify` y `rollback`,
-  todos `dry-run` por defecto y con escritura limitada a `e2e-migration`;
+- CLI de migración con `plan`, `clone`, `apply`, `verify`, `resolve` y
+  `rollback`; el modo `--cutover` admite `finm` como destino con confirmación
+  exacta de nombre y registra la corrida como no-ensayo, sin relajar el rechazo
+  de producción ni el límite a `e2e-migration` del resto de los modos.
+
+El cutover de Espacios v2 sobre `finm` se ejecutó el 2026-08-29, autorizado por
+la decisión [`0011`](../decisiones/0011-cutover-espacios-v2-en-development.md):
+
+- 11 Espacios migrados, 0 bloqueados, 354 preimágenes guardadas;
+- `verify` válido con 0 incompatibilidades de balance, deuda o vínculo privado
+  y ledger personal invariante; las 736 transacciones personales y las 33
+  cuentas conservaron su conteo previo;
+- respaldo `mongodump` verificado por lectura y 10 índices v2 creados sin
+  violaciones de unicidad;
+- el huérfano global quedó resuelto el mismo día mediante el subcomando
+  `resolve`, dentro de la corrida `cutover-20260829`; `verify` cierra con 0
+  resoluciones sin aplicar;
+- producción permanece rechazada por `isProductionLikeDatabaseName`: no hay
+  decisión posterior a la 0011 que la autorice, y el retiro global del
+  fallback legacy sigue fuera de alcance.
 
 Ramas:
 
@@ -86,7 +108,8 @@ Ramas:
 - `dev`: base de integración del próximo estado productivo;
 - `codex/spaces-multicurrency`: integrada en `dev` mediante PR 31 y merge
   `8b31c87`;
-- `codex/spaces-v2-migration`: rama corta actual para el checkpoint de etapa 4;
+- `codex/spaces-new-entry-exactness`: integrada en `dev` mediante PR 37 el
+  2026-09-09 (borrador privado y adjuntos recuperables de `Nuevo gasto`);
 - antes del checkpoint se verificó que `origin/main` fuera ancestro de
   `origin/dev`;
 - la rama local `main` está desactualizada y no se usa para trabajo hasta
@@ -328,7 +351,10 @@ elige el usuario.
 - copia aislada que conserva dinero y relaciones mientras anonimiza identidad,
   texto libre, credenciales, tokens, adjuntos y URLs;
 - backfill por Espacio con snapshots `legacy`, preimágenes con checksum,
-  manifiesto privado aprobado, replay y rollback exacto.
+  manifiesto privado aprobado, replay y rollback exacto;
+- cutover ejecutado sobre `finm` (development) el 2026-08-29: los 11 Espacios
+  operan en contrato v2, con preimágenes conservadas para rollback y el
+  fallback legacy retirado por Espacio migrado.
 
 ### Brechas verificadas
 
@@ -396,12 +422,14 @@ La base compatible v2 completada el 2026-08-24 incorpora:
   de rollback, concurrencia, replay, historia y ambas superficies de liquidación.
 
 Las etapas 2 y 3 están conectadas a las rutas e interfaz existentes, y el
-checkpoint multimoneda amplía ese contrato sin rutas paralelas. La etapa 4 ya
-prepara y verifica la migración, pero sólo sobre una copia sanitizada: migró 11
-de 11 Espacios, conservó el ledger personal, dejó cero saldos o vínculos
+checkpoint multimoneda amplía ese contrato sin rutas paralelas. La etapa 4
+preparó y ensayó la migración sobre una copia sanitizada — migró 11 de 11
+Espacios, conservó el ledger personal, dejó cero saldos o vínculos
 incompatibles, produjo replay sin cambios y restauró el fingerprint previo al
-revertir. No hubo backfill, cutover ni escritura en development o producción;
-por eso no se levanta el `NO-GO` productivo.
+revertir — y el 2026-08-29 se autorizó y ejecutó el cutover in-place sobre
+`finm`: 11 Espacios migrados, 0 bloqueados, `verify` válido y ledger personal
+invariante, con `mongodump` como respaldo externo verificado. Producción no
+recibió backfill, cutover ni escritura; el `NO-GO` productivo no cambia.
 
 Los detalles con identificadores permanecen locales en
 `test-results/audits/spaces/` y no se versionan.
@@ -536,12 +564,14 @@ Mobile web sigue siendo la superficie prioritaria.
   [`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md) y
   [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md), y la
   autoridad multimoneda definida en
-  [`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md), pero
-  su activación sigue limitada a `finp-e2e`: el ensayo aislado no habilita datos
-  legacy de development ni producción para escritura v2.
-- La clasificación y el ensayo de rollback están completos, pero el `NO-GO`
-  para development/producción continúa hasta revisar el checkpoint, aprobar la
-  ventana de cutover y ejecutar la habilitación progresiva autorizada.
+  [`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md). El cutover
+  del 2026-08-29
+  ([`0011`](../decisiones/0011-cutover-espacios-v2-en-development.md)) activó
+  el contrato v2 sobre `finm`; producción sigue sin escritura v2 y sin
+  autorización posterior a esa decisión.
+- La clasificación, el ensayo de rollback y el cutover de development están
+  cerrados. El `NO-GO` productivo continúa hasta que exista una decisión
+  equivalente a la 0011 para producción, con su propio respaldo y ventana.
 - La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
   elegir.
 - Proyección no calcula cashflow por cuenta ni escenarios y todavía no incluye
@@ -554,7 +584,8 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Borrador privado y adjuntos recuperables de `Nuevo gasto`, 2026-09-09:
+Borrador privado y adjuntos recuperables de `Nuevo gasto`, 2026-09-09 (PR 37,
+`codex/spaces-new-entry-exactness` → `dev`):
 
 - colección y contrato parcial separados de `SpaceEntry`, con un activo por
   autor, Espacio e intención y sin efecto financiero antes de publicar;
