@@ -294,8 +294,9 @@ elige el usuario.
   modo seguro de sólo lectura cuando no se puede demostrar un saldo;
 - movimientos paginados por `dateKey + _id`, capacidades calculadas por servidor
   y mutaciones con idempotencia y revisión esperada;
-- gasto v2 en tres pasos con revisión de total, parte propia, cuenta, gasto
-  operacional, adelanto y deuda antes de confirmar;
+- gasto v2 en cuatro pasos (datos, reparto, extras y revisión) con revisión de
+  total, parte propia, cuenta, gasto operacional, adelanto y deuda antes de
+  confirmar;
 - liquidación propia o representada compartida por Espacios y Deudas, con
   decisión personal separada para cada contraparte;
 - configuración v2 con moneda de reporte inmutable desde el primer movimiento,

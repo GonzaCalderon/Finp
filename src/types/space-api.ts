@@ -128,7 +128,7 @@ export interface SpaceEntryDraftDto {
     intent: 'new_expense'
     status: 'active' | 'publishing' | 'published' | 'discarded'
     revision: number
-    step: 1 | 2 | 3
+    step: 1 | 2 | 3 | 4
     expectedSpaceRevision: number
     fields: {
         title?: string

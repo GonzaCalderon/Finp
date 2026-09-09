@@ -227,9 +227,9 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     escrituras legacy;
   - las escrituras v2 sólo se habilitan con conexión efectiva a `finp-e2e`;
     development permanece cerrado, sin datos ni índices v2 nuevos;
-  - gasto guiado en tres pasos con preview exacto, borrador preservado ante
-    conflicto y acción personal explícita; permisos y acciones por movimiento
-    provienen del servidor;
+  - gasto guiado en cuatro pasos (Datos, Reparto, Extras, Revisión) con preview
+    exacto, borrador preservado ante conflicto y acción personal explícita;
+    permisos y acciones por movimiento provienen del servidor;
   - Espacios y Deudas invocan el mismo preview y servicio de liquidación propia
     o representada; una representación no mueve la cuenta del actor y deja la
     decisión privada a ambas contrapartes;
@@ -393,8 +393,9 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   - creación mínima e invitación omisible, sin configuración prematura;
   - navegación estable `Inicio`, `Movimientos`, `Balances` y `Configuración` en
     mobile y desktop;
-  - gasto guiado en tres pasos con categoría, adjuntos y opciones avanzadas por
-    complejidad progresiva;
+  - gasto guiado en cuatro pasos, con categoría, adjuntos y opciones avanzadas
+    (cuenta personal, vínculo con transacción existente) aisladas en un paso
+    propio antes de la revisión final;
   - un borrador activo por usuario y Espacio, privado, persistente, reanudable y
     visible sólo a su autor en Movimientos;
   - adjuntos asociados al borrador antes de publicar, recuperables ante error y

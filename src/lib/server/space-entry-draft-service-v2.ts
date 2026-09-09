@@ -170,7 +170,7 @@ export async function saveSpaceEntryDraftV2(input: {
     draftId?: string
     expectedRevision?: number
     expectedSpaceRevision: number
-    step: 1 | 2 | 3
+    step: 1 | 2 | 3 | 4
     fields: SpaceEntryDraftFieldsInput
 }) {
     assertSpaceV2WriteEnabled()

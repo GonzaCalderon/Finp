@@ -47,7 +47,7 @@ export const saveSpaceEntryDraftSchema = z.object({
     draftId: draftObjectIdSchema.optional(),
     expectedRevision: z.number().int().nonnegative().optional(),
     expectedSpaceRevision: z.number().int().nonnegative(),
-    step: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    step: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
     fields: spaceEntryDraftFieldsSchema,
 }).strict()
 

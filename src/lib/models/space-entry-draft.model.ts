@@ -72,7 +72,7 @@ const SpaceEntryDraftSchema = new Schema<ISpaceEntryDraft>(
             default: SPACE_ENTRY_DRAFT_STATUSES.ACTIVE,
         },
         revision: { type: Number, required: true, min: 0, default: 0 },
-        step: { type: Number, enum: [1, 2, 3], required: true, default: 1 },
+        step: { type: Number, enum: [1, 2, 3, 4], required: true, default: 1 },
         expectedSpaceRevision: { type: Number, required: true, min: 0 },
         publishIdempotencyKey: {
             type: String,

@@ -26,6 +26,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
         await page.getByRole('option', { name: /^Tarjeta E2E Tarjeta de crédito/ }).click()
         await expect(dialog.getByText(/consumo en un pago por/)).toBeVisible()
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'POST' &&
@@ -92,6 +93,11 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Reparto')
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
+        await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Extras')
+        await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
+        await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
+
         await expect(dialog.getByText('Qué cambia al confirmar')).toBeVisible()
         await expect(dialog.getByText('Total', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Tu parte', { exact: true })).toBeVisible()
@@ -100,8 +106,6 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(dialog.getByText('Adelanto recuperable', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Cambio en deuda', { exact: true })).toBeVisible()
 
-        await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
-        await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'POST' &&
             response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft/publish`)
@@ -213,7 +217,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             buffer: png,
         })
         await expect(dialog.getByTestId('space-draft-attachment-blocker')).toBeVisible()
-        await expect(dialog.getByRole('button', { name: /^Guardar;/ })).toBeDisabled()
+        await expect(dialog.getByRole('button', { name: 'Continuar' })).toBeDisabled()
         expect((await uploadResponse).status()).toBe(201)
         await page.unroute('**/entry-draft/attachments')
         await expect(dialog.getByText('ticket-e2e.png', { exact: true })).toBeVisible()
@@ -224,6 +228,8 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await page.getByRole('button', { name: 'Continuar borrador' }).click()
         await expect(dialog.getByText('ticket-e2e.png', { exact: true })).toBeVisible()
         await expect(dialog.getByText(/ · Listo$/)).toBeVisible()
+
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         const publishResponse = page.waitForResponse((response) =>
             response.request().method() === 'POST' &&
@@ -326,6 +332,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
         await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
         await expect(dialog.getByText('Transacción compatible')).not.toBeVisible()
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'POST' &&
@@ -366,6 +373,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(createDialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
         await createDialog.locator('#entry-amount').fill('10000')
         await createDialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
+        await createDialog.getByRole('button', { name: 'Continuar' }).click()
         await createDialog.getByRole('button', { name: 'Continuar' }).click()
         await createDialog.getByRole('button', { name: 'Continuar' }).click()
         const createSaveButton = createDialog.getByRole('button', {

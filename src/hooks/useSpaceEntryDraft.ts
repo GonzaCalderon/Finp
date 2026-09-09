@@ -21,7 +21,7 @@ export class DraftAttachmentMutationError extends Error {
     }
 }
 
-function draftFingerprint(step: 1 | 2 | 3, fields: DraftFields) {
+function draftFingerprint(step: 1 | 2 | 3 | 4, fields: DraftFields) {
     return JSON.stringify({ step, fields })
 }
 
@@ -70,7 +70,7 @@ export function useSpaceEntryDraft({
         }
     }, [setDraft, spaceId])
 
-    const save = useCallback((fields: DraftFields, step: 1 | 2 | 3) => {
+    const save = useCallback((fields: DraftFields, step: 1 | 2 | 3 | 4) => {
         const fingerprint = draftFingerprint(step, fields)
         if (lastSavedFingerprintRef.current === fingerprint && draftRef.current) {
             return Promise.resolve(draftRef.current)

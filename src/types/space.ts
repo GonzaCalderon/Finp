@@ -256,7 +256,7 @@ export interface ISpaceEntryDraft {
     intent: SpaceEntryDraftIntent
     status: SpaceEntryDraftStatus
     revision: number
-    step: 1 | 2 | 3
+    step: 1 | 2 | 3 | 4
     expectedSpaceRevision: number
     publishIdempotencyKey: string
     title?: string

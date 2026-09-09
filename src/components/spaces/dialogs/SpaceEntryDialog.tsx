@@ -371,7 +371,7 @@ function draftFieldsFromForm(
     }
 }
 
-function formFingerprint(form: SpaceEntryFormData, step: 1 | 2 | 3) {
+function formFingerprint(form: SpaceEntryFormData, step: 1 | 2 | 3 | 4) {
     return JSON.stringify({
         ...form,
         date: clientDateToDateKey(form.date),
@@ -492,7 +492,7 @@ export function SpaceEntryDialog({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [datePickerOpen, setDatePickerOpen] = useState(false)
     const [hasSubsequentSettlementWarning, setHasSubsequentSettlementWarning] = useState(false)
-    const [step, setStep] = useState<1 | 2 | 3>(1)
+    const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
     const [preview, setPreview] = useState<SpaceEntryPreviewDto | null>(null)
     const [previewLoading, setPreviewLoading] = useState(false)
     const [previewError, setPreviewError] = useState<string | null>(null)
@@ -619,7 +619,7 @@ export function SpaceEntryDialog({
             .then((serverDraft) => {
                 if (hydrationRunRef.current !== hydrationRun) return
                 let nextForm = defaults
-                let nextStep: 1 | 2 | 3 = 1
+                let nextStep: 1 | 2 | 3 | 4 = 1
 
                 if (serverDraft) {
                     nextForm = sanitizeDraft({
@@ -636,7 +636,7 @@ export function SpaceEntryDialog({
                         : null
                     if (cached) {
                         try {
-                            const parsed = JSON.parse(cached) as { form?: EntryDraftPayload; step?: 1 | 2 | 3 }
+                            const parsed = JSON.parse(cached) as { form?: EntryDraftPayload; step?: 1 | 2 | 3 | 4 }
                             if (parsed.form) {
                                 nextForm = sanitizeDraft({
                                     raw: JSON.stringify(parsed.form),
@@ -646,7 +646,7 @@ export function SpaceEntryDialog({
                                 })
                                 recoveredFallback = true
                             }
-                            if (parsed.step && [1, 2, 3].includes(parsed.step)) nextStep = parsed.step
+                            if (parsed.step && [1, 2, 3, 4].includes(parsed.step)) nextStep = parsed.step
                         } catch {
                             if (fallbackDraftStorageKey) {
                                 window.localStorage.removeItem(fallbackDraftStorageKey)
@@ -674,12 +674,12 @@ export function SpaceEntryDialog({
             .catch(() => {
                 if (hydrationRunRef.current !== hydrationRun) return
                 let nextForm = defaults
-                let nextStep: 1 | 2 | 3 = 1
+                let nextStep: 1 | 2 | 3 | 4 = 1
                 if (fallbackDraftStorageKey && typeof window !== 'undefined') {
                     const cached = window.localStorage.getItem(fallbackDraftStorageKey)
                     if (cached) {
                         try {
-                            const parsed = JSON.parse(cached) as { form?: EntryDraftPayload; step?: 1 | 2 | 3 }
+                            const parsed = JSON.parse(cached) as { form?: EntryDraftPayload; step?: 1 | 2 | 3 | 4 }
                             if (parsed.form) {
                                 nextForm = sanitizeDraft({
                                     raw: JSON.stringify(parsed.form),
@@ -688,7 +688,7 @@ export function SpaceEntryDialog({
                                     spaceMode,
                                 })
                             }
-                            if (parsed.step && [1, 2, 3].includes(parsed.step)) nextStep = parsed.step
+                            if (parsed.step && [1, 2, 3, 4].includes(parsed.step)) nextStep = parsed.step
                         } catch {
                             window.localStorage.removeItem(fallbackDraftStorageKey)
                         }
@@ -822,7 +822,7 @@ export function SpaceEntryDialog({
     )
 
     useEffect(() => {
-        const previewEligible = mode === 'edit' || (mode === 'create' && step === 3)
+        const previewEligible = mode === 'edit' || (mode === 'create' && (step === 3 || step === 4))
         if (!open || !previewEligible || contractVersion !== 2) {
             setPreviewLoading(false)
             return
@@ -1081,7 +1081,7 @@ export function SpaceEntryDialog({
 
     const persistDraftSnapshot = useCallback(async (
         snapshot: SpaceEntryFormData = form,
-        currentStep: 1 | 2 | 3 = step,
+        currentStep: 1 | 2 | 3 | 4 = step,
         notify = false
     ) => {
         if (mode !== 'create') return null
@@ -1382,6 +1382,11 @@ export function SpaceEntryDialog({
             }
             setFieldErrors({})
             setStep(3)
+            return
+        }
+        if (step === 3) {
+            setFieldErrors({})
+            setStep(4)
         }
     }
 
@@ -1445,7 +1450,7 @@ export function SpaceEntryDialog({
                 categoryId: parsed.data.personalAccountId ? parsed.data.categoryId : undefined,
             }
             const savedDraft = contractVersion === 2
-                ? await persistDraftSnapshot(submission, 3)
+                ? await persistDraftSnapshot(submission, 4)
                 : null
             if (contractVersion === 2 && !savedDraft) {
                 throw new Error('No pudimos preparar el borrador para publicarlo.')
@@ -1493,9 +1498,9 @@ export function SpaceEntryDialog({
                             </div>
                         </DialogHeader>
                         {mode === 'create' ? (
-                            <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="Pasos del gasto">
-                                {(['Datos', 'Reparto', 'Revisión'] as const).map((label, index) => {
-                                    const value = (index + 1) as 1 | 2 | 3
+                            <ol className="mt-4 grid grid-cols-4 gap-2" aria-label="Pasos del gasto">
+                                {(['Datos', 'Reparto', 'Extras', 'Revisión'] as const).map((label, index) => {
+                                    const value = (index + 1) as 1 | 2 | 3 | 4
                                     const active = step === value
                                     const complete = step > value
                                     return (
@@ -1622,7 +1627,7 @@ export function SpaceEntryDialog({
                             <div className={`grid gap-5 ${mode === 'edit' ? 'xl:grid-cols-[1.2fr_0.8fr]' : ''}`}>
 
                                 {/* ── Left column ── */}
-                                <div className={`space-y-5 ${mode === 'create' && step === 3 ? 'hidden' : ''}`}>
+                                <div className={`space-y-5 ${mode === 'create' && (step === 3 || step === 4) ? 'hidden' : ''}`}>
 
                                     {/* Monto, moneda, fecha, descripción, pagó, categoría */}
                                     <div className={mode === 'edit' || step === 1 ? 'block' : 'hidden'}>
@@ -1845,9 +1850,10 @@ export function SpaceEntryDialog({
                                 </div>
 
                                 {/* ── Right column ── */}
-                                <div className={`space-y-5 ${mode === 'create' && step !== 3 ? 'hidden' : ''}`}>
+                                <div className={`space-y-5 ${mode === 'create' && step !== 3 && step !== 4 ? 'hidden' : ''}`}>
 
                                     {/* Resumen */}
+                                    {mode === 'edit' || step === 4 ? (
                                     <SpaceDialogPanel>
                                         <div className="space-y-4">
                                             <div className="space-y-1">
@@ -1886,8 +1892,9 @@ export function SpaceEntryDialog({
                                             </div>
                                         </div>
                                     </SpaceDialogPanel>
+                                    ) : null}
 
-                                    {mode === 'create' || contractVersion === 2 ? (
+                                    {(mode === 'create' && step === 4) || (mode === 'edit' && contractVersion === 2) ? (
                                         <SpaceDialogPanel>
                                             <div className="space-y-4" aria-live="polite">
                                                 <div>
@@ -1935,7 +1942,7 @@ export function SpaceEntryDialog({
                                     ) : null}
 
                                     {/* Pagado desde — solo en modo crear */}
-                                    {mode === 'create' && isCurrentUserPayer ? (
+                                    {mode === 'create' && step === 3 && isCurrentUserPayer ? (
                                         <SpaceDialogPanel>
                                             <div className="space-y-3">
                                                 <div className="space-y-1">
@@ -2062,7 +2069,7 @@ export function SpaceEntryDialog({
                                         </SpaceDialogPanel>
                                     ) : null}
 
-                                    {mode === 'create' && isCurrentUserPayer ? (
+                                    {mode === 'create' && step === 3 && isCurrentUserPayer ? (
                                         <SpaceDialogPanel>
                                             <div className="space-y-3">
                                                 <button
@@ -2123,7 +2130,7 @@ export function SpaceEntryDialog({
                                     ) : null}
 
                                     {/* Adjuntos — solo en modo crear */}
-                                    {mode === 'create' ? (
+                                    {mode === 'create' && step === 3 ? (
                                         <SpaceDraftAttachmentsUploader
                                             attachments={persistedDraft?.attachments ?? []}
                                             disabled={submitting || draftLoading}
@@ -2136,7 +2143,7 @@ export function SpaceEntryDialog({
                                     ) : null}
 
                                     {/* Borrador — solo en modo crear */}
-                                    {mode === 'create' ? (
+                                    {mode === 'create' && step === 4 ? (
                                     <SpaceDialogPanel>
                                         <div className="space-y-3">
                                             <SpaceDialogSectionEyebrow>Borrador</SpaceDialogSectionEyebrow>
@@ -2199,20 +2206,20 @@ export function SpaceEntryDialog({
                         <Button
                             className="min-h-11 rounded-full"
                             onClick={() => {
-                                if (mode === 'create' && step < 3) handleNextStep()
+                                if (mode === 'create' && step < 4) handleNextStep()
                                 else void handleSubmit()
                             }}
                             disabled={
                                 submitting ||
                                 draftAttachmentsBlocked ||
-                                (mode === 'create' && step === 3 && contractVersion === 2 && (previewLoading || !preview))
+                                (mode === 'create' && step === 4 && contractVersion === 2 && (previewLoading || !preview))
                             }
                         >
                             {submitting
                                 ? (mode === 'edit' ? 'Guardando cambios...' : 'Guardando...')
                                 : mode === 'edit'
                                     ? 'Guardar cambios'
-                                    : step < 3
+                                    : step < 4
                                         ? 'Continuar'
                                         : form.personalAccountId || form.linkedTransactionId
                                             ? 'Guardar y agregar a Mi Finp'
@@ -2225,7 +2232,7 @@ export function SpaceEntryDialog({
                                 type="button"
                                 variant="outline"
                                 className="min-h-11 rounded-full"
-                                onClick={() => setStep((step - 1) as 1 | 2)}
+                                onClick={() => setStep((step - 1) as 1 | 2 | 3)}
                                 disabled={submitting}
                             >
                                 Atrás
