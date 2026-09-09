@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-09
 > Fuente de verdad: índice canónico de documentación
 
 ## Índice
@@ -139,6 +139,9 @@ Una decisión se documenta cuando:
 - Un concepto tiene una fuente canónica; los demás documentos enlazan.
 - El roadmap es el único backlog.
 - Una función nueva actualiza especificación, estado, roadmap y documentación técnica según corresponda.
+- Una etapa no trivial se implementa sólo cuando sus fuentes canónicas permiten
+  retomarla sin inventar contratos, estados, permisos, recuperación o criterios
+  de cierre; el detalle obligatorio vive en el estándar de documentación.
 - Una decisión duradera crea o actualiza un registro en `decisiones/`.
 - Un documento reemplazado se archiva y deja un enlace desde el índice sólo si conserva valor histórico.
 - No duplicar listas de pendientes en documentos de dominio.

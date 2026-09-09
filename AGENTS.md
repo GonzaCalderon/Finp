@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: agentes de IA y personas que desarrollan Finp
-> Última actualización: 2026-07-26
+> Última actualización: 2026-09-09
 > Fuente de verdad: reglas obligatorias de trabajo para todo el repositorio
 
 ## Índice
@@ -222,6 +222,12 @@ Los E2E requieren un entorno y una base de prueba aislados.
 - La documentación es parte de la entrega.
 - El backlog vive sólo en `docs/producto/roadmap_finp.md`.
 - No crear listas paralelas de pendientes.
+- Antes de implementar una etapa no trivial, su documentación canónica debe ser
+  ejecutable: alcance y fuera de alcance, contratos, estados, autorización,
+  consistencia, fallos y recuperación, experiencia, compatibilidad y verificación.
+- Una etapa no está lista si quien la retoma debe inventar una decisión material.
+  La ambigüedad se resuelve primero en el dominio, arquitectura o decisión
+  correspondiente, sin convertir el documento en otro backlog.
 - Actualizar el documento canónico cuando cambie comportamiento, arquitectura, diseño, operación o prioridad.
 - Agregar una decisión en `docs/decisiones/` cuando haya alternativas relevantes o una consecuencia duradera.
 - Mantener el índice general y el índice interno del documento.
@@ -269,5 +275,7 @@ Una tarea está terminada cuando:
 - tiene pruebas proporcionales al riesgo;
 - pasa los chequeos aplicables;
 - actualiza documentación, índice, decisión y roadmap cuando corresponde;
+- puede retomarse desde sus fuentes canónicas sin redescubrir ni decidir aspectos
+  materiales ya incluidos en el alcance;
 - declara límites y pendientes reales;
 - no deja una fuente documental contradictoria.

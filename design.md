@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-09
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -304,6 +304,30 @@ En Movimientos, un borrador usa una card diferenciada por etiqueta y texto, no
 sólo por color. Muestra información parcial disponible, última edición y
 `Continuar`, pero no usa iconos o copy de movimiento confirmado ni participa en
 totales. Sólo su autor puede verlo.
+
+### Adjuntos recuperables
+
+Seleccionar un archivo inicia su preparación privada sin esperar la confirmación
+del formulario. La superficie anuncia el límite antes del selector y representa
+cada archivo como una fila estable con nombre saneado, tipo, tamaño y uno de
+estos estados textuales: `Subiendo…`, `Listo`, `No se pudo subir` o `Quitando…`.
+Color y animación pueden acompañar, pero nunca ser la única señal.
+
+Un fallo pertenece a la fila afectada, conserva las demás y ofrece `Reintentar`
+o `Quitar`; no se comunica sólo mediante toast. Mientras haya una carga o error
+sin resolver, el CTA final queda deshabilitado y explica el siguiente paso. La
+escritura del resto del formulario continúa disponible.
+
+Cerrar no cancela ni descarta una preparación ya aceptada por el servidor. Al
+reanudar se reconstruye la lista desde el borrador, sin guardar binarios en el
+navegador. Después de descartar, las filas desaparecen junto con la card privada;
+la limpieza técnica posterior no ocupa la interfaz.
+
+En mobile, las filas mantienen un área táctil mínima de 44 px, acciones con
+nombre accesible y CTA sobre la `safe area`. En desktop no se convierte el
+uploader en una superficie paralela. El foco vuelve a la fila al fallar y pasa a
+la siguiente acción útil al quitarla; los cambios de estado se anuncian mediante
+una región `aria-live` no intrusiva.
 
 Una preview asíncrona reserva el espacio necesario y distingue `Calculando`,
 `Lista para revisar`, `Faltan datos` y `No se pudo calcular`. No muestra un error

@@ -247,6 +247,32 @@ publicación crea el movimiento; un fallo conserva el borrador recuperable y un
 descarte limpia la relación de forma idempotente. La descarga autoriza al autor
 antes de publicar y aplica los permisos del movimiento después.
 
+El contrato aprobado, todavía no implementado al 2026-09-09, exige que la etapa
+3 de FINP-P1-013 use un adapter servidor para Blob; rutas y servicios de dominio
+no llaman al SDK directamente. El adapter expone preparación, inspección y
+borrado idempotente, permite inyectar fallos en pruebas y nunca devuelve una URL
+pública como autoridad. Los binarios se guardan con una clave determinista
+formada por Espacio, borrador e ID de adjunto; el nombre original sólo existe
+como metadata saneada.
+
+El modelo de la etapa agregará `SpaceEntryDraft.attachments` con estados `preparing`, `ready`,
+`upload_failed`, `cleanup_pending` y `deleted`. Reserva identidad en MongoDB
+antes de escribir Blob. Publicar no mueve el archivo: copia metadata `ready`, con
+el mismo ID y `storageKey`, al `SpaceEntry` dentro de la transacción financiera.
+Así, Blob queda fuera de la transacción sin abrir una confirmación parcial.
+
+Quitar o descartar revoca primero la relación en MongoDB y después elimina el
+Blob. Un fallo físico deja `cleanup_pending`, ya inaccesible, y el reconciliador
+idempotente lo reintenta. También revisa preparaciones con más de 15 minutos y
+confirma, falla o limpia según la metadata real del proveedor. Se ejecuta en
+lotes, `dry-run` por defecto, sin una cola ni dependencia nueva.
+
+El límite canónico será cinco adjuntos de hasta 10 MB cada uno, JPEG, PNG, WebP o
+PDF. El servidor comparará firma real y hash con el MIME admitido, saneará el
+nombre y no serializará `storageKey`, tokens ni errores internos. La especificación completa de
+estados, rutas, autorización y fallos vive en
+[`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md#6-etapa-3-contrato-ejecutable-de-adjuntos).
+
 ### Borrador privado de movimiento de Espacio
 
 FINP-P1-013 incorpora `SpaceEntryDraft` con índice único parcial para un
@@ -265,6 +291,12 @@ pisar una revisión posterior. La base es la autoridad; `localStorage` conserva
 una copia versionada únicamente cuando falla la persistencia y se elimina al
 confirmarse el siguiente guardado. Publicar detiene nuevos autosaves, espera la
 cola vigente y envía la revisión persistida al ejecutor transaccional.
+
+Las mutaciones de adjuntos deberán participar de esa misma cola cliente. Cada reserva,
+confirmación, reintento o eliminación incrementa la revisión del borrador y su
+respuesta reemplaza la revisión local. Un archivo `preparing` o `upload_failed`
+bloquea publicar, pero no bloquea editar campos; el siguiente autosave espera la
+operación en curso y conserva los cambios locales.
 
 ### Fechas
 

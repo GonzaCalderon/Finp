@@ -88,9 +88,11 @@ backlog paralelo:
    FINP-P1-013.** Un recurso activo por usuario y Espacio, autosave serializado,
    revisión optimista, card privada en Movimientos, descarte confirmado y
    publicación atómica e idempotente.
-3. **Adjuntos recuperables — FINP-P1-013.** Preparación privada sobre el
-   borrador, validación, reintento, finalización al publicar y limpieza
-   idempotente al descartar.
+3. **Adjuntos recuperables — contrato aprobado, implementación pendiente en
+   FINP-P1-013.** Preparación privada sobre el borrador, cinco archivos de hasta
+   10 MB, validación real, reintento, transferencia transaccional de metadata y
+   limpieza idempotente según la
+   [decisión 0013](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md#6-etapa-3-contrato-ejecutable-de-adjuntos).
 4. **Experiencia y accesibilidad — FINP-P1-013.** Preview y edición completas,
    estados reales, selección personal coherente, candidatos válidos, foco,
    labels, teclado, stepper mobile, `safe area`, dark mode y recuperación.
@@ -444,6 +446,15 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   movimiento, fallback local sólo ante error, card fuera de totales y 8
   recorridos E2E aprobados en Chromium desktop/mobile. Los adjuntos del
   borrador permanecen para la etapa 3.
+- Contrato previo de etapa 3, aprobado el 2026-09-09:
+  - MongoDB autoriza y conserva metadata; Vercel Blob mantiene sólo el binario
+    privado y no participa de la transacción financiera;
+  - cada preparación tiene identidad idempotente y estados recuperables; una
+    publicación copia sólo metadata `ready` al movimiento sin mover el Blob;
+  - quitar o descartar revoca acceso antes del borrado físico y un reconciliador
+    acotado resuelve preparaciones antiguas y limpiezas pendientes;
+  - el cierre exige aislamiento del autor, validación de firma/tamaño/formato,
+    fallos inyectados, reanudación, reintento y publicación en mobile y desktop.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.

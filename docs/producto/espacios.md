@@ -358,6 +358,12 @@ errores y lleva al primer campo inválido. El preview no presenta ausencia como
 error mientras todavía calcula y la revisión final nunca abrevia el monto que
 se va a confirmar.
 
+Al elegir un adjunto, la carga privada empieza inmediatamente sobre el borrador;
+no espera a confirmar el gasto. Se admiten hasta cinco archivos de 10 MB cada
+uno en JPEG, PNG, WebP o PDF. El diálogo explica esos límites antes de seleccionar
+y muestra cada archivo por separado como `Subiendo…`, `Listo`, `No se pudo subir`
+o `Quitando…`, con acciones de reintento o eliminación cuando correspondan.
+
 Crear desde la portada o desde el detalle del Espacio invoca el mismo contrato
 v2, con dinero exacto, `dateKey`, revisión esperada, cotizaciones e idempotencia.
 No existe una variante rápida que envíe un payload legacy o omita la preview.
@@ -385,6 +391,25 @@ El diálogo comunica `Guardando…`, `Guardado` y `No se pudo guardar`, conserva
 los cambios locales recuperables y resuelve conflictos entre clientes sin
 sobrescribir una versión más nueva. La decisión completa vive en
 [`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
+
+Un archivo `Subiendo…` o con error impide confirmar y explica si hay que esperar,
+reintentar o quitarlo. Cerrar el diálogo no descarta archivos ya enviados al
+servidor; al reabrir, el estado se recupera desde el borrador. Una selección que
+todavía no inició su envío no se promete como persistida y nunca se copia al
+almacenamiento local del navegador.
+
+Descartar el borrador revoca de inmediato la lectura de sus adjuntos. La limpieza
+física puede terminar después sin reactivar el borrador ni exigir otra acción.
+Si el autor pierde membresía o el Espacio se pausa o cierra, puede ver, descargar
+o quitar lo que ya había preparado y descartar el borrador, pero no agregar
+archivos ni publicar. Ningún otro participante, incluido `admin` u `owner`, ve
+el nombre, cantidad o contenido antes de la publicación.
+
+Una publicación exitosa conserva los archivos en el movimiento sin volver a
+subirlos y reemplaza la card privada por el único movimiento confirmado. Desde
+ese momento rigen los permisos normales del movimiento. El contrato técnico y
+la recuperación de cada fallo se especifican en la sección de etapa 3 de la
+decisión 0013.
 
 ### Detalle y liquidación
 

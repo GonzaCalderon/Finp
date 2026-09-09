@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: personas y agentes que crean o modifican documentación
-> Última actualización: 2026-07-26
+> Última actualización: 2026-09-09
 > Fuente de verdad: proceso documental
 
 ## Índice
@@ -252,6 +252,64 @@ La descripción de una entrega debe indicar:
 - fuentes externas usadas;
 - pendientes agregados, modificados o cerrados en el roadmap.
 
+### Etapas ejecutables
+
+Una etapa de trabajo no trivial debe poder retomarse desde sus fuentes
+canónicas sin que el ejecutor tenga que inventar una decisión material. No
+alcanza con describir el objetivo o enumerar tareas: la documentación debe
+definir el contrato necesario para implementar, fallar de forma segura y
+demostrar el cierre.
+
+Antes de comenzar código, la documentación de la etapa cubre, cuando aplique:
+
+1. **Resultado y límites:** problema, comportamiento esperado, alcance, fuera de
+   alcance, dependencias y estado previo verificado.
+2. **Autoridad y datos:** fuente de verdad, propietario de cada dato, modelo,
+   identidad, unicidad, retención y datos que no deben persistirse o exponerse.
+3. **Contratos:** entradas, salidas, validaciones, errores esperables,
+   versionado, idempotencia y compatibilidad con clientes o datos existentes.
+4. **Estados y transiciones:** estado inicial, terminales, transiciones válidas,
+   condiciones que bloquean una acción y efecto de un reintento.
+5. **Autorización y privacidad:** quién puede crear, enumerar, leer, modificar,
+   ejecutar y eliminar; la matriz incluye roles privilegiados y pérdida de
+   membresía.
+6. **Consistencia y fallos:** frontera transaccional, orden de escrituras,
+   compensación, conflictos, timeouts, reintentos y recuperación después de una
+   caída en cada punto susceptible de éxito parcial.
+7. **Experiencia:** carga, vacío, progreso, éxito, error, conflicto,
+   recuperación, cierre o navegación durante una operación, accesibilidad,
+   mobile y desktop.
+8. **Operación y recursos:** límites, costo, observabilidad, limpieza,
+   reconciliación, seguridad y comportamiento cuando una dependencia externa no
+   está disponible.
+9. **Evolución:** migración, convivencia, rollback y retiro de compatibilidad si
+   el cambio modifica un contrato existente.
+10. **Verificación y cierre:** matriz de pruebas por capa, casos negativos,
+    evidencia esperada, comandos ejecutables y criterio inequívoco de terminado.
+
+Cuando participan dos fuentes que no comparten transacción —por ejemplo base de
+datos y almacenamiento de objetos— se documenta además:
+
+- cuál es la autoridad durable en cada transición;
+- qué escritura ocurre primero y por qué;
+- cómo se detecta un resultado incierto;
+- qué estado conserva la posibilidad de reintentar;
+- cómo se impide que un recurso huérfano sea visible o produzca un éxito parcial;
+- quién y cómo ejecuta la reconciliación o limpieza idempotente;
+- qué señal vuelve observable un residuo que no pudo limpiarse.
+
+La distribución conserva una única fuente por tema: el roadmap mantiene estado,
+prioridad y criterio resumido; el dominio define comportamiento; arquitectura
+define contratos y fronteras; una decisión conserva alternativas y compromisos;
+estado actual se actualiza sólo después de implementar y verificar. Un plan de
+etapa puede ordenar el trabajo, pero no reemplaza esas fuentes ni se convierte
+en backlog paralelo.
+
+La etapa tiene **preparación documental aprobada** cuando cada decisión material
+está definida o marcada explícitamente como elección pendiente del prompter. Si
+el código obliga a resolver una ambigüedad no declarada, se detiene esa parte y
+se corrige primero la fuente canónica.
+
 ## 12. Costo de contexto
 
 La documentación se paga en cada lectura. Un documento que nadie puede permitirse
@@ -316,6 +374,11 @@ Revisión mínima:
 - su índice interno coincide con los encabezados;
 - los enlaces relativos existen;
 - no duplica backlog;
+- una etapa declarada lista para implementar puede retomarse sin inventar
+  decisiones materiales;
+- contratos, estados, permisos y fallos parciales tienen resultado verificable;
+- toda integración externa declara frontera transaccional, reintento,
+  reconciliación y observabilidad;
 - estados actuales y futuros están separados;
 - no contradice otra fuente vigente;
 - las afirmaciones técnicas coinciden con código y pruebas;
