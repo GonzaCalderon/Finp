@@ -815,7 +815,8 @@ export function SpaceEntryDialog({
     )
 
     useEffect(() => {
-        if (!open || mode !== 'create' || step !== 3 || contractVersion !== 2) {
+        const previewEligible = mode === 'edit' || (mode === 'create' && step === 3)
+        if (!open || !previewEligible || contractVersion !== 2) {
             setPreviewLoading(false)
             return
         }
@@ -1875,7 +1876,7 @@ export function SpaceEntryDialog({
                                         </div>
                                     </SpaceDialogPanel>
 
-                                    {mode === 'create' ? (
+                                    {mode === 'create' || contractVersion === 2 ? (
                                         <SpaceDialogPanel>
                                             <div className="space-y-4" aria-live="polite">
                                                 <div>
@@ -1936,15 +1937,20 @@ export function SpaceEntryDialog({
                                                 <SpaceDialogField label="Cuenta o tarjeta">
                                                     <Select
                                                         value={form.personalAccountId ?? 'none'}
-                                                        onValueChange={(value) =>
+                                                        onValueChange={(value) => {
+                                                            if (value !== 'none') {
+                                                                setShowAdvancedLink(false)
+                                                            }
                                                             setForm((previous) => ({
                                                                 ...previous,
                                                                 personalAccountId:
                                                                     value === 'none' ? undefined : value,
                                                                 categoryId:
                                                                     value === 'none' ? undefined : previous.categoryId,
+                                                                linkedTransactionId:
+                                                                    value === 'none' ? previous.linkedTransactionId : undefined,
                                                             }))
-                                                        }
+                                                        }}
                                                     >
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Solo registrar en el espacio" />
@@ -2059,7 +2065,12 @@ export function SpaceEntryDialog({
                                                         <Select
                                                             value={form.linkedTransactionId ?? ''}
                                                             onValueChange={(linkedTransactionId) =>
-                                                                setForm((previous) => ({ ...previous, linkedTransactionId }))
+                                                                setForm((previous) => ({
+                                                                    ...previous,
+                                                                    linkedTransactionId,
+                                                                    personalAccountId: undefined,
+                                                                    categoryId: undefined,
+                                                                }))
                                                             }
                                                         >
                                                             <SelectTrigger className="w-full">

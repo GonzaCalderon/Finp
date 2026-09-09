@@ -293,4 +293,80 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         expect((await responsePromise).status()).toBe(201)
         await expect(dialog).not.toBeVisible()
     })
+
+    test('vincular una transacción existente y elegir una cuenta personal son excluyentes', async ({ page }, testInfo) => {
+        testInfo.setTimeout(60_000)
+        const description = `Exclusividad de vínculo ${testInfo.project.name}`
+        await loginAsTestUser(page)
+        await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
+
+        const directCreate = page.getByRole('button', { name: /nuevo movimiento/i }).first()
+        if (await directCreate.isVisible()) {
+            await directCreate.click()
+        } else {
+            await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
+            await page.getByRole('button', { name: 'Agregar movimiento' }).click()
+        }
+        const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        await dialog.locator('#entry-amount').fill('500')
+        await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
+        await dialog.getByRole('button', { name: 'Continuar' }).click()
+
+        const advancedLinkToggle = dialog.getByRole('button', { name: 'Vincular una transacción existente (avanzado)' })
+        await advancedLinkToggle.click()
+        await expect(dialog.getByText('Transacción compatible')).toBeVisible()
+
+        // Elegir una cuenta personal debe descartar el vínculo avanzado: no pueden
+        // coexistir linkedTransactionId y personalAccountId en el mismo movimiento.
+        await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
+        await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
+        await expect(dialog.getByText('Transacción compatible')).not.toBeVisible()
+
+        const responsePromise = page.waitForResponse((response) =>
+            response.request().method() === 'POST' &&
+            response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft/publish`)
+        )
+        await dialog.getByRole('button', { name: 'Guardar y agregar a Mi Finp' }).click()
+        const response = await responsePromise
+        expect(response.status(), await response.text()).toBe(201)
+        await expect(dialog).not.toBeVisible()
+
+        const detail = await page.request.get(`/api/spaces/${SPACE_V2_E2E.spaceId}`)
+        const body = await detail.json() as {
+            data: { movements: { items: Array<{ title: string; currentUserImpact?: { transactionId?: string } }> } }
+        }
+        const entry = body.data.movements.items.find((item) => item.title === description)
+        expect(entry?.currentUserImpact?.transactionId).toBeTruthy()
+    })
+
+    test('muestra la misma revisión financiera al editar un movimiento existente', async ({ page }) => {
+        await loginAsTestUser(page)
+        await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
+        await expect(page.getByRole('heading', { name: SPACE_V2_E2E.name })).toBeVisible()
+
+        await page.getByRole('button', { name: 'Movimientos' }).first().click()
+        await page.locator(`[data-entry-id="${SPACE_V2_E2E.arsEntryId}"]`).click()
+
+        const detailSheet = page.getByRole('dialog', { name: /Alojamiento en ARS/ })
+        await expect(detailSheet).toBeVisible()
+        await detailSheet.getByRole('button', { name: 'Editar', exact: true }).click()
+
+        const dialog = page.getByRole('dialog', { name: 'Editar movimiento' })
+        await expect(dialog).toBeVisible()
+        await expect(dialog.getByText('Qué cambia al confirmar')).toBeVisible()
+        await expect(
+            dialog.getByText('Completá monto, pagador y reparto para calcular la revisión.')
+        ).not.toBeVisible()
+        await expect(dialog.getByText('Total', { exact: true })).toBeVisible()
+        await expect(dialog.getByText('Tu parte', { exact: true })).toBeVisible()
+        await expect(dialog.getByText('Impacto real de cuenta', { exact: true })).toBeVisible()
+        await expect(dialog.getByText('Gasto operacional', { exact: true })).toBeVisible()
+        await expect(dialog.getByText('Adelanto recuperable', { exact: true })).toBeVisible()
+        await expect(dialog.getByText('Cambio en deuda', { exact: true })).toBeVisible()
+
+        await dialog.getByRole('button', { name: 'Cancelar' }).click()
+        await expect(dialog).not.toBeVisible()
+    })
 })
