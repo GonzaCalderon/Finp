@@ -222,66 +222,102 @@ Antes de crear un servicio:
 
 ### Candidatos de vínculo personal
 
-Estado: contrato definido para la etapa 4 de FINP-P1-013; implementación
-pendiente. Hasta entonces `SpaceEntryDialog` y `SpacePersonalImpactDialog`
-piden `/api/transactions?limit=25` y filtran por monto en el cliente, y
-`previewSpaceEntryV2` evalúa `linkExisting` con menos reglas que
-`resolveSpacePersonalImpactV2`: un candidato puede parecer compatible y fallar
-con `409` al confirmar.
+Estado: implementado el 2026-09-10 en la etapa 4 de FINP-P1-013, bloque 2.
 
-Autoridad. La única regla es la del `resolve`. Se extrae a
-`assessLinkCandidateV2(transaction, requirement)` en
-`space-personal-impact-service-v2.ts`: pura sobre documentos ya leídos,
-devuelve `{ compatible, issues[] }` con los códigos que ya existen
-(`SPACE_TRANSACTION_NOT_FOUND`, `SPACE_TRANSACTION_TYPE_MISMATCH`,
-`SPACE_TRANSACTION_AMOUNT_MISMATCH`, `SPACE_TRANSACTION_OPERATIONAL_MISMATCH`,
-`SPACE_TRANSACTION_DATE_MISMATCH`, `SPACE_TRANSACTION_ACCOUNT_MISMATCH`) más
-`SPACE_TRANSACTION_ALREADY_LINKED`. Preview, candidatos y `resolve` la
-invocan; el `resolve` sigue lanzando `ServiceError` con el primer issue. No hay
-ventana de fechas: el servidor exige el mismo `dateKey` en la zona horaria del
-Espacio, así que un candidato de otro día no se ofrece.
+Antes había CUATRO copias independientes de la misma regla, no dos: el alta
+guiada (`space-entry-service-v2.ts`) las aplicaba al vincular en la misma
+transacción que crea el movimiento, `resolve` (`space-personal-impact-service-v2.ts`)
+las reaplicaba al resolver un impacto pendiente, el preview
+(`space-financial-preview-v2.ts`) traía una versión más corta, y ninguna ruta
+ofrecía candidatos: ambos diálogos pedían `/api/transactions?limit=25` y
+filtraban por monto en el cliente. Las cuatro copias habían divergido: sólo el
+alta aceptaba `credit_card_expense` como equivalente de `expense` (decisión
+0012) y sólo `resolve` validaba la cuenta — el alta podía vincular una
+transacción de un no pagador que sí movía cuenta, sin que nada lo impidiera.
 
-Requisito. `LinkRequirementV2` se deriva del preview (alta) o del impacto
-persistido (edición e impacto personal) con `derivePersonalImpactAmountsV2`:
-`{ transactionType, currency, amount, operationalAmount, dateKey, timezone,
-accountRule: 'none' | 'source_required' | 'destination_required', impactId? }`.
-`amount` es `accountImpactAmount` si es positivo y `ownShareAmount` en caso
-contrario, igual que en el `resolve`.
+Autoridad. `assessLinkCandidateV2(transaction, requirement)` en
+`space-link-candidate-v2.ts`: pura sobre un documento ya leído, sin acceso a
+datos. Devuelve `{ compatible, issues[] }` con `issues` de
+`'type_mismatch' | 'currency_mismatch' | 'amount_mismatch' |
+'operational_mismatch' | 'date_mismatch' | 'account_mismatch'`; acepta
+`credit_card_expense` donde se espera `expense`. El módulo también exporta
+`resolveLinkImpactVariant`, `expectedLinkTransactionType`,
+`linkAccountRuleForVariant` (antes duplicadas como `impactVariant`/
+`resolveImpactVariant` y `expectedTransactionType`), y `firstLinkIssue`/
+`linkIssueErrorCode`/`describeLinkIssue`, que `resolve` usa para conservar
+exactamente sus códigos y mensajes previos (`SPACE_TRANSACTION_TYPE_MISMATCH`
+para tipo o moneda, luego `..._AMOUNT_MISMATCH`, `..._OPERATIONAL_MISMATCH`,
+`..._DATE_MISMATCH`, `..._ACCOUNT_MISMATCH`, en ese orden de prioridad).
+"Ya vinculada a otro impacto" sigue sin ser un `issue` de la función pura: la
+decide la consulta (el mismo `$or` que ya usaba `resolve`), no una comparación
+en memoria.
 
-Ruta. `POST /api/spaces/[id]/link-candidates`, lectura pura sin escritura;
-`POST` sólo por el tamaño del cuerpo. Cuerpo discriminado por `mode`:
+Requisito. `LinkRequirementV2 = { transactionType, currency, amount,
+operationalAmount, accountRule: 'none' | 'source_required' |
+'destination_required', dateKey?, timezone? }`. `amount` es
+`accountImpactAmount` si es positivo y `ownShareAmount` en caso contrario,
+igual en las cuatro superficies. `dateKey`/`timezone` son opcionales a
+propósito: el preview de alta no recibe la fecha del movimiento en su
+contrato actual (`entries/preview` nunca la pidió), así que su `linkExisting`
+evalúa tipo, moneda, monto, operacional y cuenta, pero no fecha ni "ya
+vinculada a otro impacto" — ambas quedan a cargo del `resolve` autoritativo,
+que si las tiene. Ensanchar el contrato de `entries/preview` para cerrar esa
+brecha queda fuera de este bloque.
 
-- `preview`: el mismo esquema de `entries/preview` más `dateKey` y `timezone`;
-- `impact`: `{ entryId, impactId }`.
+Ruta. `POST /api/spaces/[id]/link-candidates`
+(`space-link-candidates-v2.ts`), lectura pura sin escritura. Cuerpo
+discriminado por `mode`:
 
-Autorización: sesión, `getAccessibleSpaceContext` y la misma capacidad que
-exige la mutación correspondiente (`POST entries` para `preview`, `POST
-personal-impact` para `impact`); en `impact`, el impacto debe pertenecer al
-actor. Respuesta `200` `{ data: { applicable, requirement, candidates,
-excluded } }`: `applicable: false` cuando el reparto no produce acción
-financiera personal; `candidates` ordenados por fecha descendente, máximo 20,
-cada uno `{ transactionId, description, amount, currency, date, accountName? }`
-y siempre compatibles; `excluded` con conteos por motivo (`alreadyLinked`,
-`amountMismatch`, `operationalMismatch`, `accountMismatch`) para explicar una
-lista vacía sin exponer transacciones ajenas al requisito. Errores: `400`
-validación, `401`, `403` capacidad, `404` Espacio, movimiento o impacto.
+- `preview`: subconjunto de `entries/preview` — sin los campos de conversión
+  (`exchangeRate`, `exchangeRateDecimal`, `conversionSnapshot`), que sólo
+  afectan el monto de reporte y no el impacto personal — más `dateKey` y
+  `timezone`;
+- `impact`: `{ entryId, impactId }`; el impacto debe pertenecer al actor.
 
-Consulta. `Transaction.find` acotado por `userId`, `type`, `currency`,
-`status != 'voided'`, el instante inicial y final del `dateKey` en la zona
-horaria y `spaceImpactId` ausente o igual a `impactId`; monto, operacional y
-cuentas se evalúan en memoria con la misma función. El día acota el tamaño; no
-hace falta índice nuevo.
+Autorización: sesión, `getAccessibleSpaceContext` (no `loadSpaceApplicationContextV2`,
+que exige sesión Mongo transaccional; esta ruta sólo lee) más
+`contractVersion === 2` explícito y `getContextCapabilities` — `create_entry`
+para `preview`, `resolve_personal_impact` para `impact`. Respuesta `200`
+`{ data: { applicable, requirement?, candidates, excluded } }`:
+`applicable: false` cuando el reparto no produce acción financiera personal
+(`requirement` ausente); `candidates` ordenados por fecha descendente, máximo
+20, cada uno `{ transactionId, description, amount, currency, date,
+accountName? }` y siempre compatibles; `excluded` cuenta sólo lo que la
+consulta no pudo filtrar por sí sola — `amountMismatch`, `operationalMismatch`,
+`accountMismatch` y `alreadyLinked` — porque tipo, moneda y fecha ya los
+excluye la consulta antes de evaluar nada. Errores: `400` validación, `401`,
+`404` Espacio, movimiento o impacto inexistente o no v2, `403` sin capacidad.
 
-Cliente. Ambos diálogos consumen la ruta con estados `cargando`, `vacío` con
-motivos, `error` con reintento (`ErrorState`) y la misma invalidación que la
-preview: cambiar monto, moneda, fecha, pagador o reparto descarta la lista y el
-candidato elegido.
+Consulta. `Transaction.find` acotado por `userId`, `currency`,
+`status != 'voided'`, `type` (`expense` amplía a `['expense',
+'credit_card_expense']` cuando corresponde) y un margen de ±24 h alrededor del
+instante representativo del `dateKey` — generoso a propósito: el filtro exacto
+de día lo hace `assessLinkCandidateV2` en memoria después, así que el margen
+amplio no puede dejar pasar un falso positivo, sólo evita construir un
+utilitario nuevo de límites exactos de día. `spaceImpactId` ausente o igual al
+`impactId` cuando corresponde; `alreadyLinked` se cuenta con la misma consulta
+sin esa exclusión. El día acota el tamaño; no hace falta índice nuevo.
 
-Verificación. Unitarias de `assessLinkCandidateV2` por cada issue;
-integración con sesión real que demuestra la propiedad «todo candidato
-devuelto se vincula sin `409`» y que preview, candidatos y `resolve` coinciden;
-API `400/401/403/404`; el E2E `vincular una transacción existente y elegir una
-cuenta personal son excluyentes` extendido a la lista vacía explicada.
+Cliente. `fetchLinkCandidatesForNewEntry`/`fetchLinkCandidatesForImpact`
+(`space-personal-impact.ts`) y el componente compartido
+`SpaceLinkCandidateList` (`SpaceDialogPrimitives.tsx`) reemplazan el
+`<Select>` en ambos diálogos con estados `cargando` (skeleton), `vacío` con
+motivos, `error` con reintento (`ErrorState`, bloque 1) y una lista de radios
+con monto, fecha y cuenta. La misma invalidación que la preview: cambiar
+monto, moneda, fecha, pagador o reparto descarta la lista y, si el
+seleccionado ya no aparece, también la selección.
+
+Verificación. 20 unitarias de `assessLinkCandidateV2` y los helpers
+compartidos por issue, incluida la leniencia `credit_card_expense`; 3
+integraciones con sesión Mongo real: preview y `resolve` coinciden sobre la
+misma transacción (compatible se vincula sin `409`, incompatible falla con el
+mismo motivo que preview señaló), la lista de candidatos sólo devuelve lo que
+`resolve` acepta y explica lo demás por motivo, y el modo de alta no exige un
+impacto persistido; 7 unitarias de la ruta HTTP (401/400/despacho por
+modo/403/404); el E2E de vínculo se endureció para tolerar candidato o
+vacío explicado sin combobox. La propiedad completa —cada candidato que la
+ruta ofrece se vincula sin fricción— queda demostrada por integración con
+datos reales, no simulada.
 
 ## 9. Persistencia
 

@@ -192,6 +192,7 @@ function SpacesQuickEntryFlow({
             spaceCurrencies={item.space.currencies}
             defaultSplitMode={item.space.defaultSplitMode}
             spaceMode={item.space.mode}
+            spaceTimezone={item.space.timezone}
             contractVersion={item.space.contractVersion}
             spaceRevision={item.space.revision ?? 0}
             draftKey={spaceId}

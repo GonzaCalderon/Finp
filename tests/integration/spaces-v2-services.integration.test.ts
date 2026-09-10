@@ -31,6 +31,11 @@ import {
     hashSpaceOperationValue,
 } from '@/lib/server/space-operation-executor'
 import { resolveSpacePersonalImpactV2 } from '@/lib/server/space-personal-impact-service-v2'
+import { previewSpaceEntryV2 } from '@/lib/server/space-financial-preview-v2'
+import {
+    listLinkCandidatesForImpactV2,
+    listLinkCandidatesForNewEntryV2,
+} from '@/lib/server/space-link-candidates-v2'
 import { settleSpaceDebtV2 } from '@/lib/server/space-settlement-service-v2'
 import { getSpaceDetailV2 } from '@/lib/server/space-read-service-v2'
 import { resolveE2EEnvironment } from '../e2e/helpers/environment'
@@ -750,6 +755,403 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             ...syncRequest,
             idempotencyKey: `sync-transaction-stale-${runId}`,
         })).rejects.toMatchObject({ code: 'SPACE_IMPACT_VERSION_CONFLICT' })
+    })
+
+    it('todo candidato que preview marca compatible se vincula sin 409, y uno incompatible falla con la misma razón', async () => {
+        const isolated = await Space.create({
+            contractVersion: 2,
+            ownerUserId: new Types.ObjectId(ownerUserId),
+            name: `Espacio vínculo ${runId}`,
+            type: 'travel',
+            mode: 'managed',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'equal',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        trackedSpaceIds.push(isolated._id)
+        const [isolatedOwner, isolatedMember] = await SpaceParticipant.create([
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(ownerUserId),
+                displayName: 'Owner v2',
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(memberUserId),
+                displayName: 'Member v2',
+                role: 'participant',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+        ])
+        const shared = {
+            actorUserId: ownerUserId,
+            spaceId: isolated._id.toString(),
+            currency: 'ARS',
+            dateKey: '2026-08-27',
+            paidByParticipantId: isolatedOwner._id.toString(),
+            sharedWithParticipantIds: [isolatedOwner._id.toString(), isolatedMember._id.toString()],
+            splitMode: 'equal' as const,
+            actorPersonalImpact: { accountId: ownerAccountId, categoryId: ownerCategoryId },
+        }
+
+        const created = await createSpaceEntryV2({
+            ...shared,
+            title: 'Cena compartida',
+            idempotencyKey: `create-link-${runId}`,
+            expectedRevision: 0,
+            amount: 1000,
+        })
+        const entryId = created.resultRefs.spaceEntryId!.toString()
+        const pending = await SpaceEntryPersonalImpact.findOne({
+            entryId,
+            userId: memberUserId,
+            status: 'pending',
+        }).lean()
+        expect(pending).toBeTruthy()
+
+        // La transacción "ya existente" del participante: mismo tipo, moneda,
+        // monto y día financiero que exige su parte, sin cuenta — como
+        // corresponde a quien no movió dinero real.
+        const compatibleTransaction = await Transaction.create({
+            userId: memberUserId,
+            type: 'expense',
+            amount: 500,
+            operationalAmount: 500,
+            currency: 'ARS',
+            date: new Date('2026-08-27T15:00:00.000Z'),
+            description: 'Cena (ya registrada)',
+            status: 'confirmed',
+            createdFrom: 'web',
+        })
+
+        const previewInput = {
+            actorUserId: memberUserId,
+            spaceId: isolated._id.toString(),
+            amount: 1000,
+            currency: 'ARS',
+            paidByParticipantId: isolatedOwner._id.toString(),
+            sharedWithParticipantIds: [isolatedOwner._id.toString(), isolatedMember._id.toString()],
+            splitMode: 'equal' as const,
+        }
+        const preview = await previewSpaceEntryV2({
+            ...previewInput,
+            linkedTransactionId: compatibleTransaction._id.toString(),
+        })
+        expect(preview.linkExisting).toMatchObject({ compatible: true, issues: [] })
+
+        const resolved = await resolveSpacePersonalImpactV2({
+            actorUserId: memberUserId,
+            spaceId: isolated._id.toString(),
+            entryId,
+            impactId: pending!._id.toString(),
+            idempotencyKey: `link-existing-${runId}`,
+            expectedRevision: pending!.revision ?? 0,
+            decision: { type: 'link_existing', transactionId: compatibleTransaction._id.toString() },
+        })
+        expect(resolved.value!.status).toBe('linked')
+        expect(await Transaction.findOne({ _id: compatibleTransaction._id }).lean())
+            .toMatchObject({ spaceEntryId: new Types.ObjectId(entryId), type: 'expense' })
+
+        // Un candidato que preview ya marcó incompatible (otra moneda) falla en
+        // resolve con el mismo motivo — la misma evaluación, en ambos lados.
+        const mismatchedTransaction = await Transaction.create({
+            userId: memberUserId,
+            type: 'expense',
+            amount: 500,
+            operationalAmount: 500,
+            currency: 'USD',
+            date: new Date('2026-08-27T15:00:00.000Z'),
+            description: 'Otra moneda',
+            status: 'confirmed',
+            createdFrom: 'web',
+        })
+        const mismatchedPreview = await previewSpaceEntryV2({
+            ...previewInput,
+            linkedTransactionId: mismatchedTransaction._id.toString(),
+        })
+        expect(mismatchedPreview.linkExisting?.compatible).toBe(false)
+        expect(mismatchedPreview.linkExisting?.issues).toContain('currency_mismatch')
+
+        const created2 = await createSpaceEntryV2({
+            ...shared,
+            title: 'Segunda cena',
+            idempotencyKey: `create-link-2-${runId}`,
+            expectedRevision: 0,
+            amount: 1000,
+        })
+        const entryId2 = created2.resultRefs.spaceEntryId!.toString()
+        const pending2 = await SpaceEntryPersonalImpact.findOne({
+            entryId: entryId2,
+            userId: memberUserId,
+            status: 'pending',
+        }).lean()
+        expect(pending2).toBeTruthy()
+
+        await expect(resolveSpacePersonalImpactV2({
+            actorUserId: memberUserId,
+            spaceId: isolated._id.toString(),
+            entryId: entryId2,
+            impactId: pending2!._id.toString(),
+            idempotencyKey: `link-existing-mismatch-${runId}`,
+            expectedRevision: pending2!.revision ?? 0,
+            decision: { type: 'link_existing', transactionId: mismatchedTransaction._id.toString() },
+        })).rejects.toMatchObject({ code: 'SPACE_TRANSACTION_TYPE_MISMATCH' })
+    })
+
+    it('la lista de candidatos sólo devuelve transacciones que resolve acepta, y explica lo que excluyó', async () => {
+        const isolated = await Space.create({
+            contractVersion: 2,
+            ownerUserId: new Types.ObjectId(ownerUserId),
+            name: `Espacio candidatos ${runId}`,
+            type: 'travel',
+            mode: 'managed',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'equal',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        trackedSpaceIds.push(isolated._id)
+        const [isolatedOwner, isolatedMember] = await SpaceParticipant.create([
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(ownerUserId),
+                displayName: 'Owner v2',
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(memberUserId),
+                displayName: 'Member v2',
+                role: 'participant',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+        ])
+
+        const created = await createSpaceEntryV2({
+            actorUserId: ownerUserId,
+            spaceId: isolated._id.toString(),
+            title: 'Almuerzo compartido',
+            currency: 'ARS',
+            dateKey: '2026-08-28',
+            paidByParticipantId: isolatedOwner._id.toString(),
+            sharedWithParticipantIds: [isolatedOwner._id.toString(), isolatedMember._id.toString()],
+            splitMode: 'equal',
+            idempotencyKey: `create-candidates-${runId}`,
+            expectedRevision: 0,
+            amount: 1000,
+            actorPersonalImpact: { accountId: ownerAccountId, categoryId: ownerCategoryId },
+        })
+        const entryId = created.resultRefs.spaceEntryId!.toString()
+        const pending = await SpaceEntryPersonalImpact.findOne({
+            entryId,
+            userId: memberUserId,
+            status: 'pending',
+        }).lean()
+        expect(pending).toBeTruthy()
+
+        const matching = await Transaction.create({
+            userId: memberUserId,
+            type: 'expense',
+            amount: 500,
+            operationalAmount: 500,
+            currency: 'ARS',
+            date: new Date('2026-08-28T15:00:00.000Z'),
+            description: 'Almuerzo (ya registrado)',
+            status: 'confirmed',
+            createdFrom: 'web',
+        })
+        const wrongAmount = await Transaction.create({
+            userId: memberUserId,
+            type: 'expense',
+            amount: 999,
+            operationalAmount: 999,
+            currency: 'ARS',
+            date: new Date('2026-08-28T16:00:00.000Z'),
+            description: 'Monto distinto',
+            status: 'confirmed',
+            createdFrom: 'web',
+        })
+        const otherUsersTransaction = await Transaction.create({
+            userId: ownerUserId,
+            type: 'expense',
+            amount: 500,
+            operationalAmount: 500,
+            currency: 'ARS',
+            date: new Date('2026-08-28T17:00:00.000Z'),
+            description: 'Del otro participante',
+            status: 'confirmed',
+            createdFrom: 'web',
+        })
+
+        const result = await listLinkCandidatesForImpactV2({
+            actorUserId: memberUserId,
+            spaceId: isolated._id.toString(),
+            entryId,
+            impactId: pending!._id.toString(),
+        })
+
+        expect(result.applicable).toBe(true)
+        expect(result.candidates).toHaveLength(1)
+        expect(result.candidates[0].transactionId).toBe(matching._id.toString())
+        expect(result.excluded.amountMismatch).toBe(1)
+        expect(result.candidates.map((candidate) => candidate.transactionId))
+            .not.toContain(otherUsersTransaction._id.toString())
+
+        // El único candidato que la lista devuelve se vincula sin fricción — la
+        // propiedad central que la etapa 2 exige.
+        const resolved = await resolveSpacePersonalImpactV2({
+            actorUserId: memberUserId,
+            spaceId: isolated._id.toString(),
+            entryId,
+            impactId: pending!._id.toString(),
+            idempotencyKey: `link-candidate-${runId}`,
+            expectedRevision: pending!.revision ?? 0,
+            decision: { type: 'link_existing', transactionId: result.candidates[0].transactionId },
+        })
+        expect(resolved.value!.status).toBe('linked')
+
+        // Ya vinculada a este movimiento, la misma transacción cuenta como "ya
+        // vinculada" para OTRO movimiento que pide exactamente lo mismo — nunca
+        // vuelve a ofrecerse como candidato ajeno.
+        const created2 = await createSpaceEntryV2({
+            actorUserId: ownerUserId,
+            spaceId: isolated._id.toString(),
+            title: 'Segundo almuerzo',
+            currency: 'ARS',
+            dateKey: '2026-08-28',
+            paidByParticipantId: isolatedOwner._id.toString(),
+            sharedWithParticipantIds: [isolatedOwner._id.toString(), isolatedMember._id.toString()],
+            splitMode: 'equal',
+            idempotencyKey: `create-candidates-2-${runId}`,
+            expectedRevision: 0,
+            amount: 1000,
+            actorPersonalImpact: { accountId: ownerAccountId, categoryId: ownerCategoryId },
+        })
+        const entryId2 = created2.resultRefs.spaceEntryId!.toString()
+        const pending2 = await SpaceEntryPersonalImpact.findOne({
+            entryId: entryId2,
+            userId: memberUserId,
+            status: 'pending',
+        }).lean()
+        expect(pending2).toBeTruthy()
+
+        const secondResult = await listLinkCandidatesForImpactV2({
+            actorUserId: memberUserId,
+            spaceId: isolated._id.toString(),
+            entryId: entryId2,
+            impactId: pending2!._id.toString(),
+        })
+        expect(secondResult.candidates.map((candidate) => candidate.transactionId))
+            .not.toContain(matching._id.toString())
+        expect(secondResult.excluded.alreadyLinked).toBeGreaterThanOrEqual(1)
+
+        void wrongAmount
+    })
+
+    it('la lista de candidatos de alta no requiere un impacto persistido', async () => {
+        const isolated = await Space.create({
+            contractVersion: 2,
+            ownerUserId: new Types.ObjectId(ownerUserId),
+            name: `Espacio candidatos alta ${runId}`,
+            type: 'travel',
+            mode: 'managed',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'equal',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        trackedSpaceIds.push(isolated._id)
+        const [isolatedOwner, isolatedMember] = await SpaceParticipant.create([
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(ownerUserId),
+                displayName: 'Owner v2',
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(memberUserId),
+                displayName: 'Member v2',
+                role: 'participant',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+        ])
+        const freshTransaction = await Transaction.create({
+            userId: memberUserId,
+            type: 'expense',
+            amount: 500,
+            operationalAmount: 500,
+            currency: 'ARS',
+            date: new Date('2026-08-29T15:00:00.000Z'),
+            description: 'Ya registrado antes del alta',
+            status: 'confirmed',
+            createdFrom: 'web',
+        })
+
+        const result = await listLinkCandidatesForNewEntryV2({
+            actorUserId: memberUserId,
+            spaceId: isolated._id.toString(),
+            amount: 1000,
+            currency: 'ARS',
+            paidByParticipantId: isolatedOwner._id.toString(),
+            sharedWithParticipantIds: [isolatedOwner._id.toString(), isolatedMember._id.toString()],
+            splitMode: 'equal',
+            dateKey: '2026-08-29',
+            timezone: 'America/Argentina/Buenos_Aires',
+        })
+
+        expect(result.applicable).toBe(true)
+        expect(result.candidates.map((candidate) => candidate.transactionId))
+            .toContain(freshTransaction._id.toString())
+
+        // Para el pagador, el requisito es la salida real completa (1000), no
+        // su parte propia (500) — `accountImpactAmount` manda sobre
+        // `ownShareAmount` cuando es positivo.
+        const payerResult = await listLinkCandidatesForNewEntryV2({
+            actorUserId: ownerUserId,
+            spaceId: isolated._id.toString(),
+            amount: 1000,
+            currency: 'ARS',
+            paidByParticipantId: isolatedOwner._id.toString(),
+            sharedWithParticipantIds: [isolatedOwner._id.toString(), isolatedMember._id.toString()],
+            splitMode: 'equal',
+            dateKey: '2026-08-29',
+            timezone: 'America/Argentina/Buenos_Aires',
+        })
+        expect(payerResult.applicable).toBe(true)
+        expect(payerResult.requirement?.amount).toBe(1000)
     })
 
     it('bloquea la moneda de reporte, conserva monedas usadas y permite agregar nuevas', async () => {

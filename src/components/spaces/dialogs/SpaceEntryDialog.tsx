@@ -37,9 +37,9 @@ import type {
     ISpaceCategory,
     ISpaceEntry,
     ISpaceParticipant,
-    ITransaction,
     SpaceEntryPreviewDto,
     SpaceEntryDraftDto,
+    SpaceLinkCandidateDto,
     SpaceQuotesDto,
 } from '@/types'
 import {
@@ -72,6 +72,7 @@ import {
     SpaceDialogPanel,
     SpaceDialogSectionEyebrow,
     SpaceDialogTextArea,
+    SpaceLinkCandidateList,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import {
     SpaceDraftAttachmentsUploader,
@@ -81,6 +82,7 @@ import { DatePickerField } from '@/components/shared/transaction-dialog/fields/D
 import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
 import { CurrencySelector } from '@/components/shared/CurrencySelector'
 import { clientDateToDateKey, dateKeyToClientDate } from '@/lib/client/space-api-adapter'
+import { fetchLinkCandidatesForNewEntry } from '@/lib/client/space-personal-impact'
 import { moneyFromDecimal } from '@/lib/utils/money'
 import { supportsCurrency } from '@/lib/utils/accounts'
 import {
@@ -410,6 +412,7 @@ export function SpaceEntryDialog({
     spaceCurrencies,
     defaultSplitMode,
     spaceMode,
+    spaceTimezone,
     draftKey,
     mode = 'create',
     initialData,
@@ -429,6 +432,7 @@ export function SpaceEntryDialog({
     spaceCurrencies: string[]
     defaultSplitMode: SpaceEntryFormData['splitMode']
     spaceMode: SpaceFormData['mode']
+    spaceTimezone?: string
     draftKey?: string
     mode?: 'create' | 'edit'
     initialData?: ISpaceEntry
@@ -501,7 +505,11 @@ export function SpaceEntryDialog({
     // preview por sí solo: "Reintentar" lo fuerza incrementando este nonce.
     const [previewRetryNonce, setPreviewRetryNonce] = useState(0)
     const [showAdvancedLink, setShowAdvancedLink] = useState(false)
-    const [recentTransactions, setRecentTransactions] = useState<ITransaction[]>([])
+    const [candidates, setCandidates] = useState<SpaceLinkCandidateDto[]>([])
+    const [candidatesLoading, setCandidatesLoading] = useState(false)
+    const [candidatesError, setCandidatesError] = useState<string | null>(null)
+    const [candidatesExcludedCount, setCandidatesExcludedCount] = useState(0)
+    const [candidatesRetryNonce, setCandidatesRetryNonce] = useState(0)
     const [draftHydrated, setDraftHydrated] = useState(false)
     const [discardDraftOpen, setDiscardDraftOpen] = useState(false)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -553,7 +561,9 @@ export function SpaceEntryDialog({
         setPreview(null)
         setPreviewError(null)
         setShowAdvancedLink(false)
-        setRecentTransactions([])
+        setCandidates([])
+        setCandidatesError(null)
+        setCandidatesExcludedCount(0)
         setDiscardDraftOpen(false)
 
         // Edit mode: pre-populate form from initialData
@@ -909,23 +919,76 @@ export function SpaceEntryDialog({
     ])
 
     useEffect(() => {
-        if (!open || mode !== 'create' || step !== 3 || !showAdvancedLink) return
+        if (!open || mode !== 'create' || step !== 3 || !showAdvancedLink || !spaceTimezone) {
+            return
+        }
+        const sharedParticipantIds = form.sharedWithParticipantIds?.length
+            ? form.sharedWithParticipantIds
+            : form.paidByParticipantId
+                ? [form.paidByParticipantId]
+                : []
+        if (!form.paidByParticipantId || !sharedParticipantIds.length || !Number.isFinite(form.amount) || form.amount <= 0) {
+            setCandidates([])
+            setCandidatesExcludedCount(0)
+            setCandidatesLoading(false)
+            return
+        }
         let cancelled = false
-        void apiJson<{ transactions: ITransaction[] }>(
-            `/api/transactions?limit=25&sort=date_desc&currency=${form.currency}`
-        ).then((response) => {
+        setCandidatesLoading(true)
+        setCandidatesError(null)
+        fetchLinkCandidatesForNewEntry({
+            spaceId,
+            amount: form.amount,
+            currency: form.currency,
+            paidByParticipantId: form.paidByParticipantId,
+            sharedWithParticipantIds: sharedParticipantIds,
+            splitMode: form.splitMode,
+            splitAllocations: form.splitAllocations,
+            dateKey: clientDateToDateKey(form.date),
+            timezone: spaceTimezone,
+        }).then((result) => {
             if (cancelled) return
-            const expected = preview?.accountImpactAmount || preview?.ownShareAmount || form.amount
-            setRecentTransactions(response.transactions.filter(
-                (transaction) => Math.abs(transaction.amount - expected) <= 0.01
-            ))
-        }).catch(() => {
-            if (!cancelled) setRecentTransactions([])
+            setCandidates(result.candidates)
+            const excludedTotal = result.excluded.amountMismatch
+                + result.excluded.operationalMismatch
+                + result.excluded.accountMismatch
+                + result.excluded.alreadyLinked
+            setCandidatesExcludedCount(excludedTotal)
+        }).catch((err) => {
+            if (cancelled) return
+            setCandidates([])
+            setCandidatesError(err instanceof Error ? err.message : 'No pudimos cargar tus transacciones.')
+        }).finally(() => {
+            if (!cancelled) setCandidatesLoading(false)
         })
         return () => {
             cancelled = true
         }
-    }, [form.amount, form.currency, mode, open, preview?.accountImpactAmount, preview?.ownShareAmount, showAdvancedLink, step])
+    }, [
+        candidatesRetryNonce,
+        form.amount,
+        form.currency,
+        form.date,
+        form.paidByParticipantId,
+        form.sharedWithParticipantIds,
+        form.splitAllocations,
+        form.splitMode,
+        mode,
+        open,
+        showAdvancedLink,
+        spaceId,
+        spaceTimezone,
+        step,
+    ])
+
+    useEffect(() => {
+        if (!form.linkedTransactionId || candidatesLoading) return
+        const selectedStillMatches = candidates.some(
+            (candidate) => candidate.transactionId === form.linkedTransactionId
+        )
+        if (selectedStillMatches) return
+        setForm((previous) => ({ ...previous, linkedTransactionId: undefined }))
+    }, [candidates, candidatesLoading, form.linkedTransactionId])
 
     useEffect(() => {
         if (!form.spaceCategoryId) return
@@ -2106,9 +2169,13 @@ export function SpaceEntryDialog({
                                                 </button>
                                                 {showAdvancedLink ? (
                                                     <SpaceDialogField id="entry-linked-transaction" label="Transacción compatible">
-                                                        <Select
-                                                            value={form.linkedTransactionId ?? ''}
-                                                            onValueChange={(linkedTransactionId) =>
+                                                        <SpaceLinkCandidateList
+                                                            candidates={candidates}
+                                                            loading={candidatesLoading}
+                                                            error={candidatesError}
+                                                            excludedCount={candidatesExcludedCount}
+                                                            selectedId={form.linkedTransactionId}
+                                                            onSelect={(linkedTransactionId) =>
                                                                 setForm((previous) => ({
                                                                     ...previous,
                                                                     linkedTransactionId,
@@ -2116,25 +2183,8 @@ export function SpaceEntryDialog({
                                                                     categoryId: undefined,
                                                                 }))
                                                             }
-                                                        >
-                                                            <SelectTrigger
-                                                                id="entry-linked-transaction"
-                                                                aria-labelledby="entry-linked-transaction-label entry-linked-transaction"
-                                                                className="w-full"
-                                                            >
-                                                                <SelectValue placeholder="Elegí una transacción" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {recentTransactions.map((transaction) => (
-                                                                    <SelectItem
-                                                                        key={extractId(transaction._id)}
-                                                                        value={extractId(transaction._id) ?? ''}
-                                                                    >
-                                                                        {transaction.description} · {transaction.amount} {transaction.currency}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
+                                                            onRetry={() => setCandidatesRetryNonce((current) => current + 1)}
+                                                        />
                                                     </SpaceDialogField>
                                                 ) : null}
                                                 {preview?.linkExisting && !preview.linkExisting.compatible ? (

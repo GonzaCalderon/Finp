@@ -761,6 +761,7 @@ function SpaceDetailPageInner() {
                 spaceCurrencies={data.space.currencies}
                 defaultSplitMode={data.space.defaultSplitMode}
                 spaceMode={data.space.mode}
+                spaceTimezone={data.space.timezone}
                 contractVersion={data.space.contractVersion}
                 spaceRevision={data.space.revision ?? 0}
                 currentUserId={currentUserId}
@@ -894,6 +895,7 @@ function SpaceDetailPageInner() {
                 spaceCurrencies={data.space.currencies}
                 defaultSplitMode={data.space.defaultSplitMode}
                 spaceMode={data.space.mode}
+                spaceTimezone={data.space.timezone}
                 contractVersion={data.space.contractVersion}
                 spaceRevision={data.space.revision ?? 0}
                 mode="edit"

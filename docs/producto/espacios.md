@@ -376,8 +376,9 @@ aceptar —mismo usuario, tipo, moneda, monto exacto por escala, monto
 operacional, día financiero y cuentas coherentes, sin transacciones ya
 vinculadas— y, cuando la lista queda vacía, explica cuántas quedaron afuera y
 por qué. La revisión final nombra con las mismas palabras cuál de las tres
-opciones se confirma. Editar un movimiento y decidir el impacto personal desde
-el detalle usan la misma lista de candidatos y la misma regla.
+opciones se confirma. Decidir el impacto personal desde el detalle de un
+movimiento existente usa la misma lista de candidatos y la misma regla que el
+alta; editar un movimiento no reabre esa decisión, sólo el detalle la ofrece.
 
 ### Borrador personal persistente
 

@@ -9,11 +9,12 @@ import {
     invalidateData,
     SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
+import { fetchLinkCandidatesForImpact } from '@/lib/client/space-personal-impact'
 import { fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { extractId } from '@/lib/utils/spaces'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
-import type { ITransaction, ISpaceEntry, ISpaceEntryPersonalImpact } from '@/types'
+import type { ITransaction, ISpaceEntry, ISpaceEntryPersonalImpact, SpaceLinkCandidateDto } from '@/types'
 import type { SpacePersonalImpactKind } from '@/lib/constants'
 import {
     Dialog,
@@ -39,6 +40,7 @@ import {
     SpaceDialogField,
     SpaceDialogPanel,
     SpaceDialogSectionEyebrow,
+    SpaceLinkCandidateList,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 
 type Suggestion = {
@@ -97,6 +99,11 @@ export function SpacePersonalImpactDialog({
     const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
     const [existingImpact, setExistingImpact] = useState<ISpaceEntryPersonalImpact | null>(null)
     const [recentTransactions, setRecentTransactions] = useState<ITransaction[]>([])
+    const [linkCandidates, setLinkCandidates] = useState<SpaceLinkCandidateDto[]>([])
+    const [linkCandidatesLoading, setLinkCandidatesLoading] = useState(false)
+    const [linkCandidatesError, setLinkCandidatesError] = useState<string | null>(null)
+    const [linkCandidatesExcluded, setLinkCandidatesExcluded] = useState(0)
+    const [linkCandidatesRetryNonce, setLinkCandidatesRetryNonce] = useState(0)
     const [submitting, setSubmitting] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -134,6 +141,9 @@ export function SpacePersonalImpactDialog({
             setCategoryId(undefined)
             setLinkedTransactionId(undefined)
             setExistingImpact(null)
+            setLinkCandidates([])
+            setLinkCandidatesError(null)
+            setLinkCandidatesExcluded(0)
 
             try {
                 if (currentEntry.contractVersion === 2 && initialImpact) {
@@ -146,14 +156,8 @@ export function SpacePersonalImpactDialog({
                         categoryId: extractId(initialImpact.categoryId),
                     })
                     setAmount(String(impactAmount))
-                    const transactionsData = await apiJson<{ transactions: ITransaction[] }>(
-                        `/api/transactions?limit=25&sort=date_desc&currency=${currentEntry.currency}`
-                    )
-                    if (!cancelled) {
-                        setRecentTransactions(transactionsData.transactions.filter(
-                            (transaction) => Math.abs(transaction.amount - impactAmount) < 0.01
-                        ))
-                    }
+                    // Los candidatos v2 tienen su propio efecto y su propio error: un
+                    // fallo ahí no debe tapar el resto del contexto ya cargado.
                     return
                 }
                 const impactData = await apiJson<{
@@ -193,6 +197,45 @@ export function SpacePersonalImpactDialog({
             cancelled = true
         }
     }, [entry, entryId, initialImpact, open, spaceId])
+
+    const impactId = extractId(initialImpact?._id)
+
+    useEffect(() => {
+        if (!open || !spaceId || !entryId || entry?.contractVersion !== 2 || !impactId) {
+            return
+        }
+        let cancelled = false
+        setLinkCandidatesLoading(true)
+        setLinkCandidatesError(null)
+        fetchLinkCandidatesForImpact({ spaceId, entryId, impactId }).then((result) => {
+            if (cancelled) return
+            setLinkCandidates(result.candidates)
+            setLinkCandidatesExcluded(
+                result.excluded.amountMismatch
+                + result.excluded.operationalMismatch
+                + result.excluded.accountMismatch
+                + result.excluded.alreadyLinked
+            )
+        }).catch((err) => {
+            if (cancelled) return
+            setLinkCandidates([])
+            setLinkCandidatesError(err instanceof Error ? err.message : 'No pudimos cargar tus transacciones.')
+        }).finally(() => {
+            if (!cancelled) setLinkCandidatesLoading(false)
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [entry?.contractVersion, entryId, impactId, linkCandidatesRetryNonce, open, spaceId])
+
+    useEffect(() => {
+        if (!linkedTransactionId || linkCandidatesLoading) return
+        const selectedStillMatches = linkCandidates.some(
+            (candidate) => candidate.transactionId === linkedTransactionId
+        )
+        if (selectedStillMatches) return
+        setLinkedTransactionId(undefined)
+    }, [linkCandidates, linkCandidatesLoading, linkedTransactionId])
 
     async function handleSubmit() {
         if (!entryId) return
@@ -400,6 +443,18 @@ export function SpacePersonalImpactDialog({
                                                             </Select>
                                                         </SpaceDialogField>
                                                     )
+                                                ) : entry?.contractVersion === 2 ? (
+                                                    <SpaceDialogField label="Transaccion existente">
+                                                        <SpaceLinkCandidateList
+                                                            candidates={linkCandidates}
+                                                            loading={linkCandidatesLoading}
+                                                            error={linkCandidatesError}
+                                                            excludedCount={linkCandidatesExcluded}
+                                                            selectedId={linkedTransactionId}
+                                                            onSelect={setLinkedTransactionId}
+                                                            onRetry={() => setLinkCandidatesRetryNonce((current) => current + 1)}
+                                                        />
+                                                    </SpaceDialogField>
                                                 ) : (
                                                     <SpaceDialogField label="Transaccion existente">
                                                         <Select

@@ -583,13 +583,34 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
      verifica la alerta enfocada y confirma la recuperación tras reintentar; 909
      unitarias y 24 E2E de Espacios (ambos proyectos) verdes junto con
      typecheck, ESLint y `docs:check`.
-  2. Candidatos de vínculo resueltos por el servidor según `arquitectura.md`
-     §8 «Candidatos de vínculo personal»: una sola evaluación compartida por
-     preview, candidatos y `resolve`, con `cargando`, `vacío` con motivos y
-     `error` (`ErrorState`, reintento sobre la misma consulta) en vez del
-     `<Select>` de 25 transacciones filtradas en cliente. Corrección al plan
-     previo: no hay ventana de fechas; el servidor exige el mismo `dateKey`, y
-     ofrecer otra cosa es ofrecer un candidato que fallará.
+  2. Candidatos de vínculo resueltos por el servidor — completado el
+     2026-09-10, según `arquitectura.md` §8 «Candidatos de vínculo personal».
+     No eran dos copias de la regla, eran cuatro: el alta guiada, `resolve` y
+     el preview cada uno con la suya, y ninguna ruta de candidatos. Divergían
+     de verdad — sólo el alta aceptaba `credit_card_expense` (decisión 0012) y
+     sólo `resolve` validaba la cuenta, así que el alta podía vincular una
+     transacción de un no pagador que sí movía cuenta sin que nada lo
+     impidiera. Las cuatro pasan a `assessLinkCandidateV2`
+     (`space-link-candidate-v2.ts`), nueva; `POST /api/spaces/[id]/link-candidates`
+     (`space-link-candidates-v2.ts`) ofrece candidatos por alta o por impacto
+     persistido; ambos diálogos reemplazan el `<Select>` de 25 transacciones
+     filtradas en cliente por `SpaceLinkCandidateList`, con `cargando`, `vacío`
+     con motivos y `error` (`ErrorState`, reintento). Corrección al plan
+     previo: no hay ventana de fechas — el servidor exige el mismo `dateKey` —
+     pero el preview de alta no recibe fecha en su contrato actual, así que su
+     `linkExisting` no evalúa fecha ni "ya vinculada a otro impacto"; esas dos
+     quedan a cargo del `resolve` autoritativo, documentado como límite
+     deliberado en `arquitectura.md` §8, no como pendiente.
+     Evidencia: 20 unitarias de la evaluación pura y sus helpers, 3
+     integraciones con sesión Mongo real (preview/resolve coinciden sobre la
+     misma transacción, la lista de candidatos sólo devuelve lo que `resolve`
+     acepta y cuenta el resto por motivo, el modo de alta no exige impacto
+     persistido), 7 unitarias de la ruta HTTP, 938 unitarias, typecheck,
+     ESLint y `docs:check` verdes, más la matriz global de 82 de 82 E2E en
+     Chromium desktop y Pixel 7 el 2026-09-10. Durante el trabajo apareció una
+     rama muerta ajena al alcance en `SpacePersonalImpactDialog.tsx` — un
+     `POST` legacy que ya no cumple el esquema que PR 38 dejó vigente —
+     derivada a una tarea separada.
   3. Descomposición de `SpaceEntryDialog` en un componente por paso montado
      sólo cuando es el actual, con el patrón de `TransactionDialog`
      (`buildSteps`, `currentStep.id`, `transaction-dialog/*Step.tsx`).

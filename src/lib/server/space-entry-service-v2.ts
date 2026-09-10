@@ -28,7 +28,6 @@ import {
     convertSpaceAmountV2,
     derivePersonalImpactAmountsV2,
     financialDateKeyToInstant,
-    financialDateKeyFromInstant,
     normalizeFinancialDateKey,
     type SpaceSplitAllocationV2,
 } from '@/lib/utils/space-financial-v2'
@@ -38,7 +37,13 @@ import {
     buildManualConversionSnapshot,
     resolveSpaceReferenceQuote,
 } from '@/lib/server/space-quote-service'
-import { moneyFromDecimal, moneyMatchesDecimal, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
+import {
+    assessLinkCandidateV2,
+    expectedLinkTransactionType,
+    linkAccountRuleForVariant,
+    resolveLinkImpactVariant,
+} from '@/lib/server/space-link-candidate-v2'
+import { moneyMatchesDecimal, type ConversionSnapshot, type MoneyDto } from '@/lib/utils/money'
 import type { ISpaceEntry, ISpaceEntryDraft, ISpaceParticipant, ITransaction } from '@/types'
 import type { SpaceSplitMode } from '@/lib/constants'
 
@@ -93,16 +98,6 @@ function validateNewEntryParticipants(input: {
             'El pagador y las personas del reparto deben estar activos.'
         )
     }
-}
-
-function resolveImpactVariant(input: {
-    kind: 'personal_expense' | 'advance' | 'settlement_paid' | 'settlement_received'
-    isPayer: boolean
-}) {
-    if (input.kind === 'advance') return 'advance' as const
-    if (input.kind === 'settlement_paid') return 'settlement_paid' as const
-    if (input.kind === 'settlement_received') return 'settlement_received' as const
-    return input.isPayer ? 'payer_expense' as const : 'participant_expense' as const
 }
 
 async function reconcilePresentation(pendingActionIds: Types.ObjectId[]) {
@@ -195,7 +190,7 @@ async function createPersonalImpactsForEntry(input: {
         }
 
         actorImpactId = impact._id
-        const variant = resolveImpactVariant({
+        const variant = resolveLinkImpactVariant({
             kind: amounts.kind,
             isPayer: extractId(input.entry.paidByParticipantId) === participantId,
         })
@@ -209,11 +204,9 @@ async function createPersonalImpactsForEntry(input: {
         }
         const linkedTransactionId = input.actorPersonalImpact?.linkedTransactionId
         if (linkedTransactionId) {
-            const expectedType: ITransaction['type'] = variant === 'settlement_paid'
-                ? 'personal_debt_payment'
-                : variant === 'settlement_received'
-                    ? 'personal_debt_collect'
-                    : 'expense'
+            const expectedAmount = amounts.accountImpactAmount > 0
+                ? amounts.accountImpactAmount
+                : amounts.ownShareAmount
             const transaction = await Transaction.findOne({
                 _id: linkedTransactionId,
                 userId,
@@ -222,21 +215,18 @@ async function createPersonalImpactsForEntry(input: {
                     { spaceImpactId: impact._id },
                 ],
             }).session(input.session).lean<ITransaction | null>()
-            const expectedAmount = amounts.accountImpactAmount > 0
-                ? amounts.accountImpactAmount
-                : amounts.ownShareAmount
-            if (
-                !transaction ||
-                (transaction.type !== expectedType && !(
-                    expectedType === 'expense' && transaction.type === 'credit_card_expense'
-                )) ||
-                transaction.currency !== input.entry.currency ||
-                moneyFromDecimal(input.entry.currency, transaction.amount).minorUnits !==
-                    moneyFromDecimal(input.entry.currency, expectedAmount).minorUnits ||
-                moneyFromDecimal(input.entry.currency, transaction.operationalAmount ?? transaction.amount).minorUnits !==
-                    moneyFromDecimal(input.entry.currency, amounts.operationalAmount).minorUnits ||
-                financialDateKeyFromInstant(transaction.date, input.entry.timezone!) !== input.entry.dateKey
-            ) {
+            const assessment = transaction && input.entry.timezone && input.entry.dateKey
+                ? assessLinkCandidateV2(transaction, {
+                    transactionType: expectedLinkTransactionType(variant),
+                    currency: input.entry.currency,
+                    amount: expectedAmount,
+                    operationalAmount: amounts.operationalAmount,
+                    accountRule: linkAccountRuleForVariant(variant),
+                    dateKey: input.entry.dateKey,
+                    timezone: input.entry.timezone,
+                })
+                : null
+            if (!transaction || !assessment?.compatible) {
                 throw new ServiceError(
                     409,
                     'SPACE_TRANSACTION_PREVIEW_STALE',

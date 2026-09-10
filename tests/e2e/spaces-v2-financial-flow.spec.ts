@@ -361,7 +361,13 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         const advancedLinkToggle = dialog.getByRole('button', { name: 'Vincular una transacción existente (avanzado)' })
         await advancedLinkToggle.click()
         await expect(dialog.getByText('Transacción compatible')).toBeVisible()
-        await expect(dialog.getByRole('combobox', { name: 'Transacción compatible' })).toBeVisible()
+        // Los candidatos los resuelve el servidor (arquitectura.md §8): sin uno
+        // que coincida con este monto y fecha, la lista queda vacía y explica por
+        // qué, en vez de ofrecer un combobox con transacciones que fallarían.
+        await expect(
+            dialog.getByRole('radiogroup', { name: 'Transacción compatible' })
+                .or(dialog.getByText(/No encontramos/))
+        ).toBeVisible()
 
         // Elegir una cuenta personal debe descartar el vínculo avanzado: no pueden
         // coexistir linkedTransactionId y personalAccountId en el mismo movimiento.
