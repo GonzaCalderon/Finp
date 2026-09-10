@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: agentes de IA y personas que desarrollan Finp
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: reglas obligatorias de trabajo para todo el repositorio
 
 ## Índice
@@ -39,7 +39,7 @@ Antes de actuar:
 1. Leer este archivo completo.
 2. Abrir [`docs/README.md`](docs/README.md) y elegir la ruta de lectura según la tarea.
 3. Consultar sólo los documentos indicados para ese tipo de trabajo.
-4. Revisar el estado y la prioridad correspondiente en [`docs/producto/roadmap_finp.md`](docs/producto/roadmap_finp.md).
+4. Revisar el estado y la prioridad correspondiente en [`docs/producto/roadmap_finp.md`](docs/producto/roadmap_finp.md). Si el ítem declara una entrega en curso, ahí están su rama, lo entregado y lo que resta: continuarla antes de abrir trabajo nuevo.
 5. Inspeccionar el código real antes de asumir que la documentación refleja toda la implementación.
 6. Si código y documentación difieren, informar la diferencia y corregir la fuente canónica dentro del alcance autorizado.
 
@@ -53,8 +53,6 @@ Lecturas mínimas por tipo:
 | Automatización o aprendizaje | estrategia de automatización, arquitectura y criterio de entrega |
 | Priorización o producto | especificación funcional, estado actual y roadmap |
 | Documentación | guía de documentación y documento canónico afectado |
-
-Los documentos archivados no se leen salvo que haga falta reconstruir una decisión histórica.
 
 ## 3. Jerarquía documental
 

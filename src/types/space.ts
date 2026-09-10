@@ -226,11 +226,6 @@ export interface ISpaceEntry {
         reportingMoney?: MoneyDto
     }>
     notes?: string
-    linkedTransactionId?: Types.ObjectId
-    confirmationRequired?: boolean
-    confirmedByUserId?: Types.ObjectId
-    confirmedAt?: Date
-    rejectedAt?: Date
     attachments?: ISpaceEntryAttachment[]
     // Anulación lógica
     isVoided?: boolean
@@ -457,7 +452,6 @@ export interface SpaceSummarySnapshot {
     pendingToPayReporting: number
     pendingToCollectReporting: number
     participantCount: number
-    pendingEntryCount: number
     totalEntryCount: number
     categoryBreakdown: SpaceCategoryBreakdownItem[]
     balances: SpaceBalanceItem[]
@@ -499,15 +493,7 @@ export interface ISpacePendingInvite {
     invitedByName: string
 }
 
-export interface ISpacePendingConfirmation {
-    kind: 'confirmation'
-    space: ISpace
-    entry: ISpaceEntry
-    requestedByParticipant?: ISpaceParticipant
-    paidByParticipant?: ISpaceParticipant
-}
-
-export type ISpacePendingAction = ISpacePendingInvite | ISpacePendingConfirmation
+export type ISpacePendingAction = ISpacePendingInvite
 
 export interface ISpaceDetailPayload {
     space: ISpace

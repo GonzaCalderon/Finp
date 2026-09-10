@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Debt, Space, SpaceParticipant } from '@/lib/models'
 import { DEBT_STATUSES, SPACE_DEBT_MODES } from '@/lib/constants'
+import { assertSpaceCapabilityV2 } from '@/lib/server/space-capabilities'
+import { extractId } from '@/lib/utils/spaces'
 import type { SpaceDebtDto } from '@/types'
 
 export async function GET(
@@ -17,7 +19,6 @@ export async function GET(
 
         await connectDB()
 
-        // Verificar que el usuario es participante del espacio
         const space = await Space.findById(id)
         if (!space) return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
 
@@ -33,10 +34,27 @@ export async function GET(
             )
         }
 
+        try {
+            assertSpaceCapabilityV2({
+                status: space.status,
+                role: participant.role,
+                isActiveParticipant: participant.isActive,
+                isOwnerRecord: extractId(space.ownerUserId) === session.user.id,
+            }, 'view')
+        } catch {
+            return NextResponse.json(
+                { error: 'No podés ver las deudas de este espacio.' },
+                { status: 403 }
+            )
+        }
+
+        // Una obligación saldada deja de ser deuda: nunca se expone como abierta.
         const debts = await Debt.find({
             userId: session.user.id,
             spaceId: id,
             status: { $in: [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID, DEBT_STATUSES.IGNORED] },
+            remainingAmount: { $gt: 0 },
+            ...(space.contractVersion === 2 ? { contractVersion: 2 } : {}),
         }).sort({ createdAt: -1 }).lean()
 
         if (space.contractVersion === 2) {

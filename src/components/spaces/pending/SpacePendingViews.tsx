@@ -1,11 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
     Ban,
     Bell,
-    CheckCircle2,
     FileText,
     HandCoins,
     Paperclip,
@@ -41,7 +40,6 @@ import { fadeInFast, springButton, staggerContainer, staggerItem } from '@/lib/u
 import {
     SpaceAmountInline,
     SpaceCurrencyStack,
-    SpaceEntryTypeBadge,
     SpaceMetaBadge,
     SpaceModeBadge,
     SpaceSectionHeading,
@@ -56,89 +54,15 @@ import {
 import type { ISpaceActivityEvent, ISpaceEntry, ISpacePendingAction } from '@/types'
 import type { SpaceActivityEventType } from '@/lib/constants'
 
-export type PendingViewFilter = 'all' | 'invite' | 'confirmation' | 'settlement'
-
 type PendingActionHandlers = {
     onAcceptInvite: (action: Extract<ISpacePendingAction, { kind: 'invite' }>) => void
     onRejectInvite: (action: Extract<ISpacePendingAction, { kind: 'invite' }>) => void
-    onReviewConfirmation: (action: Extract<ISpacePendingAction, { kind: 'confirmation' }>) => void
-    onRejectConfirmation: (action: Extract<ISpacePendingAction, { kind: 'confirmation' }>) => void
 }
 
 type SheetTab = 'pending' | 'activity'
 
-const PENDING_FILTER_LABELS: Record<PendingViewFilter, string> = {
-    all: 'Todos',
-    invite: 'Invitaciones',
-    confirmation: 'Confirmaciones',
-    settlement: 'Liquidaciones',
-}
-
-function isSettlementConfirmation(action: ISpacePendingAction) {
-    return action.kind === 'confirmation' && action.entry.type === 'settlement'
-}
-
-function matchesFilter(action: ISpacePendingAction, filter: PendingViewFilter) {
-    if (filter === 'all') return true
-    if (filter === 'invite') return action.kind === 'invite'
-    if (filter === 'settlement') return isSettlementConfirmation(action)
-    return action.kind === 'confirmation' && action.entry.type !== 'settlement'
-}
-
 function pendingActionKey(action: ISpacePendingAction, prefix = 'pending') {
-    return action.kind === 'invite'
-        ? `${prefix}-invite-${extractId(action.invite._id)}`
-        : `${prefix}-confirmation-${extractId(action.entry._id)}`
-}
-
-function PendingFilterBar({
-    actions,
-    value,
-    onChange,
-}: {
-    actions: ISpacePendingAction[]
-    value: PendingViewFilter
-    onChange: (value: PendingViewFilter) => void
-}) {
-    const counts = useMemo(
-        () => ({
-            all: actions.length,
-            invite: actions.filter((item) => item.kind === 'invite').length,
-            confirmation: actions.filter(
-                (item) => item.kind === 'confirmation' && item.entry.type !== 'settlement'
-            ).length,
-            settlement: actions.filter((item) => isSettlementConfirmation(item)).length,
-        }),
-        [actions]
-    )
-
-    return (
-        <div className="flex flex-wrap gap-2">
-            {(Object.keys(PENDING_FILTER_LABELS) as PendingViewFilter[]).map((filter) => (
-                <button
-                    key={filter}
-                    type="button"
-                    onClick={() => onChange(filter)}
-                    className={[
-                        'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors',
-                        value === filter
-                            ? 'border-primary/20 bg-primary/10 text-primary'
-                            : 'border-border bg-background/80 text-muted-foreground hover:text-foreground',
-                    ].join(' ')}
-                >
-                    <span>{PENDING_FILTER_LABELS[filter]}</span>
-                    <span
-                        className={[
-                            'rounded-full px-2 py-0.5 text-[11px]',
-                            value === filter ? 'bg-primary/12 text-primary' : 'bg-secondary text-secondary-foreground',
-                        ].join(' ')}
-                    >
-                        {counts[filter]}
-                    </span>
-                </button>
-            ))}
-        </div>
-    )
+    return `${prefix}-invite-${extractId(action.invite._id)}`
 }
 
 function PendingInviteCard({
@@ -196,105 +120,6 @@ function PendingInviteCard({
     )
 }
 
-function PendingConfirmationCard({
-    action,
-    compact = false,
-    onReviewConfirmation,
-    onRejectConfirmation,
-}: {
-    action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    compact?: boolean
-} & Pick<PendingActionHandlers, 'onReviewConfirmation' | 'onRejectConfirmation'>) {
-    const attachmentCount = action.entry.attachments?.length ?? 0
-    const label = action.entry.type === 'settlement' ? 'Liquidación' : 'Confirmación'
-
-    return (
-        <div className={compact ? 'rounded-[20px] border border-foreground/[0.07] bg-background/72 p-3' : 'rounded-[28px] border border-foreground/[0.07] bg-background/72 p-4 backdrop-blur-sm'}>
-            <div className={compact ? 'space-y-3' : 'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'}>
-                <div className={compact ? 'space-y-2' : 'space-y-3'}>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium"
-                            style={{
-                                background:
-                                    action.entry.type === 'settlement'
-                                        ? 'rgba(74,158,204,0.14)'
-                                        : 'rgba(212,160,23,0.14)',
-                                color: action.entry.type === 'settlement' ? 'var(--sky)' : '#A67C00',
-                            }}
-                        >
-                            {action.entry.type === 'settlement' ? (
-                                <HandCoins className="h-3.5 w-3.5" />
-                            ) : (
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                            )}
-                            {label}
-                        </div>
-                        <SpaceEntryTypeBadge type={action.entry.type} />
-                        <SpaceTypeBadge type={action.space.type} />
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <p className={compact ? 'text-sm font-semibold tracking-tight' : 'text-lg font-semibold tracking-tight'}>
-                            Revisá “{action.entry.title}”
-                        </p>
-                        <p className={compact ? 'line-clamp-2 text-xs text-muted-foreground' : 'text-sm text-muted-foreground'}>
-                            {action.requestedByParticipant?.displayName ?? 'Un participante'} te marcó como pagador dentro de {action.space.name}.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                        <SpaceMetaBadge icon={Wallet}>
-                            <SpaceAmountInline
-                                amount={action.entry.amount}
-                                currency={action.entry.currency}
-                                hidden={false}
-                                className="font-semibold"
-                            />
-                        </SpaceMetaBadge>
-                        <SpaceMetaBadge icon={FileText}>{formatSpaceDate(action.entry.date)}</SpaceMetaBadge>
-                        {attachmentCount > 0 ? (
-                            <SpaceMetaBadge icon={Paperclip}>
-                                {attachmentCount} comprobante{attachmentCount > 1 ? 's' : ''}
-                            </SpaceMetaBadge>
-                        ) : null}
-                    </div>
-                </div>
-
-                <div className={compact ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2 sm:flex-row lg:min-w-[220px] lg:justify-end'}>
-                    <Button variant="outline" size={compact ? 'sm' : 'default'} className="rounded-full" onClick={() => onRejectConfirmation(action)}>
-                        Rechazar
-                    </Button>
-                    <Button size={compact ? 'sm' : 'default'} className="rounded-full" onClick={() => onReviewConfirmation(action)}>
-                        Revisar
-                    </Button>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-function PendingActionCard(props: { action: ISpacePendingAction; compact?: boolean } & PendingActionHandlers) {
-    if (props.action.kind === 'invite') {
-        return (
-            <PendingInviteCard
-                action={props.action}
-                compact={props.compact}
-                onAcceptInvite={props.onAcceptInvite}
-                onRejectInvite={props.onRejectInvite}
-            />
-        )
-    }
-
-    return (
-        <PendingConfirmationCard
-            action={props.action}
-            compact={props.compact}
-            onReviewConfirmation={props.onReviewConfirmation}
-            onRejectConfirmation={props.onRejectConfirmation}
-        />
-    )
-}
 
 const ACTIVITY_ICON_BY_TYPE: Record<SpaceActivityEventType, typeof FileText> = {
     entry_created: FileText,
@@ -461,7 +286,7 @@ export function RecentPendingPanel({
             <SpaceSectionHeading
                 eyebrow="Pendientes"
                 title="Pendientes recientes"
-                description={compact ? undefined : 'Invitaciones, confirmaciones y liquidaciones que hoy requieren una acción tuya.'}
+                description={compact ? undefined : 'Invitaciones que hoy requieren una acción tuya.'}
                 action={
                     <Button variant="ghost" size="sm" className="rounded-full" onClick={onShowAll}>
                         Ver todos
@@ -481,7 +306,7 @@ export function RecentPendingPanel({
                     </div>
                 ) : (
                     recentActions.map((action) => (
-                        <PendingActionCard
+                        <PendingInviteCard
                             key={pendingActionKey(action)}
                             action={action}
                             compact
@@ -506,12 +331,6 @@ export function SpacesPendingDialog({
     actions: ISpacePendingAction[]
     loading: boolean
 } & PendingActionHandlers) {
-    const [filter, setFilter] = useState<PendingViewFilter>('all')
-    const filteredActions = useMemo(
-        () => actions.filter((action) => matchesFilter(action, filter)),
-        [actions, filter]
-    )
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -523,13 +342,9 @@ export function SpacesPendingDialog({
                         <DialogHeader className="space-y-2">
                             <DialogTitle className="text-2xl tracking-tight">Pendientes</DialogTitle>
                             <DialogDescription>
-                                Revisá invitaciones, confirmaciones y liquidaciones pendientes dentro de tus espacios.
+                                Revisá las invitaciones pendientes dentro de tus espacios.
                             </DialogDescription>
                         </DialogHeader>
-
-                        <div className="mt-4">
-                            <PendingFilterBar actions={actions} value={filter} onChange={setFilter} />
-                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
@@ -538,7 +353,7 @@ export function SpacesPendingDialog({
                                 <Skeleton className="h-36 rounded-[28px]" />
                                 <Skeleton className="h-36 rounded-[28px]" />
                             </div>
-                        ) : filteredActions.length === 0 ? (
+                        ) : actions.length === 0 ? (
                             <SpaceSurface padding="p-6">
                                 <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
                                     <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
@@ -546,7 +361,7 @@ export function SpacesPendingDialog({
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-lg font-semibold tracking-tight">
-                                            Nada pendiente en {PENDING_FILTER_LABELS[filter].toLowerCase()}
+                                            Nada pendiente
                                         </p>
                                         <p className="text-sm text-muted-foreground">
                                             Cuando aparezcan acciones nuevas dentro de tus espacios, las vas a ver acá.
@@ -556,8 +371,8 @@ export function SpacesPendingDialog({
                             </SpaceSurface>
                         ) : (
                             <div className="space-y-3">
-                                {filteredActions.map((action) => (
-                                    <PendingActionCard
+                                {actions.map((action) => (
+                                    <PendingInviteCard
                                         key={pendingActionKey(action, 'dialog')}
                                         action={action}
                                         {...handlers}
@@ -590,12 +405,7 @@ export function SpacesPendingSheet({
     currentUserId?: string
     initialTab?: SheetTab
 } & PendingActionHandlers) {
-    const [filter, setFilter] = useState<PendingViewFilter>('all')
     const [tab, setTab] = useState<SheetTab>(initialTab)
-    const filteredActions = useMemo(
-        () => actions.filter((action) => matchesFilter(action, filter)),
-        [actions, filter]
-    )
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -632,13 +442,6 @@ export function SpacesPendingSheet({
                                 </button>
                             ))}
                         </div>
-                        <AnimatePresence mode="wait">
-                            {tab === 'pending' ? (
-                                <motion.div key="filters" {...fadeInFast}>
-                                    <PendingFilterBar actions={actions} value={filter} onChange={setFilter} />
-                                </motion.div>
-                            ) : null}
-                        </AnimatePresence>
                     </div>
                 </SheetHeader>
 
@@ -653,7 +456,7 @@ export function SpacesPendingSheet({
                             <Skeleton className="h-28 rounded-[20px]" />
                             <Skeleton className="h-28 rounded-[20px]" />
                         </motion.div>
-                    ) : filteredActions.length === 0 ? (
+                    ) : actions.length === 0 ? (
                         <motion.div key="empty" className="flex flex-col items-center justify-center gap-3 py-12 text-center" {...fadeInFast}>
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                                 <Bell className="h-5 w-5 text-muted-foreground" />
@@ -676,13 +479,12 @@ export function SpacesPendingSheet({
                             animate="animate"
                             exit="exit"
                         >
-                            {filteredActions.map((action) => (
+                            {actions.map((action) => (
                                 <motion.div key={pendingActionKey(action, 'sheet')} variants={staggerItem}>
-                                    <PendingActionCard
-                                    key={pendingActionKey(action, 'sheet')}
-                                    action={action}
-                                    compact
-                                    {...handlers}
+                                    <PendingInviteCard
+                                        action={action}
+                                        compact
+                                        {...handlers}
                                     />
                                 </motion.div>
                             ))}

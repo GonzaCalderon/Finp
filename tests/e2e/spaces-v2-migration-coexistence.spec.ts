@@ -56,7 +56,7 @@ test.describe('Espacios v2 — convivencia durante la migración', () => {
         )
         expect(blockedMutation.status()).toBe(409)
         const mutationText = await blockedMutation.text()
-        expect(mutationText).toContain('revisión')
+        expect(mutationText).toContain('migración')
         expect(mutationText).not.toContain(SPACE_MIGRATION_E2E.runId)
         expect(mutationText).not.toContain(SPACE_MIGRATION_E2E.sourceFingerprint)
     })

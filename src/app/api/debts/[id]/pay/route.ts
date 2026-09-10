@@ -7,7 +7,6 @@ import { Account, Debt, Space, SpaceParticipant } from '@/lib/models'
 import { payDebtSchema } from '@/lib/validations/debt'
 import { isAccountCurrencyCompatible } from '@/lib/utils/debt'
 import { calculateReportingAmount } from '@/lib/utils/spaces'
-import { syncSpaceDebtsForActiveParticipants } from '@/lib/server/debt-sync'
 import { createDebtSettlement } from '@/lib/server/debt-settlement'
 import { upsertLinkedPersonalImpact } from '@/lib/server/space-personal-impact'
 import { emitPersonalSyncEvent } from '@/lib/server/personal-sync-events'
@@ -162,9 +161,6 @@ export async function POST(
                     paidByParticipantId: currentParticipant._id,
                     sharedWithParticipantIds: [debt.counterpartyParticipantId],
                     splitMode: 'none',
-                    confirmationRequired: false,
-                    confirmedByUserId: authSession.user.id,
-                    confirmedAt: new Date(),
                     notes: parsed.data.notes,
                 }
             }
@@ -238,14 +234,6 @@ export async function POST(
                 }
             } catch (error) {
                 console.error('[personal-sync] pay post-commit:', error)
-            }
-        }
-
-        if (debt.sourceType === 'space' && debt.spaceId) {
-            try {
-                await syncSpaceDebtsForActiveParticipants(debt.spaceId.toString())
-            } catch (error) {
-                console.error('[debt-sync] pay route:', error)
             }
         }
 

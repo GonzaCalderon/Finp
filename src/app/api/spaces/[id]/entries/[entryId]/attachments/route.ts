@@ -7,7 +7,7 @@ import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { spaceApiErrorResponse } from '@/lib/server/space-api-contract'
 import { validateSpaceAttachmentFile } from '@/lib/server/space-attachment-file'
 import { resolveSpaceAttachmentStorage } from '@/lib/server/space-attachment-storage'
-import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { getAccessibleSpaceContext, getContextCapabilities } from '@/lib/server/spaces'
 import {
     sanitizeFileName,
 } from '@/lib/utils/space-categories'
@@ -39,6 +39,22 @@ export async function POST(
         const entry = await SpaceEntry.findOne({ _id: entryId, spaceId: id }).lean<ISpaceEntry | null>()
         if (!entry) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
+        }
+
+        // Adjuntar es una edición del movimiento compartido: exige la misma
+        // capacidad, para que un Espacio pausado, cerrado o archivado no acepte
+        // archivos nuevos ni un movimiento anulado siga creciendo.
+        const capabilities = getContextCapabilities(context)
+        const isOwnEntry = extractId(entry.createdByParticipantId) === extractId(context.currentParticipant._id)
+        const canAttach = entry.isVoided !== true && (
+            capabilities.has('edit_any_entry') ||
+            (isOwnEntry && capabilities.has('edit_own_entry'))
+        )
+        if (!canAttach) {
+            return NextResponse.json(
+                { error: 'No podés adjuntar comprobantes a este movimiento.' },
+                { status: 403 }
+            )
         }
 
         if ((entry.attachments?.length ?? 0) >= 5) {

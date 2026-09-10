@@ -420,6 +420,14 @@ posterior del alta: el borrador prepara binarios privados mediante el adapter,
 publica metadata `ready` en la transacción financiera y conserva revocación,
 limpieza y reconciliación idempotentes.
 
+El retiro de compatibilidad posterior al cutover v2 elimina las rutas de
+escritura legacy y sus campos globales de `SpaceEntry`:
+`linkedTransactionId`, `confirmationRequired`, `confirmedByUserId`,
+`confirmedAt` y `rejectedAt`. La limpieza sólo actúa sobre documentos v2,
+es idempotente y opera en `dry-run` por defecto; development exige confirmar
+el nombre exacto de la base, `--cutover` y `--apply`. La auditoría legacy
+conserva su acceso de sólo lectura para datos históricos y diagnóstico.
+
 Nivel de aprendizaje: `no aplica`. Finp observa estados técnicos de guardado,
 pero no aprende ni completa monto, moneda, fecha, pagador, reparto o impacto.
 

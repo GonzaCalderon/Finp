@@ -101,9 +101,37 @@ function dateInsidePeriod(period: string, offsetDays: number): Date {
     return value
 }
 
+/**
+ * El período en curso sólo tiene días transcurridos y el saldo acumulado corta
+ * en el instante actual, no al cierre del día: un movimiento fechado hoy al
+ * mediodía todavía es futuro si la suite corre por la mañana. El offset se
+ * recorta al último día transcurrido y, cuando ese día es hoy y su mediodía no
+ * llegó, al comienzo del día, que siempre pertenece al período y ya pasó.
+ * Sin esto el fixture sólo cuadra pasado el día 15 del mes y después de las 12.
+ */
+function dateElapsedInPeriod(period: string, offsetDays: number, now: Date): Date {
+    const { start } = parseFinancialPeriod(period)
+    const first = new Date(start)
+    first.setHours(12, 0, 0, 0)
+    const today = new Date(now)
+    today.setHours(12, 0, 0, 0)
+
+    const elapsedDays = Math.floor((today.getTime() - first.getTime()) / 86_400_000)
+    const candidate = dateInsidePeriod(
+        period,
+        Math.max(0, Math.min(offsetDays, elapsedDays))
+    )
+    if (candidate.getTime() < now.getTime()) return candidate
+
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
+    return startOfToday
+}
+
 export function buildFinancialSmokePeriods(now = new Date()) {
     const current = getCurrentFinancialPeriod(now)
     const historical = shiftFinancialPeriod(current, -1)
+    const elapsed = (offsetDays: number) => dateElapsedInPeriod(current, offsetDays, now)
 
     return {
         current,
@@ -112,14 +140,14 @@ export function buildFinancialSmokePeriods(now = new Date()) {
             historicalIncome: dateInsidePeriod(historical, 2),
             historicalExpenseArs: dateInsidePeriod(historical, 4),
             historicalExpenseUsd: dateInsidePeriod(historical, 6),
-            currentIncome: dateInsidePeriod(current, 2),
-            currentExpenseArs: dateInsidePeriod(current, 4),
-            currentExpenseUsd: dateInsidePeriod(current, 6),
-            currentExchange: dateInsidePeriod(current, 8),
-            negativeExpense: dateInsidePeriod(current, 10),
-            partialDebtPayment: dateInsidePeriod(current, 12),
-            paidDebtCollect: dateInsidePeriod(current, 14),
-            installmentPurchase: dateInsidePeriod(current, 1),
+            currentIncome: elapsed(2),
+            currentExpenseArs: elapsed(4),
+            currentExpenseUsd: elapsed(6),
+            currentExchange: elapsed(8),
+            negativeExpense: elapsed(10),
+            partialDebtPayment: elapsed(12),
+            paidDebtCollect: elapsed(14),
+            installmentPurchase: elapsed(1),
         },
     }
 }

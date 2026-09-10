@@ -165,7 +165,6 @@ export function adaptSpaceDetailDtoForUi(detail: SpaceDetailDto): SpaceDetailUiP
             pendingToPayReporting: 0,
             pendingToCollectReporting: 0,
             participantCount: detail.participants.filter((participant) => participant.isActive).length,
-            pendingEntryCount: 0,
             totalEntryCount: 0,
             balances: [],
             categoryBreakdown: [],

@@ -6,7 +6,7 @@ import { SpaceEntry } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
 import { spaceApiErrorResponse } from '@/lib/server/space-api-contract'
 import { resolveSpaceAttachmentStorage } from '@/lib/server/space-attachment-storage'
-import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { getAccessibleSpaceContext, getContextCapabilities } from '@/lib/server/spaces'
 import { extractId } from '@/lib/utils/spaces'
 import { sanitizeFileName } from '@/lib/utils/space-categories'
 import type { ISpaceEntry, ISpaceEntryAttachment } from '@/types'
@@ -39,6 +39,7 @@ async function getAttachmentContext(spaceId: string, entryId: string, attachment
             entry: null,
             attachment: null,
             role: undefined,
+            canMutateEntry: false,
         }
     }
 
@@ -49,6 +50,7 @@ async function getAttachmentContext(spaceId: string, entryId: string, attachment
             entry: null,
             attachment: null,
             role: undefined,
+            canMutateEntry: false,
         }
     }
 
@@ -59,8 +61,18 @@ async function getAttachmentContext(spaceId: string, entryId: string, attachment
             entry: null,
             attachment: null,
             role: context.currentParticipant.role,
+            canMutateEntry: false,
         }
     }
+
+    // Quitar un comprobante edita el movimiento compartido: un Espacio pausado,
+    // cerrado o archivado, o un movimiento anulado, no admiten el cambio.
+    const capabilities = getContextCapabilities(context)
+    const isOwnEntry = extractId(entry.createdByParticipantId) === extractId(context.currentParticipant._id)
+    const canMutateEntry = entry.isVoided !== true && (
+        capabilities.has('edit_any_entry') ||
+        (isOwnEntry && capabilities.has('edit_own_entry'))
+    )
 
     const attachment = (entry.attachments ?? []).find(
         (item) => extractId(item._id) === attachmentId
@@ -72,6 +84,7 @@ async function getAttachmentContext(spaceId: string, entryId: string, attachment
             entry,
             attachment: null,
             role: context.currentParticipant.role,
+            canMutateEntry,
         }
     }
 
@@ -80,6 +93,7 @@ async function getAttachmentContext(spaceId: string, entryId: string, attachment
         entry,
         attachment,
         role: context.currentParticipant.role,
+        canMutateEntry,
     }
 }
 
@@ -144,6 +158,7 @@ export async function DELETE(
         }
 
         if (
+            !context.canMutateEntry ||
             !canManageAttachment({
                 attachment: context.attachment,
                 userId: session.user.id,

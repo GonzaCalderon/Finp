@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: reglas funcionales y experiencia esperada de Espacios
 
 ## Índice
@@ -435,9 +435,10 @@ Cada recorrido cubre:
 
 En el alta guiada, la preview distingue `calculando`, `disponible`, `incompleta`
 y `error`; sólo el último comunica un fallo. La edición usa la misma preview
-financiera antes de confirmar. Crear una transacción personal o vincular una
-existente son intenciones excluyentes y sólo se ofrecen candidatos que el
-servidor pueda validar.
+financiera antes de confirmar: el CTA y el despacho esperan una revisión vigente,
+que se invalida al cambiar monto, moneda, fecha, pagador o reparto. Crear una
+transacción personal o vincular una existente son intenciones excluyentes y sólo
+se ofrecen candidatos que el servidor pueda validar.
 
 Requisitos transversales:
 
@@ -528,7 +529,9 @@ Un Espacio bloqueado conserva historia y acceso permitido, pero no presenta
 balances parciales ni admite nuevas mutaciones. Un Espacio migra de forma
 atómica y confirma `contractVersion: 2` sólo después de comprobar dinero exacto,
 deuda por moneda, privacidad, replay y rollback. Desde entonces no puede volver
-a una escritura legacy.
+a una escritura legacy: los cuerpos legacy de escritura ya no existen y toda
+mutación de un documento que no sea v2 se rechaza con `409`. El legado
+sobreviviente es de lectura forense.
 
 Las ambigüedades personales se representan como `needs_review`; no reasignan
 propietarios, cuentas ni dinero. Los detalles operativos y las preimágenes

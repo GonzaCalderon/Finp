@@ -35,10 +35,8 @@ export function SpaceKpiRow({
             label: 'Pendiente',
             desktopLabel: 'Pendiente',
             amount: summary.pendingToPayReporting,
-            footer: summary.pendingEntryCount > 0 ? `${summary.pendingEntryCount} por confirmar` : 'Sin pendientes',
-            desktopFooter: summary.pendingEntryCount > 0
-                ? `${summary.pendingEntryCount} pendiente${summary.pendingEntryCount === 1 ? '' : 's'} de confirmación`
-                : 'Sin pagos pendientes para vos.',
+            footer: 'Por pagar',
+            desktopFooter: 'Lo que hoy le debés al espacio.',
             accent: 'var(--destructive)',
         },
         {

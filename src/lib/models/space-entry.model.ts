@@ -118,16 +118,6 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         },
         splitAllocations: [splitAllocationSchema],
         notes: { type: String, trim: true },
-        linkedTransactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
-        confirmationRequired: {
-            type: Boolean,
-            default: function legacyConfirmationDefault(this: { contractVersion?: number }) {
-                return this.contractVersion === 2 ? undefined : false
-            },
-        },
-        confirmedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
-        confirmedAt: { type: Date },
-        rejectedAt: { type: Date },
         attachments: [attachmentSchema],
         // Anulación lógica
         isVoided: { type: Boolean, required: true, default: false },
@@ -147,7 +137,6 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
 
 SpaceEntrySchema.index({ spaceId: 1, date: -1, createdAt: -1 })
 SpaceEntrySchema.index({ paidByParticipantId: 1, status: 1, createdAt: -1 })
-SpaceEntrySchema.index({ linkedTransactionId: 1 })
 SpaceEntrySchema.index({ spaceId: 1, isVoided: 1, date: -1 })
 
 const existingSpaceEntryModel = mongoose.models.SpaceEntry as mongoose.Model<ISpaceEntry> | undefined
@@ -155,9 +144,7 @@ const existingSpaceEntryModel = mongoose.models.SpaceEntry as mongoose.Model<ISp
 const currentStatusEnum = existingSpaceEntryModel?.schema.path('status')?.options?.enum as string[] | undefined
 const needsSchemaRefresh =
     !!existingSpaceEntryModel &&
-    (!existingSpaceEntryModel.schema.path('confirmationRequired') ||
-        !existingSpaceEntryModel.schema.path('confirmedByUserId') ||
-        !currentStatusEnum?.includes(SPACE_ENTRY_STATUSES.CONFIRMED) ||
+    (!currentStatusEnum?.includes(SPACE_ENTRY_STATUSES.CONFIRMED) ||
         !currentStatusEnum?.includes('voided') ||
         !existingSpaceEntryModel.schema.path('contractVersion') ||
         !existingSpaceEntryModel.schema.path('dateKey') ||

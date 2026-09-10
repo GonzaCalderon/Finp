@@ -18,15 +18,7 @@ export const PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS: DataTag[] = Array.fro
 
 export type RemovePersonalSpaceTransactionResponse = {
     ok: true
-    deletedTransaction: boolean
     orphanTransactionDeleted: boolean
-}
-
-export class PersonalSpaceTransactionNotDeletedError extends Error {
-    constructor() {
-        super('No pudimos confirmar que la transacción se haya eliminado. Actualizamos los datos para que puedas intentar de nuevo.')
-        this.name = 'PersonalSpaceTransactionNotDeletedError'
-    }
 }
 
 export function withoutSelectedTransaction<
@@ -43,15 +35,29 @@ export async function removePersonalSpaceTransaction(input: {
     spaceEntryId: string
 }): Promise<RemovePersonalSpaceTransactionResponse> {
     const transactionId = input.transactionId.trim()
-    const query = new URLSearchParams({ transactionId })
-    const response = await apiJson<RemovePersonalSpaceTransactionResponse>(
-        `/api/spaces/${input.spaceId}/entries/${input.spaceEntryId}/personal-impact?${query.toString()}`,
-        { method: 'DELETE' }
-    )
+    const impactUrl = `/api/spaces/${input.spaceId}/entries/${input.spaceEntryId}/personal-impact`
+    const current = await apiJson<{
+        impact: { _id: string; revision?: number } | null
+    }>(impactUrl)
 
-    if (response.ok !== true || response.deletedTransaction !== true) {
-        throw new PersonalSpaceTransactionNotDeletedError()
+    if (current.impact) {
+        await apiJson(impactUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Idempotency-Key': crypto.randomUUID(),
+            },
+            body: JSON.stringify({
+                impactId: current.impact._id,
+                expectedRevision: current.impact.revision ?? 0,
+                decision: { type: 'remove_transaction' },
+            }),
+        })
+        return { ok: true, orphanTransactionDeleted: false }
     }
 
-    return response
+    // Una transacción sin impacto persistido ya no tiene un contrato de Espacios
+    // que resolver. Se elimina por su recurso personal sin tocar el movimiento.
+    await apiJson(`/api/transactions/${transactionId}`, { method: 'DELETE' })
+    return { ok: true, orphanTransactionDeleted: true }
 }

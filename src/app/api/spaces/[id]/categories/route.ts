@@ -3,14 +3,11 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceCategory } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
-import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { getAccessibleSpaceContext, getContextCapabilities } from '@/lib/server/spaces'
 import { extractId } from '@/lib/utils/spaces'
 import { normalizeSpaceCategoryName } from '@/lib/utils/space-categories'
 import { spaceCategorySchema } from '@/lib/validations'
 
-function canManageSpace(context: { isOwner: boolean; currentParticipant?: { role?: string } | null }) {
-    return context.isOwner || context.currentParticipant?.role === 'owner' || context.currentParticipant?.role === 'admin'
-}
 
 export async function GET(
     request: Request,
@@ -75,7 +72,7 @@ export async function POST(
             return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
         }
 
-        if (!canManageSpace(context)) {
+        if (!getContextCapabilities(context).has('manage_shared_settings')) {
             return NextResponse.json(
                 { error: 'No tenés permisos para editar categorías.' },
                 { status: 403 }

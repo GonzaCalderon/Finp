@@ -286,32 +286,6 @@ export const spaceCategoryUpdateSchema = spaceCategorySchema.partial().extend({
     isArchived: z.boolean().optional(),
 })
 
-export const spaceEntryConfirmSchema = z
-    .object({
-        mode: z.enum(['create', 'link']).default('create'),
-        description: optionalTrimmedString,
-        categoryId: optionalObjectIdString,
-        accountId: optionalObjectIdString,
-        linkedTransactionId: optionalObjectIdString,
-    })
-    .superRefine((data, ctx) => {
-        if (data.mode === 'create' && !data.accountId) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'Seleccioná una cuenta para registrar la transacción',
-                path: ['accountId'],
-            })
-        }
-
-        if (data.mode === 'link' && !data.linkedTransactionId) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'Seleccioná una transacción existente para vincular',
-                path: ['linkedTransactionId'],
-            })
-        }
-    })
-
 export const spacePersonalImpactSchema = z
     .object({
         mode: z.enum(['create_transaction', 'link_existing']),
@@ -488,5 +462,3 @@ export type SpaceParticipantFormData = z.output<typeof spaceParticipantSchema>
 export type SpaceEntryFormInput = z.input<typeof spaceEntrySchema>
 export type SpaceEntryFormData = z.output<typeof spaceEntrySchema>
 export type SpaceCategoryFormData = z.output<typeof spaceCategorySchema>
-export type SpaceEntryConfirmInput = z.input<typeof spaceEntryConfirmSchema>
-export type SpaceEntryConfirmData = z.output<typeof spaceEntryConfirmSchema>

@@ -220,7 +220,6 @@ export const SPACE_ENTRY_TYPES = {
 export const SPACE_ENTRY_STATUSES = {
     RECORDED: 'recorded',
     VOIDED: 'voided',
-    PENDING_CONFIRMATION: 'pending_confirmation',
     CONFIRMED: 'confirmed',
     LINKED: 'linked',
     REJECTED: 'rejected',

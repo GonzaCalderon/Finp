@@ -51,7 +51,7 @@ const participants: ISpaceParticipant[] = [
     },
 ]
 
-function entry(overrides: Partial<ISpaceEntry> = {}): ISpaceEntry {
+function entry(overrides: Partial<ISpaceEntry> & Record<string, unknown> = {}): ISpaceEntry {
     return {
         _id: ids.entry,
         spaceId: ids.space,

@@ -320,7 +320,6 @@ function buildSummary(input: {
         pendingToPayReporting: Math.max(0, -balance),
         pendingToCollectReporting: Math.max(0, balance),
         participantCount: input.participants.filter((participant) => participant.isActive).length,
-        pendingEntryCount: 0,
         totalEntryCount: input.entries.length,
         totalReportingMoney: moneyFromDecimal(input.reportingCurrency, totalReporting),
         includedCurrencies: Array.from(composition.keys()).filter((currency) => currency !== input.reportingCurrency),

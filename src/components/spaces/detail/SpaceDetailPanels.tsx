@@ -138,13 +138,7 @@ function MovementCard({
     const category = resolveCategoryInfo(entry)
     const clickable = Boolean(onEntryClick)
     const includedCount = entry.sharedWithParticipantIds?.length ?? 0
-    const legacyImpactsCurrentUser = Boolean(
-        entry.linkedTransactionId &&
-        currentUserId &&
-        payer &&
-        (extractId(entry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
-    )
-    const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
+    const impactsCurrentUser = personalImpact?.status === 'linked'
     const needsReview = Boolean(reviewImpact) && !entry.isVoided
     const settlementReceiverId = entry.type === 'settlement'
         ? extractId(entry.sharedWithParticipantIds?.[0])
@@ -528,7 +522,7 @@ export function SpaceMovementsPanel({
             return (b.reportingAmount ?? b.amount) - (a.reportingAmount ?? a.amount)
         }
         if (sort === 'status') {
-            const order = ['pending_confirmation', 'confirmed', 'linked', 'rejected']
+            const order = ['confirmed', 'linked', 'rejected']
             return order.indexOf(a.status) - order.indexOf(b.status)
         }
 
@@ -1145,9 +1139,6 @@ export function SpaceClosurePanel({
                             </SpaceMetaBadge>
                             <SpaceMetaBadge icon={Users}>
                                 {summary.participantCount} participante{summary.participantCount === 1 ? '' : 's'}
-                            </SpaceMetaBadge>
-                            <SpaceMetaBadge icon={Plus}>
-                                {summary.pendingEntryCount} pendiente{summary.pendingEntryCount === 1 ? '' : 's'}
                             </SpaceMetaBadge>
                         </div>
                     </div>

@@ -6,6 +6,7 @@ import {
     extractId,
 } from '@/lib/utils/spaces'
 import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
+import { getSpaceCapabilitiesV2 } from '@/lib/server/space-capabilities'
 import type {
     ISpace,
     ISpaceDetailPayload,
@@ -13,7 +14,6 @@ import type {
     ISpaceListItem,
     ISpaceParticipant,
     ISpacePendingAction,
-    ISpacePendingConfirmation,
     ISpacePendingInvite,
 } from '@/types'
 
@@ -39,12 +39,7 @@ const directInviteFilter = {
 }
 
 export function canManageSpaceInvites(context: Awaited<ReturnType<typeof getAccessibleSpaceContext>>) {
-    return Boolean(
-        context &&
-            (context.isOwner ||
-                context.currentParticipant?.role === 'owner' ||
-                context.currentParticipant?.role === 'admin')
-    )
+    return Boolean(context && getContextCapabilities(context).has('manage_invites'))
 }
 
 export async function getAccessibleSpaceContext(spaceId: string, userId: string) {
@@ -78,6 +73,24 @@ export async function getAccessibleSpaceContext(spaceId: string, userId: string)
         participants: sortParticipants(participants),
         isOwner,
     }
+}
+
+export type AccessibleSpaceContext = NonNullable<
+    Awaited<ReturnType<typeof getAccessibleSpaceContext>>
+>
+
+/**
+ * Capacidades del actor según la misma matriz que usan los servicios v2, de modo
+ * que el rol y el estado del Espacio se evalúen en un solo lugar. Un chequeo de
+ * rol suelto ignora pausa, cierre y archivo.
+ */
+export function getContextCapabilities(context: AccessibleSpaceContext) {
+    return getSpaceCapabilitiesV2({
+        status: context.space.status,
+        role: context.currentParticipant?.role,
+        isActiveParticipant: context.currentParticipant?.isActive ?? false,
+        isOwnerRecord: context.isOwner,
+    })
 }
 
 export async function getSpaceEntries(spaceId: string, extraFilter?: Record<string, unknown>) {
@@ -183,7 +196,7 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
         return [] as ISpacePendingAction[]
     }
 
-    const [spaces, participants, pendingEntries, pendingInvites] = await Promise.all([
+    const [spaces, participants, pendingInvites] = await Promise.all([
         Space.find({
             _id: { $in: onlySpaceId ? [onlySpaceId] : spaceIds },
         }).lean<ISpace[]>(),
@@ -191,15 +204,6 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
             spaceId: { $in: onlySpaceId ? [onlySpaceId] : spaceIds },
             isActive: true,
         }).lean<ISpaceParticipant[]>(),
-        SpaceEntry.find({
-            spaceId: { $in: onlySpaceId ? [onlySpaceId] : spaceIds },
-            status: 'pending_confirmation',
-            paidByParticipantId: { $in: participantIds },
-        })
-            .sort({ date: -1, createdAt: -1 })
-            .populate('categoryId', 'name color type')
-            .populate('spaceCategoryId', 'name color type isArchived')
-            .lean<ISpaceEntry[]>(),
         SpaceInvite.find({
             participantId: { $in: participantIds },
             status: 'pending',
@@ -241,35 +245,9 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
         })
         .filter((action): action is ISpacePendingInvite => Boolean(action))
 
-    const confirmationActions = pendingEntries
-        .map<ISpacePendingConfirmation | null>((entry) => {
-            const space = spacesById.get(extractId(entry.spaceId) ?? '')
-            if (!space) return null
-
-            return {
-                kind: 'confirmation',
-                space,
-                entry,
-                requestedByParticipant:
-                    participantsById.get(extractId(entry.createdByParticipantId) ?? ''),
-                paidByParticipant:
-                    participantsById.get(extractId(entry.paidByParticipantId) ?? ''),
-            }
-        })
-        .filter((action): action is ISpacePendingConfirmation => Boolean(action))
-
-    return [...inviteActions, ...confirmationActions].sort((left, right) => {
-        const leftDate =
-            left.kind === 'invite'
-                ? new Date(left.invite.createdAt).getTime()
-                : new Date(left.entry.createdAt).getTime()
-        const rightDate =
-            right.kind === 'invite'
-                ? new Date(right.invite.createdAt).getTime()
-                : new Date(right.entry.createdAt).getTime()
-
-        return rightDate - leftDate
-    })
+    return inviteActions.sort((left, right) => (
+        new Date(right.invite.createdAt).getTime() - new Date(left.invite.createdAt).getTime()
+    ))
 }
 
 export async function buildSpaceDetailPayload(spaceId: string, userId: string) {
@@ -283,9 +261,7 @@ export async function buildSpaceDetailPayload(spaceId: string, userId: string) {
     const personalImpactsByEntryId = await getPersonalImpactForEntries(
         spaceId,
         userId,
-        entries.map((entry) => extractId(entry._id)).filter((entryId): entryId is string => Boolean(entryId)),
-        entries,
-        context.participants
+        entries.map((entry) => extractId(entry._id)).filter((entryId): entryId is string => Boolean(entryId))
     )
 
     return {
