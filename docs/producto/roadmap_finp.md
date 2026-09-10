@@ -106,9 +106,10 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P0-006 — Exactitud financiera de Espacios, Mi Finp y Deudas
 
-- Estado: `validación`. La rama `codex/spaces-p0-006-closure` completó dominio,
-  datos, API, UI, migración, recuperación, pruebas y documentación; resta el
-  merge a `dev`.
+- Estado: `cerrado` el 2026-09-10 — PR 38, `codex/spaces-p0-006-closure` →
+  `dev` (`418b4b5`), con la matriz de verificación completa registrada abajo.
+  Producción sigue sin escritura v2: exige una decisión propia equivalente a la
+  0011.
 - Decisiones:
   - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
   - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
@@ -474,8 +475,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 ### FINP-P1-013 — Cierre integral de experiencia de Espacios
 
 - Estado: `en curso`.
-- Dependencia de cierre: FINP-P0-006. El checkpoint de exactitud de `Nuevo
-  gasto` ya habilita las etapas 2 a 4; el ítem no puede cerrarse antes que el P0.
+- Dependencia de cierre: FINP-P0-006, cerrado el 2026-09-10. La etapa 4 corre
+  sobre `dev` con el contrato v2 ya único y sin cuerpos legacy de escritura.
 - Decisión:
   [`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 - Regla de entrega: es un único cierre de producto. Los recorridos pueden

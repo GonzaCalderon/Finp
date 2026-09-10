@@ -26,8 +26,9 @@ Finp es una aplicación web funcional de finanzas personales y compartidas. Cubr
 
 Estado general:
 
-- base personal apta para preproducción controlada; Espacios requiere cerrar su
-  exactitud P0 antes de considerarse listo para liberación;
+- base personal apta para preproducción controlada; Espacios tiene su exactitud
+  P0 cerrada en `dev` y le resta el cierre integral de experiencia (FINP-P1-013)
+  antes de considerarse listo para liberación;
 - Espacios v2 tiene su cutover ejecutado y verificado sobre development
   (`finm`, 2026-08-29); producción permanece fuera de alcance sin una
   decisión propia que la autorice;
@@ -116,7 +117,8 @@ Ramas:
   `8b31c87`;
 - `codex/spaces-new-entry-exactness`: integrada en `dev` mediante PR 37 el
   2026-09-09 (borrador privado y adjuntos recuperables de `Nuevo gasto`);
-- `codex/spaces-p0-006-closure`: abierta el 2026-09-09, sin mergear. Retira el
+- `codex/spaces-p0-006-closure`: abierta el 2026-09-09, mergeada a `dev` el
+  2026-09-10 como PR 38. Retira el
   legado que podía escribir sobre datos v2 y completa la etapa 5 de FINP-P0-006.
   Su estado, sus correcciones al diagnóstico y lo que resta viven en
   [`roadmap_finp.md`](roadmap_finp.md);
@@ -370,8 +372,8 @@ elige el usuario.
 
 La auditoría funcional y de interfaz confirmó que la amplitud disponible no
 equivale todavía a un recorrido confiable de punta a punta. La rama
-`codex/spaces-p0-006-closure` cerró en el código, sin mergear a `dev`, estas
-brechas de exactitud:
+`codex/spaces-p0-006-closure`, mergeada a `dev` el 2026-09-10 (PR 38), cerró
+estas brechas de exactitud:
 
 - la confirmación global del movimiento, que presentaba una decisión privada como
   si una persona tuviera que confirmar para los demás;
@@ -610,8 +612,25 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Borrador privado y adjuntos recuperables de `Nuevo gasto`, 2026-09-09 (PR 37,
-`codex/spaces-new-entry-exactness` → `dev`):
+Cierre de FINP-P0-006, 2026-09-10 (PR 38, `codex/spaces-p0-006-closure` →
+`dev`):
+
+- retiro de las rutas legacy de impacto personal, de la confirmación global del
+  movimiento y de los cuerpos legacy de escritura; toda mutación de un documento
+  no v2 rechaza con `409` y `debt-sync` desaparece con sus llamadas best-effort;
+- una obligación saldada es inalcanzable como deuda abierta desde Espacios y Mi
+  Finp; categorías, invitaciones y adjuntos resuelven permisos por la matriz v2;
+- `finm` limpio de los campos globales retirados en sus 91 documentos v2;
+- la edición bloquea guardar sin preview vigente e invalida al cambiar monto,
+  moneda, fecha, pagador o reparto;
+- smoke financiero independiente del día y de la hora de la corrida;
+- matriz completa: typecheck, ESLint, 906 unitarias, 17 de integración con
+  sesión MongoDB real, 80 de 80 E2E en Chromium desktop y Pixel 7 y `docs:check`.
+  Un escenario intermitente ajeno (`quick-capture.spec.ts:591`) queda declarado
+  como límite en el roadmap.
+
+Bloque previo — borrador privado y adjuntos recuperables de `Nuevo gasto`,
+2026-09-09 (PR 37, `codex/spaces-new-entry-exactness` → `dev`):
 
 - colección y contrato parcial separados de `SpaceEntry`, con un activo por
   autor, Espacio e intención y sin efecto financiero antes de publicar;
