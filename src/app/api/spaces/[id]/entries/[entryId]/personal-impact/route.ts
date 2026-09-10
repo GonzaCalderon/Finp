@@ -92,6 +92,7 @@ export async function GET(_request: Request, { params }: { params: Params }) {
         const entryImpact = impacts[entryId]
         return NextResponse.json({
             impact: entryImpact?.linkedImpact ?? null,
+            reviewImpact: entryImpact?.reviewImpact ?? null,
             pendingActions: entryImpact?.pendingActions ?? [],
             suggestion: suggestion
                 ? {

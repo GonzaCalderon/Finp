@@ -30,6 +30,7 @@ import {
     executeSpaceOperation,
     hashSpaceOperationValue,
 } from '@/lib/server/space-operation-executor'
+import { resolveSpacePersonalImpactV2 } from '@/lib/server/space-personal-impact-service-v2'
 import { settleSpaceDebtV2 } from '@/lib/server/space-settlement-service-v2'
 import { getSpaceDetailV2 } from '@/lib/server/space-read-service-v2'
 import { resolveE2EEnvironment } from '../e2e/helpers/environment'
@@ -52,6 +53,7 @@ import { createMemorySpaceAttachmentStorage } from '@/lib/server/space-attachmen
 describe.sequential('spaces v2 application services — Mongo transaction integration', () => {
     const runId = new Types.ObjectId().toHexString()
     const trackedUserIds: Types.ObjectId[] = []
+    const trackedSpaceIds: Types.ObjectId[] = []
     let ownerUserId: string
     let memberUserId: string
     let ownerAccountId: string
@@ -141,6 +143,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             revision: 0,
         })
         spaceId = space._id.toString()
+        trackedSpaceIds.push(space._id)
         const [ownerParticipant, memberParticipant] = await SpaceParticipant.create([
             {
                 spaceId: space._id,
@@ -169,28 +172,28 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
 
     afterAll(async () => {
         if (mongoose.connection.readyState === 1) {
-            const spaceObjectId = new Types.ObjectId(spaceId)
+            const spaceScope = { $in: trackedSpaceIds }
             const userObjectIds = trackedUserIds
             await Promise.all([
                 Notification.deleteMany({
                     $or: [
                         { recipientUserId: { $in: userObjectIds } },
-                        { 'entityRefs.spaceId': spaceObjectId },
+                        { 'entityRefs.spaceId': spaceScope },
                     ],
                 }),
-                SpaceActivityEvent.deleteMany({ spaceId: spaceObjectId }),
-                SpaceEntryPersonalImpact.deleteMany({ spaceId: spaceObjectId }),
-                Transaction.deleteMany({ spaceId: spaceObjectId }),
-                mongoose.connection.collection('debtmovements').deleteMany({ spaceId: spaceObjectId }),
-                Debt.deleteMany({ spaceId: spaceObjectId }),
-                SpaceOperation.deleteMany({ spaceId: spaceObjectId }),
-                SpaceEntryDraft.deleteMany({ spaceId: spaceObjectId }),
-                SpaceEntry.deleteMany({ spaceId: spaceObjectId }),
-                SpaceParticipant.deleteMany({ spaceId: spaceObjectId }),
+                SpaceActivityEvent.deleteMany({ spaceId: spaceScope }),
+                SpaceEntryPersonalImpact.deleteMany({ spaceId: spaceScope }),
+                Transaction.deleteMany({ spaceId: spaceScope }),
+                mongoose.connection.collection('debtmovements').deleteMany({ spaceId: spaceScope }),
+                Debt.deleteMany({ spaceId: spaceScope }),
+                SpaceOperation.deleteMany({ spaceId: spaceScope }),
+                SpaceEntryDraft.deleteMany({ spaceId: spaceScope }),
+                SpaceEntry.deleteMany({ spaceId: spaceScope }),
+                SpaceParticipant.deleteMany({ spaceId: spaceScope }),
                 Account.deleteMany({ userId: { $in: userObjectIds } }),
                 Category.deleteMany({ userId: { $in: userObjectIds } }),
             ])
-            await Space.deleteOne({ _id: spaceObjectId })
+            await Space.deleteMany({ _id: spaceScope })
             await User.deleteMany({ _id: { $in: userObjectIds } })
         }
         await mongoose.disconnect()
@@ -638,6 +641,115 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             title: 'Edición obsoleta',
             idempotencyKey: `edit-conflict-${runId}`,
         })).rejects.toMatchObject({ code: 'SPACE_ENTRY_VERSION_CONFLICT' })
+    })
+
+    it('sincroniza la transacción del pagador con el impacto real de cuenta y no con la parte propia', async () => {
+        // Espacio propio: la suite es secuencial y comparte balances entre casos.
+        const isolated = await Space.create({
+            contractVersion: 2,
+            ownerUserId: new Types.ObjectId(ownerUserId),
+            name: `Espacio sync ${runId}`,
+            type: 'travel',
+            mode: 'managed',
+            status: 'active',
+            currencies: ['ARS'],
+            reportingCurrency: 'ARS',
+            defaultSplitMode: 'equal',
+            debtMode: 'direct',
+            timezone: 'America/Argentina/Buenos_Aires',
+            revision: 0,
+        })
+        trackedSpaceIds.push(isolated._id)
+        const [isolatedOwner, isolatedMember] = await SpaceParticipant.create([
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(ownerUserId),
+                displayName: 'Owner v2',
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+            {
+                spaceId: isolated._id,
+                kind: 'finp_user',
+                userId: new Types.ObjectId(memberUserId),
+                displayName: 'Member v2',
+                role: 'participant',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+            },
+        ])
+
+        const shared = {
+            actorUserId: ownerUserId,
+            spaceId: isolated._id.toString(),
+            title: 'Gasto a sincronizar',
+            currency: 'ARS',
+            dateKey: '2026-08-26',
+            paidByParticipantId: isolatedOwner._id.toString(),
+            sharedWithParticipantIds: [isolatedOwner._id.toString(), isolatedMember._id.toString()],
+            splitMode: 'equal' as const,
+        }
+        const created = await createSpaceEntryV2({
+            ...shared,
+            idempotencyKey: `create-sync-${runId}`,
+            expectedRevision: 0,
+            amount: 200,
+            actorPersonalImpact: { accountId: ownerAccountId, categoryId: ownerCategoryId },
+        })
+        const entryId = created.resultRefs.spaceEntryId!.toString()
+
+        // El pagador adelanta: la cuenta refleja el total real y el reporting sólo su parte.
+        expect(await Transaction.findOne({ userId: ownerUserId, spaceEntryId: entryId }).lean())
+            .toMatchObject({ amount: 200, operationalAmount: 100 })
+
+        await editSpaceEntryV2({
+            ...shared,
+            entryId,
+            expectedRevision: 0,
+            idempotencyKey: `edit-sync-${runId}`,
+            amount: 300,
+        })
+
+        const review = await SpaceEntryPersonalImpact.findOne({
+            entryId,
+            userId: ownerUserId,
+            status: 'needs_review',
+        }).lean()
+        expect(review).toBeTruthy()
+
+        const syncRequest = {
+            actorUserId: ownerUserId,
+            spaceId: isolated._id.toString(),
+            entryId,
+            impactId: review!._id.toString(),
+            idempotencyKey: `sync-transaction-${runId}`,
+            expectedRevision: review!.revision ?? 0,
+            decision: { type: 'sync_transaction' as const },
+        }
+        const synced = await resolveSpacePersonalImpactV2(syncRequest)
+        expect(synced.replayed).toBe(false)
+
+        expect(await Transaction.findOne({ userId: ownerUserId, spaceEntryId: entryId }).lean())
+            .toMatchObject({ amount: 300, operationalAmount: 150 })
+        expect(await SpaceEntryPersonalImpact.countDocuments({
+            entryId,
+            userId: ownerUserId,
+            status: 'linked',
+        })).toBe(1)
+
+        // Un reintento con la misma clave replica el resultado sin volver a escribir.
+        expect((await resolveSpacePersonalImpactV2(syncRequest)).replayed).toBe(true)
+        expect(await Transaction.countDocuments({ userId: ownerUserId, spaceEntryId: entryId })).toBe(1)
+
+        // Una clave nueva con la revisión ya consumida choca contra la concurrencia optimista.
+        await expect(resolveSpacePersonalImpactV2({
+            ...syncRequest,
+            idempotencyKey: `sync-transaction-stale-${runId}`,
+        })).rejects.toMatchObject({ code: 'SPACE_IMPACT_VERSION_CONFLICT' })
     })
 
     it('bloquea la moneda de reporte, conserva monedas usadas y permite agregar nuevas', async () => {

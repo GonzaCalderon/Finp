@@ -462,22 +462,21 @@ function SpaceDetailPageInner() {
         if (!entryId) return
         try {
             const reviewImpact = data?.personalImpactsByEntryId[entryId]?.reviewImpact
-            if (entry.contractVersion === 2 && reviewImpact) {
-                await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Idempotency-Key': crypto.randomUUID(),
-                    },
-                    body: JSON.stringify({
-                        impactId: extractId(reviewImpact._id),
-                        expectedRevision: reviewImpact.revision ?? 0,
-                        decision: { type: 'sync_transaction' },
-                    }),
-                })
-            } else {
-                await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact/sync`, { method: 'POST' })
+            if (!reviewImpact) {
+                throw new Error('Este movimiento ya no requiere revisión.')
             }
+            await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': crypto.randomUUID(),
+                },
+                body: JSON.stringify({
+                    impactId: extractId(reviewImpact._id),
+                    expectedRevision: reviewImpact.revision ?? 0,
+                    decision: { type: 'sync_transaction' },
+                }),
+            })
             invalidateData([...SPACE_INVALIDATION_TAGS, ...NOTIFICATION_INVALIDATION_TAGS])
             success('Transacción actualizada')
         } catch (err) {
