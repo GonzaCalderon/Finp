@@ -529,7 +529,9 @@ Un Espacio bloqueado conserva historia y acceso permitido, pero no presenta
 balances parciales ni admite nuevas mutaciones. Un Espacio migra de forma
 atómica y confirma `contractVersion: 2` sólo después de comprobar dinero exacto,
 deuda por moneda, privacidad, replay y rollback. Desde entonces no puede volver
-a una escritura legacy.
+a una escritura legacy: los cuerpos legacy de escritura ya no existen y toda
+mutación de un documento que no sea v2 se rechaza con `409`. El legado
+sobreviviente es de lectura forense.
 
 Las ambigüedades personales se representan como `needs_review`; no reasignan
 propietarios, cuentas ni dinero. Los detalles operativos y las preimágenes

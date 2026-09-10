@@ -561,9 +561,13 @@ Mobile web sigue siendo la superficie prioritaria.
 - `dev` suma hoy 916 unitarias globales y 12 recorridos de integración: la
   migración agrega apply, fallo cerrado, replay, verificación, rollback y 1.000
   movimientos bajo el presupuesto por fase;
-- `codex/spaces-p0-006-closure` lleva ese piso a 923 unitarias y 17 recorridos de
+- `codex/spaces-p0-006-closure` lleva ese piso a 906 unitarias y 17 recorridos de
   integración, con la primera cobertura real de `resolveSpacePersonalImpactV2`,
-  que era el servicio del impacto personal y no tenía ninguna;
+  que era el servicio del impacto personal y no tenía ninguna. Su registro previo
+  declaraba 923 unitarias verdes: eran 902 y dos estaban en rojo, caracterizando
+  el contrato que la misma rama había retirado;
+- la matriz global E2E cierra en 80 de 80 escenarios en Chromium desktop y Pixel
+  7, con el smoke financiero ya independiente de la hora de la corrida;
 
 ### Brechas
 
@@ -630,6 +634,6 @@ Borrador privado y adjuntos recuperables de `Nuevo gasto`, 2026-09-09 (PR 37,
   pendientes, con fallos de carga y borrado inyectados en integración;
 - integración real y recorrido de preparación, cierre, reanudación, publicación
   y lectura aprobados en Chromium desktop y Pixel 7. FINP-P1-013 continúa abierto
-  por su etapa 4 de experiencia y accesibilidad integral. La última repetición
-  completa de integración quedó impedida por EACCES/whitelist de MongoDB Atlas;
-  la dirigida de servicios de la etapa había aprobado 13/13.
+  por su etapa 4 de experiencia y accesibilidad integral. El EACCES/whitelist de
+  MongoDB Atlas anotado entonces no volvió a reproducirse: la suite completa de
+  integración corre desde el entorno local.

@@ -411,19 +411,22 @@ Una versión puede promoverse cuando:
 ## 15. Estado actual
 
 Checks base, contratos y recorridos financieros de Espacios verificados hasta
-el 2026-08-25:
+el 2026-09-10 sobre `codex/spaces-p0-006-closure`:
 
-- 895 pruebas unitarias aprobadas en 119 archivos;
-- 12 recorridos de integración de Espacios v2 aprobados contra bases E2E con
+- 906 pruebas unitarias aprobadas en 123 archivos;
+- 17 recorridos de integración de Espacios v2 aprobados contra bases E2E con
   sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
-  deuda, configuración monetaria, lifecycle, ownership, participantes inactivos
-  y liquidaciones propias o representadas; los dos recorridos de migración
-  agregan apply, replay, verify, rollback y una historia de 1.000 movimientos;
-- build, typecheck, lint y validación documental aprobados;
-- 68 de 68 E2E globales aprobados en Chromium desktop y Pixel 7 sobre el build
-  de producción;
-- 68 de 68 E2E globales aprobados nuevamente con `next dev`, sin reproducir 404
-  ni altas fallidas después de una ejecución larga;
+  deuda por moneda, configuración monetaria, lifecycle, ownership, participantes
+  inactivos, borrador privado, impacto personal y liquidaciones propias o
+  representadas; los recorridos de migración agregan apply, replay, verify,
+  rollback, resolución huérfana y una historia de 1.000 movimientos;
+- typecheck, lint y validación documental aprobados; `docs:check` cierra válido
+  sobre 35 archivos activos;
+- 80 de 80 E2E globales aprobados en Chromium desktop y Pixel 7;
+- el conteo previo de 895 unitarias y 68 E2E quedaba corto por la suite, no por
+  regresión; el de 923 unitarias que la rama declaró en su primer registro nunca
+  existió: eran 902, dos de ellas en rojo contra el contrato que la propia rama
+  había retirado;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
   conectar; con la credencial ejecuta preflight, seed, build y Playwright;
@@ -440,7 +443,9 @@ el 2026-08-25:
 - historia de 1.000 movimientos medida en 45.987 bytes y 859 ms para una página
   de 50 elementos, sin cache, colas ni dependencias nuevas;
 - el smoke financiero conserva datos representativos de dos períodos y volvió a
-  quedar verde sin depender de cuentas residuales;
+  quedar verde sin depender de cuentas residuales ni de la hora de la corrida:
+  fecha cada movimiento del período en curso antes del instante actual, porque
+  el saldo acumulado corta en `now` y no al cierre del día;
 - la regresión de Captura rápida recarga un Dashboard sin primera capa del
   Sankey, espera el SVG, valida la descripción accesible del diálogo y falla si
   reaparece cualquiera de los dos avisos cerrados por FINP-P1-012;

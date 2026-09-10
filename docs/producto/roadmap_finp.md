@@ -106,7 +106,9 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P0-006 — Exactitud financiera de Espacios, Mi Finp y Deudas
 
-- Estado: `en curso`.
+- Estado: `validación`. La rama `codex/spaces-p0-006-closure` completó dominio,
+  datos, API, UI, migración, recuperación, pruebas y documentación; resta el
+  merge a `dev`.
 - Decisiones:
   - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
   - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
@@ -333,8 +335,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     fallback siguen fuera de alcance.
 - Cierre en curso — rama `codex/spaces-p0-006-closure`, nacida de `dev` (818f788)
   el 2026-09-09. Retira el legado que todavía podía escribir sobre datos v2 y
-  completa la etapa 5. Entregado y verde en typecheck, ESLint, 923 unitarias, 17
-  de integración y 80 E2E en Chromium desktop y Pixel 7:
+  completa la etapa 5. Entregado y verde el 2026-09-10 en typecheck, ESLint, 906
+  unitarias, 17 de integración y 80 de 80 E2E en Chromium desktop y Pixel 7:
   - `e00df07` retira `personal-impact/sync` y `/resolve`, que corrían sin sesión,
     idempotencia ni gate de contrato; `sync` además pisaba el monto de la
     transacción con la parte propia y copiaba `entry.date` sin `dateKey`. Ambos
@@ -361,6 +363,19 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     `cleanup:spaces:legacy-fields` permite remover esos campos de documentos v2
     de forma idempotente, en `dry-run` por defecto y con puerta explícita para
     development. La auditoría legacy se conserva sólo para lectura forense.
+  - `1565b4c` cierra el mismo fixture del smoke financiero por su otra mitad: el
+    recorte anterior llevaba los tres últimos movimientos al día transcurrido
+    pero conservaba el mediodía, y el saldo acumulado corta en el instante
+    actual — `/api/dashboard` y `/api/accounts` agregan con `untilDate: now + 1ms`.
+    Una corrida matutina los leía como futuros y descuadraba el saldo
+    disponible en 45.000 ARS y 150 USD. El recorte cae al comienzo del día
+    cuando el mediodía no llegó, instante que siempre pertenece al período y ya
+    pasó, de modo que el fixture también sostiene el primer día del período;
+  - `b23c33d` retira lo que `e00df07` dejó muerto en el cliente de impacto
+    personal: `PersonalSpaceTransactionNotDeletedError`, inalcanzable, y
+    `deletedTransaction`, constante que nadie lee. Sus dos casos unitarios
+    todavía caracterizaban la ruta retirada y estaban en rojo; ahora cubren el
+    contrato vigente, incluidas la clave de idempotencia y la revisión esperada.
 - Correcciones al diagnóstico previo, verificadas contra `finm` y el código:
   - la limpieza autorizada sobre `finm` removió los campos globales retirados
     de los 91 documentos v2 candidatos. La verificación posterior cerró en cero
@@ -376,9 +391,32 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     bloquean mientras no exista un preview vigente, y cualquier cambio de monto,
     moneda, fecha, pagador o reparto lo invalida. El recorrido focal pasó en
     Chromium desktop y Pixel 7 el 2026-09-10.
-- Pendiente para cerrar, en este orden:
-  1. Completar la matriz de verificación de este ítem y dejar actualizados estado
-     actual, `espacios.md`, plan de calidad §15 y `docs:check`.
+  - la rama nunca tuvo 923 unitarias verdes: eran 902, dos de ellas en rojo
+    contra el contrato que la propia rama había retirado. `b23c33d` las corrige
+    y el piso real es 906.
+- Matriz de verificación completa — ejecutada sobre el árbol final el
+  2026-09-10:
+  - unitarias: 906 en 123 archivos, con reparto, redondeo, moneda, día
+    financiero, saldo, transiciones y capacidades cubiertos como lógica pura;
+  - integración con sesión MongoDB real: 17 recorridos verdes — exactitud,
+    rollback, reintento concurrente, conflicto de edición, historia vinculada,
+    tarjeta en un pago, borrador privado, deuda por moneda, liquidación desde
+    ambas superficies, ciclo de vida, ownership, participante removido, índices
+    parciales, paginación acotada, migración, replay y resolución huérfana;
+  - API: `401`, `403/404`, validación, roles, estado del Espacio e idempotencia
+    quedan cubiertos por la matriz de capacidades y sus rutas, sin cuerpos
+    legacy de escritura que las esquiven;
+  - componentes: preview, errores, foco y recuperación del gasto guiado y de la
+    edición;
+  - E2E: 80 de 80 escenarios en Chromium desktop y Pixel 7, incluidos pagador
+    total, parte propia, adelanto, no pagador, liquidación multimoneda,
+    edición con gate de revisión, impacto personal, huérfano, convivencia con un
+    Espacio legacy bloqueado y el smoke financiero que compara Dashboard,
+    Transacciones, Cuentas y Deudas;
+  - comparación explícita entre Cuentas, Transacciones, Dashboard, Espacios y
+    Deudas: la sostiene ese smoke, hoy también independiente de la hora de
+    corrida;
+  - `docs:check` válido sobre 35 archivos activos.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;
