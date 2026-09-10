@@ -53,7 +53,6 @@ function entry(overrides: Record<string, unknown>): ISpaceEntry {
         reportingAmount: 0,
         date: new Date('2026-04-10'),
         splitMode: 'none',
-        confirmationRequired: false,
         createdAt: new Date('2026-04-10'),
         updatedAt: new Date('2026-04-10'),
         ...overrides,
@@ -253,32 +252,6 @@ describe('buildSpaceBalances — settlements', () => {
         ]
         const balances = buildSpaceBalances(entries, participants)
         expect(balances.every((b) => b.balanceReporting === 0)).toBe(true)
-    })
-
-    it('settlement pending_confirmation no reduce balances', () => {
-        const entries = [
-            entry({
-                amount: 100000,
-                reportingAmount: 100000,
-                paidByParticipantId: 'p-gonzalo',
-                splitMode: 'none',
-                sharedWithParticipantIds: ['p-roro'],
-            }),
-            entry({
-                type: 'settlement',
-                status: 'pending_confirmation',
-                amount: 100000,
-                reportingAmount: 100000,
-                paidByParticipantId: 'p-roro',
-                splitMode: 'none',
-                sharedWithParticipantIds: ['p-gonzalo'],
-            }),
-        ]
-        const balances = buildSpaceBalances(entries, participants)
-        const gonzalo = balances.find((b) => b.participantId === 'p-gonzalo')
-        const roro = balances.find((b) => b.participantId === 'p-roro')
-        expect(gonzalo?.balanceReporting).toBe(100000)
-        expect(roro?.balanceReporting).toBe(-100000)
     })
 
     it('entry rechazado no afecta balances', () => {

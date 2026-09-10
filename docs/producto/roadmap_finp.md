@@ -354,34 +354,30 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     tres movimientos en los días 11, 13 y 15 del período, que quedaban en el
     futuro y el saldo acumulado ignoraba. Sólo pasaba después del día 15 de cada
     mes; la falla se reprodujo en `dev` a secas antes de tocar nada.
+  - retiro de cuerpos legacy de escritura: las rutas de movimiento, impacto,
+    participantes y configuración sólo delegan al contrato v2; `debt-sync.ts`
+    y sus seis llamadas best-effort desaparecen. `SpaceEntry` ya no modela la
+    confirmación global ni el vínculo personal compartido, y
+    `cleanup:spaces:legacy-fields` permite remover esos campos de documentos v2
+    de forma idempotente, en `dry-run` por defecto y con puerta explícita para
+    development. La auditoría legacy se conserva sólo para lectura forense.
 - Correcciones al diagnóstico previo, verificadas contra `finm` y el código:
-  - la migración sólo hizo `$unset` de `linkedTransactionId`;
-    `confirmationRequired` sigue en los 91 entries y `confirmedByUserId` en 79,
-    así que retirarlos exige limpieza de datos y no sólo borrar paths del schema;
-  - `enterLegacySpaceWriteFacade` ya rechaza con 409 cualquier documento v2 y
-    `pending_confirmation` sólo se escribe dentro de esa rama: los cuerpos legacy
-    son código muerto sobre una base migrada, no un riesgo vivo;
+  - la limpieza autorizada sobre `finm` removió los campos globales retirados
+    de los 91 documentos v2 candidatos. La verificación posterior cerró en cero
+    para `linkedTransactionId`, `confirmationRequired`,
+    `confirmedByUserId`, `confirmedAt` y `rejectedAt`;
+  - el cutover ya no conserva una fachada ni cuerpos legacy de escritura:
+    cualquier mutación de un documento no v2 rechaza con 409 y los recorridos v2
+    no vuelven a sincronizar deudas fuera de su sesión financiera;
   - la integración contra Atlas corre desde entorno local; la limitación
     EACCES/whitelist registrada en la etapa 3 de FINP-P1-013 no se reproduce;
   - la suite global tiene 80 escenarios E2E, no 68.
+  - edición usa el mismo gate de revisión que el alta: el CTA y el despacho se
+    bloquean mientras no exista un preview vigente, y cualquier cambio de monto,
+    moneda, fecha, pagador o reparto lo invalida. El recorrido focal pasó en
+    Chromium desktop y Pixel 7 el 2026-09-10.
 - Pendiente para cerrar, en este orden:
-  1. Extirpar los cuerpos legacy. Quitar las ramas posteriores a la fachada en
-     `[id]/entries`, `[id]/entries/[entryId]`, `.../void`, `.../personal-impact`,
-     `[id]/participants/**` y `[id]/route.ts`; eliminar `debt-sync.ts` con sus
-     seis llamadores en `try/catch`, que son la última escritura derivada
-     best-effort del dominio; quitar de `SpaceEntry` los campos
-     `linkedTransactionId`, `confirmationRequired`, `confirmedByUserId`,
-     `confirmedAt` y `rejectedAt` con una limpieza idempotente y `dry-run` por
-     defecto; retirar el estado `pending_confirmation` y `pendingEntryCount`.
-     Conservar `space-legacy-audit-*`, que es lectura forense de sólo lectura.
-     Registrar el criterio de retiro en la decisión 0013.
-  2. Bloquear la confirmación de una edición sin revisión vigente.
-     `SpaceEntryDialog` despacha `handleEditSubmit` antes del gate de preview, de
-     modo que una edición se confirma sin revisión aunque el panel se muestre.
-     Mover el despacho después del gate e invalidar el preview cuando cambien
-     monto, moneda, fecha, pagador o reparto. Es exactitud, no experiencia: la
-     descomposición del diálogo pertenece a FINP-P1-013.
-  3. Completar la matriz de verificación de este ítem y dejar actualizados estado
+  1. Completar la matriz de verificación de este ítem y dejar actualizados estado
      actual, `espacios.md`, plan de calidad §15 y `docs:check`.
 - Criterio financiero:
   - cuentas muestran dinero real;

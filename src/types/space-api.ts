@@ -185,7 +185,6 @@ export interface SpaceSummaryDto {
     pendingToPayReporting: number
     pendingToCollectReporting: number
     participantCount: number
-    pendingEntryCount: number
     totalEntryCount: number
     totalReportingMoney?: MoneyDto
     includedCurrencies?: string[]

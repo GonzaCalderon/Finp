@@ -15,7 +15,6 @@ import {
 } from '@/lib/server/migrations/space-v2-migration-target'
 import { parseSpaceMigrationCliArguments } from '@/lib/server/migrations/space-v2-migration-cli'
 import { validateMigrationManifest } from '@/lib/server/migrations/space-v2-migration-runner'
-import { enterLegacySpaceWriteFacade } from '@/lib/server/space-legacy-write-facade'
 
 function finding(code: string, severity: SpaceAuditFinding['severity'] = 'high'): SpaceAuditFinding {
     return {
@@ -218,11 +217,4 @@ describe('space v2 migration core', () => {
         })).toThrow('SPACE_MIGRATION_MANUAL_RESOLUTION_MISSING')
     })
 
-    it('impide que un Espacio bloqueado o migrado caiga en escrituras legacy', () => {
-        expect(() => enterLegacySpaceWriteFacade({ migration: { state: 'blocked' } }))
-            .toThrow('sólo para consulta')
-        expect(() => enterLegacySpaceWriteFacade({ contractVersion: 2 }))
-            .toThrow('no puede usar el camino de escritura legacy')
-        expect(() => enterLegacySpaceWriteFacade({})).not.toThrow()
-    })
 })

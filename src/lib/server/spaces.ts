@@ -261,9 +261,7 @@ export async function buildSpaceDetailPayload(spaceId: string, userId: string) {
     const personalImpactsByEntryId = await getPersonalImpactForEntries(
         spaceId,
         userId,
-        entries.map((entry) => extractId(entry._id)).filter((entryId): entryId is string => Boolean(entryId)),
-        entries,
-        context.participants
+        entries.map((entry) => extractId(entry._id)).filter((entryId): entryId is string => Boolean(entryId))
     )
 
     return {

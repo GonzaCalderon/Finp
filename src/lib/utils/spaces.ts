@@ -292,7 +292,6 @@ export function buildSpaceBalances(entries: ISpaceEntry[], participants: ISpaceP
         .filter((entry) => {
             if (entry.isVoided) return false
             if (entry.status === 'rejected') return false
-            if (entry.type === 'settlement' && entry.status === 'pending_confirmation') return false
             return true
         })
         .forEach((entry) => {
@@ -487,7 +486,6 @@ export function buildSpaceSummary({
         pendingToPayReporting: yourBalanceReporting < 0 ? Math.abs(yourBalanceReporting) : 0,
         pendingToCollectReporting: yourBalanceReporting > 0 ? yourBalanceReporting : 0,
         participantCount: participants.filter((participant) => participant.isActive).length,
-        pendingEntryCount: relevantEntries.filter((entry) => entry.status === 'pending_confirmation').length,
         totalEntryCount: relevantEntries.length,
         categoryBreakdown,
         balances,

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: reglas funcionales y experiencia esperada de Espacios
 
 ## Índice
@@ -435,9 +435,10 @@ Cada recorrido cubre:
 
 En el alta guiada, la preview distingue `calculando`, `disponible`, `incompleta`
 y `error`; sólo el último comunica un fallo. La edición usa la misma preview
-financiera antes de confirmar. Crear una transacción personal o vincular una
-existente son intenciones excluyentes y sólo se ofrecen candidatos que el
-servidor pueda validar.
+financiera antes de confirmar: el CTA y el despacho esperan una revisión vigente,
+que se invalida al cambiar monto, moneda, fecha, pagador o reparto. Crear una
+transacción personal o vincular una existente son intenciones excluyentes y sólo
+se ofrecen candidatos que el servidor pueda validar.
 
 Requisitos transversales:
 

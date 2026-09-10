@@ -432,18 +432,7 @@ function SpaceDetailPageInner() {
         setVoidingEntry(entry)
         let hasLinkedTransaction = false
         let hasSubsequentSettlement = false
-        const payer = data?.participants.find(
-            (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
-        )
-        const impactsCurrentUser = Boolean(
-            data?.personalImpactsByEntryId[entryId ?? '']?.linkedImpact?.status === 'linked' ||
-            (
-                entry.linkedTransactionId &&
-                currentUserId &&
-                payer &&
-                (extractId(entry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
-            )
-        )
+        const impactsCurrentUser = data?.personalImpactsByEntryId[entryId ?? '']?.linkedImpact?.status === 'linked'
         try {
             const res = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`)
             if (res.ok) {
@@ -763,7 +752,6 @@ function SpaceDetailPageInner() {
                 onSubmit={handleCreateEntry}
                 spaceId={spaceId}
                 participants={data.participants}
-                currentUserId={currentUserId}
                 defaultCurrency={data.space.reportingCurrency}
                 reportingCurrency={data.space.reportingCurrency}
                 spaceCurrencies={data.space.currencies}
@@ -771,6 +759,7 @@ function SpaceDetailPageInner() {
                 spaceMode={data.space.mode}
                 contractVersion={data.space.contractVersion}
                 spaceRevision={data.space.revision ?? 0}
+                currentUserId={currentUserId}
                 draftKey={spaceId}
                 quotes={quotesApi.data}
                 onDraftChange={entriesApi.setDraft}
@@ -854,7 +843,6 @@ function SpaceDetailPageInner() {
                 participants={data.participants}
                 spaceId={spaceId}
                 currency={data.space.reportingCurrency}
-                currentUserId={currentUserId}
                 personalImpact={detailEntry ? (
                     data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.linkedImpact ??
                     data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.pendingActions[0]

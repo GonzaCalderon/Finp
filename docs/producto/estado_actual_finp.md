@@ -391,15 +391,18 @@ Permanecen abiertas, y pertenecen a FINP-P1-013:
 - faltan estados de recuperación, foco y accesibilidad consistentes en flujos
   principales y secundarios.
 
-Las etapas 1, 2 y 3 de la auditoría específica de `Nuevo gasto` están
+Las etapas 1, 2, 3 y el gate financiero de edición de la auditoría específica de `Nuevo gasto` están
 implementadas y verificadas. La primera cerró tarjeta `1/1`, contrato v2 único,
 dinero exacto, fecha civil, revisión vigente y preservación histórica. La segunda
 y la tercera, cerradas el 2026-09-09, incorporaron el borrador privado
 persistente con su card personal, la publicación transaccional y los adjuntos
-preparados sobre el borrador antes de publicar. Permanece la etapa 4:
+preparados sobre el borrador antes de publicar. El 2026-09-10, editar pasó a
+bloquear el CTA y el despacho hasta contar con un preview vigente; monto, moneda,
+fecha, pagador y reparto lo invalidan. El recorrido focal pasó en Chromium
+desktop y Pixel 7.
 
-- la revisión financiera se muestra al editar pero no bloquea la confirmación: el
-  envío en modo edición se despacha antes del gate de preview;
+Permanecen en FINP-P1-013:
+
 - los candidatos para vincular una transacción se filtran en el cliente por monto,
   sin ventana de fechas, sin excluir las ya vinculadas y sin estado de error;
 - carga, error, vacío, foco, labels y stepper mobile todavía no forman un

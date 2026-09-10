@@ -781,13 +781,7 @@ export function SpaceEntryDialog({
         (participant) => extractId(participant._id) === form.paidByParticipantId
     )
     const isCurrentUserPayer = extractId(paidByParticipant?.userId) === currentUserId
-    const initialLinkedTransactionImpactsCurrentUser = Boolean(
-        initialData?.linkedTransactionId &&
-        currentUserId &&
-        extractId(availableParticipants.find(
-            (participant) => extractId(participant._id) === extractId(initialData.paidByParticipantId)
-        )?.userId) === currentUserId
-    )
+    const initialLinkedTransactionImpactsCurrentUser = false
     const filteredAccounts = useMemo(
         () =>
             accounts.filter((account) => account.isActive !== false &&
@@ -896,6 +890,7 @@ export function SpaceEntryDialog({
         automaticQuoteSelected,
         form.amount,
         form.currency,
+        form.date,
         form.exchangeRate,
         form.linkedTransactionId,
         form.paidByParticipantId,
@@ -1273,6 +1268,18 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
+            focusFirstError()
+            return
+        }
+
+        // La edición cambia balances y deuda: usa la misma revisión vigente que el alta.
+        if (contractVersion === 2 && (previewLoading || !preview)) {
+            setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
+            focusFirstError()
+            return
+        }
+        if (preview?.linkExisting && !preview.linkExisting.compatible) {
+            setError('La transacción elegida no coincide con la revisión financiera. Elegí otra o creá una nueva.')
             focusFirstError()
             return
         }
@@ -2212,7 +2219,9 @@ export function SpaceEntryDialog({
                             disabled={
                                 submitting ||
                                 draftAttachmentsBlocked ||
-                                (mode === 'create' && step === 4 && contractVersion === 2 && (previewLoading || !preview))
+                                (contractVersion === 2 &&
+                                    (mode === 'edit' || (mode === 'create' && step === 4)) &&
+                                    (previewLoading || !preview))
                             }
                         >
                             {submitting

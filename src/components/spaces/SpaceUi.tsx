@@ -485,9 +485,7 @@ export function SpaceEntryStatusBadge({
             ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
             : status === 'confirmed'
                 ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
-                : status === 'pending_confirmation'
-                    ? { background: 'rgba(212,160,23,0.14)', color: '#A67C00', label: 'Pendiente' }
-                    : { background: 'rgba(239,68,68,0.12)', color: '#EF4444', label: 'Rechazado' }
+                : { background: 'rgba(239,68,68,0.12)', color: '#EF4444', label: 'Rechazado' }
 
     return (
         <Badge

@@ -88,7 +88,6 @@ export function SpaceEntryDetailSheet({
     participants,
     spaceId,
     currency,
-    currentUserId,
     personalImpact,
     reviewImpact,
     canEdit,
@@ -105,7 +104,6 @@ export function SpaceEntryDetailSheet({
     participants: ISpaceParticipant[]
     spaceId: string
     currency: string
-    currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
     reviewImpact?: ISpaceEntryPersonalImpact
     canEdit?: boolean
@@ -156,13 +154,7 @@ export function SpaceEntryDetailSheet({
         .map((participantId) => participantsById.get(extractId(participantId) ?? ''))
         .filter((participant): participant is ISpaceParticipant => Boolean(participant))
     const category = resolveCategory(currentEntry)
-    const legacyImpactsCurrentUser = Boolean(
-        currentEntry.linkedTransactionId &&
-        currentUserId &&
-        payer &&
-        (extractId(currentEntry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
-    )
-    const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
+    const impactsCurrentUser = personalImpact?.status === 'linked'
     const isVoided = currentEntry.isVoided === true
     const hasReview = Boolean(reviewImpact && !isVoided)
     const isEdited = (currentEntry.editCount ?? 0) > 0

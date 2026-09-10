@@ -409,6 +409,22 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(dialog.getByText('Adelanto recuperable', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Cambio en deuda', { exact: true })).toBeVisible()
 
+        const saveButton = dialog.getByRole('button', { name: 'Guardar cambios' })
+        await expect(saveButton).toBeEnabled()
+        await page.route(`**/api/spaces/${SPACE_V2_E2E.spaceId}/entries/preview`, async (route) => {
+            await new Promise((resolve) => setTimeout(resolve, 500))
+            await route.continue()
+        })
+        const refreshedPreview = page.waitForRequest((request) =>
+            request.method() === 'POST' &&
+            request.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entries/preview`)
+        )
+        await dialog.locator('#entry-amount').fill('10001')
+        await refreshedPreview
+        await expect(saveButton).toBeDisabled()
+        await expect(saveButton).toBeEnabled({ timeout: 10_000 })
+        await page.unroute(`**/api/spaces/${SPACE_V2_E2E.spaceId}/entries/preview`)
+
         await dialog.getByRole('button', { name: 'Cancelar' }).click()
         await expect(dialog).not.toBeVisible()
     })

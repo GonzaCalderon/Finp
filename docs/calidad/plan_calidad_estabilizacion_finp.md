@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-10
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -434,6 +434,9 @@ el 2026-08-25:
 - cobertura no bloqueante;
 - fixture contractual v2 y recorrido de gasto en tres pasos con preview e
   impacto vinculado aprobados en desktop y mobile;
+- el recorrido focal de edición v2, aprobado el 2026-09-10 en Chromium desktop
+  y Pixel 7, retarda el preview luego de cambiar el monto y verifica que
+  `Guardar cambios` permanezca bloqueado hasta recibir una revisión vigente;
 - historia de 1.000 movimientos medida en 45.987 bytes y 859 ms para una página
   de 50 elementos, sin cache, colas ni dependencias nuevas;
 - el smoke financiero conserva datos representativos de dos períodos y volvió a
