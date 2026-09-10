@@ -585,12 +585,11 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
      el valor en el nombre. `useScrollToFirstError` cableado sin perder el foco
      al primer error que el E2E ya exige; anuncio del paso según `espacios.md`
      §11.
-  4. Cierre con la decisión 0014 si se acepta, las aserciones dirigidas y el
-     orden del plan de calidad §8: mobile, táctil y teclado, desktop.
-- Elecciones pendientes del prompter antes de cerrar:
-  - aceptar o rechazar la [decisión 0014](../decisiones/0014-axe-core-playwright-en-recorridos-de-espacios.md);
-    sin ella el bloque 4 cierra sólo con aserciones dirigidas;
-  - `ErrorState` fuera de Espacios queda fuera de alcance salvo indicación.
+  4. Cierre con `@axe-core/playwright` (decisión 0014, aceptada el 2026-09-10
+     e instalada), las aserciones dirigidas y el orden del plan de calidad §8:
+     mobile, táctil y teclado, desktop.
+- Elección pendiente del prompter antes de cerrar: `ErrorState` fuera de
+  Espacios queda fuera de alcance salvo indicación.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.

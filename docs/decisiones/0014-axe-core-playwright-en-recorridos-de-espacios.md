@@ -1,7 +1,8 @@
 # 0014 — `@axe-core/playwright` en los recorridos E2E de Espacios
 
-> Estado: propuesta
+> Estado: aceptada
 > Fecha: 2026-09-10
+> Última actualización: 2026-09-10
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
 > Fuente de verdad: decisión 0014
 > Responsables: prompter y equipo Finp
@@ -16,6 +17,7 @@
 5. [Consecuencias](#5-consecuencias)
 6. [Verificación](#6-verificación)
 7. [Referencias](#7-referencias)
+8. [Aceptación](#8-aceptación)
 
 ## 1. Contexto y problema
 
@@ -138,3 +140,15 @@ segundo criterio que nadie reconcilia.
   consultado el 2026-09-10: reglas por etiqueta WCAG y niveles de impacto.
   Respalda el criterio de fallo por impacto.
 - [`AGENTS.md`](../../AGENTS.md) §11: criterio de evaluación de dependencias.
+
+## 8. Aceptación
+
+Aceptada por el prompter el 2026-09-10. Instalado
+`@axe-core/playwright@4.13.0` fijado por lockfile; `npm ls @axe-core/playwright`
+confirma una sola versión resuelta. `axe-core` pasó de `4.11.1` (dependencia de
+lint de `eslint-plugin-jsx-a11y`) a `4.13.0` deduplicado con la nueva
+dependencia: ningún paquete nuevo aparte del wrapper. Las 31 vulnerabilidades
+preexistentes de `npm audit` no mencionan `axe`. `npm run build` no incluye
+`axe-core` en `.next/static`: queda fuera del bundle de producción, como exige
+la restricción de la sección 2. El helper compartido vive en
+`tests/e2e/helpers/accessibility.ts`.
