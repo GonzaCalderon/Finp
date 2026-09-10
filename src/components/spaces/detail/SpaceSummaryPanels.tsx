@@ -17,10 +17,10 @@ import {
     UserPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceMetaBadge, SpaceSectionHeading, SpaceSurface, SpaceTypeBadge } from '@/components/spaces/SpaceUi'
+import { SpaceAmountInline, SpaceEntryStatusBadge, SpaceEntryTypeBadge, SpaceMetaBadge, SpaceSectionHeading, SpaceSurface } from '@/components/spaces/SpaceUi'
 import { staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { formatCurrencyAmount, formatSpaceDate, extractId } from '@/lib/utils/spaces'
-import type { ISpaceActivityEvent, ISpaceEntry, ISpaceParticipant, ISpacePendingAction } from '@/types'
+import type { ISpaceActivityEvent, ISpaceEntry, ISpaceParticipant } from '@/types'
 import type { SpaceActivityEventType } from '@/lib/constants'
 
 function resolveCategoryName(entry: ISpaceEntry) {
@@ -305,56 +305,6 @@ export function RecentSpaceAttachmentsCard({
                 ) : (
                     <div className="rounded-[26px] border border-dashed border-border bg-background/60 px-4 py-12 text-center text-sm text-muted-foreground">
                         Todavía no hay comprobantes adjuntos en este espacio.
-                    </div>
-                )}
-            </div>
-        </SpaceSurface>
-    )
-}
-
-export function SpacePendingConfirmationsCard({
-    actions,
-    onReview,
-}: {
-    actions: Array<Extract<ISpacePendingAction, { kind: 'confirmation' }>>
-    onReview: (action: Extract<ISpacePendingAction, { kind: 'confirmation' }>) => void
-}) {
-    return (
-        <SpaceSurface>
-            <SpaceSectionHeading
-                eyebrow="Revisión"
-                title="Pendientes dentro del espacio"
-                description="Confirmaciones que todavía esperan una acción del pagador antes de quedar cerradas."
-            />
-
-            <div className="mt-5 space-y-3">
-                {actions.length > 0 ? (
-                    actions.map((action) => (
-                        <div
-                            key={extractId(action.entry._id)}
-                            className="flex flex-col gap-4 rounded-[26px] border border-foreground/[0.07] bg-background/74 p-4 md:flex-row md:items-center md:justify-between"
-                        >
-                            <div className="space-y-2">
-                                <div className="flex flex-wrap gap-2">
-                                    <SpaceEntryTypeBadge type={action.entry.type} />
-                                    <SpaceTypeBadge type={action.space.type} />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-foreground">{action.entry.title}</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        {action.requestedByParticipant?.displayName ?? 'Un participante'} te marcó como pagador.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <Button className="rounded-full" onClick={() => onReview(action)}>
-                                Revisar
-                            </Button>
-                        </div>
-                    ))
-                ) : (
-                    <div className="rounded-[26px] border border-dashed border-border bg-background/60 px-4 py-12 text-center text-sm text-muted-foreground">
-                        No hay confirmaciones pendientes dentro de este espacio.
                     </div>
                 )}
             </div>

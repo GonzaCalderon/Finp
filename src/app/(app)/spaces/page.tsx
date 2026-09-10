@@ -23,7 +23,6 @@ import { useSpaceQuotes } from '@/hooks/useSpaceQuotes'
 import { useSpaces } from '@/hooks/useSpaces'
 import { useToast } from '@/hooks/useToast'
 import {
-    ConfirmSpaceEntryDialog,
     CreateSpaceDialog,
     SpaceEntryDialog,
 } from '@/components/spaces/SpaceDialogs'
@@ -38,7 +37,7 @@ import type { SpaceSortOption } from '@/components/spaces/index/SpacesFiltersBar
 import { SpacesPageTopBar } from '@/components/spaces/index/SpacesPageHeader'
 import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingViews'
 import { extractId } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpaceListItem, ISpacePendingAction } from '@/types'
+import type { ISpaceListItem, ISpacePendingAction } from '@/types'
 import type { SpaceEntryFormData } from '@/lib/validations'
 
 type SpaceStatusFilter = 'all' | 'active' | 'paused' | 'closed' | 'archived'
@@ -218,8 +217,6 @@ function SpacesPageInner() {
     const [entryDialogOpen, setEntryDialogOpen] = useState(false)
     const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
     const [pendingDialogOpen, setPendingDialogOpen] = useState(false)
-    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
-    const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
 
     usePageTitle('Espacios')
     useAppStartupReady(!loading)
@@ -362,39 +359,6 @@ function SpacesPageInner() {
         }
     }
 
-    const handleRejectConfirmation = async (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        try {
-            await pending.rejectEntry(extractId(action.entry._id) ?? '')
-            success('Movimiento rechazado')
-        } catch (err) {
-            toastError(
-                err instanceof Error ? err.message : 'No pudimos rechazar el movimiento.'
-            )
-        }
-    }
-
-    const handleReviewConfirmation = (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        setSelectedPendingEntry(action.entry)
-        setConfirmDialogOpen(true)
-    }
-
-    const handleConfirmPendingEntry = async (payload: {
-        mode: 'create' | 'link'
-        description?: string
-        categoryId?: string
-        accountId?: string
-        linkedTransactionId?: string
-    }) => {
-        if (!selectedPendingEntry) return
-
-        await pending.confirmEntry(extractId(selectedPendingEntry._id) ?? '', payload)
-        success('Movimiento confirmado')
-    }
-
     return (
         <>
             <div className="mx-auto max-w-[1600px] space-y-5 px-4 pb-28 pt-4 md:space-y-6 md:px-6 md:py-6">
@@ -491,15 +455,6 @@ function SpacesPageInner() {
                 currentUserId={currentUserId}
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
-                onReviewConfirmation={handleReviewConfirmation}
-                onRejectConfirmation={(action) => void handleRejectConfirmation(action)}
-            />
-
-            <ConfirmSpaceEntryDialog
-                open={confirmDialogOpen}
-                onOpenChange={setConfirmDialogOpen}
-                entry={selectedPendingEntry}
-                onSubmit={handleConfirmPendingEntry}
             />
         </>
     )

@@ -18,7 +18,6 @@ import { useSpaceQuotes } from '@/hooks/useSpaceQuotes'
 import { useSpaceParticipants } from '@/hooks/useSpaceParticipants'
 import { useToast } from '@/hooks/useToast'
 import {
-    ConfirmSpaceEntryDialog,
     EditSpaceSettingsDialog,
     SpaceEntryDialog,
     SpaceParticipantDialog,
@@ -103,11 +102,9 @@ function DetailSkeleton() {
 
 function MobileTabBar({
     activeTab,
-    pendingCount,
     onChange,
 }: {
     activeTab: SpaceTab
-    pendingCount: number
     onChange: (tab: SpaceTab) => void
 }) {
     const activeMobile = MOBILE_TABS.some((t) => t.value === activeTab) ? activeTab : 'summary'
@@ -117,8 +114,6 @@ function MobileTabBar({
             <div className="grid grid-cols-3 gap-1">
                 {MOBILE_TABS.map((tab) => {
                     const active = activeMobile === tab.value
-                    const showPending = tab.value === 'entries' && pendingCount > 0
-
                     return (
                         <button
                             key={tab.value}
@@ -128,11 +123,6 @@ function MobileTabBar({
                         >
                             {active ? <motion.span layoutId="space-mobile-tab" className="absolute inset-0 rounded-[16px] bg-background shadow-sm" /> : null}
                             <span className="relative truncate">{tab.label}</span>
-                            {showPending ? (
-                                <span className="relative shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
-                                    {pendingCount}
-                                </span>
-                            ) : null}
                         </button>
                     )
                 })}
@@ -143,11 +133,9 @@ function MobileTabBar({
 
 function DesktopTabBar({
     activeTab,
-    pendingCount,
     onChange,
 }: {
     activeTab: SpaceTab
-    pendingCount: number
     onChange: (tab: SpaceTab) => void
 }) {
     return (
@@ -155,8 +143,6 @@ function DesktopTabBar({
             <div className="grid grid-cols-4 gap-1">
                 {DESKTOP_TABS.map((tab) => {
                     const active = activeTab === tab.value
-                    const showPending = tab.value === 'entries' && pendingCount > 0
-
                     return (
                         <button
                             key={tab.value}
@@ -166,11 +152,6 @@ function DesktopTabBar({
                         >
                             {active ? <motion.span layoutId="space-desktop-tab" className="absolute inset-0 rounded-[16px] bg-background shadow-sm" /> : null}
                             <span className="relative truncate">{tab.label}</span>
-                            {showPending ? (
-                                <span className="relative shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
-                                    {pendingCount}
-                                </span>
-                            ) : null}
                         </button>
                     )
                 })}
@@ -191,8 +172,7 @@ function SpaceMovementsKpiRow({
     const items: Array<{ label: string; value: number; footer: string; accent?: string; isAmount: boolean }> = [
         { label: 'Total gastado', value: summary.totalReporting, footer: `${summary.totalEntryCount} movimientos`, accent: undefined, isAmount: true },
         { label: 'Tu parte', value: summary.yourShareReporting, footer: 'Correspondiente', accent: 'var(--chart-1)', isAmount: true },
-        { label: 'Confirmados', value: Math.max(0, summary.totalEntryCount - summary.pendingEntryCount), footer: 'Movimientos cerrados', accent: 'var(--chart-3)', isAmount: false },
-        { label: 'Pendientes', value: summary.pendingEntryCount, footer: 'Por confirmar', accent: 'var(--destructive)', isAmount: false },
+        { label: 'Participantes', value: summary.participantCount, footer: 'Con acceso al espacio', accent: 'var(--chart-3)', isAmount: false },
     ]
 
     return (
@@ -237,8 +217,6 @@ function SpaceDetailPageInner() {
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
     const [pendingSheetOpen, setPendingSheetOpen] = useState(false)
-    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
-    const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
     const [focusedEntryId, setFocusedEntryId] = useState<string | null>(focusEntryId)
     const [detailEntry, setDetailEntry] = useState<ISpaceEntry | null>(null)
     const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
@@ -421,42 +399,6 @@ function SpaceDetailPageInner() {
         }
     }
 
-    const handleReviewPending = (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        setSelectedPendingEntry(action.entry)
-        setConfirmDialogOpen(true)
-    }
-
-    const handleRejectConfirmation = async (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        await apiJson(`/api/space-entries/${extractId(action.entry._id)}/reject`, {
-            method: 'POST',
-        })
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        success('Movimiento rechazado')
-    }
-
-    const handleConfirmPendingEntry = async (payload: {
-        mode: 'create' | 'link'
-        description?: string
-        categoryId?: string
-        accountId?: string
-        linkedTransactionId?: string
-    }) => {
-        if (!selectedPendingEntry) return
-
-        await apiJson(`/api/space-entries/${extractId(selectedPendingEntry._id)}/confirm`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        })
-
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        success('Movimiento confirmado')
-    }
-
     async function handleSyncImpact(entry: ISpaceEntry) {
         const entryId = extractId(entry._id)
         if (!entryId) return
@@ -620,7 +562,6 @@ function SpaceDetailPageInner() {
                 {/* Mobile tab bar (3 tabs) */}
                 <MobileTabBar
                     activeTab={activeTab}
-                    pendingCount={data.summary.pendingEntryCount}
                     onChange={(tab) => {
                         setFocusedEntryId(null)
                         setActiveTab(tab)
@@ -630,7 +571,6 @@ function SpaceDetailPageInner() {
                 {/* Desktop tab bar (6 tabs) */}
                 <DesktopTabBar
                     activeTab={activeTab}
-                    pendingCount={data.summary.pendingEntryCount}
                     onChange={(tab) => {
                         setFocusedEntryId(null)
                         setActiveTab(tab)
@@ -876,8 +816,6 @@ function SpaceDetailPageInner() {
                 initialTab="pending"
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
-                onReviewConfirmation={handleReviewPending}
-                onRejectConfirmation={(action) => void handleRejectConfirmation(action)}
             />
 
             {canManage ? (
@@ -906,13 +844,6 @@ function SpaceDetailPageInner() {
                     lockedCurrencies={data.api.space.currencyPolicy?.usedCurrencies}
                 />
             ) : null}
-
-            <ConfirmSpaceEntryDialog
-                open={confirmDialogOpen}
-                onOpenChange={setConfirmDialogOpen}
-                entry={selectedPendingEntry}
-                onSubmit={handleConfirmPendingEntry}
-            />
 
             <SpaceEntryDetailSheet
                 open={detailEntry !== null}

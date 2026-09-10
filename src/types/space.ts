@@ -499,15 +499,7 @@ export interface ISpacePendingInvite {
     invitedByName: string
 }
 
-export interface ISpacePendingConfirmation {
-    kind: 'confirmation'
-    space: ISpace
-    entry: ISpaceEntry
-    requestedByParticipant?: ISpaceParticipant
-    paidByParticipant?: ISpaceParticipant
-}
-
-export type ISpacePendingAction = ISpacePendingInvite | ISpacePendingConfirmation
+export type ISpacePendingAction = ISpacePendingInvite
 
 export interface ISpaceDetailPayload {
     space: ISpace

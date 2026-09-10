@@ -21,8 +21,7 @@ export async function GET() {
         return NextResponse.json({
             pendingActions,
             total: pendingActions.length,
-            invitations: pendingActions.filter((action) => action.kind === 'invite').length,
-            confirmations: pendingActions.filter((action) => action.kind === 'confirmation').length,
+            invitations: pendingActions.length,
             unreadActivityCount,
         })
     } catch (error) {

@@ -13,7 +13,6 @@ import type {
     ISpaceListItem,
     ISpaceParticipant,
     ISpacePendingAction,
-    ISpacePendingConfirmation,
     ISpacePendingInvite,
 } from '@/types'
 
@@ -183,7 +182,7 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
         return [] as ISpacePendingAction[]
     }
 
-    const [spaces, participants, pendingEntries, pendingInvites] = await Promise.all([
+    const [spaces, participants, pendingInvites] = await Promise.all([
         Space.find({
             _id: { $in: onlySpaceId ? [onlySpaceId] : spaceIds },
         }).lean<ISpace[]>(),
@@ -191,15 +190,6 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
             spaceId: { $in: onlySpaceId ? [onlySpaceId] : spaceIds },
             isActive: true,
         }).lean<ISpaceParticipant[]>(),
-        SpaceEntry.find({
-            spaceId: { $in: onlySpaceId ? [onlySpaceId] : spaceIds },
-            status: 'pending_confirmation',
-            paidByParticipantId: { $in: participantIds },
-        })
-            .sort({ date: -1, createdAt: -1 })
-            .populate('categoryId', 'name color type')
-            .populate('spaceCategoryId', 'name color type isArchived')
-            .lean<ISpaceEntry[]>(),
         SpaceInvite.find({
             participantId: { $in: participantIds },
             status: 'pending',
@@ -241,35 +231,9 @@ export async function getPendingSpaceActions(userId: string, onlySpaceId?: strin
         })
         .filter((action): action is ISpacePendingInvite => Boolean(action))
 
-    const confirmationActions = pendingEntries
-        .map<ISpacePendingConfirmation | null>((entry) => {
-            const space = spacesById.get(extractId(entry.spaceId) ?? '')
-            if (!space) return null
-
-            return {
-                kind: 'confirmation',
-                space,
-                entry,
-                requestedByParticipant:
-                    participantsById.get(extractId(entry.createdByParticipantId) ?? ''),
-                paidByParticipant:
-                    participantsById.get(extractId(entry.paidByParticipantId) ?? ''),
-            }
-        })
-        .filter((action): action is ISpacePendingConfirmation => Boolean(action))
-
-    return [...inviteActions, ...confirmationActions].sort((left, right) => {
-        const leftDate =
-            left.kind === 'invite'
-                ? new Date(left.invite.createdAt).getTime()
-                : new Date(left.entry.createdAt).getTime()
-        const rightDate =
-            right.kind === 'invite'
-                ? new Date(right.invite.createdAt).getTime()
-                : new Date(right.entry.createdAt).getTime()
-
-        return rightDate - leftDate
-    })
+    return inviteActions.sort((left, right) => (
+        new Date(right.invite.createdAt).getTime() - new Date(left.invite.createdAt).getTime()
+    ))
 }
 
 export async function buildSpaceDetailPayload(spaceId: string, userId: string) {

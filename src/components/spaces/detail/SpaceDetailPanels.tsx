@@ -1146,9 +1146,6 @@ export function SpaceClosurePanel({
                             <SpaceMetaBadge icon={Users}>
                                 {summary.participantCount} participante{summary.participantCount === 1 ? '' : 's'}
                             </SpaceMetaBadge>
-                            <SpaceMetaBadge icon={Plus}>
-                                {summary.pendingEntryCount} pendiente{summary.pendingEntryCount === 1 ? '' : 's'}
-                            </SpaceMetaBadge>
                         </div>
                     </div>
                 </div>

@@ -6,13 +6,11 @@ import {
 } from '@/lib/client/data-sync'
 import { useDataInvalidation } from '@/hooks/useDataInvalidation'
 import type { ISpacePendingAction } from '@/types'
-import type { SpaceEntryConfirmData } from '@/lib/validations'
 
 type PendingResponse = {
     pendingActions: ISpacePendingAction[]
     total: number
     invitations: number
-    confirmations: number
     unreadActivityCount: number
 }
 
@@ -21,7 +19,6 @@ export function useSpacePendingActions() {
     const [counts, setCounts] = useState({
         total: 0,
         invitations: 0,
-        confirmations: 0,
         unreadActivityCount: 0,
     })
     const [loading, setLoading] = useState(true)
@@ -42,7 +39,6 @@ export function useSpacePendingActions() {
             setCounts({
                 total: data.total,
                 invitations: data.invitations,
-                confirmations: data.confirmations,
                 unreadActivityCount: data.unreadActivityCount,
             })
         } catch (err) {
@@ -52,40 +48,6 @@ export function useSpacePendingActions() {
             setRefreshing(false)
         }
     }, [])
-
-    const confirmEntry = useCallback(async (entryId: string, body: SpaceEntryConfirmData) => {
-        const data = await apiJson(`/api/space-entries/${entryId}/confirm`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        })
-
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        return data
-    }, [])
-
-    const rejectEntry = useCallback(async (entryId: string) => {
-        const data = await apiJson(`/api/space-entries/${entryId}/reject`, {
-            method: 'POST',
-        })
-
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        return data
-    }, [])
-
-    const linkTransaction = useCallback(
-        async (entryId: string, linkedTransactionId: string, categoryId?: string) => {
-            const data = await apiJson(`/api/space-entries/${entryId}/link-transaction`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ linkedTransactionId, categoryId }),
-            })
-
-            invalidateData(SPACE_INVALIDATION_TAGS)
-            return data
-        },
-        []
-    )
 
     const respondToInvite = useCallback(
         async (
@@ -123,9 +85,6 @@ export function useSpacePendingActions() {
         refreshing,
         error,
         fetchPendingActions,
-        confirmEntry,
-        rejectEntry,
-        linkTransaction,
         respondToInvite,
     }
 }
