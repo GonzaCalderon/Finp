@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -27,7 +27,9 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
     Select,
     SelectContent,
@@ -891,6 +893,8 @@ function SpaceSettlementDialogV2({
     const [payerId, setPayerId] = useState('')
     const [receiverId, setReceiverId] = useState('')
     const [debts, setDebts] = useState<SpaceDebtDto[]>([])
+    const [debtsLoading, setDebtsLoading] = useState(true)
+    const [debtsError, setDebtsError] = useState<string | null>(null)
     const [selectedComponents, setSelectedComponents] = useState<string[]>([])
     const [legs, setLegs] = useState<SettlementLegDraft[]>([])
     const [customQuotes, setCustomQuotes] = useState<SpaceQuotesDto['quotes']>([])
@@ -932,12 +936,24 @@ function SpaceSettlementDialogV2({
         idempotencyKeyRef.current = null
     }, [currentParticipantId, defaultCurrency, open, prefill, suggestedPayments])
 
+    const fetchDebts = useCallback(async () => {
+        setDebtsLoading(true)
+        setDebtsError(null)
+        try {
+            const response = await apiJson<{ data: SpaceDebtDto[] }>(`/api/spaces/${v2SpaceId}/debts`)
+            setDebts(response.data)
+        } catch (cause) {
+            setDebts([])
+            setDebtsError(cause instanceof Error ? cause.message : 'No se pudieron cargar las deudas.')
+        } finally {
+            setDebtsLoading(false)
+        }
+    }, [v2SpaceId])
+
     useEffect(() => {
         if (!open) return
-        void apiJson<{ data: SpaceDebtDto[] }>(`/api/spaces/${v2SpaceId}/debts`)
-            .then((response) => setDebts(response.data))
-            .catch((cause) => setError(cause instanceof Error ? cause.message : 'No se pudieron cargar las deudas.'))
-    }, [open, v2SpaceId])
+        void fetchDebts()
+    }, [fetchDebts, open])
 
     const isOwnSettlement = Boolean(
         currentParticipantId && (payerId === currentParticipantId || receiverId === currentParticipantId)
@@ -1226,7 +1242,19 @@ function SpaceSettlementDialogV2({
                         <SpaceDialogPanel>
                             <SpaceDialogSectionEyebrow>2 · Componentes de deuda</SpaceDialogSectionEyebrow>
                             <div className="mt-3 space-y-2">
-                                {componentChoices.length ? componentChoices.map((component) => {
+                                {debtsLoading ? (
+                                    <>
+                                        <Skeleton className="h-12 rounded-xl" />
+                                        <Skeleton className="h-12 rounded-xl" />
+                                    </>
+                                ) : debtsError ? (
+                                    <ErrorState
+                                        icon={TriangleAlert}
+                                        title="No pudimos cargar el saldo"
+                                        description={debtsError}
+                                        onRetry={() => void fetchDebts()}
+                                    />
+                                ) : componentChoices.length ? componentChoices.map((component) => {
                                     const selected = selectedComponents.includes(component.key)
                                     return (
                                         <button

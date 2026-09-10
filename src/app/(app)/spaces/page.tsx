@@ -2,9 +2,10 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Layers3, Plus, Sparkles } from 'lucide-react'
+import { AlertTriangle, Layers3, Plus, Sparkles } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     Dialog,
@@ -205,7 +206,7 @@ function SpacesPageInner() {
     const { hidden } = useHideAmounts()
     const { setAction: setSpaceAction, clearAction: clearSpaceAction } = useSpaceAction()
     const { success, error: toastError } = useToast()
-    const { spaces, loading, error, createSpace, currentUserId } = useSpaces()
+    const { spaces, loading, error, createSpace, currentUserId, fetchSpaces } = useSpaces()
     const pending = useSpacePendingActions()
     const [statusFilter, setStatusFilter] = useState<SpaceStatusFilter>('all')
     const [search, setSearch] = useState('')
@@ -387,9 +388,12 @@ function SpacesPageInner() {
                         ))}
                     </div>
                 ) : error ? (
-                    <div className="rounded-[28px] border border-destructive/15 bg-destructive/5 px-5 py-10 text-center text-sm text-destructive">
-                        {error}
-                    </div>
+                    <ErrorState
+                        icon={AlertTriangle}
+                        title="No pudimos cargar tus espacios"
+                        description={error}
+                        onRetry={() => void fetchSpaces()}
+                    />
                 ) : filteredSpaces.length === 0 ? (
                     <div className="px-2 py-8 md:py-12">
                         <EmptyState
@@ -452,6 +456,8 @@ function SpacesPageInner() {
                 onOpenChange={setPendingDialogOpen}
                 actions={pending.pendingActions}
                 loading={pending.loading}
+                error={pending.error}
+                onRetry={() => void pending.fetchPendingActions()}
                 currentUserId={currentUserId}
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}

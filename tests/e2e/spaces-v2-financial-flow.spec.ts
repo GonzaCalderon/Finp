@@ -300,6 +300,42 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(dialog).not.toBeVisible()
     })
 
+    test('un fallo al cargar el saldo de la liquidación se explica y se recupera con reintento', async ({ page }) => {
+        await loginAsTestUser(page)
+        await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
+
+        let attempts = 0
+        await page.route(`**/api/spaces/${SPACE_V2_E2E.spaceId}/debts`, async (route) => {
+            attempts += 1
+            if (attempts === 1) {
+                await route.fulfill({
+                    status: 500,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ error: 'Error interno del servidor' }),
+                })
+                return
+            }
+            await route.fetch().then((response) => route.fulfill({ response }))
+        })
+
+        await page.getByRole('button', { name: 'Balance' }).first().click()
+        await page.getByRole('button', { name: 'Registrar pago' }).click()
+        const dialog = page.getByRole('dialog', { name: 'Liquidar saldo por moneda' })
+
+        // El fallo de lectura se anuncia como alerta, no como "sin componentes",
+        // y recibe el foco sin que nadie tenga que buscarlo.
+        const alert = dialog.getByRole('alert')
+        await expect(alert).toContainText('No pudimos cargar el saldo')
+        await expect(alert).toBeFocused()
+
+        await alert.getByRole('button', { name: 'Reintentar' }).click()
+        await expect(dialog.getByText('Deuda en ARS')).toBeVisible()
+        await expect(dialog.getByText('No pudimos cargar el saldo')).toHaveCount(0)
+        expect(attempts).toBe(2)
+
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
+    })
+
     test('vincular una transacción existente y elegir una cuenta personal son excluyentes', async ({ page }, testInfo) => {
         testInfo.setTimeout(60_000)
         const description = `Exclusividad de vínculo ${testInfo.project.name}`

@@ -560,21 +560,36 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   marcadas abajo: el comportamiento vive en `espacios.md` §10–11, la primitiva
   de error en `design.md` §10 y el contrato de candidatos en `arquitectura.md`
   §8. Verificado contra el código antes de planificar: `SpaceEntryDialog`
-  tiene 2263 líneas y oculta pasos con `hidden`; no existe `ErrorState`; ambos
-  diálogos piden 25 transacciones y filtran en cliente; el preview valida
-  `linkExisting` con menos reglas que el `resolve`; `useScrollToFirstError`
-  existe y no está cableado; el footer del diálogo ya usa `safe-area-pb`.
+  tiene 2263 líneas y oculta pasos con `hidden`; ambos diálogos piden 25
+  transacciones y filtran en cliente; el preview valida `linkExisting` con
+  menos reglas que el `resolve`; `useScrollToFirstError` existe y no está
+  cableado; el footer del diálogo ya usa `safe-area-pb`.
   Bloques, en este orden y cada uno verde antes del siguiente:
-  1. Estados reales. `ErrorState` según `design.md` §10 y adopción en portada,
-     detalle, `SpacePendingViews`, revisión financiera, candidatos y saldo de
-     la liquidación, que hoy carga deudas sin estado de carga y con el error
-     escondido en `form`. Reintento real con `fetchSpaces` y `fetchSpace`, que
-     ya existen. Skeleton en los paneles que hoy quedan en silencio.
+  1. Estados reales — completado el 2026-09-10. `ErrorState` según `design.md`
+     §10, con foco al montarse y reintento real: portada (`fetchSpaces`),
+     detalle (`fetchSpace`), pendientes y actividad de `SpacesPendingSheet`
+     (`fetchPendingActions`, `fetchActivity`, antes silenciados), revisión
+     financiera del alta/edición (nuevo `previewRetryNonce` porque el efecto de
+     preview no tenía una vía de reintento sin cambiar un campo) y saldo de
+     liquidación en `SpaceSettlementDialogV2`, que cargaba deudas sin estado de
+     carga y mezclaba ese fallo con el `error` genérico de preview/envío
+     (`fetchDebts` extraído, con `debtsLoading`/`debtsError` propios).
+     Corrección al plan: «candidatos» se saca de este bloque y pasa al 2 — hoy
+     es un `<Select>` nativo poblado por un filtro de cliente, sin región propia
+     donde montar la primitiva sin romper la semántica del combobox; sólo tiene
+     sentido una vez que el bloque 2 lo convierta en una lista con estados.
+     Evidencia: `ErrorState` (`src/components/shared/ErrorState.tsx`), 3
+     unitarias focales; E2E nuevo que falla la carga del saldo con `page.route`,
+     verifica la alerta enfocada y confirma la recuperación tras reintentar; 909
+     unitarias y 24 E2E de Espacios (ambos proyectos) verdes junto con
+     typecheck, ESLint y `docs:check`.
   2. Candidatos de vínculo resueltos por el servidor según `arquitectura.md`
      §8 «Candidatos de vínculo personal»: una sola evaluación compartida por
-     preview, candidatos y `resolve`. Corrección al plan previo: no hay ventana
-     de fechas; el servidor exige el mismo `dateKey`, y ofrecer otra cosa es
-     ofrecer un candidato que fallará.
+     preview, candidatos y `resolve`, con `cargando`, `vacío` con motivos y
+     `error` (`ErrorState`, reintento sobre la misma consulta) en vez del
+     `<Select>` de 25 transacciones filtradas en cliente. Corrección al plan
+     previo: no hay ventana de fechas; el servidor exige el mismo `dateKey`, y
+     ofrecer otra cosa es ofrecer un candidato que fallará.
   3. Descomposición de `SpaceEntryDialog` en un componente por paso montado
      sólo cuando es el actual, con el patrón de `TransactionDialog`
      (`buildSteps`, `currentStep.id`, `transaction-dialog/*Step.tsx`).

@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { Suspense, useMemo, useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, Coins, Plus, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Coins, Plus, Users } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
@@ -204,7 +205,7 @@ function SpaceDetailPageInner() {
     const spaceId = params?.id
     const { hidden } = useHideAmounts()
     const { success, error: toastError } = useToast()
-    const { data, loading, error, updateSpace } = useSpace(spaceId)
+    const { data, loading, error, updateSpace, fetchSpace } = useSpace(spaceId)
     const spaceActivity = useSpaceActivity(spaceId)
     const quotesApi = useSpaceQuotes(spaceId, (data?.space.currencies?.length ?? 0) > 1)
     const [currencyFilters, setCurrencyFilters] = useState<SpaceMovementFilters>({})
@@ -475,9 +476,12 @@ function SpaceDetailPageInner() {
     if (error || !data) {
         return (
             <div className="mx-auto max-w-[920px] px-4 py-8 md:px-6">
-                <div className="rounded-[28px] border border-destructive/15 bg-destructive/5 px-5 py-10 text-center text-sm text-destructive">
-                    {error ?? 'No pudimos cargar el espacio.'}
-                </div>
+                <ErrorState
+                    icon={AlertTriangle}
+                    title="No pudimos cargar el espacio"
+                    description={error ?? undefined}
+                    onRetry={() => void fetchSpace()}
+                />
             </div>
         )
     }

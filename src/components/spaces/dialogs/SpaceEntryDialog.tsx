@@ -51,6 +51,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Input } from '@/components/ui/input'
 import {
     Select,
@@ -496,6 +497,9 @@ export function SpaceEntryDialog({
     const [preview, setPreview] = useState<SpaceEntryPreviewDto | null>(null)
     const [previewLoading, setPreviewLoading] = useState(false)
     const [previewError, setPreviewError] = useState<string | null>(null)
+    // Un fallo de red sin cambiar ningún campo no vuelve a disparar el efecto de
+    // preview por sí solo: "Reintentar" lo fuerza incrementando este nonce.
+    const [previewRetryNonce, setPreviewRetryNonce] = useState(0)
     const [showAdvancedLink, setShowAdvancedLink] = useState(false)
     const [recentTransactions, setRecentTransactions] = useState<ITransaction[]>([])
     const [draftHydrated, setDraftHydrated] = useState(false)
@@ -899,6 +903,7 @@ export function SpaceEntryDialog({
         form.splitMode,
         mode,
         open,
+        previewRetryNonce,
         spaceId,
         step,
     ])
@@ -1936,9 +1941,14 @@ export function SpaceEntryDialog({
                                                         ))}
                                                     </dl>
                                                 ) : previewError ? (
-                                                    <p className="rounded-xl border border-destructive/15 bg-destructive/5 p-3 text-sm text-destructive" tabIndex={-1}>
-                                                        {previewError}
-                                                    </p>
+                                                    <div className="rounded-xl border border-destructive/15 bg-destructive/5">
+                                                        <ErrorState
+                                                            icon={AlertTriangle}
+                                                            title="No pudimos calcular la revisión"
+                                                            description={previewError}
+                                                            onRetry={() => setPreviewRetryNonce((current) => current + 1)}
+                                                        />
+                                                    </div>
                                                 ) : (
                                                     <p className="rounded-xl border border-foreground/[0.07] bg-muted/35 p-3 text-sm text-muted-foreground">
                                                         Completá monto, pagador y reparto para calcular la revisión.
