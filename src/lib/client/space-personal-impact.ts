@@ -18,15 +18,7 @@ export const PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS: DataTag[] = Array.fro
 
 export type RemovePersonalSpaceTransactionResponse = {
     ok: true
-    deletedTransaction: boolean
     orphanTransactionDeleted: boolean
-}
-
-export class PersonalSpaceTransactionNotDeletedError extends Error {
-    constructor() {
-        super('No pudimos confirmar que la transacción se haya eliminado. Actualizamos los datos para que puedas intentar de nuevo.')
-        this.name = 'PersonalSpaceTransactionNotDeletedError'
-    }
 }
 
 export function withoutSelectedTransaction<
@@ -61,19 +53,11 @@ export async function removePersonalSpaceTransaction(input: {
                 decision: { type: 'remove_transaction' },
             }),
         })
-        return {
-            ok: true,
-            deletedTransaction: true,
-            orphanTransactionDeleted: false,
-        }
+        return { ok: true, orphanTransactionDeleted: false }
     }
 
     // Una transacción sin impacto persistido ya no tiene un contrato de Espacios
     // que resolver. Se elimina por su recurso personal sin tocar el movimiento.
     await apiJson(`/api/transactions/${transactionId}`, { method: 'DELETE' })
-    return {
-        ok: true,
-        deletedTransaction: true,
-        orphanTransactionDeleted: true,
-    }
+    return { ok: true, orphanTransactionDeleted: true }
 }
