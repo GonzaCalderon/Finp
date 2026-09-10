@@ -102,9 +102,12 @@ function dateInsidePeriod(period: string, offsetDays: number): Date {
 }
 
 /**
- * El período en curso sólo tiene días transcurridos. Un movimiento con fecha
- * futura queda fuera del saldo acumulado, así que el offset se recorta a hoy:
- * sin esto el fixture sólo cuadra si la suite corre pasado el día 15 del mes.
+ * El período en curso sólo tiene días transcurridos y el saldo acumulado corta
+ * en el instante actual, no al cierre del día: un movimiento fechado hoy al
+ * mediodía todavía es futuro si la suite corre por la mañana. El offset se
+ * recorta al último día transcurrido y, cuando ese día es hoy y su mediodía no
+ * llegó, al comienzo del día, que siempre pertenece al período y ya pasó.
+ * Sin esto el fixture sólo cuadra pasado el día 15 del mes y después de las 12.
  */
 function dateElapsedInPeriod(period: string, offsetDays: number, now: Date): Date {
     const { start } = parseFinancialPeriod(period)
@@ -114,7 +117,15 @@ function dateElapsedInPeriod(period: string, offsetDays: number, now: Date): Dat
     today.setHours(12, 0, 0, 0)
 
     const elapsedDays = Math.floor((today.getTime() - first.getTime()) / 86_400_000)
-    return dateInsidePeriod(period, Math.max(0, Math.min(offsetDays, elapsedDays)))
+    const candidate = dateInsidePeriod(
+        period,
+        Math.max(0, Math.min(offsetDays, elapsedDays))
+    )
+    if (candidate.getTime() < now.getTime()) return candidate
+
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
+    return startOfToday
 }
 
 export function buildFinancialSmokePeriods(now = new Date()) {
