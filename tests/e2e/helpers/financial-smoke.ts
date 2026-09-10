@@ -101,9 +101,26 @@ function dateInsidePeriod(period: string, offsetDays: number): Date {
     return value
 }
 
+/**
+ * El período en curso sólo tiene días transcurridos. Un movimiento con fecha
+ * futura queda fuera del saldo acumulado, así que el offset se recorta a hoy:
+ * sin esto el fixture sólo cuadra si la suite corre pasado el día 15 del mes.
+ */
+function dateElapsedInPeriod(period: string, offsetDays: number, now: Date): Date {
+    const { start } = parseFinancialPeriod(period)
+    const first = new Date(start)
+    first.setHours(12, 0, 0, 0)
+    const today = new Date(now)
+    today.setHours(12, 0, 0, 0)
+
+    const elapsedDays = Math.floor((today.getTime() - first.getTime()) / 86_400_000)
+    return dateInsidePeriod(period, Math.max(0, Math.min(offsetDays, elapsedDays)))
+}
+
 export function buildFinancialSmokePeriods(now = new Date()) {
     const current = getCurrentFinancialPeriod(now)
     const historical = shiftFinancialPeriod(current, -1)
+    const elapsed = (offsetDays: number) => dateElapsedInPeriod(current, offsetDays, now)
 
     return {
         current,
@@ -112,14 +129,14 @@ export function buildFinancialSmokePeriods(now = new Date()) {
             historicalIncome: dateInsidePeriod(historical, 2),
             historicalExpenseArs: dateInsidePeriod(historical, 4),
             historicalExpenseUsd: dateInsidePeriod(historical, 6),
-            currentIncome: dateInsidePeriod(current, 2),
-            currentExpenseArs: dateInsidePeriod(current, 4),
-            currentExpenseUsd: dateInsidePeriod(current, 6),
-            currentExchange: dateInsidePeriod(current, 8),
-            negativeExpense: dateInsidePeriod(current, 10),
-            partialDebtPayment: dateInsidePeriod(current, 12),
-            paidDebtCollect: dateInsidePeriod(current, 14),
-            installmentPurchase: dateInsidePeriod(current, 1),
+            currentIncome: elapsed(2),
+            currentExpenseArs: elapsed(4),
+            currentExpenseUsd: elapsed(6),
+            currentExchange: elapsed(8),
+            negativeExpense: elapsed(10),
+            partialDebtPayment: elapsed(12),
+            paidDebtCollect: elapsed(14),
+            installmentPurchase: elapsed(1),
         },
     }
 }
