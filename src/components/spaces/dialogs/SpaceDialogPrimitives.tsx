@@ -109,22 +109,35 @@ export function SpaceDialogTextArea({
     )
 }
 
+/**
+ * Píldora de una decisión excluyente.
+ *
+ * Con `role="radio"` el estado deja de depender sólo del color: el navegador
+ * expone `aria-checked` y el grupo que la contiene puede declararse
+ * `role="radiogroup"` con su propio nombre (`espacios.md` §11). Sin el `role`
+ * se comporta como el botón que ya era, para no cambiar las superficies que
+ * todavía no lo declaran.
+ */
 export function SpaceDialogChoice({
     active,
     onClick,
     children,
     disabled = false,
     className,
+    role,
 }: {
     active: boolean
     onClick: () => void
     children: ReactNode
     disabled?: boolean
     className?: string
+    role?: 'radio'
 }) {
     return (
         <button
             type="button"
+            role={role}
+            aria-checked={role === 'radio' ? active : undefined}
             disabled={disabled}
             onClick={onClick}
             className={cn(

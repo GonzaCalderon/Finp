@@ -3,20 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     AlertTriangle,
-    Banknote,
-    Building2,
-    CalendarRange,
-    CircleDollarSign,
-    Coins,
-    CreditCard,
-    PiggyBank,
-    Link2,
     Loader2,
     Save,
     Trash2,
-    Wallet,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useSpaceCategories } from '@/hooks/useSpaceCategories'
@@ -30,11 +20,8 @@ import {
 } from '@/lib/client/data-sync'
 import { spaceEntryEditSchema, spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
-import type { AccountType, Currency } from '@/lib/constants'
+import type { Currency } from '@/lib/constants'
 import type {
-    IAccount,
-    ICategory,
-    ISpaceCategory,
     ISpaceEntry,
     ISpaceParticipant,
     SpaceEntryPreviewDto,
@@ -51,36 +38,20 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { ErrorState } from '@/components/shared/ErrorState'
-import { Input } from '@/components/ui/input'
+import type { DialogProps } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
+import { SpaceEntryStepper } from '@/components/spaces/dialogs/entry-steps/SpaceEntryStepper'
+import { SpaceEntryDataStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntryDataStep'
+import { SpaceEntrySplitStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntrySplitStep'
+import { SpaceEntryExtrasStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntryExtrasStep'
+import { SpaceEntryReviewStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntryReviewStep'
+import { SpaceEntryNotesPanel } from '@/components/spaces/dialogs/entry-steps/SpaceEntryNotesPanel'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
-import {
-    SpaceAmountInline,
-    SpaceEntryTypeBadge,
-    SpaceInitialsAvatar,
-    SpaceMetaBadge,
-} from '@/components/spaces/SpaceUi'
-import {
-    DialogProps,
-    SpaceDialogField,
-    SpaceDialogPanel,
-    SpaceDialogSectionEyebrow,
-    SpaceDialogTextArea,
-    SpaceLinkCandidateList,
-} from '@/components/spaces/dialogs/SpaceDialogPrimitives'
-import {
-    SpaceDraftAttachmentsUploader,
-} from '@/components/spaces/dialogs/SpaceDraftAttachmentsUploader'
-import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitConfigurator'
-import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
-import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
-import { CurrencySelector } from '@/components/shared/CurrencySelector'
+    buildSpaceEntrySteps,
+    SPACE_ENTRY_STEP_NUMBER,
+    stepIndexFromNumber,
+    type SpaceEntryPersonalIntent,
+} from '@/components/spaces/dialogs/entry-steps/types'
+import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
 import { clientDateToDateKey, dateKeyToClientDate } from '@/lib/client/space-api-adapter'
 import { fetchLinkCandidatesForNewEntry } from '@/lib/client/space-personal-impact'
 import { moneyFromDecimal } from '@/lib/utils/money'
@@ -95,25 +66,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-
-// ── Account type helpers ──────────────────────────────────────────────────────
-
-function getAccountTypeMeta(type: AccountType): { label: string; icon: LucideIcon } {
-    switch (type) {
-        case 'bank':
-            return { label: 'Cuenta bancaria', icon: Building2 }
-        case 'cash':
-            return { label: 'Efectivo', icon: Banknote }
-        case 'wallet':
-            return { label: 'Billetera', icon: Wallet }
-        case 'credit_card':
-            return { label: 'Tarjeta de crédito', icon: CreditCard }
-        case 'savings':
-            return { label: 'Caja de ahorro', icon: PiggyBank }
-        default:
-            return { label: 'Cuenta', icon: CircleDollarSign }
-    }
-}
 
 // ── Internal types ────────────────────────────────────────────────────────────
 
@@ -382,19 +334,23 @@ function formFingerprint(form: SpaceEntryFormData, step: 1 | 2 | 3 | 4) {
     })
 }
 
+/**
+ * Un borrador recuperado no guarda la intención: la deduce de qué campo quedó
+ * elegido. Los dos nunca conviven — el servidor rechaza cuenta personal y
+ * vínculo a la vez— así que la lectura no es ambigua.
+ */
+function personalIntentFromForm(form: SpaceEntryFormData): SpaceEntryPersonalIntent {
+    if (form.linkedTransactionId) return 'link_existing'
+    if (form.personalAccountId) return 'create_transaction'
+    return 'space_only'
+}
+
 function formatFinancialDate(date: Date) {
     return new Intl.DateTimeFormat('es-AR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
     }).format(date)
-}
-
-function formatFinancialAmount(currency: string, amount: number) {
-    return new Intl.NumberFormat('es-AR', {
-        style: 'currency',
-        currency,
-    }).format(amount)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -497,14 +453,24 @@ export function SpaceEntryDialog({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [datePickerOpen, setDatePickerOpen] = useState(false)
     const [hasSubsequentSettlementWarning, setHasSubsequentSettlementWarning] = useState(false)
-    const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
+    const steps = useMemo(() => buildSpaceEntrySteps(spaceMode), [spaceMode])
+    const [stepIndex, setStepIndex] = useState(0)
+    const currentStep = steps[Math.min(stepIndex, steps.length - 1)]
+    const step = SPACE_ENTRY_STEP_NUMBER[currentStep.id]
+    const isLastStep = stepIndex >= steps.length - 1
+    const setStep = useCallback(
+        (value: number) => setStepIndex(stepIndexFromNumber(steps, value)),
+        [steps]
+    )
     const [preview, setPreview] = useState<SpaceEntryPreviewDto | null>(null)
     const [previewLoading, setPreviewLoading] = useState(false)
     const [previewError, setPreviewError] = useState<string | null>(null)
     // Un fallo de red sin cambiar ningún campo no vuelve a disparar el efecto de
     // preview por sí solo: "Reintentar" lo fuerza incrementando este nonce.
     const [previewRetryNonce, setPreviewRetryNonce] = useState(0)
-    const [showAdvancedLink, setShowAdvancedLink] = useState(false)
+    // Las tres formas de impacto personal son excluyentes: el estado es la
+    // intención, no un efecto lateral de qué campo quedó lleno.
+    const [personalIntent, setPersonalIntent] = useState<SpaceEntryPersonalIntent>('space_only')
     const [candidates, setCandidates] = useState<SpaceLinkCandidateDto[]>([])
     const [candidatesLoading, setCandidatesLoading] = useState(false)
     const [candidatesError, setCandidatesError] = useState<string | null>(null)
@@ -513,13 +479,17 @@ export function SpaceEntryDialog({
     const [draftHydrated, setDraftHydrated] = useState(false)
     const [discardDraftOpen, setDiscardDraftOpen] = useState(false)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
-    const focusFirstError = () => {
-        requestAnimationFrame(() => {
-            const firstError = scrollContainerRef.current?.querySelector<HTMLElement>('.text-destructive')
-            firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            firstError?.focus()
-        })
-    }
+    const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+    // Cada intento rechazado incrementa el contador; el hook compartido lleva el
+    // foco y el scroll al primer error (design.md §9, espacios.md §11).
+    const [submitAttempt, setSubmitAttempt] = useState(0)
+    // Sólo se incrementa cuando el intento se rechaza, así que siempre hay un
+    // error visible que reclamar.
+    const rejectAttempt = useCallback(() => setSubmitAttempt((current) => current + 1), [])
+    useScrollToFirstError(submitAttempt, true, scrollContainerRef, {
+        focus: true,
+        block: 'center',
+    })
     const previousCurrencyRef = useRef(form.currency)
     const draftBaselineRef = useRef<string | null>(null)
     const initializedOpenRef = useRef(false)
@@ -557,10 +527,10 @@ export function SpaceEntryDialog({
         setSubmitting(false)
         setError(null)
         setHasSubsequentSettlementWarning(false)
-        setStep(1)
+        setStepIndex(0)
         setPreview(null)
         setPreviewError(null)
-        setShowAdvancedLink(false)
+        setPersonalIntent('space_only')
         setCandidates([])
         setCandidatesError(null)
         setCandidatesExcludedCount(0)
@@ -623,6 +593,7 @@ export function SpaceEntryDialog({
                 ? sanitizeDraft({ raw: savedDraft, defaults, activeParticipants, spaceMode })
                 : defaults
             setForm(nextForm)
+            setPersonalIntent(personalIntentFromForm(nextForm))
             draftBaselineRef.current = formFingerprint(nextForm, 1)
             setDraftHydrated(true)
             return
@@ -681,6 +652,7 @@ export function SpaceEntryDialog({
                 }
 
                 setForm(nextForm)
+                setPersonalIntent(personalIntentFromForm(nextForm))
                 setStep(nextStep)
                 draftBaselineRef.current = formFingerprint(nextForm, nextStep)
                 setDraftHydrated(true)
@@ -709,6 +681,7 @@ export function SpaceEntryDialog({
                     }
                 }
                 setForm(nextForm)
+                setPersonalIntent(personalIntentFromForm(nextForm))
                 setStep(nextStep)
                 draftBaselineRef.current = formFingerprint(nextForm, nextStep)
                 setDraftHydrated(true)
@@ -727,6 +700,7 @@ export function SpaceEntryDialog({
         loadDraft,
         mode,
         open,
+        setStep,
         spaceMode,
     ])
 
@@ -795,7 +769,6 @@ export function SpaceEntryDialog({
         (participant) => extractId(participant._id) === form.paidByParticipantId
     )
     const isCurrentUserPayer = extractId(paidByParticipant?.userId) === currentUserId
-    const initialLinkedTransactionImpactsCurrentUser = false
     const filteredAccounts = useMemo(
         () =>
             accounts.filter((account) => account.isActive !== false &&
@@ -829,8 +802,49 @@ export function SpaceEntryDialog({
         [filteredCategories, form.spaceCategoryId]
     )
 
+    // Cambiar de paso lleva el foco al encabezado del paso (`espacios.md` §11).
+    // No corre al abrir ni al rehidratar un borrador: reanudar no debe saltar
+    // sobre el contenido que el usuario todavía no vio.
+    const announcedStepRef = useRef<number | null>(null)
     useEffect(() => {
-        const previewEligible = mode === 'edit' || (mode === 'create' && (step === 3 || step === 4))
+        if (!open || mode !== 'create') {
+            announcedStepRef.current = null
+            return
+        }
+        // Hasta que el borrador termina de hidratar, el paso todavía puede
+        // cambiar solo: se registra sin mover el foco.
+        if (!draftHydrated || announcedStepRef.current === null) {
+            announcedStepRef.current = stepIndex
+            return
+        }
+        if (announcedStepRef.current === stepIndex) return
+        announcedStepRef.current = stepIndex
+        stepHeadingRef.current?.focus()
+    }, [draftHydrated, mode, open, stepIndex])
+
+    const hasSplitStep = steps.some((item) => item.id === 'split')
+    /**
+     * La autoridad de si hace falta una cuenta personal es la revisión del
+     * servidor: sólo una salida real la exige. Mientras no hay revisión se
+     * asume que sí, que es el caso del pagador.
+     */
+    const requiresPersonalAccount = preview ? preview.accountImpactAmount > 0 : true
+
+    const handlePersonalIntentChange = (next: SpaceEntryPersonalIntent) => {
+        setPersonalIntent(next)
+        clearFieldError('personalIntent')
+        setForm((previous) => ({
+            ...previous,
+            personalAccountId: next === 'create_transaction' ? previous.personalAccountId : undefined,
+            categoryId: next === 'create_transaction' ? previous.categoryId : undefined,
+            linkedTransactionId: next === 'link_existing' ? previous.linkedTransactionId : undefined,
+        }))
+    }
+
+    useEffect(() => {
+        const previewEligible =
+            mode === 'edit' ||
+            (mode === 'create' && (currentStep.id === 'extras' || currentStep.id === 'review'))
         if (!open || !previewEligible || contractVersion !== 2) {
             setPreviewLoading(false)
             return
@@ -915,11 +929,17 @@ export function SpaceEntryDialog({
         open,
         previewRetryNonce,
         spaceId,
-        step,
+        currentStep.id,
     ])
 
     useEffect(() => {
-        if (!open || mode !== 'create' || step !== 3 || !showAdvancedLink || !spaceTimezone) {
+        if (
+            !open ||
+            mode !== 'create' ||
+            currentStep.id !== 'extras' ||
+            personalIntent !== 'link_existing' ||
+            !spaceTimezone
+        ) {
             return
         }
         const sharedParticipantIds = form.sharedWithParticipantIds?.length
@@ -975,10 +995,10 @@ export function SpaceEntryDialog({
         form.splitMode,
         mode,
         open,
-        showAdvancedLink,
+        personalIntent,
         spaceId,
         spaceTimezone,
-        step,
+        currentStep.id,
     ])
 
     useEffect(() => {
@@ -1274,6 +1294,7 @@ export function SpaceEntryDialog({
                 spaceMode,
             })
             setForm(nextForm)
+            setPersonalIntent(personalIntentFromForm(nextForm))
             setStep(latest.step)
             draftBaselineRef.current = formFingerprint(nextForm, latest.step)
         } catch {
@@ -1336,19 +1357,19 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
-            focusFirstError()
+            rejectAttempt()
             return
         }
 
         // La edición cambia balances y deuda: usa la misma revisión vigente que el alta.
         if (contractVersion === 2 && (previewLoading || !preview)) {
             setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
-            focusFirstError()
+            rejectAttempt()
             return
         }
         if (preview?.linkExisting && !preview.linkExisting.compatible) {
             setError('La transacción elegida no coincide con la revisión financiera. Elegí otra o creá una nueva.')
-            focusFirstError()
+            rejectAttempt()
             return
         }
 
@@ -1424,9 +1445,51 @@ export function SpaceEntryDialog({
         }
     }
 
+    const parseWithSchema = () => {
+        const parsed = spaceEntrySchema.safeParse({ ...form, type: 'expense' })
+        if (parsed.success) return null
+        const nextErrors: Record<string, string> = {}
+        for (const issue of parsed.error.issues) {
+            const key = String(issue.path[0] ?? '')
+            if (key && !nextErrors[key]) nextErrors[key] = issue.message
+        }
+        return nextErrors
+    }
+
+    /**
+     * La intención personal ya elegida tiene que poder confirmarse: el servidor
+     * exige cuenta cuando la revisión indica salida real, y un vínculo sin
+     * transacción elegida no es un vínculo (`espacios.md` §10).
+     */
+    const validatePersonalIntent = (): Record<string, string> | null => {
+        if (!isCurrentUserPayer) return null
+        if (personalIntent === 'create_transaction') {
+            if (!requiresPersonalAccount) return null
+            if (filteredAccounts.length === 0) {
+                return {
+                    personalIntent: `Necesitás una cuenta en ${form.currency} para registrarlo en tu Finp, o elegí «Sólo en el Espacio».`,
+                }
+            }
+            if (!form.personalAccountId) {
+                return { personalIntent: 'Elegí la cuenta o tarjeta desde la que pagaste.' }
+            }
+            return null
+        }
+        if (personalIntent === 'link_existing' && !form.linkedTransactionId) {
+            return { personalIntent: 'Elegí una transacción compatible o cambiá la opción.' }
+        }
+        return null
+    }
+
+    const goToStep = (index: number) => {
+        setFieldErrors({})
+        setStepIndex(Math.max(0, Math.min(index, steps.length - 1)))
+    }
+
     const handleNextStep = () => {
         if (mode === 'edit') return
-        if (step === 1) {
+
+        if (currentStep.id === 'data') {
             const nextErrors: Record<string, string> = {}
             if (!form.title.trim()) nextErrors.title = 'Ingresá una descripción.'
             if (!Number.isFinite(form.amount) || form.amount <= 0) nextErrors.amount = 'Ingresá un monto mayor a cero.'
@@ -1434,34 +1497,39 @@ export function SpaceEntryDialog({
             if (form.currency !== reportingCurrency && !form.exchangeRate) {
                 nextErrors.exchangeRate = 'Ingresá la cotización para la moneda de reporte.'
             }
+            // Sin paso de reparto —un Espacio `solo`— el esquema completo se
+            // valida acá; si no, nada lo verificaría antes de la revisión.
+            if (!Object.keys(nextErrors).length && !hasSplitStep) {
+                Object.assign(nextErrors, parseWithSchema() ?? {})
+            }
             if (Object.keys(nextErrors).length) {
                 setFieldErrors(nextErrors)
-                focusFirstError()
+                rejectAttempt()
                 return
             }
-            setFieldErrors({})
-            setStep(2)
+            goToStep(stepIndex + 1)
             return
         }
-        if (step === 2) {
-            const parsed = spaceEntrySchema.safeParse({ ...form, type: 'expense' })
-            if (!parsed.success) {
-                const nextErrors: Record<string, string> = {}
-                for (const issue of parsed.error.issues) {
-                    const key = String(issue.path[0] ?? '')
-                    if (key && !nextErrors[key]) nextErrors[key] = issue.message
-                }
+
+        if (currentStep.id === 'split') {
+            const nextErrors = parseWithSchema()
+            if (nextErrors) {
                 setFieldErrors(nextErrors)
-                focusFirstError()
+                rejectAttempt()
                 return
             }
-            setFieldErrors({})
-            setStep(3)
+            goToStep(stepIndex + 1)
             return
         }
-        if (step === 3) {
-            setFieldErrors({})
-            setStep(4)
+
+        if (currentStep.id === 'extras') {
+            const nextErrors = validatePersonalIntent()
+            if (nextErrors) {
+                setFieldErrors(nextErrors)
+                rejectAttempt()
+                return
+            }
+            goToStep(stepIndex + 1)
         }
     }
 
@@ -1500,18 +1568,18 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
-            focusFirstError()
+            rejectAttempt()
             return
         }
 
         if (contractVersion === 2 && (previewLoading || !preview)) {
             setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
-            focusFirstError()
+            rejectAttempt()
             return
         }
         if (preview?.linkExisting && !preview.linkExisting.compatible) {
             setError('La transacción elegida no coincide con la revisión financiera. Elegí otra o creá una nueva.')
-            focusFirstError()
+            rejectAttempt()
             return
         }
 
@@ -1525,7 +1593,7 @@ export function SpaceEntryDialog({
                 categoryId: parsed.data.personalAccountId ? parsed.data.categoryId : undefined,
             }
             const savedDraft = contractVersion === 2
-                ? await persistDraftSnapshot(submission, 4)
+                ? await persistDraftSnapshot(submission, SPACE_ENTRY_STEP_NUMBER.review)
                 : null
             if (contractVersion === 2 && !savedDraft) {
                 throw new Error('No pudimos preparar el borrador para publicarlo.')
@@ -1546,6 +1614,198 @@ export function SpaceEntryDialog({
         } finally {
             setSubmitting(false)
         }
+    }
+
+    const linkedCandidate = candidates.find(
+        (candidate) => candidate.transactionId === form.linkedTransactionId
+    )
+    const personalIntentSummary = !isCurrentUserPayer
+        ? undefined
+        : personalIntent === 'link_existing'
+            ? linkedCandidate
+                ? `Se vinculará con «${linkedCandidate.description}» de tu Finp.`
+                : 'Se vinculará con una transacción existente de tu Finp.'
+            : personalIntent === 'create_transaction'
+                ? selectedPersonalAccount
+                    ? `Se creará una transacción en ${selectedPersonalAccount.name}.`
+                    : 'Se registrará como gasto operacional en tu Finp, sin mover una cuenta.'
+                : 'Queda sólo en el Espacio; podés decidir tu Finp después.'
+
+    const dataStep = (
+        <SpaceEntryDataStep
+            amount={form.amount}
+            currency={form.currency}
+            date={form.date instanceof Date ? form.date : undefined}
+            title={form.title}
+            paidByParticipantId={form.paidByParticipantId}
+            spaceCategoryId={form.spaceCategoryId}
+            exchangeRate={form.exchangeRate}
+            reportingCurrency={reportingCurrency}
+            spaceCurrencies={spaceCurrencies}
+            payerParticipants={payerParticipants}
+            spaceCategories={filteredCategories}
+            datePickerOpen={datePickerOpen}
+            fieldErrors={fieldErrors}
+            activeQuote={activeQuote}
+            automaticQuoteSelected={automaticQuoteSelected}
+            onAmountChange={(value) => {
+                setForm((previous) => ({ ...previous, amount: value }))
+                clearFieldError('amount')
+            }}
+            onCurrencyChange={(currency) => {
+                setForm((previous) => ({
+                    ...previous,
+                    currency,
+                    personalAccountId: undefined,
+                    categoryId: undefined,
+                }))
+                clearFieldError('currency')
+            }}
+            onDateChange={(date) => setForm((previous) => ({ ...previous, date }))}
+            onDatePickerOpenChange={(nextOpen) => {
+                if (nextOpen) clearFieldError('date')
+                setDatePickerOpen(nextOpen)
+            }}
+            onTitleChange={(value) => {
+                setForm((previous) => ({ ...previous, title: value }))
+                clearFieldError('title')
+            }}
+            onPaidByChange={(value) => {
+                clearFieldError('paidByParticipantId')
+                setForm((previous) => {
+                    const nextIsCurrentUser =
+                        extractId(
+                            availableParticipants.find(
+                                (participant) => extractId(participant._id) === value
+                            )?.userId
+                        ) === currentUserId
+                    const shouldMoveResponsibility =
+                        previous.splitMode === 'none' &&
+                        (!previous.sharedWithParticipantIds?.[0] ||
+                            previous.sharedWithParticipantIds[0] === previous.paidByParticipantId)
+
+                    return {
+                        ...previous,
+                        paidByParticipantId: value,
+                        sharedWithParticipantIds: shouldMoveResponsibility
+                            ? [value]
+                            : previous.sharedWithParticipantIds,
+                        personalAccountId: nextIsCurrentUser ? previous.personalAccountId : undefined,
+                    }
+                })
+            }}
+            onSpaceCategoryChange={(spaceCategoryId) =>
+                setForm((previous) => ({ ...previous, spaceCategoryId }))
+            }
+            onExchangeRateChange={(exchangeRate) => {
+                setForm((previous) => ({ ...previous, exchangeRate }))
+                clearFieldError('exchangeRate')
+            }}
+        />
+    )
+
+    const splitStep = (
+        <SpaceEntrySplitStep
+            participants={splitParticipants}
+            amount={Number.isFinite(form.amount) ? form.amount : 0}
+            currency={form.currency}
+            paidByParticipantId={form.paidByParticipantId}
+            selectedParticipantIds={form.sharedWithParticipantIds ?? []}
+            splitMode={form.splitMode}
+            allocations={form.splitAllocations}
+            error={fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations}
+            onToggleParticipant={(id) => {
+                toggleSharedParticipant(id)
+                clearFieldError('sharedWithParticipantIds')
+                clearFieldError('splitAllocations')
+            }}
+            onResponsibleChange={setResponsibleParticipant}
+            onApplyPreset={(preset) => {
+                applySplitPreset(preset)
+                clearFieldError('splitAllocations')
+            }}
+            onAllocationsChange={(allocations) => {
+                updateSplitAllocations(allocations)
+                clearFieldError('splitAllocations')
+            }}
+        />
+    )
+
+    const reviewStep = (
+        <SpaceEntryReviewStep
+            entryType={form.type}
+            amount={form.amount}
+            currency={form.currency}
+            reportingCurrency={reportingCurrency}
+            formattedDate={formatFinancialDate(form.date)}
+            payerName={paidByParticipant?.displayName}
+            personalIntentSummary={mode === 'create' ? personalIntentSummary : undefined}
+            preview={preview}
+            previewLoading={previewLoading}
+            previewError={previewError}
+            showFinancialReview={mode === 'create' || contractVersion === 2}
+            onPreviewRetry={() => setPreviewRetryNonce((current) => current + 1)}
+            onSaveDraftAndClose={
+                mode === 'create' && contractVersion === 2 ? () => void handleSaveDraft() : undefined
+            }
+            saveDraftDisabled={submitting || draftLoading || draftSaveState === 'saving'}
+            saveDraftBusy={draftSaveState === 'saving'}
+        />
+    )
+
+    const renderCurrentStep = () => {
+        if (currentStep.id === 'data') return dataStep
+        if (currentStep.id === 'split') return splitStep
+        if (currentStep.id === 'review') return reviewStep
+        return (
+            <SpaceEntryExtrasStep
+                isCurrentUserPayer={isCurrentUserPayer}
+                intent={personalIntent}
+                personalAccountId={form.personalAccountId}
+                categoryId={form.categoryId}
+                linkedTransactionId={form.linkedTransactionId}
+                currency={form.currency}
+                amount={Number.isFinite(form.amount) ? form.amount : 0}
+                requiresPersonalAccount={requiresPersonalAccount}
+                accounts={filteredAccounts}
+                personalCategories={personalExpenseCategories}
+                intentError={fieldErrors.personalIntent}
+                linkIncompatible={Boolean(preview?.linkExisting && !preview.linkExisting.compatible)}
+                candidates={candidates}
+                candidatesLoading={candidatesLoading}
+                candidatesError={candidatesError}
+                candidatesExcludedCount={candidatesExcludedCount}
+                attachments={persistedDraft?.attachments ?? []}
+                attachmentsDisabled={submitting || draftLoading}
+                onIntentChange={handlePersonalIntentChange}
+                onPersonalAccountChange={(personalAccountId) => {
+                    clearFieldError('personalIntent')
+                    setForm((previous) => ({
+                        ...previous,
+                        personalAccountId,
+                        linkedTransactionId: undefined,
+                    }))
+                }}
+                onCategoryChange={(categoryId) => setForm((previous) => ({ ...previous, categoryId }))}
+                onLinkedTransactionChange={(linkedTransactionId) => {
+                    clearFieldError('personalIntent')
+                    setForm((previous) => ({
+                        ...previous,
+                        linkedTransactionId,
+                        personalAccountId: undefined,
+                        categoryId: undefined,
+                    }))
+                }}
+                onCandidatesRetry={() => setCandidatesRetryNonce((current) => current + 1)}
+                onAttachmentUpload={handleDraftAttachmentUpload}
+                onAttachmentRemove={async (attachmentId) => {
+                    await removeDraftAttachment(attachmentId)
+                }}
+                onAttachmentsBlockingChange={setDraftAttachmentsBlocked}
+                notes={form.notes ?? ''}
+                onNotesChange={(notes) => setForm((previous) => ({ ...previous, notes }))}
+            />
+        )
     }
 
     return (
@@ -1573,25 +1833,11 @@ export function SpaceEntryDialog({
                             </div>
                         </DialogHeader>
                         {mode === 'create' ? (
-                            <ol className="mt-4 grid grid-cols-4 gap-2" aria-label="Pasos del gasto">
-                                {(['Datos', 'Reparto', 'Extras', 'Revisión'] as const).map((label, index) => {
-                                    const value = (index + 1) as 1 | 2 | 3 | 4
-                                    const active = step === value
-                                    const complete = step > value
-                                    return (
-                                        <li key={label}>
-                                            <button
-                                                type="button"
-                                                className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-medium transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : complete ? 'border-foreground/10 bg-muted/60 text-foreground' : 'border-foreground/10 text-muted-foreground'}`}
-                                                onClick={() => complete && setStep(value)}
-                                                aria-current={active ? 'step' : undefined}
-                                            >
-                                                {value}. {label}
-                                            </button>
-                                        </li>
-                                    )
-                                })}
-                            </ol>
+                            <SpaceEntryStepper
+                                steps={steps}
+                                currentIndex={stepIndex}
+                                onSelectStep={goToStep}
+                            />
                         ) : null}
                         {mode === 'create' && contractVersion === 2 && draftHydrated ? (
                             <div className="mt-3 space-y-2">
@@ -1670,14 +1916,6 @@ export function SpaceEntryDialog({
                                 ) : null}
                             </div>
                         ) : null}
-                        {mode === 'edit' && initialLinkedTransactionImpactsCurrentUser ? (
-                            <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                <span>
-                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada para mantener tus finanzas consistentes.
-                                </span>
-                            </div>
-                        ) : null}
                         {hasSubsequentSettlementWarning ? (
                             <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1698,574 +1936,46 @@ export function SpaceEntryDialog({
                                 </div>
                             </div>
                         ) : null}
-                        <div className="space-y-5">
-                            <div className={`grid gap-5 ${mode === 'edit' ? 'xl:grid-cols-[1.2fr_0.8fr]' : ''}`}>
 
-                                {/* ── Left column ── */}
-                                <div className={`space-y-5 ${mode === 'create' && (step === 3 || step === 4) ? 'hidden' : ''}`}>
-
-                                    {/* Monto, moneda, fecha, descripción, pagó, categoría */}
-                                    <div className={mode === 'edit' || step === 1 ? 'block' : 'hidden'}>
-                                    <SpaceDialogPanel>
-                                        <div className="grid gap-4">
-                                            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.55fr_0.7fr]">
-                                                <FormattedAmountInput
-                                                    id="entry-amount"
-                                                    label="Monto"
-                                                    value={form.amount || undefined}
-                                                    currency={form.currency}
-                                                    error={fieldErrors.amount}
-                                                    labelClassName="text-sm font-medium text-foreground"
-                                                    onValueChangeAction={(value) => {
-                                                        setForm((previous) => ({ ...previous, amount: value }))
-                                                        clearFieldError('amount')
-                                                    }}
-                                                />
-
-                                                <CurrencySelector
-                                                    value={form.currency}
-                                                    options={spaceCurrencies}
-                                                    onValueChange={(currency) => {
-                                                        setForm((previous) => ({
-                                                            ...previous,
-                                                            currency,
-                                                            personalAccountId: undefined,
-                                                            categoryId: undefined,
-                                                        }))
-                                                        clearFieldError('currency')
-                                                    }}
-                                                    error={fieldErrors.currency}
-                                                />
-
-                                                <DatePickerField
-                                                    label="Fecha"
-                                                    value={form.date instanceof Date ? form.date : undefined}
-                                                    isOpen={datePickerOpen}
-                                                    onOpenChange={(open) => {
-                                                        if (open) clearFieldError('date')
-                                                        setDatePickerOpen(open)
-                                                    }}
-                                                    onChange={(date) => {
-                                                        if (date) setForm((previous) => ({ ...previous, date }))
-                                                    }}
-                                                    error={fieldErrors.date}
-                                                    showErrors={Boolean(fieldErrors.date)}
-                                                />
-                                            </div>
-
-                                            <SpaceDialogField id="entry-title" label="Descripción" error={fieldErrors.title}>
-                                                <Input
-                                                    id="entry-title"
-                                                    value={form.title}
-                                                    onChange={(event) => {
-                                                        setForm((previous) => ({ ...previous, title: event.target.value }))
-                                                        clearFieldError('title')
-                                                    }}
-                                                    placeholder="Ej. Almuerzo equipo en Santiago"
-                                                    className={fieldErrors.title ? 'border-destructive focus-visible:ring-destructive/25' : ''}
-                                                />
-                                            </SpaceDialogField>
-
-                                            <div className="grid gap-4 lg:grid-cols-2">
-                                                <SpaceDialogField id="entry-paid-by" label="Pagó" error={fieldErrors.paidByParticipantId}>
-                                                    <Select
-                                                        value={form.paidByParticipantId}
-                                                        onValueChange={(value) => {
-                                                            clearFieldError('paidByParticipantId')
-                                                            setForm((previous) => {
-                                                                const nextIsCurrentUser =
-                                                                    extractId(
-                                                                        availableParticipants.find(
-                                                                            (participant) =>
-                                                                                extractId(participant._id) === value
-                                                                        )?.userId
-                                                                    ) === currentUserId
-                                                                const shouldMoveResponsibility =
-                                                                    previous.splitMode === 'none' &&
-                                                                    (!previous.sharedWithParticipantIds?.[0] ||
-                                                                        previous.sharedWithParticipantIds[0] ===
-                                                                            previous.paidByParticipantId)
-
-                                                                return {
-                                                                    ...previous,
-                                                                    paidByParticipantId: value,
-                                                                    sharedWithParticipantIds: shouldMoveResponsibility
-                                                                        ? [value]
-                                                                        : previous.sharedWithParticipantIds,
-                                                                    personalAccountId: nextIsCurrentUser
-                                                                        ? previous.personalAccountId
-                                                                        : undefined,
-                                                                }
-                                                            })
-                                                        }}
-                                                    >
-                                                        <SelectTrigger
-                                                            id="entry-paid-by"
-                                                            aria-labelledby="entry-paid-by-label entry-paid-by"
-                                                            className="w-full"
-                                                        >
-                                                            <SelectValue placeholder="Elegí un participante" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {payerParticipants.map((participant) => (
-                                                                <SelectItem
-                                                                    key={extractId(participant._id)}
-                                                                    value={extractId(participant._id) ?? ''}
-                                                                >
-                                                                    <span className="flex items-center gap-2">
-                                                                        <SpaceInitialsAvatar
-                                                                            name={participant.displayName}
-                                                                            className="h-6 w-6 text-[10px]"
-                                                                        />
-                                                                        <span>
-                                                                            {participant.displayName}
-                                                                            {!participant.isActive ? ' · inactivo' : ''}
-                                                                        </span>
-                                                                    </span>
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </SpaceDialogField>
-
-                                                <SpaceDialogField id="entry-space-category" label="Categoría del espacio">
-                                                    <Select
-                                                        value={form.spaceCategoryId ?? 'none'}
-                                                        onValueChange={(value) =>
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                spaceCategoryId: value === 'none' ? undefined : value,
-                                                            }))
-                                                        }
-                                                    >
-                                                        <SelectTrigger
-                                                            id="entry-space-category"
-                                                            aria-labelledby="entry-space-category-label entry-space-category"
-                                                            className="w-full"
-                                                        >
-                                                            <SelectValue placeholder="Sin categoría" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">Sin categoría</SelectItem>
-                                                            {filteredCategories.map((category: ISpaceCategory) => (
-                                                                <SelectItem
-                                                                    key={extractId(category._id)}
-                                                                    value={extractId(category._id) ?? ''}
-                                                                >
-                                                                    {category.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </SpaceDialogField>
-                                            </div>
-
-                                            {form.currency !== reportingCurrency ? (
-                                                <FormattedAmountInput
-                                                    id="space-exchange-rate"
-                                                    label={`Cotización a ${reportingCurrency}`}
-                                                    value={form.exchangeRate}
-                                                    currency={reportingCurrency}
-                                                    helperText="Necesaria para reflejar el movimiento correctamente en la moneda de reporte."
-                                                    error={fieldErrors.exchangeRate}
-                                                    placeholder={`Valor de 1 ${form.currency}`}
-                                                    onValueChangeAction={(exchangeRate) => {
-                                                        setForm((previous) => ({
-                                                            ...previous,
-                                                            exchangeRate: exchangeRate || undefined,
-                                                        }))
-                                                        clearFieldError('exchangeRate')
-                                                    }}
-                                                />
-                                            ) : null}
-                                            {form.currency !== reportingCurrency ? (
-                                                <p className="text-xs text-muted-foreground" aria-live="polite">
-                                                    {automaticQuoteSelected && activeQuote
-                                                        ? `Referencia automática · ${activeQuote.source === 'dolarapi_official' ? 'DolarAPI oficial' : 'Frankfurter'} · ${activeQuote.status === 'current' ? 'actualizada' : 'desactualizada'}`
-                                                        : 'Cotización manual: Finp guardará este valor, su autor y el momento de confirmación.'}
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    </SpaceDialogPanel>
-                                    </div>
-
-                                    {/* Split configurator */}
-                                    {(mode === 'edit' || step === 2) && spaceMode !== 'solo' ? (
-                                        <div>
-                                            <SpaceSplitConfigurator
-                                                participants={splitParticipants}
-                                                amount={Number.isFinite(form.amount) ? form.amount : 0}
-                                                currency={form.currency}
-                                                paidByParticipantId={form.paidByParticipantId}
-                                                selectedParticipantIds={form.sharedWithParticipantIds ?? []}
-                                                splitMode={form.splitMode}
-                                                allocations={form.splitAllocations}
-                                                onToggleParticipant={(id) => {
-                                                    toggleSharedParticipant(id)
-                                                    clearFieldError('sharedWithParticipantIds')
-                                                    clearFieldError('splitAllocations')
-                                                }}
-                                                onResponsibleChange={setResponsibleParticipant}
-                                                onApplyPreset={(preset) => {
-                                                    applySplitPreset(preset)
-                                                    clearFieldError('splitAllocations')
-                                                }}
-                                                onAllocationsChange={(allocs) => {
-                                                    updateSplitAllocations(allocs)
-                                                    clearFieldError('splitAllocations')
-                                                }}
-                                            />
-                                            {(fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations) ? (
-                                                <p className="mt-2 text-xs font-medium text-destructive" tabIndex={-1}>
-                                                    {fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations}
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    ) : null}
+                        {mode === 'create' ? (
+                            <div className="space-y-5" data-testid={`space-entry-step-${currentStep.id}`}>
+                                <div className="space-y-1">
+                                    <h2
+                                        ref={stepHeadingRef}
+                                        tabIndex={-1}
+                                        className="text-lg font-semibold tracking-tight text-foreground outline-none"
+                                    >
+                                        {currentStep.title}
+                                    </h2>
+                                    <p className="text-sm text-muted-foreground">{currentStep.description}</p>
                                 </div>
-
-                                {/* ── Right column ── */}
-                                <div className={`space-y-5 ${mode === 'create' && step !== 3 && step !== 4 ? 'hidden' : ''}`}>
-
-                                    {/* Resumen */}
-                                    {mode === 'edit' || step === 4 ? (
-                                    <SpaceDialogPanel>
-                                        <div className="space-y-4">
-                                            <div className="space-y-1">
-                                                <SpaceDialogSectionEyebrow>Resumen</SpaceDialogSectionEyebrow>
-                                                <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                    Vista rápida antes de guardar
-                                                </h3>
-                                            </div>
-
-                                            <div className="flex flex-wrap gap-2">
-                                                <SpaceEntryTypeBadge type={form.type} />
-                                                <SpaceMetaBadge icon={Coins}>
-                                                    {form.currency} · reporte en {reportingCurrency}
-                                                </SpaceMetaBadge>
-                                                <SpaceMetaBadge icon={CalendarRange}>
-                                                    {formatFinancialDate(form.date)}
-                                                </SpaceMetaBadge>
-                                            </div>
-
-                                            <div className="rounded-[24px] border border-foreground/[0.07] bg-background/72 p-4">
-                                                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                                                    Monto
-                                                </p>
-                                                <SpaceAmountInline
-                                                    amount={Number.isFinite(form.amount) ? form.amount : 0}
-                                                    currency={form.currency}
-                                                    hidden={false}
-                                                    className="mt-2 text-2xl font-semibold"
-                                                    exact
-                                                />
-                                                <p className="mt-2 text-sm text-muted-foreground">
-                                                    {paidByParticipant
-                                                        ? `Lo registra ${paidByParticipant.displayName}.`
-                                                        : 'Todavía falta elegir quién paga.'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </SpaceDialogPanel>
-                                    ) : null}
-
-                                    {(mode === 'create' && step === 4) || (mode === 'edit' && contractVersion === 2) ? (
-                                        <SpaceDialogPanel>
-                                            <div className="space-y-4" aria-live="polite">
-                                                <div>
-                                                    <SpaceDialogSectionEyebrow>Revisión financiera</SpaceDialogSectionEyebrow>
-                                                    <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-                                                        Qué cambia al confirmar
-                                                    </h3>
-                                                </div>
-                                                {previewLoading ? (
-                                                    <p className="text-sm text-muted-foreground">Calculando con las reglas del Espacio…</p>
-                                                ) : preview ? (
-                                                    <dl className="grid grid-cols-2 gap-3 text-sm">
-                                                        {[
-                                                            ['Total', preview.totalAmount],
-                                                            ['Tu parte', preview.ownShareAmount],
-                                                            ['Impacto real de cuenta', preview.accountImpactAmount],
-                                                            ['Gasto operacional', preview.operationalAmount],
-                                                            ['Adelanto recuperable', preview.recoverableAdvanceAmount],
-                                                            ['Cambio en deuda', preview.debtDeltaReporting],
-                                                        ].map(([label, amount]) => (
-                                                            <div key={label as string} className="rounded-xl border border-foreground/[0.07] bg-background/70 p-3">
-                                                                <dt className="text-xs text-muted-foreground">{label}</dt>
-                                                                <dd className="mt-1 font-semibold">
-                                                                    <SpaceAmountInline
-                                                                        amount={amount as number}
-                                                                        currency={label === 'Cambio en deuda' ? preview.reportingCurrency : preview.currency}
-                                                                        hidden={false}
-                                                                        exact
-                                                                    />
-                                                                </dd>
-                                                            </div>
-                                                        ))}
-                                                    </dl>
-                                                ) : previewError ? (
-                                                    <div className="rounded-xl border border-destructive/15 bg-destructive/5">
-                                                        <ErrorState
-                                                            icon={AlertTriangle}
-                                                            title="No pudimos calcular la revisión"
-                                                            description={previewError}
-                                                            onRetry={() => setPreviewRetryNonce((current) => current + 1)}
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <p className="rounded-xl border border-foreground/[0.07] bg-muted/35 p-3 text-sm text-muted-foreground">
-                                                        Completá monto, pagador y reparto para calcular la revisión.
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </SpaceDialogPanel>
-                                    ) : null}
-
-                                    {/* Pagado desde — solo en modo crear */}
-                                    {mode === 'create' && step === 3 && isCurrentUserPayer ? (
-                                        <SpaceDialogPanel>
-                                            <div className="space-y-3">
-                                                <div className="space-y-1">
-                                                    <SpaceDialogSectionEyebrow>Impacto personal</SpaceDialogSectionEyebrow>
-                                                    <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                        Pagado desde
-                                                    </h3>
-                                                </div>
-
-                                                <SpaceDialogField id="entry-personal-account" label="Cuenta o tarjeta">
-                                                    <Select
-                                                        value={form.personalAccountId ?? 'none'}
-                                                        onValueChange={(value) => {
-                                                            if (value !== 'none') {
-                                                                setShowAdvancedLink(false)
-                                                            }
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                personalAccountId:
-                                                                    value === 'none' ? undefined : value,
-                                                                categoryId:
-                                                                    value === 'none' ? undefined : previous.categoryId,
-                                                                linkedTransactionId:
-                                                                    value === 'none' ? previous.linkedTransactionId : undefined,
-                                                            }))
-                                                        }}
-                                                    >
-                                                        <SelectTrigger
-                                                            id="entry-personal-account"
-                                                            aria-labelledby="entry-personal-account-label entry-personal-account"
-                                                            className="w-full"
-                                                        >
-                                                            <SelectValue placeholder="Solo registrar en el espacio" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none" textValue="Solo registrar en el espacio">
-                                                                <span className="flex items-center gap-2.5">
-                                                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-muted">
-                                                                        <CircleDollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                    </span>
-                                                                    <span className="text-sm text-muted-foreground">
-                                                                        Solo registrar en el espacio
-                                                                    </span>
-                                                                </span>
-                                                            </SelectItem>
-                                                            {filteredAccounts.map((account: IAccount) => {
-                                                                const meta = getAccountTypeMeta(account.type)
-                                                                const Icon = meta.icon
-                                                                return (
-                                                                    <SelectItem
-                                                                        key={extractId(account._id)}
-                                                                        value={extractId(account._id) ?? ''}
-                                                                        textValue={account.name}
-                                                                    >
-                                                                        <span className="flex items-center gap-2.5">
-                                                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-muted">
-                                                                                <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                            </span>
-                                                                            <span>
-                                                                                <span className="block text-sm font-medium leading-tight">
-                                                                                    {account.name}
-                                                                                </span>
-                                                                                <span className="block text-xs leading-tight text-muted-foreground">
-                                                                                    {meta.label} · {account.currency}
-                                                                                </span>
-                                                                            </span>
-                                                                        </span>
-                                                                    </SelectItem>
-                                                                )
-                                                            })}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </SpaceDialogField>
-
-                                                {filteredAccounts.length === 0 ? (
-                                                    <p className="rounded-[18px] border border-warning-soft bg-warning-soft/40 px-3 py-2 text-xs text-warning-foreground">
-                                                        Para impactarlo en Finp personal vas a necesitar registrarlo en una moneda compatible o resolverlo con una conversión.
-                                                    </p>
-                                                ) : null}
-
-                                                {form.personalAccountId ? (
-                                                    <SpaceDialogField
-                                                        id="entry-personal-category"
-                                                        label="Categoría personal"
-                                                        hint="Solo impacta en tu Finp personal. La categoría del espacio se conserva aparte."
-                                                    >
-                                                        <Select
-                                                            value={form.categoryId ?? 'none'}
-                                                            onValueChange={(value) =>
-                                                                setForm((previous) => ({
-                                                                    ...previous,
-                                                                    categoryId: value === 'none' ? undefined : value,
-                                                                }))
-                                                            }
-                                                        >
-                                                            <SelectTrigger
-                                                                id="entry-personal-category"
-                                                                aria-labelledby="entry-personal-category-label entry-personal-category"
-                                                                className="w-full"
-                                                            >
-                                                                <SelectValue placeholder="Sin categoría" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="none">Sin categoría</SelectItem>
-                                                                {personalExpenseCategories.map((category: ICategory) => (
-                                                                    <SelectItem
-                                                                        key={extractId(category._id)}
-                                                                        value={extractId(category._id) ?? ''}
-                                                                    >
-                                                                        {category.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </SpaceDialogField>
-                                                ) : null}
-
-                                                <p className="text-xs text-muted-foreground">
-                                                    {selectedPersonalAccount?.type === 'credit_card'
-                                                        ? `Se registrará un consumo en un pago por ${formatFinancialAmount(form.currency, form.amount)} en la tarjeta. Tu gasto personal seguirá siendo tu parte.`
-                                                        : 'Elegí una cuenta o tarjeta si querés impactarlo también en tu Finp personal.'}
-                                                </p>
-                                            </div>
-                                        </SpaceDialogPanel>
-                                    ) : null}
-
-                                    {mode === 'create' && step === 3 && isCurrentUserPayer ? (
-                                        <SpaceDialogPanel>
-                                            <div className="space-y-3">
-                                                <button
-                                                    type="button"
-                                                    className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-                                                    onClick={() => {
-                                                        setShowAdvancedLink((value) => !value)
-                                                        setForm((previous) => ({
-                                                            ...previous,
-                                                            linkedTransactionId: undefined,
-                                                            ...(showAdvancedLink ? {} : { personalAccountId: undefined, categoryId: undefined }),
-                                                        }))
-                                                    }}
-                                                >
-                                                    <Link2 className="h-4 w-4" />
-                                                    Vincular una transacción existente (avanzado)
-                                                </button>
-                                                {showAdvancedLink ? (
-                                                    <SpaceDialogField id="entry-linked-transaction" label="Transacción compatible">
-                                                        <SpaceLinkCandidateList
-                                                            candidates={candidates}
-                                                            loading={candidatesLoading}
-                                                            error={candidatesError}
-                                                            excludedCount={candidatesExcludedCount}
-                                                            selectedId={form.linkedTransactionId}
-                                                            onSelect={(linkedTransactionId) =>
-                                                                setForm((previous) => ({
-                                                                    ...previous,
-                                                                    linkedTransactionId,
-                                                                    personalAccountId: undefined,
-                                                                    categoryId: undefined,
-                                                                }))
-                                                            }
-                                                            onRetry={() => setCandidatesRetryNonce((current) => current + 1)}
-                                                        />
-                                                    </SpaceDialogField>
-                                                ) : null}
-                                                {preview?.linkExisting && !preview.linkExisting.compatible ? (
-                                                    <p className="text-xs font-medium text-destructive" tabIndex={-1}>
-                                                        La transacción no coincide en monto o moneda con este impacto.
-                                                    </p>
-                                                ) : null}
-                                            </div>
-                                        </SpaceDialogPanel>
-                                    ) : null}
-
-                                    {/* Adjuntos — solo en modo crear */}
-                                    {mode === 'create' && step === 3 ? (
-                                        <SpaceDraftAttachmentsUploader
-                                            attachments={persistedDraft?.attachments ?? []}
-                                            disabled={submitting || draftLoading}
-                                            onUpload={handleDraftAttachmentUpload}
-                                            onRemove={async (attachmentId) => {
-                                                await removeDraftAttachment(attachmentId)
-                                            }}
-                                            onBlockingChange={setDraftAttachmentsBlocked}
-                                        />
-                                    ) : null}
-
-                                    {/* Borrador — solo en modo crear */}
-                                    {mode === 'create' && step === 4 ? (
-                                    <SpaceDialogPanel>
-                                        <div className="space-y-3">
-                                            <SpaceDialogSectionEyebrow>Borrador</SpaceDialogSectionEyebrow>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="w-full justify-start rounded-full text-muted-foreground"
-                                                onClick={() => void handleSaveDraft()}
-                                                disabled={submitting || draftLoading || draftSaveState === 'saving'}
-                                            >
-                                                {draftSaveState === 'saving' ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <Save className="h-4 w-4" />
-                                                )}
-                                                Guardar borrador y cerrar
-                                            </Button>
-                                        </div>
-                                    </SpaceDialogPanel>
-                                    ) : null}
-                                </div>
+                                {renderCurrentStep()}
+                                {error ? (
+                                    <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive" tabIndex={-1}>
+                                        {error}
+                                    </p>
+                                ) : null}
                             </div>
-
-                            {/* Notas */}
-                            <div className={mode === 'edit' || step === 3 ? 'block' : 'hidden'}>
-                            <SpaceDialogPanel>
-                                <div className="space-y-3">
-                                    <div className="space-y-1">
-                                        <SpaceDialogSectionEyebrow>Notas</SpaceDialogSectionEyebrow>
-                                        <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                            Contexto adicional
-                                        </h3>
+                        ) : (
+                            <div className="space-y-5">
+                                <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+                                    <div className="space-y-5">
+                                        {dataStep}
+                                        {hasSplitStep ? splitStep : null}
                                     </div>
-                                    <SpaceDialogTextArea
-                                        value={form.notes ?? ''}
-                                        onChange={(event) =>
-                                            setForm((previous) => ({
-                                                ...previous,
-                                                notes: event.target.value,
-                                            }))
-                                        }
-                                        rows={4}
-                                        placeholder="Notas internas, contexto o recordatorios útiles para el equipo."
-                                    />
+                                    <div className="space-y-5">{reviewStep}</div>
                                 </div>
-                            </SpaceDialogPanel>
+                                <SpaceEntryNotesPanel
+                                    notes={form.notes ?? ''}
+                                    onNotesChange={(notes) => setForm((previous) => ({ ...previous, notes }))}
+                                />
+                                {error ? (
+                                    <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive" tabIndex={-1}>
+                                        {error}
+                                    </p>
+                                ) : null}
                             </div>
-
-                            {error ? (
-                                <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive" tabIndex={-1}>
-                                    {error}
-                                </p>
-                            ) : null}
-                        </div>
+                        )}
                     </div>
 
                     {/* ── Footer ── */}
@@ -2273,14 +1983,14 @@ export function SpaceEntryDialog({
                         <Button
                             className="min-h-11 rounded-full"
                             onClick={() => {
-                                if (mode === 'create' && step < 4) handleNextStep()
+                                if (mode === 'create' && !isLastStep) handleNextStep()
                                 else void handleSubmit()
                             }}
                             disabled={
                                 submitting ||
                                 draftAttachmentsBlocked ||
                                 (contractVersion === 2 &&
-                                    (mode === 'edit' || (mode === 'create' && step === 4)) &&
+                                    (mode === 'edit' || (mode === 'create' && isLastStep)) &&
                                     (previewLoading || !preview))
                             }
                         >
@@ -2288,20 +1998,20 @@ export function SpaceEntryDialog({
                                 ? (mode === 'edit' ? 'Guardando cambios...' : 'Guardando...')
                                 : mode === 'edit'
                                     ? 'Guardar cambios'
-                                    : step < 4
+                                    : !isLastStep
                                         ? 'Continuar'
-                                        : form.personalAccountId || form.linkedTransactionId
+                                        : personalIntent !== 'space_only'
                                             ? 'Guardar y agregar a Mi Finp'
                                             : preview?.personalAction === 'not_applicable'
                                                 ? 'Guardar en Espacios'
                                                 : 'Guardar; decidir Mi Finp después'}
                         </Button>
-                        {mode === 'create' && step > 1 ? (
+                        {mode === 'create' && stepIndex > 0 ? (
                             <Button
                                 type="button"
                                 variant="outline"
                                 className="min-h-11 rounded-full"
-                                onClick={() => setStep((step - 1) as 1 | 2 | 3)}
+                                onClick={() => goToStep(stepIndex - 1)}
                                 disabled={submitting}
                             >
                                 Atrás

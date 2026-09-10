@@ -346,11 +346,15 @@ capacidades. Volver desde un detalle conserva el filtro y la posición anterior.
 
 ### Nuevo gasto
 
-El recorrido principal usa tres decisiones breves:
+El recorrido principal separa cada decisión en su propio paso:
 
-1. gasto: descripción, total, moneda y fecha;
-2. personas: quién pagó y cómo se reparte;
-3. revisión: total, partes, balances e impacto personal posible.
+1. `Datos`: descripción, total, moneda, fecha y quién pagó;
+2. `Reparto`: a quiénes alcanza el gasto y cómo se divide;
+3. `Extras`: efecto en Mi Finp, adjuntos y notas;
+4. `Revisión`: total, partes, balances e impacto personal posible.
+
+Un Espacio `solo` no tiene nada que repartir: su recorrido omite el paso 2 y
+usa tres pasos, no uno vacío.
 
 La categoría, los adjuntos y las opciones infrecuentes son progresivos. La
 confirmación permanece visible sobre la `safe area`, conserva el borrador ante
@@ -472,8 +476,8 @@ skeleton; el silencio no es un estado.
 
 En los diálogos guiados, el paso actual es la única región del cuerpo presente
 en el DOM: los pasos anteriores no permanecen ocultos. Cambiar de paso anuncia
-`Paso N de 4 · Nombre` en una región `aria-live="polite"` y lleva el foco al
-encabezado del paso. Intentar avanzar con errores lleva el foco al primer
+`Paso N de M · Nombre` en una región `aria-live="polite"` y lleva el foco al
+encabezado del paso; `M` es la cantidad real de pasos de ese Espacio. Intentar avanzar con errores lleva el foco al primer
 mensaje de error y lo desplaza a la vista. El nombre accesible de cada control
 es su `label` asociado y no incluye el valor actual. En mobile, la barra de
 acciones queda sobre la `safe area` y el stepper ocupa una sola línea.

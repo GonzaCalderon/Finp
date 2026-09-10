@@ -611,16 +611,53 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
      rama muerta ajena al alcance en `SpacePersonalImpactDialog.tsx` — un
      `POST` legacy que ya no cumple el esquema que PR 38 dejó vigente —
      derivada a una tarea separada.
-  3. Descomposición de `SpaceEntryDialog` en un componente por paso montado
-     sólo cuando es el actual, con el patrón de `TransactionDialog`
-     (`buildSteps`, `currentStep.id`, `transaction-dialog/*Step.tsx`).
-     Píldoras excluyentes `SpaceDialogChoice` para «Sólo en el Espacio / Crear
-     en Mi Finp / Vincular existente» en Extras, como en
-     `SpacePersonalImpactDialog`. Nombre accesible por el `htmlFor` de
-     `SpaceDialogField`: retirar los `aria-labelledby="x-label x"` que duplican
-     el valor en el nombre. `useScrollToFirstError` cableado sin perder el foco
-     al primer error que el E2E ya exige; anuncio del paso según `espacios.md`
-     §11.
+  3. Descomposición de `SpaceEntryDialog` — implementado el 2026-09-10, con la
+     matriz E2E pendiente (abajo). Un componente por paso en
+     `dialogs/entry-steps/`, montado sólo cuando es el actual: `buildSpaceEntrySteps`
+     y `currentStep.id` reemplazan al número de paso, y los `hidden` que dejaban
+     los campos anteriores en el DOM —y en el orden de lectura y tabulación—
+     desaparecen. La edición no es un flujo guiado y no gana stepper: compone los
+     mismos pasos en su lectura de dos columnas.
+     Correcciones al plan, verificadas contra el código antes de escribirlo:
+     - un Espacio `solo` montaba «Reparto» vacío y pedía «Continuar» sobre una
+       pantalla en blanco; `buildSpaceEntrySteps` omite ese paso, el recorrido
+       tiene tres y el anuncio pasó de `Paso N de 4` a `Paso N de M` en
+       `espacios.md` §11 y `design.md` §9;
+     - el stepper era una grilla de cuatro columnas, justo lo que `design.md` §9
+       prohíbe en mobile: ahora resume `Paso N de M · Nombre` con barra compacta
+       en mobile y conserva las píldoras navegables hacia atrás en desktop;
+     - `useScrollToFirstError` sólo hacía scroll, así que cablearlo tal cual
+       habría perdido el foco que el E2E exige: se le agregó foco opcional y
+       reemplaza al `focusFirstError` local en las ocho vías de rechazo.
+     Las tres opciones de Mi Finp pasaron de un `Select` con opción «Solo
+     registrar en el espacio» más un toggle de texto avanzado —dos controles para
+     una sola decisión— a píldoras `SpaceDialogChoice` excluyentes con
+     `role="radio"` dentro de un `radiogroup` con nombre. Su validación usa la
+     autoridad del servidor: `Crear en Mi Finp` exige cuenta sólo cuando la
+     revisión declara salida real (`accountImpactAmount > 0`) y `Vincular
+     existente` exige un candidato elegido; antes se llegaba a la revisión con la
+     intención a medias. El error pertenece al grupo, no a un campo: colgado del
+     `Select` quedaba sin superficie cuando no hay cuentas compatibles.
+     Retirados: los cuatro `aria-labelledby="x-label x"` que metían el valor
+     elegido dentro del nombre accesible, y una rama muerta de edición
+     (`initialLinkedTransactionImpactsCurrentUser`, constante `false`) cuyo aviso
+     nunca se renderizaba. El textarea de notas no tenía nombre accesible.
+     Evidencia: 11 unitarias nuevas —contrato de pasos y número persistido,
+     stepper, montaje excluyente, nombre accesible sin valor, foco al primer
+     error, anuncio y foco del paso, Espacio `solo`, exclusividad y validación de
+     la intención—, 949 unitarias globales, typecheck, ESLint y `docs:check`
+     sobre 36 archivos.
+     Verificación pendiente declarada: la matriz E2E de Espacios en Chromium
+     desktop y Pixel 7 no se pudo ejecutar. Una corrida ajena de la suite
+     completa ocupaba el puerto 3001 y la base `finp-e2e` —exclusivos por
+     diseño— y el `webServer` entró en pánico por un caché de Turbopack
+     corrupto. Los specs ya están adaptados a la interacción nueva (píldoras en
+     vez de `Select`, `Paso N de 4 · Nombre` y ausencia del paso anterior en el
+     DOM); falta correrlos en un entorno sin concurrencia antes de dar el bloque
+     por cerrado.
+     Límite declarado: el contenedor conserva borrador, preview, candidatos,
+     validación y envío, y sigue en 2.033 líneas. Extraer ese ciclo de vida a un
+     hook no formó parte de este bloque.
   4. Cierre con `@axe-core/playwright` (decisión 0014, aceptada el 2026-09-10
      e instalada), las aserciones dirigidas y el orden del plan de calidad §8:
      mobile, táctil y teclado, desktop.

@@ -23,7 +23,8 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await dialog.getByRole('button', { name: 'Continuar' }).click()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
-        await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
+        await dialog.getByRole('radio', { name: 'Crear en Mi Finp' }).click()
+        await dialog.getByRole('combobox', { name: 'Cuenta o tarjeta' }).click()
         await page.getByRole('option', { name: /^Tarjeta E2E Tarjeta de crédito/ }).click()
         await expect(dialog.getByText(/consumo en un pago por/)).toBeVisible()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
@@ -85,16 +86,20 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         }
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
         await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
-        await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Datos')
+        await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Paso 1 de 4 · Datos')
         await dialog.locator('#entry-amount').fill('1000')
         await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
-        await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Reparto')
+        await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Paso 2 de 4 · Reparto')
+        await expect(dialog.getByTestId('space-entry-step-split')).toBeVisible()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
-        await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Extras')
-        await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
+        await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Paso 3 de 4 · Extras')
+        // El paso anterior sale del DOM, no queda oculto detrás del actual.
+        await expect(dialog.getByTestId('space-entry-step-split')).toHaveCount(0)
+        await dialog.getByRole('radio', { name: 'Crear en Mi Finp' }).click()
+        await dialog.getByRole('combobox', { name: 'Cuenta o tarjeta' }).click()
         await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
@@ -356,11 +361,15 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await dialog.getByRole('button', { name: 'Continuar' }).click()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
-        await expect(dialog.getByRole('combobox', { name: 'Cuenta o tarjeta' })).toBeVisible()
+        // Las tres opciones son una sola decisión excluyente, no un select más un
+        // toggle avanzado: el grupo expone el estado sin depender del color.
+        const intentGroup = dialog.getByRole('radiogroup', { name: 'Efecto en tu Finp personal' })
+        await expect(intentGroup.getByRole('radio', { name: 'Sólo en el Espacio' }))
+            .toHaveAttribute('aria-checked', 'true')
 
-        const advancedLinkToggle = dialog.getByRole('button', { name: 'Vincular una transacción existente (avanzado)' })
-        await advancedLinkToggle.click()
+        await intentGroup.getByRole('radio', { name: 'Vincular existente' }).click()
         await expect(dialog.getByText('Transacción compatible')).toBeVisible()
+        await expect(dialog.getByRole('combobox', { name: 'Cuenta o tarjeta' })).toHaveCount(0)
         // Los candidatos los resuelve el servidor (arquitectura.md §8): sin uno
         // que coincida con este monto y fecha, la lista queda vacía y explica por
         // qué, en vez de ofrecer un combobox con transacciones que fallarían.
@@ -369,11 +378,12 @@ test.describe('Espacios v2 — recorrido financiero', () => {
                 .or(dialog.getByText(/No encontramos/))
         ).toBeVisible()
 
-        // Elegir una cuenta personal debe descartar el vínculo avanzado: no pueden
+        // Elegir una cuenta personal debe descartar el vínculo: no pueden
         // coexistir linkedTransactionId y personalAccountId en el mismo movimiento.
-        await dialog.getByText('Solo registrar en el espacio', { exact: true }).click()
+        await intentGroup.getByRole('radio', { name: 'Crear en Mi Finp' }).click()
+        await expect(dialog.getByText('Transacción compatible')).toHaveCount(0)
+        await dialog.getByRole('combobox', { name: 'Cuenta o tarjeta' }).click()
         await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
-        await expect(dialog.getByText('Transacción compatible')).not.toBeVisible()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         const responsePromise = page.waitForResponse((response) =>

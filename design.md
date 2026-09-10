@@ -218,9 +218,11 @@ En Compromisos, alta y edición siguen `Compromiso → Frecuencia → Aplicació
 La agenda de montos no forma parte del formulario general: se administra desde
 `Cambiar monto` para no mezclar configuración, vigencia e historia.
 
-En mobile, el progreso se resume como `Paso N de 3 · Nombre` y una barra
-compacta; no se reservan tres columnas sin contenido para representar el
-stepper. En desktop se conservan los tres pasos visibles. El día mensual usa el
+En mobile, el progreso se resume como `Paso N de M · Nombre` y una barra
+compacta; no se reservan columnas sin contenido para representar el stepper. En
+desktop se conservan todos los pasos visibles y navegables hacia atrás. `M` es
+la cantidad real de pasos del flujo: tres en Compromisos, cuatro en el gasto de
+un Espacio compartido y tres en uno `solo`. El día mensual usa el
 mismo patrón de datepicker de Nueva transacción, adaptado a un calendario fijo
 de 31 días; no usa texto libre, un desplegable largo ni una cuadrícula siempre
 abierta. Debe mostrar una vista previa del vencimiento y el recordatorio
