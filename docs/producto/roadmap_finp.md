@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -95,7 +95,8 @@ backlog paralelo:
    [decisión 0013](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md#6-etapa-3-contrato-ejecutable-de-adjuntos).
 4. **Experiencia y accesibilidad — FINP-P1-013.** Preview y edición completas,
    estados reales, selección personal coherente, candidatos válidos, foco,
-   labels, teclado, stepper mobile, `safe area`, dark mode y recuperación.
+   labels, teclado, stepper mobile, `safe area`, dark mode y recuperación. Su
+   secuencia ejecutable vive en la ficha de FINP-P1-013.
 
 La etapa 1 precede al modelo de borrador para no persistir un contrato financiero
 que deba migrarse inmediatamente. El diálogo mantiene `NO-GO` de cierre hasta
@@ -330,6 +331,58 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     dejado Espacios v2 sanos en sólo lectura. `verify` cierra con 11 Espacios,
     0 bloqueados y 0 resoluciones sin aplicar. Producción y el retiro global del
     fallback siguen fuera de alcance.
+- Cierre en curso — rama `codex/spaces-p0-006-closure`, nacida de `dev` (818f788)
+  el 2026-09-09. Retira el legado que todavía podía escribir sobre datos v2 y
+  completa la etapa 5. Entregado y verde en typecheck, ESLint, 923 unitarias, 17
+  de integración y 80 E2E en Chromium desktop y Pixel 7:
+  - `e00df07` retira `personal-impact/sync` y `/resolve`, que corrían sin sesión,
+    idempotencia ni gate de contrato; `sync` además pisaba el monto de la
+    transacción con la parte propia y copiaba `entry.date` sin `dateKey`. Ambos
+    llamadores usan `resolveSpacePersonalImpactV2`, que ya resolvía
+    `sync_transaction` correctamente, y el GET de impacto expone `reviewImpact`;
+  - `b1f3e72` retira la confirmación global: rutas `space-entries/*`, acción
+    `confirmation`, `ConfirmSpaceEntryDialog` y los KPI de `pendingEntryCount`,
+    que eran cero por construcción. `ISpacePendingAction` colapsa a la variante
+    de invitación, así que reintroducirla es error de compilación;
+  - `76eab25` vuelve inalcanzable una obligación saldada como deuda abierta desde
+    Espacios y Mi Finp, y pasa la ruta de deudas del Espacio por
+    `assertSpaceCapabilityV2`, que no tenía;
+  - `25aac36` resuelve permisos de categorías, invitaciones y adjuntos con la
+    matriz v2 vía `getContextCapabilities`. Los adjuntos no tenían control alguno:
+    bastaba ser miembro para subir o borrar en un Espacio pausado o archivado;
+  - `24e0126` corrige un fixture ajeno al alcance: el smoke financiero sembraba
+    tres movimientos en los días 11, 13 y 15 del período, que quedaban en el
+    futuro y el saldo acumulado ignoraba. Sólo pasaba después del día 15 de cada
+    mes; la falla se reprodujo en `dev` a secas antes de tocar nada.
+- Correcciones al diagnóstico previo, verificadas contra `finm` y el código:
+  - la migración sólo hizo `$unset` de `linkedTransactionId`;
+    `confirmationRequired` sigue en los 91 entries y `confirmedByUserId` en 79,
+    así que retirarlos exige limpieza de datos y no sólo borrar paths del schema;
+  - `enterLegacySpaceWriteFacade` ya rechaza con 409 cualquier documento v2 y
+    `pending_confirmation` sólo se escribe dentro de esa rama: los cuerpos legacy
+    son código muerto sobre una base migrada, no un riesgo vivo;
+  - la integración contra Atlas corre desde entorno local; la limitación
+    EACCES/whitelist registrada en la etapa 3 de FINP-P1-013 no se reproduce;
+  - la suite global tiene 80 escenarios E2E, no 68.
+- Pendiente para cerrar, en este orden:
+  1. Extirpar los cuerpos legacy. Quitar las ramas posteriores a la fachada en
+     `[id]/entries`, `[id]/entries/[entryId]`, `.../void`, `.../personal-impact`,
+     `[id]/participants/**` y `[id]/route.ts`; eliminar `debt-sync.ts` con sus
+     seis llamadores en `try/catch`, que son la última escritura derivada
+     best-effort del dominio; quitar de `SpaceEntry` los campos
+     `linkedTransactionId`, `confirmationRequired`, `confirmedByUserId`,
+     `confirmedAt` y `rejectedAt` con una limpieza idempotente y `dry-run` por
+     defecto; retirar el estado `pending_confirmation` y `pendingEntryCount`.
+     Conservar `space-legacy-audit-*`, que es lectura forense de sólo lectura.
+     Registrar el criterio de retiro en la decisión 0013.
+  2. Bloquear la confirmación de una edición sin revisión vigente.
+     `SpaceEntryDialog` despacha `handleEditSubmit` antes del gate de preview, de
+     modo que una edición se confirma sin revisión aunque el panel se muestre.
+     Mover el despacho después del gate e invalidar el preview cuando cambien
+     monto, moneda, fecha, pagador o reparto. Es exactitud, no experiencia: la
+     descomposición del diálogo pertenece a FINP-P1-013.
+  3. Completar la matriz de verificación de este ítem y dejar actualizados estado
+     actual, `espacios.md`, plan de calidad §15 y `docs:check`.
 - Criterio financiero:
   - cuentas muestran dinero real;
   - Dashboard y reportes muestran gasto propio;
@@ -461,6 +514,34 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   - La suite de integración completa posterior al último endurecimiento no pudo
     abrir MongoDB Atlas desde este entorno por EACCES/whitelist; queda como
     verificación operativa pendiente fuera de este entorno.
+- Etapa 4 pendiente, en rama propia posterior al merge de
+  `codex/spaces-p0-006-closure`, en este orden:
+  1. Estados reales. Crear `src/components/shared/ErrorState.tsx` espejando la API
+     de `EmptyState` más `onRetry`, con `role="alert"` y contenedor enfocable, y
+     adoptarlo en la portada, el detalle, `SpacePendingViews`, los errores de
+     preview y de candidatos, y el panel de deudas: hoy la portada y el detalle
+     muestran un cuadro destructivo sin reintento y no existe primitiva
+     compartida. Sumar skeletons a los paneles de deudas e impactos.
+  2. Candidatos de vínculo resueltos por el servidor. Nueva ruta
+     `[id]/entries/[entryId]/link-candidates` con capacidad, que calcula el
+     esperado con `derivePersonalImpactAmountsV2` y filtra por actor, moneda,
+     tolerancia de monto, ventana de fechas alrededor del `dateKey`, exclusión de
+     transacciones ya vinculadas, tipo compatible y cuenta activa. Hoy ambos
+     diálogos piden 25 transacciones y filtran en el cliente por monto, sin
+     ventana, sin excluir vinculadas y tragándose el error.
+  3. Descomponer `SpaceEntryDialog` (2254 líneas) en componentes por paso
+     desmontados, nunca ocultos con `hidden`, que es lo que hoy rompe foco, orden
+     de tabulación y stepper a la vez. Portar el patrón canónico de
+     `TransactionDialog`; reemplazar el selector de cuenta más el toggle avanzado
+     por las píldoras excluyentes que ya funcionan en `SpacePersonalImpactDialog`;
+     cablear `useScrollToFirstError`; quitar los `aria-labelledby`
+     autorreferenciales; aplicar `safe-area-bottom-bar` a la barra mobile.
+  4. Cierre: `@axe-core/playwright` sobre los recorridos de Espacios en ambos
+     proyectos, con la evaluación de dependencia que exige `AGENTS.md` §11. Axe no
+     cubre lo que esta etapa nombra —foco en el primer error, anuncio del paso,
+     orden de tabulación, `safe area`—, así que las aserciones dirigidas de RTL y
+     Playwright siguen siendo necesarias. Verificar en el orden del plan de
+     calidad §8: mobile, luego táctil y teclado, luego desktop.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.

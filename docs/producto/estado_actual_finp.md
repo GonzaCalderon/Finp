@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -36,10 +36,10 @@ Estado general:
   de integración y experiencia verificadas;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- entorno E2E local aislado y reproducible, con 68 de 68 escenarios globales
-  aprobados en desktop y mobile tanto sobre producción como en desarrollo;
+- entorno E2E local aislado y reproducible, con 80 escenarios globales en desktop
+  y mobile;
 - smoke financiero con validación histórica y fixtures independientes del orden
-  de ejecución;
+  de ejecución y de la fecha en que corre la suite;
 - rotación de la credencial y activación E2E en CI diferidas hasta la preparación
   de la promoción a producción.
 
@@ -62,11 +62,17 @@ sobre el estado actual el 2026-09-09:
 - 916 unit tests aprobados en 123 archivos, sin tests en `todo` (verificado el
   2026-09-09, tras integrar el PR 37);
 - 12 recorridos de integración de Espacios v2 aprobados contra bases E2E con
-  sesiones MongoDB reales;
-- 68 de 68 escenarios E2E globales aprobados en Chromium desktop y Pixel 7
-  sobre el build de producción;
-- 68 de 68 escenarios E2E globales aprobados nuevamente con `next dev`, sin 404
-  ni altas fallidas después de una ejecución larga;
+  sesiones MongoDB reales; la suite corre desde entorno local sin la limitación
+  EACCES/whitelist de Atlas que quedó registrada al cerrar la etapa 3 de
+  FINP-P1-013;
+- la suite global tiene 80 escenarios E2E en Chromium desktop y Pixel 7. El
+  registro previo de «68 de 68» quedó desactualizado por crecimiento de la suite
+  y, además, era optimista: el smoke financiero sembraba tres movimientos con
+  fecha futura y sólo cuadraba corriendo la suite pasado el día 15 del mes. La
+  corrección del fixture viaja en `codex/spaces-p0-006-closure`, donde los 80
+  escenarios quedaron verdes el 2026-09-09; sobre `dev` la comparación entre
+  Dashboard, Transacciones, Cuentas y Deudas todavía falla antes de esa fecha del
+  mes;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
 - `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
@@ -110,6 +116,10 @@ Ramas:
   `8b31c87`;
 - `codex/spaces-new-entry-exactness`: integrada en `dev` mediante PR 37 el
   2026-09-09 (borrador privado y adjuntos recuperables de `Nuevo gasto`);
+- `codex/spaces-p0-006-closure`: abierta el 2026-09-09, sin mergear. Retira el
+  legado que podía escribir sobre datos v2 y completa la etapa 5 de FINP-P0-006.
+  Su estado, sus correcciones al diagnóstico y lo que resta viven en
+  [`roadmap_finp.md`](roadmap_finp.md);
 - antes del checkpoint se verificó que `origin/main` fuera ancestro de
   `origin/dev`;
 - la rama local `main` está desactualizada y no se usa para trabajo hasta
@@ -359,35 +369,41 @@ elige el usuario.
 ### Brechas verificadas
 
 La auditoría funcional y de interfaz confirmó que la amplitud disponible no
-equivale todavía a un recorrido confiable de punta a punta:
+equivale todavía a un recorrido confiable de punta a punta. La rama
+`codex/spaces-p0-006-closure` cerró en el código, sin mergear a `dev`, estas
+brechas de exactitud:
 
-- el estado compartido y la decisión privada pueden presentarse como si una
-  persona tuviera que confirmar el movimiento para los demás;
-- `Agregar a Mi Finp` no guía siempre hacia la parte propia exacta ni distingue
-  al no pagador con parte cero del pagador que realizó un adelanto;
-- la carga y edición del impacto personal pueden mostrar o permitir un monto que
-  no representa con claridad gasto propio, salida real y adelanto;
-- pendientes, notificaciones y deudas se superponen en algunos recorridos y
-  pueden producir relaciones sin saldo útil;
-- el cierre del Espacio, los roles y la protección del último `owner` no están
-  aplicados de forma uniforme entre interfaz y servidor;
-- las fechas editables pueden desplazarse por conversión UTC;
+- la confirmación global del movimiento, que presentaba una decisión privada como
+  si una persona tuviera que confirmar para los demás;
+- la parte propia, el adelanto recuperable y la ausencia de acción del no pagador
+  con parte cero, que el dominio v2 ya separaba pero una ruta legacy de
+  sincronización volvía a mezclar al reescribir el monto de la transacción;
+- las fechas editables desplazadas por conversión UTC, cuyo último origen era esa
+  misma ruta legacy;
+- las relaciones de deuda sin saldo útil, ahora inalcanzables como deuda abierta
+  desde Espacios y desde Mi Finp;
+- el cierre del Espacio y los roles aplicados de forma despareja entre rutas: las
+  de categorías, invitaciones y adjuntos ignoraban el estado del Espacio.
+
+Permanecen abiertas, y pertenecen a FINP-P1-013:
+
 - mobile y desktop divergen en navegación, densidad y ubicación de acciones;
 - faltan estados de recuperación, foco y accesibilidad consistentes en flujos
   principales y secundarios.
 
-Las etapas 1 y 2 de la auditoría específica de `Nuevo gasto` están
+Las etapas 1, 2 y 3 de la auditoría específica de `Nuevo gasto` están
 implementadas y verificadas. La primera cerró tarjeta `1/1`, contrato v2 único,
-dinero exacto, fecha civil, revisión vigente y preservación histórica. La
-segunda, cerrada el 2026-09-09, incorporó el borrador privado persistente, su
-card personal y la publicación transaccional. Permanecen estas brechas para las
-etapas 3 y 4:
+dinero exacto, fecha civil, revisión vigente y preservación histórica. La segunda
+y la tercera, cerradas el 2026-09-09, incorporaron el borrador privado
+persistente con su card personal, la publicación transaccional y los adjuntos
+preparados sobre el borrador antes de publicar. Permanece la etapa 4:
 
-- la edición no tiene todavía la misma revisión financiera completa del alta;
-- los adjuntos se cargan después de confirmar el movimiento, con riesgo de
-  éxito parcial sin borrador recuperable;
-- carga, error, vacío, candidatos de transacción, foco, labels y stepper mobile
-  todavía no forman un recorrido accesible y coherente de punta a punta.
+- la revisión financiera se muestra al editar pero no bloquea la confirmación: el
+  envío en modo edición se despacha antes del gate de preview;
+- los candidatos para vincular una transacción se filtran en el cliente por monto,
+  sin ventana de fechas, sin excluir las ya vinculadas y sin estado de error;
+- carga, error, vacío, foco, labels y stepper mobile todavía no forman un
+  recorrido accesible y coherente de punta a punta.
 
 Las resoluciones aprobadas viven en las decisiones
 [`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md) y
@@ -539,9 +555,12 @@ Mobile web sigue siendo la superficie prioritaria.
   seed aislado;
 - el checkpoint multimoneda previo quedó cubierto por 881 unitarias globales y
   10 recorridos de integración sobre transacciones MongoDB reales;
-- el estado actual suma 895 unitarias globales y 12 recorridos de integración:
-  la migración agrega apply, fallo cerrado, replay, verificación, rollback y
-  1.000 movimientos bajo el presupuesto por fase;
+- `dev` suma hoy 916 unitarias globales y 12 recorridos de integración: la
+  migración agrega apply, fallo cerrado, replay, verificación, rollback y 1.000
+  movimientos bajo el presupuesto por fase;
+- `codex/spaces-p0-006-closure` lleva ese piso a 923 unitarias y 17 recorridos de
+  integración, con la primera cobertura real de `resolveSpacePersonalImpactV2`,
+  que era el servicio del impacto personal y no tenía ninguna;
 
 ### Brechas
 
