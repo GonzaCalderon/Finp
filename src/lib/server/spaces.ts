@@ -6,6 +6,7 @@ import {
     extractId,
 } from '@/lib/utils/spaces'
 import { getPersonalImpactForEntries } from '@/lib/server/space-personal-impact'
+import { getSpaceCapabilitiesV2 } from '@/lib/server/space-capabilities'
 import type {
     ISpace,
     ISpaceDetailPayload,
@@ -38,12 +39,7 @@ const directInviteFilter = {
 }
 
 export function canManageSpaceInvites(context: Awaited<ReturnType<typeof getAccessibleSpaceContext>>) {
-    return Boolean(
-        context &&
-            (context.isOwner ||
-                context.currentParticipant?.role === 'owner' ||
-                context.currentParticipant?.role === 'admin')
-    )
+    return Boolean(context && getContextCapabilities(context).has('manage_invites'))
 }
 
 export async function getAccessibleSpaceContext(spaceId: string, userId: string) {
@@ -77,6 +73,24 @@ export async function getAccessibleSpaceContext(spaceId: string, userId: string)
         participants: sortParticipants(participants),
         isOwner,
     }
+}
+
+export type AccessibleSpaceContext = NonNullable<
+    Awaited<ReturnType<typeof getAccessibleSpaceContext>>
+>
+
+/**
+ * Capacidades del actor según la misma matriz que usan los servicios v2, de modo
+ * que el rol y el estado del Espacio se evalúen en un solo lugar. Un chequeo de
+ * rol suelto ignora pausa, cierre y archivo.
+ */
+export function getContextCapabilities(context: AccessibleSpaceContext) {
+    return getSpaceCapabilitiesV2({
+        status: context.space.status,
+        role: context.currentParticipant?.role,
+        isActiveParticipant: context.currentParticipant?.isActive ?? false,
+        isOwnerRecord: context.isOwner,
+    })
 }
 
 export async function getSpaceEntries(spaceId: string, extraFilter?: Record<string, unknown>) {
