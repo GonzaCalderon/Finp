@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -356,6 +356,16 @@ Todo flujo contempla:
 - Indicar si hubo o no impacto financiero.
 - Permitir reintentar o corregir.
 - Conservar el borrador siempre que sea seguro.
+
+La primitiva compartida para un error de lectura es `ErrorState`
+(`src/components/shared/ErrorState.tsx`): espejo de `EmptyState` más
+recuperación, con `icon`, `title`, `description?`, `retryLabel?` y `onRetry?`.
+Renderiza `role="alert"`, un contenedor enfocable que recibe el foco al
+montarse y, si existe `onRetry`, un botón secundario de reintento. Un módulo no
+dibuja su propio cuadro destructivo cuando esta primitiva alcanza, y un error
+de lectura nunca se comunica sólo por toast. Un error de mutación va junto al
+formulario, conserva el borrador y dice si no escribió, revirtió o sólo falló
+un refresco.
 
 ### Éxito
 

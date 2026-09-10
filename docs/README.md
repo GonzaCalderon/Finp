@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: índice canónico de documentación
 
 ## Índice
@@ -119,6 +119,7 @@ Decisiones vigentes:
 - [`0011 — Cutover de Espacios v2 en development`](decisiones/0011-cutover-espacios-v2-en-development.md).
 - [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
 - [`0013 — Borrador privado persistente de movimiento de Espacio`](decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
+- [`0014 — @axe-core/playwright en los recorridos E2E de Espacios`](decisiones/0014-axe-core-playwright-en-recorridos-de-espacios.md) — propuesta.
 
 Una decisión se documenta cuando:
 

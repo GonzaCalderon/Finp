@@ -555,34 +555,42 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   - La suite de integración completa posterior al último endurecimiento no pudo
     abrir MongoDB Atlas desde este entorno por EACCES/whitelist; queda como
     verificación operativa pendiente fuera de este entorno.
-- Etapa 4 pendiente, en rama propia posterior al merge de
-  `codex/spaces-p0-006-closure`, en este orden:
-  1. Estados reales. Crear `src/components/shared/ErrorState.tsx` espejando la API
-     de `EmptyState` más `onRetry`, con `role="alert"` y contenedor enfocable, y
-     adoptarlo en la portada, el detalle, `SpacePendingViews`, los errores de
-     preview y de candidatos, y el panel de deudas: hoy la portada y el detalle
-     muestran un cuadro destructivo sin reintento y no existe primitiva
-     compartida. Sumar skeletons a los paneles de deudas e impactos.
-  2. Candidatos de vínculo resueltos por el servidor. Nueva ruta
-     `[id]/entries/[entryId]/link-candidates` con capacidad, que calcula el
-     esperado con `derivePersonalImpactAmountsV2` y filtra por actor, moneda,
-     tolerancia de monto, ventana de fechas alrededor del `dateKey`, exclusión de
-     transacciones ya vinculadas, tipo compatible y cuenta activa. Hoy ambos
-     diálogos piden 25 transacciones y filtran en el cliente por monto, sin
-     ventana, sin excluir vinculadas y tragándose el error.
-  3. Descomponer `SpaceEntryDialog` (2254 líneas) en componentes por paso
-     desmontados, nunca ocultos con `hidden`, que es lo que hoy rompe foco, orden
-     de tabulación y stepper a la vez. Portar el patrón canónico de
-     `TransactionDialog`; reemplazar el selector de cuenta más el toggle avanzado
-     por las píldoras excluyentes que ya funcionan en `SpacePersonalImpactDialog`;
-     cablear `useScrollToFirstError`; quitar los `aria-labelledby`
-     autorreferenciales; aplicar `safe-area-bottom-bar` a la barra mobile.
-  4. Cierre: `@axe-core/playwright` sobre los recorridos de Espacios en ambos
-     proyectos, con la evaluación de dependencia que exige `AGENTS.md` §11. Axe no
-     cubre lo que esta etapa nombra —foco en el primer error, anuncio del paso,
-     orden de tabulación, `safe area`—, así que las aserciones dirigidas de RTL y
-     Playwright siguen siendo necesarias. Verificar en el orden del plan de
-     calidad §8: mobile, luego táctil y teclado, luego desktop.
+- Etapa 4 — rama `codex/spaces-p1-013-experience`, nacida de `dev`
+  (`418b4b5`) el 2026-09-10. Preparación documental lista salvo las elecciones
+  marcadas abajo: el comportamiento vive en `espacios.md` §10–11, la primitiva
+  de error en `design.md` §10 y el contrato de candidatos en `arquitectura.md`
+  §8. Verificado contra el código antes de planificar: `SpaceEntryDialog`
+  tiene 2263 líneas y oculta pasos con `hidden`; no existe `ErrorState`; ambos
+  diálogos piden 25 transacciones y filtran en cliente; el preview valida
+  `linkExisting` con menos reglas que el `resolve`; `useScrollToFirstError`
+  existe y no está cableado; el footer del diálogo ya usa `safe-area-pb`.
+  Bloques, en este orden y cada uno verde antes del siguiente:
+  1. Estados reales. `ErrorState` según `design.md` §10 y adopción en portada,
+     detalle, `SpacePendingViews`, revisión financiera, candidatos y saldo de
+     la liquidación, que hoy carga deudas sin estado de carga y con el error
+     escondido en `form`. Reintento real con `fetchSpaces` y `fetchSpace`, que
+     ya existen. Skeleton en los paneles que hoy quedan en silencio.
+  2. Candidatos de vínculo resueltos por el servidor según `arquitectura.md`
+     §8 «Candidatos de vínculo personal»: una sola evaluación compartida por
+     preview, candidatos y `resolve`. Corrección al plan previo: no hay ventana
+     de fechas; el servidor exige el mismo `dateKey`, y ofrecer otra cosa es
+     ofrecer un candidato que fallará.
+  3. Descomposición de `SpaceEntryDialog` en un componente por paso montado
+     sólo cuando es el actual, con el patrón de `TransactionDialog`
+     (`buildSteps`, `currentStep.id`, `transaction-dialog/*Step.tsx`).
+     Píldoras excluyentes `SpaceDialogChoice` para «Sólo en el Espacio / Crear
+     en Mi Finp / Vincular existente» en Extras, como en
+     `SpacePersonalImpactDialog`. Nombre accesible por el `htmlFor` de
+     `SpaceDialogField`: retirar los `aria-labelledby="x-label x"` que duplican
+     el valor en el nombre. `useScrollToFirstError` cableado sin perder el foco
+     al primer error que el E2E ya exige; anuncio del paso según `espacios.md`
+     §11.
+  4. Cierre con la decisión 0014 si se acepta, las aserciones dirigidas y el
+     orden del plan de calidad §8: mobile, táctil y teclado, desktop.
+- Elecciones pendientes del prompter antes de cerrar:
+  - aceptar o rechazar la [decisión 0014](../decisiones/0014-axe-core-playwright-en-recorridos-de-espacios.md);
+    sin ella el bloque 4 cierra sólo con aserciones dirigidas;
+  - `ErrorState` fuera de Espacios queda fuera de alcance salvo indicación.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.

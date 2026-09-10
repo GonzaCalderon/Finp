@@ -368,6 +368,17 @@ Crear desde la portada o desde el detalle del Espacio invoca el mismo contrato
 v2, con dinero exacto, `dateKey`, revisión esperada, cotizaciones e idempotencia.
 No existe una variante rápida que envíe un payload legacy o omita la preview.
 
+En Extras, el efecto en Mi Finp se elige entre tres opciones excluyentes: sólo
+registrar en el Espacio, crear una transacción personal o vincular una
+existente. Crear pide cuenta cuando la revisión indica una salida real y
+categoría opcional. Vincular muestra únicamente candidatos que el servidor va a
+aceptar —mismo usuario, tipo, moneda, monto exacto por escala, monto
+operacional, día financiero y cuentas coherentes, sin transacciones ya
+vinculadas— y, cuando la lista queda vacía, explica cuántas quedaron afuera y
+por qué. La revisión final nombra con las mismas palabras cuál de las tres
+opciones se confirma. Editar un movimiento y decidir el impacto personal desde
+el detalle usan la misma lista de candidatos y la misma regla.
+
 ### Borrador personal persistente
 
 Cada usuario puede tener un solo borrador activo de nuevo gasto por Espacio. Se
@@ -450,6 +461,21 @@ Requisitos transversales:
   pérdida de información;
 - reducción de movimiento respetada;
 - sin acciones esenciales disponibles sólo por `hover`.
+
+Un error de lectura en portada, detalle, pendientes, revisión financiera,
+candidatos o saldo de una liquidación usa la primitiva compartida de
+[`design.md`](../../design.md) §10: dice qué no se cargó, no afirma ni niega
+impacto financiero cuando sólo falló una lectura, ofrece reintentar y recibe el
+foco al aparecer. Mientras carga, la superficie conserva su estructura con un
+skeleton; el silencio no es un estado.
+
+En los diálogos guiados, el paso actual es la única región del cuerpo presente
+en el DOM: los pasos anteriores no permanecen ocultos. Cambiar de paso anuncia
+`Paso N de 4 · Nombre` en una región `aria-live="polite"` y lleva el foco al
+encabezado del paso. Intentar avanzar con errores lleva el foco al primer
+mensaje de error y lo desplaza a la vista. El nombre accesible de cada control
+es su `label` asociado y no incluye el valor actual. En mobile, la barra de
+acciones queda sobre la `safe area` y el stepper ocupa una sola línea.
 
 ## 12. Aprendizaje y automatización
 

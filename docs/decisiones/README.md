@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-10
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -113,3 +113,6 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0013 — Borrador privado persistente de movimiento de Espacio`](0013-borrador-privado-persistente-movimiento-espacio.md):
   recurso por autor y Espacio, autosave, listado privado, adjuntos recuperables
   y publicación atómica e idempotente.
+- [`0014 — @axe-core/playwright en los recorridos E2E de Espacios`](0014-axe-core-playwright-en-recorridos-de-espacios.md):
+  evaluación de dependencia, alcance por superficie, umbral de fallo por
+  impacto y complemento de las aserciones dirigidas.
