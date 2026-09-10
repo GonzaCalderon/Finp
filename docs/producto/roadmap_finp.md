@@ -413,6 +413,12 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     edición con gate de revisión, impacto personal, huérfano, convivencia con un
     Espacio legacy bloqueado y el smoke financiero que compara Dashboard,
     Transacciones, Cuentas y Deudas;
+  - límite declarado: de tres corridas globales del día, la intermedia cerró en
+    79 de 80 por `quick-capture.spec.ts:591` en Pixel 7, ajeno a este ítem. No se
+    reproduce aislado ni en el orden de su propio spec, y su artefacto se perdió
+    al relanzar. La orientación depende del preview, cuyos abortos el servidor ya
+    registra como `ECONNRESET`, así que la hipótesis es sensibilidad de tiempo
+    bajo carga y no una regresión de Espacios. Queda por investigar aparte;
   - comparación explícita entre Cuentas, Transacciones, Dashboard, Espacios y
     Deudas: la sostiene ese smoke, hoy también independiente de la hora de
     corrida;

@@ -422,7 +422,10 @@ el 2026-09-10 sobre `codex/spaces-p0-006-closure`:
   rollback, resolución huérfana y una historia de 1.000 movimientos;
 - typecheck, lint y validación documental aprobados; `docs:check` cierra válido
   sobre 35 archivos activos;
-- 80 de 80 E2E globales aprobados en Chromium desktop y Pixel 7;
+- 80 de 80 E2E globales aprobados en Chromium desktop y Pixel 7; de tres
+  corridas globales del día, la intermedia cerró en 79 de 80 por
+  `quick-capture.spec.ts:591` en Pixel 7, que no se reproduce aislado ni en el
+  orden de su propio spec y sigue sin causa confirmada;
 - el conteo previo de 895 unitarias y 68 E2E quedaba corto por la suite, no por
   regresión; el de 923 unitarias que la rama declaró en su primer registro nunca
   existió: eran 902, dos de ellas en rojo contra el contrato que la propia rama
