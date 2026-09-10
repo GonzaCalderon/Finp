@@ -13,9 +13,11 @@ export async function GET() {
 
         await connectDB()
 
+        // Una obligación sin saldo no aporta a la posición neta.
         const debts = await Debt.find({
             userId: session.user.id,
             status: { $in: [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID] },
+            remainingAmount: { $gt: 0 },
         })
 
         const summary = buildDebtSummary(debts as IDebt[])

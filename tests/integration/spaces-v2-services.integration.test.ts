@@ -940,6 +940,20 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
         })
         debt = await Debt.findById(debt!._id).lean()
         expect(debt).toMatchObject({ remainingAmount: 0, status: 'paid' })
+
+        // Ninguna superficie puede devolver una obligación saldada como abierta:
+        // se replica el filtro que aplican las rutas de Espacios y de Mi Finp.
+        expect(await Debt.countDocuments({
+            _id: debt!._id,
+            status: { $in: ['active', 'partially_paid', 'ignored'] },
+            remainingAmount: { $gt: 0 },
+        })).toBe(0)
+        expect(await Debt.countDocuments({
+            userId: ownerUserId,
+            status: { $in: ['active', 'partially_paid'] },
+            remainingAmount: { $lte: 0 },
+        })).toBe(0)
+
         const settlements = await SpaceEntry.find({ spaceId, type: 'settlement', contractVersion: 2 }).lean()
         expect(settlements).toHaveLength(4)
         const settlementTransactions = await Transaction.find({
