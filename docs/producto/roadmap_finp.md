@@ -414,12 +414,17 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     edición con gate de revisión, impacto personal, huérfano, convivencia con un
     Espacio legacy bloqueado y el smoke financiero que compara Dashboard,
     Transacciones, Cuentas y Deudas;
-  - límite declarado: de tres corridas globales del día, la intermedia cerró en
-    79 de 80 por `quick-capture.spec.ts:591` en Pixel 7, ajeno a este ítem. No se
-    reproduce aislado ni en el orden de su propio spec, y su artefacto se perdió
-    al relanzar. La orientación depende del preview, cuyos abortos el servidor ya
-    registra como `ECONNRESET`, así que la hipótesis es sensibilidad de tiempo
-    bajo carga y no una regresión de Espacios. Queda por investigar aparte;
+  - corrección posterior, del 2026-09-10 sobre `codex/spaces-p1-013-experience`:
+    la intermitencia de `quick-capture.spec.ts:591` en Pixel 7 (79 de 80 en una
+    de tres corridas globales) no era del dominio de Espacios ni dependía del
+    preview — `orientation` se resuelve en cliente y nunca toca esa red. La
+    causa real era del test: esa aserción usaba el timeout por defecto de
+    Playwright (~5 s) mientras cada aserción equivalente del mismo archivo usa
+    8-10 s, y su único handler hacía un `route.fetch()` real dentro del
+    intercept, agregando un round-trip innecesario al camino crítico de
+    `loadContext()`. Corregido con un payload prefetcheado antes de abrir el
+    diálogo y el mismo timeout que el resto del archivo; verificado 10/10 en
+    aislado y en dos corridas limpias de la matriz global;
   - comparación explícita entre Cuentas, Transacciones, Dashboard, Espacios y
     Deudas: la sostiene ese smoke, hoy también independiente de la hora de
     corrida;
@@ -647,14 +652,22 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
      error, anuncio y foco del paso, Espacio `solo`, exclusividad y validación de
      la intención—, 949 unitarias globales, typecheck, ESLint y `docs:check`
      sobre 36 archivos.
-     Verificación pendiente declarada: la matriz E2E de Espacios en Chromium
-     desktop y Pixel 7 no se pudo ejecutar. Una corrida ajena de la suite
-     completa ocupaba el puerto 3001 y la base `finp-e2e` —exclusivos por
-     diseño— y el `webServer` entró en pánico por un caché de Turbopack
-     corrupto. Los specs ya están adaptados a la interacción nueva (píldoras en
-     vez de `Select`, `Paso N de 4 · Nombre` y ausencia del paso anterior en el
-     DOM); falta correrlos en un entorno sin concurrencia antes de dar el bloque
-     por cerrado.
+     Verificación pendiente, ahora ejecutada: la matriz E2E de Espacios corrió
+     en un entorno sin concurrencia el 2026-09-10 (el `webServer` sigue siendo
+     sensible a un caché de Turbopack corrupto si un proceso previo no cierra
+     limpio; `rm -rf .next` antes de una corrida aislada lo repara). Los specs
+     ya adaptados a la interacción nueva (píldoras en vez de `Select`,
+     `Paso N de M · Nombre`, ausencia del paso anterior en el DOM) pasan. La
+     corrida encontró una regresión real, no de entorno, en
+     `SpaceEntryReviewStep.tsx`: el título del paso («Qué cambia al confirmar»)
+     quedó duplicado como `h2` (encabezado del paso) y `h3` (dentro del propio
+     componente), lo que rompía `spaces-v2-financial-flow.spec.ts:74` en los
+     dos proyectos de forma determinística. Corregido el 2026-09-10: el
+     encabezado propio del panel «Revisión financiera» pasa a describir ese
+     panel («Cómo queda cada monto»), igual que el resto de los pasos —
+     `extras` ya tenía un patrón así (eyebrow + `h3` propio, distinto del
+     título del paso)—; verificado con
+     `spaces-v2-financial-flow.spec.ts:74` en Chromium desktop y Pixel 7.
      Límite declarado: el contenedor conserva borrador, preview, candidatos,
      validación y envío, y sigue en 2.033 líneas. Extraer ese ciclo de vida a un
      hook no formó parte de este bloque.

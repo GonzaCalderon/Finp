@@ -102,7 +102,7 @@ export function SpaceEntryReviewStep({
                     <div>
                         <SpaceDialogSectionEyebrow>Revisión financiera</SpaceDialogSectionEyebrow>
                         <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-                            Qué cambia al confirmar
+                            Cómo queda cada monto
                         </h3>
                     </div>
                     {previewLoading ? (

@@ -424,8 +424,13 @@ el 2026-09-10 sobre `codex/spaces-p0-006-closure`:
   sobre 35 archivos activos;
 - 80 de 80 E2E globales aprobados en Chromium desktop y Pixel 7; de tres
   corridas globales del día, la intermedia cerró en 79 de 80 por
-  `quick-capture.spec.ts:591` en Pixel 7, que no se reproduce aislado ni en el
-  orden de su propio spec y sigue sin causa confirmada;
+  `quick-capture.spec.ts:591` en Pixel 7. Investigado y corregido el
+  2026-09-10 sobre `codex/spaces-p1-013-experience`: la causa era del test, no
+  de Espacios ni de la orientación de Captura rápida — esa aserción usaba el
+  timeout por defecto (~5 s) mientras el resto del archivo usa 8-10 s, y su
+  intercept hacía un `route.fetch()` real que agregaba un round-trip
+  innecesario. Corregido con payload prefetcheado y timeout alineado;
+  verificado 10/10 en aislado y en dos corridas limpias de la matriz global;
 - el conteo previo de 895 unitarias y 68 E2E quedaba corto por la suite, no por
   regresión; el de 923 unitarias que la rama declaró en su primer registro nunca
   existió: eran 902, dos de ellas en rojo contra el contrato que la propia rama

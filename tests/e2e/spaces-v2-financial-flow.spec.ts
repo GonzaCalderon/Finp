@@ -450,7 +450,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
 
         const dialog = page.getByRole('dialog', { name: 'Editar movimiento' })
         await expect(dialog).toBeVisible()
-        await expect(dialog.getByText('Qué cambia al confirmar')).toBeVisible()
+        await expect(dialog.getByText('Cómo queda cada monto')).toBeVisible()
         await expect(
             dialog.getByText('Completá monto, pagador y reparto para calcular la revisión.')
         ).not.toBeVisible()

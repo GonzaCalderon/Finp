@@ -107,6 +107,7 @@ function MovementCard({
     participants,
     currentUserId,
     personalImpact,
+    pendingImpact,
     reviewImpact,
     capabilities,
     highlighted,
@@ -122,6 +123,7 @@ function MovementCard({
     participants: ISpaceParticipant[]
     currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
+    pendingImpact?: ISpaceEntryPersonalImpact
     reviewImpact?: ISpaceEntryPersonalImpact
     capabilities?: Array<'edit' | 'void'>
     highlighted?: boolean
@@ -140,6 +142,10 @@ function MovementCard({
     const includedCount = entry.sharedWithParticipantIds?.length ?? 0
     const impactsCurrentUser = personalImpact?.status === 'linked'
     const needsReview = Boolean(reviewImpact) && !entry.isVoided
+    // Sin un pending v2 no hay decisión que enviar: escrituras legacy están
+    // retiradas server-side (ver docs/producto/espacios.md #14), y sin un
+    // impacto propio el movimiento no afecta el Finp de este usuario.
+    const canRegisterPersonalImpact = entry.contractVersion === 2 && Boolean(pendingImpact)
     const settlementReceiverId = entry.type === 'settlement'
         ? extractId(entry.sharedWithParticipantIds?.[0])
         : null
@@ -313,7 +319,7 @@ function MovementCard({
                 ) : null}
                 {/* Badges + desktop quick actions + mobile tap affordance — single row */}
                 <div className="flex items-center gap-1.5">
-                    {!isVoided && !impactsCurrentUser && currentParticipant && onPersonalImpact ? (
+                    {!isVoided && !impactsCurrentUser && !needsReview && currentParticipant && onPersonalImpact && canRegisterPersonalImpact ? (
                         <button
                             type="button"
                             onClick={(event) => {
@@ -649,6 +655,7 @@ export function SpaceMovementsPanel({
                             participants={participants}
                             currentUserId={currentUserId}
                             personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.linkedImpact}
+                            pendingImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.pendingActions[0]}
                             reviewImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.reviewImpact}
                             capabilities={entryCapabilitiesById[extractId(entry._id) ?? '']}
                             highlighted={Boolean(focusEntryId && extractId(entry._id) === focusEntryId)}
