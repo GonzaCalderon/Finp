@@ -250,7 +250,7 @@ export function SpacePersonalImpactDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 variant="fullscreen-mobile"
-                className="max-w-[640px] gap-0 overflow-hidden p-0 sm:max-h-[92vh] sm:max-w-[640px]"
+                className="max-w-[640px] gap-0 overflow-hidden p-0 [&_[data-slot=dialog-close]]:size-11 sm:max-h-[92vh] sm:max-w-[640px] sm:[&_[data-slot=dialog-close]]:size-7"
             >
                 <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                     <div className="border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
@@ -323,9 +323,14 @@ export function SpacePersonalImpactDialog({
                                                         Como queres registrarlo
                                                     </h3>
                                                 </div>
-                                                <div className="flex flex-wrap gap-2">
+                                                <div
+                                                    className="flex flex-wrap gap-2"
+                                                    role="radiogroup"
+                                                    aria-label="Cómo querés registrarlo"
+                                                >
                                                     <SpaceDialogChoice
                                                         active={mode === 'create_transaction'}
+                                                        role="radio"
                                                         onClick={() => {
                                                             setMode('create_transaction')
                                                             setLinkedTransactionId(undefined)
@@ -338,6 +343,7 @@ export function SpacePersonalImpactDialog({
                                                     </SpaceDialogChoice>
                                                     <SpaceDialogChoice
                                                         active={mode === 'link_existing'}
+                                                        role="radio"
                                                         onClick={() => {
                                                             setMode('link_existing')
                                                             setAccountId(undefined)
@@ -368,12 +374,12 @@ export function SpacePersonalImpactDialog({
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <SpaceDialogField label="Cuenta">
+                                                        <SpaceDialogField id="personal-impact-account" label="Cuenta">
                                                             <Select
                                                                 value={accountId ?? ''}
                                                                 onValueChange={setAccountId}
                                                             >
-                                                                <SelectTrigger className="w-full">
+                                                                <SelectTrigger id="personal-impact-account" className="w-full">
                                                                     <SelectValue placeholder="Elegi una cuenta" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
@@ -415,6 +421,7 @@ export function SpacePersonalImpactDialog({
                                                 />
 
                                                 <SpaceDialogField
+                                                    id="personal-impact-category"
                                                     label="Categoria personal"
                                                     hint="Solo se guarda en tu Finp personal."
                                                 >
@@ -424,7 +431,7 @@ export function SpacePersonalImpactDialog({
                                                             setCategoryId(value === 'none' ? undefined : value)
                                                         }
                                                     >
-                                                        <SelectTrigger className="w-full">
+                                                        <SelectTrigger id="personal-impact-category" className="w-full">
                                                             <SelectValue placeholder="Sin categoria" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -456,6 +463,7 @@ export function SpacePersonalImpactDialog({
                             {error ? (
                                 <motion.p
                                     {...fadeInFast}
+                                    role="alert"
                                     className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive"
                                 >
                                     {error}
@@ -464,10 +472,10 @@ export function SpacePersonalImpactDialog({
                         </div>
                     </motion.div>
 
-                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
+                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 safe-area-pb sm:px-6">
                         <Button
                             variant="outline"
-                            className="rounded-full"
+                            className="min-h-11 rounded-full"
                             onClick={() => onOpenChange(false)}
                             disabled={submitting}
                         >
@@ -475,7 +483,7 @@ export function SpacePersonalImpactDialog({
                         </Button>
                         {!existingImpact ? (
                             <Button
-                                className="rounded-full"
+                                className="min-h-11 rounded-full"
                                 onClick={() => void handleSubmit()}
                                 disabled={
                                     submitting ||

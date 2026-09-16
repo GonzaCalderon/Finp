@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { loginAsTestUser } from './helpers/auth'
+import { assertAccessibleSurface } from './helpers/accessibility'
 import { SPACE_V2_E2E } from './helpers/spaces-v2'
 
 test.describe('Espacios v2 — recorrido financiero', () => {
@@ -9,6 +10,8 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         const description = `Tarjeta desde inicio ${testInfo.project.name}`
         await loginAsTestUser(page)
         await page.goto('/spaces')
+        await expect(page.locator('h3:visible', { hasText: SPACE_V2_E2E.name }).first()).toBeVisible()
+        await assertAccessibleSurface(page, testInfo, 'spaces-index')
 
         await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
         await page.locator('[data-fab-action="space-action"]:visible').click()
@@ -76,6 +79,8 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await loginAsTestUser(page)
         await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
         await expect(page.getByRole('heading', { name: SPACE_V2_E2E.name })).toBeVisible()
+        await expect(page.getByText(/Cotizaciones de referencia/).first()).toBeVisible()
+        await assertAccessibleSurface(page, testInfo, 'space-detail')
 
         const directCreate = page.getByRole('button', { name: /nuevo movimiento/i }).first()
         if (await directCreate.isVisible()) {
@@ -87,29 +92,51 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
         await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
         await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Paso 1 de 4 · Datos')
+        await assertAccessibleSurface(page, testInfo, 'new-entry-data')
+        if (testInfo.project.name === 'mobile-chromium') {
+            const action = dialog.getByRole('button', { name: 'Continuar' })
+            const box = await action.boundingBox()
+            const viewport = page.viewportSize()
+            expect(box?.height).toBeGreaterThanOrEqual(44)
+            expect(box && viewport && box.y + box.height <= viewport.height).toBe(true)
+        }
         await dialog.locator('#entry-amount').fill('1000')
         await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Paso 2 de 4 · Reparto')
         await expect(dialog.getByTestId('space-entry-step-split')).toBeVisible()
+        await expect(dialog.getByRole('heading', { name: 'Quiénes participan' })).toBeFocused()
+        await expect(dialog.locator('p[aria-live="polite"]').filter({ hasText: 'Paso 2 de 4 · Reparto' })).toHaveText('Paso 2 de 4 · Reparto')
+        await assertAccessibleSurface(page, testInfo, 'new-entry-split')
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Paso 3 de 4 · Extras')
+        await expect(dialog.getByRole('heading', { name: 'Comprobantes y tu Finp' })).toBeFocused()
         // El paso anterior sale del DOM, no queda oculto detrás del actual.
         await expect(dialog.getByTestId('space-entry-step-split')).toHaveCount(0)
-        await dialog.getByRole('radio', { name: 'Crear en Mi Finp' }).click()
+        await assertAccessibleSurface(page, testInfo, 'new-entry-extras')
+        const createInFinp = dialog.getByRole('radio', { name: 'Crear en Mi Finp' })
+        if (testInfo.project.name === 'chromium') {
+            await createInFinp.focus()
+            await createInFinp.press('Space')
+        } else {
+            await createInFinp.click()
+        }
+        await expect(createInFinp).toHaveAttribute('aria-checked', 'true')
         await dialog.getByRole('combobox', { name: 'Cuenta o tarjeta' }).click()
         await page.getByRole('option', { name: /^Efectivo Efectivo/ }).click()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
-        await expect(dialog.getByText('Qué cambia al confirmar')).toBeVisible()
+        await expect(dialog.getByRole('heading', { name: 'Qué cambia al confirmar' })).toBeFocused()
+        await expect(dialog.getByText('Cómo queda cada monto')).toBeVisible()
         await expect(dialog.getByText('Total', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Tu parte', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Impacto real de cuenta', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Gasto operacional', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Adelanto recuperable', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Cambio en deuda', { exact: true })).toBeVisible()
+        await assertAccessibleSurface(page, testInfo, 'new-entry-review')
 
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'POST' &&
@@ -259,7 +286,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         expect(download.headers()['x-content-type-options']).toBe('nosniff')
     })
 
-    test('explica el total multimoneda, filtra USD y revisa una liquidación ARS+USD', async ({ page }) => {
+    test('explica el total multimoneda, filtra USD y revisa una liquidación ARS+USD', async ({ page }, testInfo) => {
         await loginAsTestUser(page)
         await page.goto(`/spaces/${SPACE_V2_E2E.spaceId}`)
 
@@ -282,6 +309,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         const dialog = page.getByRole('dialog', { name: 'Liquidar saldo por moneda' })
         await expect(dialog.getByText('Deuda en ARS')).toBeVisible()
         await expect(dialog.getByText('Deuda en USD')).toBeVisible()
+        await assertAccessibleSurface(page, testInfo, 'settlement')
 
         await dialog.getByLabel('Monto efectivamente pagado').first().fill('100')
         await dialog.getByRole('button', { name: /Agregar tramo/i }).click()
@@ -446,6 +474,14 @@ test.describe('Espacios v2 — recorrido financiero', () => {
 
         const detailSheet = page.getByRole('dialog', { name: new RegExp(description) })
         await expect(detailSheet).toBeVisible()
+        const registerImpact = detailSheet.getByRole('button', { name: 'Registrar en mi Finp' })
+        await expect(registerImpact).toBeVisible()
+        await registerImpact.click()
+        const personalImpactDialog = page.getByRole('dialog', { name: 'Tu Finp' })
+        await expect(personalImpactDialog.getByRole('radiogroup', { name: 'Cómo querés registrarlo' })).toBeVisible()
+        await assertAccessibleSurface(page, testInfo, 'personal-impact')
+        await personalImpactDialog.getByRole('button', { name: 'Cerrar' }).click()
+        await expect(registerImpact).toBeFocused()
         await detailSheet.getByRole('button', { name: 'Editar', exact: true }).click()
 
         const dialog = page.getByRole('dialog', { name: 'Editar movimiento' })
@@ -460,6 +496,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(dialog.getByText('Gasto operacional', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Adelanto recuperable', { exact: true })).toBeVisible()
         await expect(dialog.getByText('Cambio en deuda', { exact: true })).toBeVisible()
+        await assertAccessibleSurface(page, testInfo, 'edit-entry')
 
         const saveButton = dialog.getByRole('button', { name: 'Guardar cambios' })
         await expect(saveButton).toBeEnabled()
@@ -495,6 +532,12 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         }
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
         await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+
+        if (testInfo.project.name === 'mobile-chromium') {
+            await page.setViewportSize({ width: 412, height: 600 })
+            await dialog.getByRole('textbox', { name: 'Descripción' }).focus()
+            await expect(dialog.getByRole('button', { name: 'Continuar' })).toBeInViewport()
+        }
 
         // Los campos deben exponer un nombre accesible real (no sólo un label
         // visual sin asociar), calculado por el propio navegador.

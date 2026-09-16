@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { AlertTriangle, ArrowUpRight, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, RefreshCw, Trash2, Users, WalletCards } from 'lucide-react'
@@ -119,9 +119,18 @@ export function SpaceEntryDetailSheet({
     const [revisionSheetOpen, setRevisionSheetOpen] = useState(false)
     const [selectedSnapshot, setSelectedSnapshot] = useState<ISpaceEntrySnapshot | null>(null)
     const [impactDialogOpen, setImpactDialogOpen] = useState(false)
+    const personalImpactTriggerRef = useRef<HTMLButtonElement>(null)
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
     const [resolving, setResolving] = useState(false)
     const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false, affectedUsersCount: 0 })
+
+    const handleImpactDialogOpenChange = (nextOpen: boolean) => {
+        setImpactDialogOpen(nextOpen)
+
+        if (!nextOpen) {
+            requestAnimationFrame(() => personalImpactTriggerRef.current?.focus())
+        }
+    }
 
     useEffect(() => {
         setCurrentEntry(entry)
@@ -456,6 +465,7 @@ export function SpaceEntryDetailSheet({
                                     <Button
                                         size="sm"
                                         className="rounded-full"
+                                        ref={personalImpactTriggerRef}
                                         onClick={() => setImpactDialogOpen(true)}
                                         disabled={isVoided}
                                     >
@@ -642,7 +652,7 @@ export function SpaceEntryDetailSheet({
 
             <SpacePersonalImpactDialog
                 open={impactDialogOpen}
-                onOpenChange={setImpactDialogOpen}
+                onOpenChange={handleImpactDialogOpenChange}
                 spaceId={spaceId}
                 entry={currentEntry}
                 initialImpact={personalImpact}

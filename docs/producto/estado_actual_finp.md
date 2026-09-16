@@ -27,8 +27,7 @@ Finp es una aplicación web funcional de finanzas personales y compartidas. Cubr
 Estado general:
 
 - base personal apta para preproducción controlada; Espacios tiene su exactitud
-  P0 cerrada en `dev` y le resta el cierre integral de experiencia (FINP-P1-013)
-  antes de considerarse listo para liberación;
+  P0 y su cierre integral de experiencia (FINP-P1-013) completados en `dev`;
 - Espacios v2 tiene su cutover ejecutado y verificado sobre development
   (`finm`, 2026-08-29); producción permanece fuera de alcance sin una
   decisión propia que la autorice;
@@ -387,11 +386,9 @@ estas brechas de exactitud:
 - el cierre del Espacio y los roles aplicados de forma despareja entre rutas: las
   de categorías, invitaciones y adjuntos ignoraban el estado del Espacio.
 
-Permanecen abiertas, y pertenecen a FINP-P1-013:
-
-- mobile y desktop divergen en navegación, densidad y ubicación de acciones;
-- faltan estados de recuperación, foco y accesibilidad consistentes en flujos
-  principales y secundarios.
+FINP-P1-013 cerró el 2026-09-16: mobile y desktop comparten el recorrido de
+Espacios, con recuperación, foco y accesibilidad verificados en sus flujos
+principales y secundarios.
 
 Las etapas 1, 2, 3 y el gate financiero de edición de la auditoría específica de `Nuevo gasto` están
 implementadas y verificadas. La primera cerró tarjeta `1/1`, contrato v2 único,
@@ -403,12 +400,8 @@ bloquear el CTA y el despacho hasta contar con un preview vigente; monto, moneda
 fecha, pagador y reparto lo invalidan. El recorrido focal pasó en Chromium
 desktop y Pixel 7.
 
-Permanecen en FINP-P1-013:
-
-- los candidatos para vincular una transacción se filtran en el cliente por monto,
-  sin ventana de fechas, sin excluir las ya vinculadas y sin estado de error;
-- carga, error, vacío, foco, labels y stepper mobile todavía no forman un
-  recorrido accesible y coherente de punta a punta.
+Los candidatos se resuelven en el servidor y carga, error, vacío, foco, labels
+y stepper forman un recorrido accesible y coherente de punta a punta.
 
 Las resoluciones aprobadas viven en las decisiones
 [`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md) y
@@ -652,7 +645,8 @@ Bloque previo — borrador privado y adjuntos recuperables de `Nuevo gasto`,
 - reconciliación `dry-run` por defecto para preparaciones antiguas y limpiezas
   pendientes, con fallos de carga y borrado inyectados en integración;
 - integración real y recorrido de preparación, cierre, reanudación, publicación
-  y lectura aprobados en Chromium desktop y Pixel 7. FINP-P1-013 continúa abierto
-  por su etapa 4 de experiencia y accesibilidad integral. El EACCES/whitelist de
+  y lectura aprobados en Chromium desktop y Pixel 7. FINP-P1-013 cerró su etapa
+  4 de experiencia y accesibilidad integral el 2026-09-16, con 9/9 recorridos
+  de su matriz en cada proyecto. El EACCES/whitelist de
   MongoDB Atlas anotado entonces no volvió a reproducirse: la suite completa de
   integración corre desde el entorno local.

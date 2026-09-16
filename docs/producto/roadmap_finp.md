@@ -479,7 +479,7 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P1-013 — Cierre integral de experiencia de Espacios
 
-- Estado: `en curso`.
+- Estado: `completado` el 2026-09-16.
 - Dependencia de cierre: FINP-P0-006, cerrado el 2026-09-10. La etapa 4 corre
   sobre `dev` con el contrato v2 ya único y sin cuerpos legacy de escritura.
 - Decisión:
@@ -671,11 +671,15 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
      Límite declarado: el contenedor conserva borrador, preview, candidatos,
      validación y envío, y sigue en 2.033 líneas. Extraer ese ciclo de vida a un
      hook no formó parte de este bloque.
-  4. Cierre con `@axe-core/playwright` (decisión 0014, aceptada el 2026-09-10
-     e instalada), las aserciones dirigidas y el orden del plan de calidad §8:
-     mobile, táctil y teclado, desktop.
-- Elección pendiente del prompter antes de cerrar: `ErrorState` fuera de
-  Espacios queda fuera de alcance salvo indicación.
+  4. Cierre de accesibilidad — completado el 2026-09-16. La decisión 0014 se
+     aplica en nueve checkpoints: portada, detalle, los cuatro pasos de Nuevo
+     gasto, edición, impacto personal y liquidación. El helper falla ante
+     `serious`/`critical`, adjunta el resto y espera las animaciones finitas
+     antes de leer el DOM estable. Se corrigieron nombres, foco de retorno,
+     listas, regiones desplazables, áreas táctiles y contrastes compartidos.
+     La matriz pasó 9/9 en Chromium desktop y Pixel 7; un botón sin nombre
+     inyectado falló como `button-name (critical)` y fue revertido.
+- `ErrorState` fuera de Espacios queda fuera de alcance de este ítem.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.
@@ -807,8 +811,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P3-001 — Compromisos en Espacios
 
-- Estado: `bloqueado`.
-- Bloqueado por: FINP-P1-013.
+- Estado: `pendiente`.
+- FINP-P1-013 dejó de bloquearlo el 2026-09-16.
 - Dependencia funcional: compromisos variables e impacto personal estabilizado.
 - Criterio: plantilla compartida, reparto, aplicación idempotente, un movimiento del Espacio e impacto privado por participante.
 
@@ -830,7 +834,7 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 ### FINP-P3-007 — Cuotas en Espacios
 
 - Estado: `en discovery`.
-- Dependencias: FINP-P0-006 y FINP-P1-013.
+- Dependencias satisfechas: FINP-P0-006 y FINP-P1-013 (2026-09-16).
 - Límite: no incluye el consumo privado `1/1` de la decisión 0012.
 - Criterio previo: definir plan compartido, reconocimiento por período,
   balances, edición, settlements e impacto personal antes de admitir más de una

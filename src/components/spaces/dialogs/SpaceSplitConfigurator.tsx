@@ -431,7 +431,7 @@ export function SpaceSplitConfigurator({
                                                 <p className="truncate font-medium text-foreground">
                                                     {participant.displayName}
                                                 </p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className={cn('text-xs', checked ? 'text-foreground' : 'text-muted-foreground')}>
                                                     {participant.isActive
                                                         ? SPACE_ROLE_LABELS[participant.role]
                                                         : 'Inactivo · sólo historial'}
@@ -486,7 +486,7 @@ export function SpaceSplitConfigurator({
                                                     <p className="truncate font-medium text-foreground">
                                                         {participant.displayName}
                                                     </p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className={cn('text-xs', checked ? 'text-foreground' : 'text-muted-foreground')}>
                                                     {participant.isActive
                                                         ? SPACE_ROLE_LABELS[participant.role]
                                                         : 'Inactivo · sólo historial'}

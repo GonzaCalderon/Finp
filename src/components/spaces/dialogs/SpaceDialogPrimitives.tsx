@@ -141,7 +141,7 @@ export function SpaceDialogChoice({
             disabled={disabled}
             onClick={onClick}
             className={cn(
-                'rounded-full border px-3 py-2 text-sm font-medium transition-[background-color,border-color,color,box-shadow] disabled:cursor-not-allowed disabled:opacity-45',
+                'min-h-11 rounded-full border px-3 py-2 text-sm font-medium transition-[background-color,border-color,color,box-shadow] disabled:cursor-not-allowed disabled:opacity-45',
                 active
                     ? 'border-primary/20 bg-primary/10 text-primary'
                     : 'border-border bg-background/80 text-muted-foreground hover:text-foreground',

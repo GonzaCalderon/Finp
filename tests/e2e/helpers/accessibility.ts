@@ -30,6 +30,22 @@ export async function assertAccessibleSurface(
     testInfo: TestInfo,
     name: string
 ) {
+    // El diálogo puede quedar visible antes de que termine la salida finita de
+    // una acción contextual. Axe debe evaluar el estado estable, no ese cuadro
+    // intermedio con opacidad parcial. Las animaciones infinitas (ticker) no
+    // bloquean la espera.
+    await page
+        .waitForFunction(
+            () =>
+                document.getAnimations().every((animation) => {
+                    const iterations = animation.effect?.getTiming().iterations
+                    return iterations === Infinity || animation.playState !== 'running'
+                }),
+            undefined,
+            { timeout: 1_000 }
+        )
+        .catch(() => undefined)
+
     const results = await new AxeBuilder({ page })
         .withTags(WCAG_TAGS)
         .disableRules(EXCLUDED_RULES.map((rule) => rule.id))
@@ -57,11 +73,14 @@ export async function assertAccessibleSurface(
     }
 
     expect(
-        blocking,
+        blocking.length,
         blocking
             .map((violation) =>
-                `${violation.id} (${violation.impact}): ${violation.help} — ${violation.nodes.length} nodo(s)`
+                `${violation.id} (${violation.impact}): ${violation.help} — ${violation.nodes.length} nodo(s)\n${violation.nodes
+                    .slice(0, 5)
+                    .map((node) => `  • ${node.target.join(' ')}\n    ${node.html}`)
+                    .join('\n')}`
             )
             .join('\n')
-    ).toEqual([])
+    ).toBe(0)
 }

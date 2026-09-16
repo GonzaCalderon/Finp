@@ -326,7 +326,7 @@ function MovementCard({
                                 event.stopPropagation()
                                 onPersonalImpact(entry)
                             }}
-                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/8 px-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/8 px-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
                         >
                             <Plus className="h-3.5 w-3.5" />
                             Registrar en Mi Finp

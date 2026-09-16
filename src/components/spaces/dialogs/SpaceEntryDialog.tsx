@@ -1812,7 +1812,7 @@ export function SpaceEntryDialog({
         <Dialog open={open} onOpenChange={handleDialogOpenChange}>
             <DialogContent
                 variant="fullscreen-mobile"
-                className="max-w-[1120px] gap-0 overflow-hidden p-0 sm:max-h-[94vh] sm:max-w-[1120px]"
+                className="max-w-[1120px] gap-0 overflow-hidden p-0 [&_[data-slot=dialog-close]]:size-11 sm:max-h-[94vh] sm:max-w-[1120px] sm:[&_[data-slot=dialog-close]]:size-7"
             >
                 <div className="flex h-full min-h-0 flex-col sm:h-[94vh]">
                     {/* ── Header ── */}

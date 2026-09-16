@@ -440,7 +440,10 @@ function SpaceSettlementDialogLegacy({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent variant="fullscreen-mobile" className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+            <DialogContent
+                variant="fullscreen-mobile"
+                className="gap-0 overflow-hidden p-0 [&_[data-slot=dialog-close]]:size-11 sm:max-w-lg sm:[&_[data-slot=dialog-close]]:size-7"
+            >
                 <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                 <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4">
                     <DialogTitle className="text-base font-semibold">Registrar pago</DialogTitle>
@@ -528,7 +531,7 @@ function SpaceSettlementDialogLegacy({
                         {/* Participantes */}
                         <SpaceDialogPanel>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <SpaceDialogField label="Quién pagó">
+                                <SpaceDialogField id="legacy-settlement-payer" label="Quién pagó">
                                     <Select
                                         value={form.payerId}
                                         onValueChange={(value) => {
@@ -540,7 +543,7 @@ function SpaceSettlementDialogLegacy({
                                             if (selectedSuggestion) setSelectedSuggestion(null)
                                         }}
                                     >
-                                        <SelectTrigger className="w-full">
+                                        <SelectTrigger id="legacy-settlement-payer" className="w-full">
                                             <SelectValue placeholder="Elegí un participante" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -565,7 +568,7 @@ function SpaceSettlementDialogLegacy({
                                     ) : null}
                                 </SpaceDialogField>
 
-                                <SpaceDialogField label="A quién le pagó">
+                                <SpaceDialogField id="legacy-settlement-receiver" label="A quién le pagó">
                                     <Select
                                         value={form.receiverId}
                                         onValueChange={(value) => {
@@ -573,7 +576,7 @@ function SpaceSettlementDialogLegacy({
                                             if (selectedSuggestion) setSelectedSuggestion(null)
                                         }}
                                     >
-                                        <SelectTrigger className="w-full">
+                                        <SelectTrigger id="legacy-settlement-receiver" className="w-full">
                                             <SelectValue placeholder="Elegí un participante" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -725,9 +728,9 @@ function SpaceSettlementDialogLegacy({
 
                         {v2 && isOwnSettlement ? (
                             <SpaceDialogPanel>
-                                <SpaceDialogField label="Cuenta personal" hint="El movimiento se registrará en Mi Finp">
+                                <SpaceDialogField id="legacy-settlement-account" label="Cuenta personal" hint="El movimiento se registrará en Mi Finp">
                                     <Select value={accountId} onValueChange={setAccountId}>
-                                        <SelectTrigger className="w-full">
+                                        <SelectTrigger id="legacy-settlement-account" className="w-full">
                                             <SelectValue placeholder="Elegí una cuenta compatible" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -771,8 +774,9 @@ function SpaceSettlementDialogLegacy({
 
                         {/* Comentario */}
                         <SpaceDialogPanel>
-                            <SpaceDialogField label="Comentario" hint="Opcional">
+                            <SpaceDialogField id="legacy-settlement-notes" label="Comentario" hint="Opcional">
                                 <SpaceDialogTextArea
+                                    id="legacy-settlement-notes"
                                     value={form.notes}
                                     onChange={(e) =>
                                         setForm((prev) => ({ ...prev, notes: e.target.value }))
@@ -785,15 +789,16 @@ function SpaceSettlementDialogLegacy({
                     </div>
                 </div>
 
-                <DialogFooter className="shrink-0 border-t border-border/60 px-5 py-4">
+                <DialogFooter className="shrink-0 border-t border-border/60 px-5 py-4 safe-area-pb">
                     <Button
+                        className="min-h-11"
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                         disabled={submitting}
                     >
                         Cancelar
                     </Button>
-                    <Button onClick={handleSubmit} disabled={submitting || Boolean(v2 && (previewing || !serverPreview))}>
+                    <Button className="min-h-11" onClick={handleSubmit} disabled={submitting || Boolean(v2 && (previewing || !serverPreview))}>
                         {submitting ? 'Guardando…' : 'Guardar pago'}
                     </Button>
                 </DialogFooter>
@@ -1202,7 +1207,10 @@ function SpaceSettlementDialogV2({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent variant="fullscreen-mobile" className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
+            <DialogContent
+                variant="fullscreen-mobile"
+                className="gap-0 overflow-hidden p-0 [&_[data-slot=dialog-close]]:size-11 sm:max-w-2xl sm:[&_[data-slot=dialog-close]]:size-7"
+            >
                 <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                     <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4">
                         <DialogTitle className="text-base font-semibold">Liquidar saldo por moneda</DialogTitle>
@@ -1214,20 +1222,20 @@ function SpaceSettlementDialogV2({
                         <SpaceDialogPanel>
                             <SpaceDialogSectionEyebrow>1 · Relación</SpaceDialogSectionEyebrow>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <SpaceDialogField label="Quién paga">
+                                <SpaceDialogField id="settlement-payer" label="Quién paga">
                                     <Select value={payerId} onValueChange={(value) => {
                                         setPayerId(value)
                                         if (value === receiverId) setReceiverId('')
                                     }}>
-                                        <SelectTrigger className="w-full"><SelectValue placeholder="Elegí una persona" /></SelectTrigger>
+                                        <SelectTrigger id="settlement-payer" className="w-full"><SelectValue placeholder="Elegí una persona" /></SelectTrigger>
                                         <SelectContent>{activeParticipants.map((participant) => (
                                             <SelectItem key={extractId(participant._id)} value={extractId(participant._id) ?? ''}>{participant.displayName}</SelectItem>
                                         ))}</SelectContent>
                                     </Select>
                                 </SpaceDialogField>
-                                <SpaceDialogField label="Quién recibe">
+                                <SpaceDialogField id="settlement-receiver" label="Quién recibe">
                                     <Select value={receiverId} onValueChange={setReceiverId}>
-                                        <SelectTrigger className="w-full"><SelectValue placeholder="Elegí una persona" /></SelectTrigger>
+                                        <SelectTrigger id="settlement-receiver" className="w-full"><SelectValue placeholder="Elegí una persona" /></SelectTrigger>
                                         <SelectContent>{activeParticipants.filter((participant) => extractId(participant._id) !== payerId).map((participant) => (
                                             <SelectItem key={extractId(participant._id)} value={extractId(participant._id) ?? ''}>{participant.displayName}</SelectItem>
                                         ))}</SelectContent>
@@ -1266,7 +1274,7 @@ function SpaceSettlementDialogV2({
                                                 : [...current, component.key]
                                             )}
                                             className={cn(
-                                                'flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition-colors',
+                                                'flex min-h-11 w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition-colors',
                                                 selected ? 'border-primary/30 bg-primary/8' : 'border-border bg-background/70'
                                             )}
                                         >
@@ -1283,7 +1291,7 @@ function SpaceSettlementDialogV2({
                         <SpaceDialogPanel>
                             <div className="flex items-center justify-between gap-3">
                                 <SpaceDialogSectionEyebrow>3 · Tramos de pago</SpaceDialogSectionEyebrow>
-                                <Button type="button" size="sm" variant="outline" onClick={() => setLegs((current) => [...current, {
+                                <Button className="min-h-11" type="button" size="sm" variant="outline" onClick={() => setLegs((current) => [...current, {
                                     id: crypto.randomUUID(), currency: defaultCurrency, amount: '', accountId: '', manualTargets: [], manualRates: {},
                                 }])}>
                                     <Plus className="h-3.5 w-3.5" /> Agregar tramo
@@ -1300,7 +1308,7 @@ function SpaceSettlementDialogV2({
                                             <div className="flex items-center justify-between">
                                                 <p className="text-sm font-semibold">Tramo {index + 1}</p>
                                                 {legs.length > 1 ? (
-                                                    <Button type="button" size="icon-sm" variant="ghost" aria-label={`Eliminar tramo ${index + 1}`} onClick={() => setLegs((current) => current.filter((item) => item.id !== leg.id))}>
+                                                    <Button className="size-11" type="button" size="icon-sm" variant="ghost" aria-label={`Eliminar tramo ${index + 1}`} onClick={() => setLegs((current) => current.filter((item) => item.id !== leg.id))}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 ) : null}
@@ -1319,9 +1327,9 @@ function SpaceSettlementDialogV2({
                                             </div>
                                             {isOwnSettlement ? (
                                                 <div className="mt-3">
-                                                    <SpaceDialogField label="Mi Finp" hint="Podés decidir o vincular este tramo más tarde">
+                                                    <SpaceDialogField id={`settlement-leg-account-${leg.id}`} label="Mi Finp" hint="Podés decidir o vincular este tramo más tarde">
                                                         <Select value={leg.accountId || 'later'} onValueChange={(value) => updateLeg(leg.id, { accountId: value === 'later' ? '' : value })}>
-                                                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                                            <SelectTrigger id={`settlement-leg-account-${leg.id}`} className="w-full"><SelectValue /></SelectTrigger>
                                                             <SelectContent>
                                                                 <SelectItem value="later">Elegir después en Mi Finp</SelectItem>
                                                                 {compatibleAccounts.map((account) => (
@@ -1341,7 +1349,7 @@ function SpaceSettlementDialogV2({
                                                             <div key={target} className="rounded-xl bg-muted/35 p-2.5">
                                                                 <div className="flex items-center justify-between gap-2 text-xs">
                                                                     <span>{leg.currency}/{target}</span>
-                                                                    <button type="button" className="font-medium text-primary" onClick={() => updateLeg(leg.id, {
+                                                                    <button type="button" className="min-h-11 font-medium text-primary" onClick={() => updateLeg(leg.id, {
                                                                         manualTargets: manual ? leg.manualTargets.filter((item) => item !== target) : [...leg.manualTargets, target],
                                                                     })}>{manual ? 'Usar referencia' : 'Cambiar cotización'}</button>
                                                                 </div>
@@ -1415,15 +1423,15 @@ function SpaceSettlementDialogV2({
                                     onChange={(value) => setDate(formatDateInput(value))}
                                     showErrors={false}
                                 />
-                                <SpaceDialogField label="Comentario" hint="Opcional">
-                                    <SpaceDialogTextArea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ej. Transferencia por el viaje" />
+                                <SpaceDialogField id="settlement-notes" label="Comentario" hint="Opcional">
+                                    <SpaceDialogTextArea id="settlement-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ej. Transferencia por el viaje" />
                                 </SpaceDialogField>
                             </div>
                         </SpaceDialogPanel>
                     </div>
-                    <DialogFooter className="shrink-0 border-t border-border/60 px-5 py-4">
-                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>
-                        <Button onClick={() => void submit()} disabled={submitting || previewing || !preview}>
+                    <DialogFooter className="shrink-0 border-t border-border/60 px-5 py-4 safe-area-pb">
+                        <Button className="min-h-11" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>
+                        <Button className="min-h-11" onClick={() => void submit()} disabled={submitting || previewing || !preview}>
                             {submitting ? 'Confirmando…' : 'Confirmar liquidación'}
                         </Button>
                     </DialogFooter>

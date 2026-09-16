@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-09-10
+> Última actualización: 2026-09-16
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -411,7 +411,12 @@ Una versión puede promoverse cuando:
 ## 15. Estado actual
 
 Checks base, contratos y recorridos financieros de Espacios verificados hasta
-el 2026-09-10 sobre `codex/spaces-p0-006-closure`:
+el 2026-09-16 sobre `codex/spaces-p1-013-experience`:
+
+- FINP-P1-013 etapa 4: nueve checkpoints de axe más aserciones dirigidas de
+  foco, teclado, áreas táctiles y `safe area`, aprobados 9/9 en Chromium desktop
+  y Pixel 7; un control sin nombre inyectado fue bloqueado como crítico y luego
+  revertido.
 
 - 906 pruebas unitarias aprobadas en 123 archivos;
 - 17 recorridos de integración de Espacios v2 aprobados contra bases E2E con

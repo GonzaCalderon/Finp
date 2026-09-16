@@ -2,7 +2,7 @@
 
 > Estado: aceptada
 > Fecha: 2026-09-10
-> Última actualización: 2026-09-10
+> Última actualización: 2026-09-16
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
 > Fuente de verdad: decisión 0014
 > Responsables: prompter y equipo Finp
@@ -92,9 +92,9 @@ Adoptar la opción A como complemento de la B, no como reemplazo. Alcance:
   existen hoy; si aparecen, se excluyen ahí) y falla el test ante cualquier
   violación de impacto `serious` o `critical`; `moderate` y `minor` se
   reportan como adjunto del test sin fallar;
-- se corre sólo sobre las superficies de Espacios que la etapa 4 modifica:
-  portada, detalle, `Nuevo gasto` en cada paso, edición, impacto personal y
-  liquidación; en Chromium desktop y Pixel 7;
+- se corre sólo sobre las nueve superficies de Espacios que la etapa 4 modifica:
+  portada, detalle, `Nuevo gasto` en Datos, Reparto, Extras y Revisión, edición,
+  impacto personal y liquidación; en Chromium desktop y Pixel 7;
 - una exclusión de regla se escribe en el helper con el motivo y el enlace a la
   regla; nunca inline en un spec.
 
@@ -111,7 +111,7 @@ segundo criterio que nadie reconcilia.
 
 ### Negativas o costos
 
-- Entre 12 y 24 s adicionales en la matriz global (seis superficies, dos
+- Entre 18 y 36 s adicionales en la matriz global (nueve superficies, dos
   proyectos, 1–2 s por análisis).
 - Dependencia de desarrollo nueva que hay que mantener alineada con
   `@playwright/test`.
@@ -151,4 +151,8 @@ dependencia: ningún paquete nuevo aparte del wrapper. Las 31 vulnerabilidades
 preexistentes de `npm audit` no mencionan `axe`. `npm run build` no incluye
 `axe-core` en `.next/static`: queda fuera del bundle de producción, como exige
 la restricción de la sección 2. El helper compartido vive en
-`tests/e2e/helpers/accessibility.ts`.
+`tests/e2e/helpers/accessibility.ts`. El 2026-09-16 se verificaron las nueve
+superficies en Chromium desktop y Pixel 7 (9/9 en cada proyecto). El helper
+espera sólo animaciones finitas antes del análisis, para no evaluar un fotograma
+transitorio de salida como estado estable. Un botón sin nombre inyectado de
+forma temporal produjo `button-name (critical)` y la inyección se revirtió.
