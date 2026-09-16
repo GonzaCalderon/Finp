@@ -431,10 +431,10 @@ export function SpaceInviteStatusBadge({
 }) {
     const tone =
         status === 'accepted'
-            ? { background: 'rgba(16,185,129,0.12)', color: '#10B981' }
+            ? { background: 'rgba(16,185,129,0.12)', color: 'var(--chart-3)' }
             : status === 'declined'
-                ? { background: 'rgba(239,68,68,0.12)', color: '#EF4444' }
-                : { background: 'rgba(212,160,23,0.14)', color: '#A67C00' }
+                ? { background: 'rgba(239,68,68,0.12)', color: 'var(--chart-4)' }
+                : { background: 'rgba(212,160,23,0.14)', color: 'var(--warning-foreground)' }
 
     return (
         <Badge
@@ -485,7 +485,7 @@ export function SpaceEntryStatusBadge({
             ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
             : status === 'confirmed'
                 ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
-                : { background: 'rgba(239,68,68,0.12)', color: '#EF4444', label: 'Rechazado' }
+                : { background: 'rgba(239,68,68,0.12)', color: 'var(--chart-4)', label: 'Rechazado' }
 
     return (
         <Badge
@@ -607,7 +607,7 @@ export function SpaceTonePill({
             )}
             style={{
                 background: positive ? 'rgba(16,185,129,0.12)' : 'rgba(212,160,23,0.14)',
-                color: positive ? '#10B981' : '#A67C00',
+                color: positive ? 'var(--chart-3)' : 'var(--warning-foreground)',
             }}
         >
             {positive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}

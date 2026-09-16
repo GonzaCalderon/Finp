@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+    AlertTriangle,
     Ban,
     Bell,
     FileText,
@@ -20,6 +21,7 @@ import {
     Wallet,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ErrorState } from '@/components/shared/ErrorState'
 import {
     Dialog,
     DialogContent,
@@ -235,6 +237,13 @@ function ActivityList({
                     <Skeleton className="h-24 rounded-[20px]" />
                     <Skeleton className="h-24 rounded-[20px]" />
                 </div>
+            ) : activity.error ? (
+                <ErrorState
+                    icon={AlertTriangle}
+                    title="No pudimos cargar la actividad"
+                    description={activity.error}
+                    onRetry={() => void activity.fetchActivity()}
+                />
             ) : activity.events.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -392,6 +401,8 @@ export function SpacesPendingSheet({
     onOpenChange,
     actions,
     loading,
+    error,
+    onRetry,
     spaceId,
     currentUserId,
     initialTab = 'pending',
@@ -401,6 +412,8 @@ export function SpacesPendingSheet({
     onOpenChange: (open: boolean) => void
     actions: ISpacePendingAction[]
     loading: boolean
+    error?: string | null
+    onRetry?: () => void
     spaceId?: string
     currentUserId?: string
     initialTab?: SheetTab
@@ -455,6 +468,15 @@ export function SpacesPendingSheet({
                         <motion.div key="loading" className="space-y-3" {...fadeInFast}>
                             <Skeleton className="h-28 rounded-[20px]" />
                             <Skeleton className="h-28 rounded-[20px]" />
+                        </motion.div>
+                    ) : error ? (
+                        <motion.div key="error" {...fadeInFast}>
+                            <ErrorState
+                                icon={AlertTriangle}
+                                title="No pudimos cargar los pendientes"
+                                description={error}
+                                onRetry={onRetry}
+                            />
                         </motion.div>
                     ) : actions.length === 0 ? (
                         <motion.div key="empty" className="flex flex-col items-center justify-center gap-3 py-12 text-center" {...fadeInFast}>

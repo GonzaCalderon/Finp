@@ -592,14 +592,21 @@ test.describe('Captura rápida', () => {
         page,
     }, testInfo) => {
         // El compromiso pendiente se inyecta en el contexto: el test verifica la
-        // orientación, no la creación de datos.
+        // orientación, no la creación de datos. Se resuelve el payload real antes
+        // de abrir el diálogo para que la intercepción sea una respuesta estática:
+        // un `route.fetch()` dentro del handler agrega un round-trip completo al
+        // camino crítico de `loadContext()` y hace flaky la primera aserción de
+        // orientación bajo cualquier lentitud transitoria del servidor de E2E.
+        const contextResponse = await page.request.get('/api/quick-capture/context')
+        expect(contextResponse.ok()).toBe(true)
+        const contextPayload = await contextResponse.json()
+
         await page.route('**/api/quick-capture/context', async (route) => {
-            const response = await route.fetch()
-            const payload = await response.json()
             await route.fulfill({
-                response,
+                status: 200,
+                contentType: 'application/json',
                 json: {
-                    ...payload,
+                    ...contextPayload,
                     currentPeriod: '2026-07',
                     commitments: [
                         {
@@ -630,7 +637,7 @@ test.describe('Captura rápida', () => {
         await dialog.getByLabel('Describí el movimiento').fill('Alquiler 675000')
 
         const orientation = dialog.getByTestId('capture-orientation')
-        await expect(orientation).toBeVisible()
+        await expect(orientation).toBeVisible({ timeout: 8_000 })
         await expect(orientation).toHaveAttribute('data-intent', 'apply_commitment')
         await expect(orientation).toContainText('Alquiler')
         // Anuncia el importe que se va a aplicar, no el previsto por la plantilla.

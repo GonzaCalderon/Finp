@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { AlertTriangle, ArrowUpRight, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, RefreshCw, Trash2, Users, WalletCards } from 'lucide-react'
@@ -119,9 +119,18 @@ export function SpaceEntryDetailSheet({
     const [revisionSheetOpen, setRevisionSheetOpen] = useState(false)
     const [selectedSnapshot, setSelectedSnapshot] = useState<ISpaceEntrySnapshot | null>(null)
     const [impactDialogOpen, setImpactDialogOpen] = useState(false)
+    const personalImpactTriggerRef = useRef<HTMLButtonElement>(null)
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
     const [resolving, setResolving] = useState(false)
     const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false, affectedUsersCount: 0 })
+
+    const handleImpactDialogOpenChange = (nextOpen: boolean) => {
+        setImpactDialogOpen(nextOpen)
+
+        if (!nextOpen) {
+            requestAnimationFrame(() => personalImpactTriggerRef.current?.focus())
+        }
+    }
 
     useEffect(() => {
         setCurrentEntry(entry)
@@ -157,6 +166,11 @@ export function SpaceEntryDetailSheet({
     const impactsCurrentUser = personalImpact?.status === 'linked'
     const isVoided = currentEntry.isVoided === true
     const hasReview = Boolean(reviewImpact && !isVoided)
+    // Sin un pending v2 no hay decisión que enviar: escrituras legacy están
+    // retiradas server-side (ver docs/producto/espacios.md #14), y sin un
+    // impacto propio el movimiento no afecta el Finp de este usuario.
+    const canRegisterPersonalImpact = currentEntry.contractVersion === 2
+        && personalImpact?.status === 'pending'
     const isEdited = (currentEntry.editCount ?? 0) > 0
     const previousVersions = currentEntry.previousVersions ?? []
     const hasPreviousVersions = previousVersions.length > 0
@@ -428,9 +442,11 @@ export function SpaceEntryDetailSheet({
                                                 ? 'El movimiento fue editado. Tu transacción en Finp puede estar desactualizada.'
                                                 : isVoided
                                                     ? 'Este movimiento esta anulado.'
-                                                    : 'Todavia no registraste este movimiento en tu Finp.'}
+                                                    : canRegisterPersonalImpact
+                                                        ? 'Todavia no registraste este movimiento en tu Finp.'
+                                                        : 'Este movimiento no afecta tu Finp personal.'}
                                     </p>
-                                    {isEdited && !isVoided && !impactsCurrentUser && !hasReview ? (
+                                    {isEdited && !isVoided && !impactsCurrentUser && !hasReview && canRegisterPersonalImpact ? (
                                         <p className="text-xs text-amber-700 dark:text-amber-400">
                                             Este movimiento fue editado. Revisa el monto antes de registrarlo en tu Finp.
                                         </p>
@@ -445,10 +461,11 @@ export function SpaceEntryDetailSheet({
                                         <RefreshCw className="h-3.5 w-3.5" />
                                         Resolver
                                     </Button>
-                                ) : !impactsCurrentUser && !hasReview ? (
+                                ) : !impactsCurrentUser && !hasReview && canRegisterPersonalImpact ? (
                                     <Button
                                         size="sm"
                                         className="rounded-full"
+                                        ref={personalImpactTriggerRef}
                                         onClick={() => setImpactDialogOpen(true)}
                                         disabled={isVoided}
                                     >
@@ -635,7 +652,7 @@ export function SpaceEntryDetailSheet({
 
             <SpacePersonalImpactDialog
                 open={impactDialogOpen}
-                onOpenChange={setImpactDialogOpen}
+                onOpenChange={handleImpactDialogOpenChange}
                 spaceId={spaceId}
                 entry={currentEntry}
                 initialImpact={personalImpact}

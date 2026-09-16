@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -218,9 +218,11 @@ En Compromisos, alta y edición siguen `Compromiso → Frecuencia → Aplicació
 La agenda de montos no forma parte del formulario general: se administra desde
 `Cambiar monto` para no mezclar configuración, vigencia e historia.
 
-En mobile, el progreso se resume como `Paso N de 3 · Nombre` y una barra
-compacta; no se reservan tres columnas sin contenido para representar el
-stepper. En desktop se conservan los tres pasos visibles. El día mensual usa el
+En mobile, el progreso se resume como `Paso N de M · Nombre` y una barra
+compacta; no se reservan columnas sin contenido para representar el stepper. En
+desktop se conservan todos los pasos visibles y navegables hacia atrás. `M` es
+la cantidad real de pasos del flujo: tres en Compromisos, cuatro en el gasto de
+un Espacio compartido y tres en uno `solo`. El día mensual usa el
 mismo patrón de datepicker de Nueva transacción, adaptado a un calendario fijo
 de 31 días; no usa texto libre, un desplegable largo ni una cuadrícula siempre
 abierta. Debe mostrar una vista previa del vencimiento y el recordatorio
@@ -356,6 +358,16 @@ Todo flujo contempla:
 - Indicar si hubo o no impacto financiero.
 - Permitir reintentar o corregir.
 - Conservar el borrador siempre que sea seguro.
+
+La primitiva compartida para un error de lectura es `ErrorState`
+(`src/components/shared/ErrorState.tsx`): espejo de `EmptyState` más
+recuperación, con `icon`, `title`, `description?`, `retryLabel?` y `onRetry?`.
+Renderiza `role="alert"`, un contenedor enfocable que recibe el foco al
+montarse y, si existe `onRetry`, un botón secundario de reintento. Un módulo no
+dibuja su propio cuadro destructivo cuando esta primitiva alcanza, y un error
+de lectura nunca se comunica sólo por toast. Un error de mutación va junto al
+formulario, conserva el borrador y dice si no escribió, revirtió o sólo falló
+un refresco.
 
 ### Éxito
 

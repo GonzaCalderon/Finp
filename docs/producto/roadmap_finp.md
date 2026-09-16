@@ -106,9 +106,10 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P0-006 — Exactitud financiera de Espacios, Mi Finp y Deudas
 
-- Estado: `validación`. La rama `codex/spaces-p0-006-closure` completó dominio,
-  datos, API, UI, migración, recuperación, pruebas y documentación; resta el
-  merge a `dev`.
+- Estado: `cerrado` el 2026-09-10 — PR 38, `codex/spaces-p0-006-closure` →
+  `dev` (`418b4b5`), con la matriz de verificación completa registrada abajo.
+  Producción sigue sin escritura v2: exige una decisión propia equivalente a la
+  0011.
 - Decisiones:
   - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
   - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
@@ -413,12 +414,17 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     edición con gate de revisión, impacto personal, huérfano, convivencia con un
     Espacio legacy bloqueado y el smoke financiero que compara Dashboard,
     Transacciones, Cuentas y Deudas;
-  - límite declarado: de tres corridas globales del día, la intermedia cerró en
-    79 de 80 por `quick-capture.spec.ts:591` en Pixel 7, ajeno a este ítem. No se
-    reproduce aislado ni en el orden de su propio spec, y su artefacto se perdió
-    al relanzar. La orientación depende del preview, cuyos abortos el servidor ya
-    registra como `ECONNRESET`, así que la hipótesis es sensibilidad de tiempo
-    bajo carga y no una regresión de Espacios. Queda por investigar aparte;
+  - corrección posterior, del 2026-09-10 sobre `codex/spaces-p1-013-experience`:
+    la intermitencia de `quick-capture.spec.ts:591` en Pixel 7 (79 de 80 en una
+    de tres corridas globales) no era del dominio de Espacios ni dependía del
+    preview — `orientation` se resuelve en cliente y nunca toca esa red. La
+    causa real era del test: esa aserción usaba el timeout por defecto de
+    Playwright (~5 s) mientras cada aserción equivalente del mismo archivo usa
+    8-10 s, y su único handler hacía un `route.fetch()` real dentro del
+    intercept, agregando un round-trip innecesario al camino crítico de
+    `loadContext()`. Corregido con un payload prefetcheado antes de abrir el
+    diálogo y el mismo timeout que el resto del archivo; verificado 10/10 en
+    aislado y en dos corridas limpias de la matriz global;
   - comparación explícita entre Cuentas, Transacciones, Dashboard, Espacios y
     Deudas: la sostiene ese smoke, hoy también independiente de la hora de
     corrida;
@@ -473,9 +479,9 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P1-013 — Cierre integral de experiencia de Espacios
 
-- Estado: `en curso`.
-- Dependencia de cierre: FINP-P0-006. El checkpoint de exactitud de `Nuevo
-  gasto` ya habilita las etapas 2 a 4; el ítem no puede cerrarse antes que el P0.
+- Estado: `completado` el 2026-09-16.
+- Dependencia de cierre: FINP-P0-006, cerrado el 2026-09-10. La etapa 4 corre
+  sobre `dev` con el contrato v2 ya único y sin cuerpos legacy de escritura.
 - Decisión:
   [`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 - Regla de entrega: es un único cierre de producto. Los recorridos pueden
@@ -554,34 +560,126 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   - La suite de integración completa posterior al último endurecimiento no pudo
     abrir MongoDB Atlas desde este entorno por EACCES/whitelist; queda como
     verificación operativa pendiente fuera de este entorno.
-- Etapa 4 pendiente, en rama propia posterior al merge de
-  `codex/spaces-p0-006-closure`, en este orden:
-  1. Estados reales. Crear `src/components/shared/ErrorState.tsx` espejando la API
-     de `EmptyState` más `onRetry`, con `role="alert"` y contenedor enfocable, y
-     adoptarlo en la portada, el detalle, `SpacePendingViews`, los errores de
-     preview y de candidatos, y el panel de deudas: hoy la portada y el detalle
-     muestran un cuadro destructivo sin reintento y no existe primitiva
-     compartida. Sumar skeletons a los paneles de deudas e impactos.
-  2. Candidatos de vínculo resueltos por el servidor. Nueva ruta
-     `[id]/entries/[entryId]/link-candidates` con capacidad, que calcula el
-     esperado con `derivePersonalImpactAmountsV2` y filtra por actor, moneda,
-     tolerancia de monto, ventana de fechas alrededor del `dateKey`, exclusión de
-     transacciones ya vinculadas, tipo compatible y cuenta activa. Hoy ambos
-     diálogos piden 25 transacciones y filtran en el cliente por monto, sin
-     ventana, sin excluir vinculadas y tragándose el error.
-  3. Descomponer `SpaceEntryDialog` (2254 líneas) en componentes por paso
-     desmontados, nunca ocultos con `hidden`, que es lo que hoy rompe foco, orden
-     de tabulación y stepper a la vez. Portar el patrón canónico de
-     `TransactionDialog`; reemplazar el selector de cuenta más el toggle avanzado
-     por las píldoras excluyentes que ya funcionan en `SpacePersonalImpactDialog`;
-     cablear `useScrollToFirstError`; quitar los `aria-labelledby`
-     autorreferenciales; aplicar `safe-area-bottom-bar` a la barra mobile.
-  4. Cierre: `@axe-core/playwright` sobre los recorridos de Espacios en ambos
-     proyectos, con la evaluación de dependencia que exige `AGENTS.md` §11. Axe no
-     cubre lo que esta etapa nombra —foco en el primer error, anuncio del paso,
-     orden de tabulación, `safe area`—, así que las aserciones dirigidas de RTL y
-     Playwright siguen siendo necesarias. Verificar en el orden del plan de
-     calidad §8: mobile, luego táctil y teclado, luego desktop.
+- Etapa 4 — rama `codex/spaces-p1-013-experience`, nacida de `dev`
+  (`418b4b5`) el 2026-09-10. Preparación documental lista salvo las elecciones
+  marcadas abajo: el comportamiento vive en `espacios.md` §10–11, la primitiva
+  de error en `design.md` §10 y el contrato de candidatos en `arquitectura.md`
+  §8. Verificado contra el código antes de planificar: `SpaceEntryDialog`
+  tiene 2263 líneas y oculta pasos con `hidden`; ambos diálogos piden 25
+  transacciones y filtran en cliente; el preview valida `linkExisting` con
+  menos reglas que el `resolve`; `useScrollToFirstError` existe y no está
+  cableado; el footer del diálogo ya usa `safe-area-pb`.
+  Bloques, en este orden y cada uno verde antes del siguiente:
+  1. Estados reales — completado el 2026-09-10. `ErrorState` según `design.md`
+     §10, con foco al montarse y reintento real: portada (`fetchSpaces`),
+     detalle (`fetchSpace`), pendientes y actividad de `SpacesPendingSheet`
+     (`fetchPendingActions`, `fetchActivity`, antes silenciados), revisión
+     financiera del alta/edición (nuevo `previewRetryNonce` porque el efecto de
+     preview no tenía una vía de reintento sin cambiar un campo) y saldo de
+     liquidación en `SpaceSettlementDialogV2`, que cargaba deudas sin estado de
+     carga y mezclaba ese fallo con el `error` genérico de preview/envío
+     (`fetchDebts` extraído, con `debtsLoading`/`debtsError` propios).
+     Corrección al plan: «candidatos» se saca de este bloque y pasa al 2 — hoy
+     es un `<Select>` nativo poblado por un filtro de cliente, sin región propia
+     donde montar la primitiva sin romper la semántica del combobox; sólo tiene
+     sentido una vez que el bloque 2 lo convierta en una lista con estados.
+     Evidencia: `ErrorState` (`src/components/shared/ErrorState.tsx`), 3
+     unitarias focales; E2E nuevo que falla la carga del saldo con `page.route`,
+     verifica la alerta enfocada y confirma la recuperación tras reintentar; 909
+     unitarias y 24 E2E de Espacios (ambos proyectos) verdes junto con
+     typecheck, ESLint y `docs:check`.
+  2. Candidatos de vínculo resueltos por el servidor — completado el
+     2026-09-10, según `arquitectura.md` §8 «Candidatos de vínculo personal».
+     No eran dos copias de la regla, eran cuatro: el alta guiada, `resolve` y
+     el preview cada uno con la suya, y ninguna ruta de candidatos. Divergían
+     de verdad — sólo el alta aceptaba `credit_card_expense` (decisión 0012) y
+     sólo `resolve` validaba la cuenta, así que el alta podía vincular una
+     transacción de un no pagador que sí movía cuenta sin que nada lo
+     impidiera. Las cuatro pasan a `assessLinkCandidateV2`
+     (`space-link-candidate-v2.ts`), nueva; `POST /api/spaces/[id]/link-candidates`
+     (`space-link-candidates-v2.ts`) ofrece candidatos por alta o por impacto
+     persistido; ambos diálogos reemplazan el `<Select>` de 25 transacciones
+     filtradas en cliente por `SpaceLinkCandidateList`, con `cargando`, `vacío`
+     con motivos y `error` (`ErrorState`, reintento). Corrección al plan
+     previo: no hay ventana de fechas — el servidor exige el mismo `dateKey` —
+     pero el preview de alta no recibe fecha en su contrato actual, así que su
+     `linkExisting` no evalúa fecha ni "ya vinculada a otro impacto"; esas dos
+     quedan a cargo del `resolve` autoritativo, documentado como límite
+     deliberado en `arquitectura.md` §8, no como pendiente.
+     Evidencia: 20 unitarias de la evaluación pura y sus helpers, 3
+     integraciones con sesión Mongo real (preview/resolve coinciden sobre la
+     misma transacción, la lista de candidatos sólo devuelve lo que `resolve`
+     acepta y cuenta el resto por motivo, el modo de alta no exige impacto
+     persistido), 7 unitarias de la ruta HTTP, 938 unitarias, typecheck,
+     ESLint y `docs:check` verdes, más la matriz global de 82 de 82 E2E en
+     Chromium desktop y Pixel 7 el 2026-09-10. Durante el trabajo apareció una
+     rama muerta ajena al alcance en `SpacePersonalImpactDialog.tsx` — un
+     `POST` legacy que ya no cumple el esquema que PR 38 dejó vigente —
+     derivada a una tarea separada.
+  3. Descomposición de `SpaceEntryDialog` — implementado el 2026-09-10, con la
+     matriz E2E pendiente (abajo). Un componente por paso en
+     `dialogs/entry-steps/`, montado sólo cuando es el actual: `buildSpaceEntrySteps`
+     y `currentStep.id` reemplazan al número de paso, y los `hidden` que dejaban
+     los campos anteriores en el DOM —y en el orden de lectura y tabulación—
+     desaparecen. La edición no es un flujo guiado y no gana stepper: compone los
+     mismos pasos en su lectura de dos columnas.
+     Correcciones al plan, verificadas contra el código antes de escribirlo:
+     - un Espacio `solo` montaba «Reparto» vacío y pedía «Continuar» sobre una
+       pantalla en blanco; `buildSpaceEntrySteps` omite ese paso, el recorrido
+       tiene tres y el anuncio pasó de `Paso N de 4` a `Paso N de M` en
+       `espacios.md` §11 y `design.md` §9;
+     - el stepper era una grilla de cuatro columnas, justo lo que `design.md` §9
+       prohíbe en mobile: ahora resume `Paso N de M · Nombre` con barra compacta
+       en mobile y conserva las píldoras navegables hacia atrás en desktop;
+     - `useScrollToFirstError` sólo hacía scroll, así que cablearlo tal cual
+       habría perdido el foco que el E2E exige: se le agregó foco opcional y
+       reemplaza al `focusFirstError` local en las ocho vías de rechazo.
+     Las tres opciones de Mi Finp pasaron de un `Select` con opción «Solo
+     registrar en el espacio» más un toggle de texto avanzado —dos controles para
+     una sola decisión— a píldoras `SpaceDialogChoice` excluyentes con
+     `role="radio"` dentro de un `radiogroup` con nombre. Su validación usa la
+     autoridad del servidor: `Crear en Mi Finp` exige cuenta sólo cuando la
+     revisión declara salida real (`accountImpactAmount > 0`) y `Vincular
+     existente` exige un candidato elegido; antes se llegaba a la revisión con la
+     intención a medias. El error pertenece al grupo, no a un campo: colgado del
+     `Select` quedaba sin superficie cuando no hay cuentas compatibles.
+     Retirados: los cuatro `aria-labelledby="x-label x"` que metían el valor
+     elegido dentro del nombre accesible, y una rama muerta de edición
+     (`initialLinkedTransactionImpactsCurrentUser`, constante `false`) cuyo aviso
+     nunca se renderizaba. El textarea de notas no tenía nombre accesible.
+     Evidencia: 11 unitarias nuevas —contrato de pasos y número persistido,
+     stepper, montaje excluyente, nombre accesible sin valor, foco al primer
+     error, anuncio y foco del paso, Espacio `solo`, exclusividad y validación de
+     la intención—, 949 unitarias globales, typecheck, ESLint y `docs:check`
+     sobre 36 archivos.
+     Verificación pendiente, ahora ejecutada: la matriz E2E de Espacios corrió
+     en un entorno sin concurrencia el 2026-09-10 (el `webServer` sigue siendo
+     sensible a un caché de Turbopack corrupto si un proceso previo no cierra
+     limpio; `rm -rf .next` antes de una corrida aislada lo repara). Los specs
+     ya adaptados a la interacción nueva (píldoras en vez de `Select`,
+     `Paso N de M · Nombre`, ausencia del paso anterior en el DOM) pasan. La
+     corrida encontró una regresión real, no de entorno, en
+     `SpaceEntryReviewStep.tsx`: el título del paso («Qué cambia al confirmar»)
+     quedó duplicado como `h2` (encabezado del paso) y `h3` (dentro del propio
+     componente), lo que rompía `spaces-v2-financial-flow.spec.ts:74` en los
+     dos proyectos de forma determinística. Corregido el 2026-09-10: el
+     encabezado propio del panel «Revisión financiera» pasa a describir ese
+     panel («Cómo queda cada monto»), igual que el resto de los pasos —
+     `extras` ya tenía un patrón así (eyebrow + `h3` propio, distinto del
+     título del paso)—; verificado con
+     `spaces-v2-financial-flow.spec.ts:74` en Chromium desktop y Pixel 7.
+     Límite declarado: el contenedor conserva borrador, preview, candidatos,
+     validación y envío, y sigue en 2.033 líneas. Extraer ese ciclo de vida a un
+     hook no formó parte de este bloque.
+  4. Cierre de accesibilidad — completado el 2026-09-16. La decisión 0014 se
+     aplica en nueve checkpoints: portada, detalle, los cuatro pasos de Nuevo
+     gasto, edición, impacto personal y liquidación. El helper falla ante
+     `serious`/`critical`, adjunta el resto y espera las animaciones finitas
+     antes de leer el DOM estable. Se corrigieron nombres, foco de retorno,
+     listas, regiones desplazables, áreas táctiles y contrastes compartidos.
+     La matriz pasó 9/9 en Chromium desktop y Pixel 7; un botón sin nombre
+     inyectado falló como `button-name (critical)` y fue revertido.
+- `ErrorState` fuera de Espacios queda fuera de alcance de este ítem.
 - Verificación: tests de componentes y accesibilidad, E2E de recorridos y
   recuperación, revisión visual light/dark y anchos intermedios, contenido
   representativo y evaluación guiada de las tareas críticas antes del cierre.
@@ -713,8 +811,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P3-001 — Compromisos en Espacios
 
-- Estado: `bloqueado`.
-- Bloqueado por: FINP-P1-013.
+- Estado: `pendiente`.
+- FINP-P1-013 dejó de bloquearlo el 2026-09-16.
 - Dependencia funcional: compromisos variables e impacto personal estabilizado.
 - Criterio: plantilla compartida, reparto, aplicación idempotente, un movimiento del Espacio e impacto privado por participante.
 
@@ -736,7 +834,7 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 ### FINP-P3-007 — Cuotas en Espacios
 
 - Estado: `en discovery`.
-- Dependencias: FINP-P0-006 y FINP-P1-013.
+- Dependencias satisfechas: FINP-P0-006 y FINP-P1-013 (2026-09-16).
 - Límite: no incluye el consumo privado `1/1` de la decisión 0012.
 - Criterio previo: definir plan compartido, reconocimiento por período,
   balances, edición, settlements e impacto personal antes de admitir más de una

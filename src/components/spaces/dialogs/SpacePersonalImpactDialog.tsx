@@ -9,11 +9,12 @@ import {
     invalidateData,
     SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
+import { fetchLinkCandidatesForImpact } from '@/lib/client/space-personal-impact'
 import { fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { extractId } from '@/lib/utils/spaces'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
-import type { ITransaction, ISpaceEntry, ISpaceEntryPersonalImpact } from '@/types'
+import type { ISpaceEntry, ISpaceEntryPersonalImpact, SpaceLinkCandidateDto } from '@/types'
 import type { SpacePersonalImpactKind } from '@/lib/constants'
 import {
     Dialog,
@@ -39,6 +40,7 @@ import {
     SpaceDialogField,
     SpaceDialogPanel,
     SpaceDialogSectionEyebrow,
+    SpaceLinkCandidateList,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 
 type Suggestion = {
@@ -46,32 +48,12 @@ type Suggestion = {
     currency: string
     impactKind: SpacePersonalImpactKind
     categoryId?: string
-    categoryStrategy?: string
 }
 
 function getImpactCopy(kind?: SpacePersonalImpactKind) {
     if (kind === 'participant_share') return 'Vas a registrar tu parte del gasto en tu Finp.'
     if (kind === 'settlement_paid' || kind === 'settlement_received') return 'Vas a registrar este pago en tu Finp.'
     return 'Vas a registrar el gasto completo en tu Finp.'
-}
-
-function getTransactionAccountName(transaction: ITransaction) {
-    const account = (
-        transaction.type === 'income'
-            ? transaction.destinationAccountId
-            : transaction.sourceAccountId
-    ) as unknown
-
-    if (
-        account &&
-        typeof account === 'object' &&
-        'name' in account &&
-        typeof account.name === 'string'
-    ) {
-        return account.name
-    }
-
-    return 'Cuenta sin identificar'
 }
 
 export function SpacePersonalImpactDialog({
@@ -96,7 +78,11 @@ export function SpacePersonalImpactDialog({
     const [amount, setAmount] = useState('')
     const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
     const [existingImpact, setExistingImpact] = useState<ISpaceEntryPersonalImpact | null>(null)
-    const [recentTransactions, setRecentTransactions] = useState<ITransaction[]>([])
+    const [linkCandidates, setLinkCandidates] = useState<SpaceLinkCandidateDto[]>([])
+    const [linkCandidatesLoading, setLinkCandidatesLoading] = useState(false)
+    const [linkCandidatesError, setLinkCandidatesError] = useState<string | null>(null)
+    const [linkCandidatesExcluded, setLinkCandidatesExcluded] = useState(0)
+    const [linkCandidatesRetryNonce, setLinkCandidatesRetryNonce] = useState(0)
     const [submitting, setSubmitting] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -134,50 +120,30 @@ export function SpacePersonalImpactDialog({
             setCategoryId(undefined)
             setLinkedTransactionId(undefined)
             setExistingImpact(null)
+            setLinkCandidates([])
+            setLinkCandidatesError(null)
+            setLinkCandidatesExcluded(0)
 
             try {
-                if (currentEntry.contractVersion === 2 && initialImpact) {
-                    const impactAmount = initialImpact.accountImpactAmount || initialImpact.ownShareAmount || initialImpact.amount
-                    setExistingImpact(initialImpact.status === 'linked' ? initialImpact : null)
-                    setSuggestion({
-                        amount: impactAmount,
-                        currency: initialImpact.currency,
-                        impactKind: initialImpact.impactKind,
-                        categoryId: extractId(initialImpact.categoryId),
-                    })
-                    setAmount(String(impactAmount))
-                    const transactionsData = await apiJson<{ transactions: ITransaction[] }>(
-                        `/api/transactions?limit=25&sort=date_desc&currency=${currentEntry.currency}`
-                    )
-                    if (!cancelled) {
-                        setRecentTransactions(transactionsData.transactions.filter(
-                            (transaction) => Math.abs(transaction.amount - impactAmount) < 0.01
-                        ))
-                    }
-                    return
+                if (currentEntry.contractVersion !== 2 || !initialImpact) {
+                    // Todo movimiento v2 con impacto para este usuario llega con
+                    // initialImpact ya resuelto (ver SpaceEntryDetailSheet). Si no lo
+                    // trae, no hay nada que registrar: fallar explícito en vez de
+                    // intentar un contrato de escritura legacy que el servidor ya no
+                    // acepta (retirado en PR 38, ver docs/producto/espacios.md #14).
+                    throw new Error('Este movimiento no tiene un impacto personal para registrar.')
                 }
-                const impactData = await apiJson<{
-                    impact: ISpaceEntryPersonalImpact | null
-                    pendingActions: ISpaceEntryPersonalImpact[]
-                    suggestion: Suggestion | null
-                }>(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`)
-                if (cancelled) return
-                // Solo el linkedImpact real bloquea el registro; pendingActions son informativos
-                setExistingImpact(impactData.impact)
-                setSuggestion(impactData.suggestion)
-                setAmount(String(impactData.suggestion?.amount ?? currentEntry.amount))
-                setCategoryId(impactData.suggestion?.categoryId)
-
-                const transactionsData = await apiJson<{ transactions: ITransaction[] }>(
-                    `/api/transactions?limit=25&sort=date_desc&currency=${currentEntry.currency}`
-                )
-                if (cancelled) return
-                const targetAmount = impactData.suggestion?.amount ?? currentEntry.amount
-                setRecentTransactions(
-                    transactionsData.transactions.filter(
-                        (transaction) => Math.abs(transaction.amount - targetAmount) < 0.01
-                    )
-                )
+                const impactAmount = initialImpact.accountImpactAmount || initialImpact.ownShareAmount || initialImpact.amount
+                setExistingImpact(initialImpact.status === 'linked' ? initialImpact : null)
+                setSuggestion({
+                    amount: impactAmount,
+                    currency: initialImpact.currency,
+                    impactKind: initialImpact.impactKind,
+                    categoryId: extractId(initialImpact.categoryId),
+                })
+                setAmount(String(impactAmount))
+                // Los candidatos v2 tienen su propio efecto y su propio error: un
+                // fallo ahí no debe tapar el resto del contexto ya cargado.
             } catch (err) {
                 if (!cancelled) {
                     setError(err instanceof Error ? err.message : 'No pudimos cargar tu impacto personal.')
@@ -194,61 +160,84 @@ export function SpacePersonalImpactDialog({
         }
     }, [entry, entryId, initialImpact, open, spaceId])
 
+    const impactId = extractId(initialImpact?._id)
+
+    useEffect(() => {
+        if (!open || !spaceId || !entryId || entry?.contractVersion !== 2 || !impactId) {
+            return
+        }
+        let cancelled = false
+        setLinkCandidatesLoading(true)
+        setLinkCandidatesError(null)
+        fetchLinkCandidatesForImpact({ spaceId, entryId, impactId }).then((result) => {
+            if (cancelled) return
+            setLinkCandidates(result.candidates)
+            setLinkCandidatesExcluded(
+                result.excluded.amountMismatch
+                + result.excluded.operationalMismatch
+                + result.excluded.accountMismatch
+                + result.excluded.alreadyLinked
+            )
+        }).catch((err) => {
+            if (cancelled) return
+            setLinkCandidates([])
+            setLinkCandidatesError(err instanceof Error ? err.message : 'No pudimos cargar tus transacciones.')
+        }).finally(() => {
+            if (!cancelled) setLinkCandidatesLoading(false)
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [entry?.contractVersion, entryId, impactId, linkCandidatesRetryNonce, open, spaceId])
+
+    useEffect(() => {
+        if (!linkedTransactionId || linkCandidatesLoading) return
+        const selectedStillMatches = linkCandidates.some(
+            (candidate) => candidate.transactionId === linkedTransactionId
+        )
+        if (selectedStillMatches) return
+        setLinkedTransactionId(undefined)
+    }, [linkCandidates, linkCandidatesLoading, linkedTransactionId])
+
     async function handleSubmit() {
         if (!entryId) return
         setSubmitting(true)
         setError(null)
 
         try {
-            if (entry?.contractVersion === 2 && initialImpact) {
-                const response = await apiJson<{
-                    data?: { impactId: string; status: 'linked' }
-                }>(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Idempotency-Key': crypto.randomUUID(),
-                    },
-                    body: JSON.stringify({
-                        impactId: extractId(initialImpact._id),
-                        expectedRevision: initialImpact.revision ?? 0,
-                        decision: mode === 'link_existing'
-                            ? { type: 'link_existing', transactionId: linkedTransactionId }
-                            : {
-                                type: 'create_transaction',
-                                accountId,
-                                categoryId,
-                                description: entry.title,
-                            },
-                    }),
-                })
-                const impact = {
-                    ...initialImpact,
-                    status: response.data?.status ?? 'linked',
-                    revision: (initialImpact.revision ?? 0) + 1,
-                } as ISpaceEntryPersonalImpact
-                invalidateData(SPACE_INVALIDATION_TAGS)
-                onCreated?.(impact)
-                onOpenChange(false)
-                return
+            if (entry?.contractVersion !== 2 || !initialImpact) {
+                // Ver el mismo guard en loadContext: sin un impacto v2 resuelto no
+                // hay decisión válida que enviar.
+                throw new Error('Este movimiento no tiene un impacto personal para registrar.')
             }
-            const response = await apiJson<{ impact: ISpaceEntryPersonalImpact }>(
-                `/api/spaces/${spaceId}/entries/${entryId}/personal-impact`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        mode,
-                        accountId,
-                        categoryId,
-                        linkedTransactionId,
-                        impactKind: suggestion?.impactKind,
-                        amount: Number(amount),
-                    }),
-                }
-            )
+            const response = await apiJson<{
+                data?: { impactId: string; status: 'linked' }
+            }>(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': crypto.randomUUID(),
+                },
+                body: JSON.stringify({
+                    impactId: extractId(initialImpact._id),
+                    expectedRevision: initialImpact.revision ?? 0,
+                    decision: mode === 'link_existing'
+                        ? { type: 'link_existing', transactionId: linkedTransactionId }
+                        : {
+                            type: 'create_transaction',
+                            accountId,
+                            categoryId,
+                            description: entry.title,
+                        },
+                }),
+            })
+            const impact = {
+                ...initialImpact,
+                status: response.data?.status ?? 'linked',
+                revision: (initialImpact.revision ?? 0) + 1,
+            } as ISpaceEntryPersonalImpact
             invalidateData(SPACE_INVALIDATION_TAGS)
-            onCreated?.(response.impact)
+            onCreated?.(impact)
             onOpenChange(false)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No pudimos registrar el movimiento en tu Finp.')
@@ -261,7 +250,7 @@ export function SpacePersonalImpactDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 variant="fullscreen-mobile"
-                className="max-w-[640px] gap-0 overflow-hidden p-0 sm:max-h-[92vh] sm:max-w-[640px]"
+                className="max-w-[640px] gap-0 overflow-hidden p-0 [&_[data-slot=dialog-close]]:size-11 sm:max-h-[92vh] sm:max-w-[640px] sm:[&_[data-slot=dialog-close]]:size-7"
             >
                 <div className="flex h-full min-h-0 flex-col sm:h-auto sm:max-h-[inherit]">
                     <div className="border-b border-border/70 bg-background/92 px-5 py-5 backdrop-blur sm:px-6">
@@ -334,9 +323,14 @@ export function SpacePersonalImpactDialog({
                                                         Como queres registrarlo
                                                     </h3>
                                                 </div>
-                                                <div className="flex flex-wrap gap-2">
+                                                <div
+                                                    className="flex flex-wrap gap-2"
+                                                    role="radiogroup"
+                                                    aria-label="Cómo querés registrarlo"
+                                                >
                                                     <SpaceDialogChoice
                                                         active={mode === 'create_transaction'}
+                                                        role="radio"
                                                         onClick={() => {
                                                             setMode('create_transaction')
                                                             setLinkedTransactionId(undefined)
@@ -349,6 +343,7 @@ export function SpacePersonalImpactDialog({
                                                     </SpaceDialogChoice>
                                                     <SpaceDialogChoice
                                                         active={mode === 'link_existing'}
+                                                        role="radio"
                                                         onClick={() => {
                                                             setMode('link_existing')
                                                             setAccountId(undefined)
@@ -379,12 +374,12 @@ export function SpacePersonalImpactDialog({
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <SpaceDialogField label="Cuenta">
+                                                        <SpaceDialogField id="personal-impact-account" label="Cuenta">
                                                             <Select
                                                                 value={accountId ?? ''}
                                                                 onValueChange={setAccountId}
                                                             >
-                                                                <SelectTrigger className="w-full">
+                                                                <SelectTrigger id="personal-impact-account" className="w-full">
                                                                     <SelectValue placeholder="Elegi una cuenta" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
@@ -402,39 +397,15 @@ export function SpacePersonalImpactDialog({
                                                     )
                                                 ) : (
                                                     <SpaceDialogField label="Transaccion existente">
-                                                        <Select
-                                                            value={linkedTransactionId ?? ''}
-                                                            onValueChange={setLinkedTransactionId}
-                                                        >
-                                                            <SelectTrigger className="w-full">
-                                                                <SelectValue
-                                                                    placeholder={
-                                                                        loading
-                                                                            ? 'Buscando transacciones...'
-                                                                            : 'Elegi una transaccion'
-                                                                    }
-                                                                />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {recentTransactions.map((transaction) => (
-                                                                    <SelectItem
-                                                                        key={extractId(transaction._id)}
-                                                                        value={extractId(transaction._id) ?? ''}
-                                                                    >
-                                                                        <span className="flex min-w-0 flex-col">
-                                                                            <span className="truncate">
-                                                                                {transaction.description}
-                                                                            </span>
-                                                                            <span className="text-xs text-muted-foreground">
-                                                                                {new Date(transaction.date).toLocaleDateString('es-AR')}
-                                                                                {' · '}
-                                                                                {getTransactionAccountName(transaction)}
-                                                                            </span>
-                                                                        </span>
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
+                                                        <SpaceLinkCandidateList
+                                                            candidates={linkCandidates}
+                                                            loading={linkCandidatesLoading}
+                                                            error={linkCandidatesError}
+                                                            excludedCount={linkCandidatesExcluded}
+                                                            selectedId={linkedTransactionId}
+                                                            onSelect={setLinkedTransactionId}
+                                                            onRetry={() => setLinkCandidatesRetryNonce((current) => current + 1)}
+                                                        />
                                                     </SpaceDialogField>
                                                 )}
 
@@ -450,6 +421,7 @@ export function SpacePersonalImpactDialog({
                                                 />
 
                                                 <SpaceDialogField
+                                                    id="personal-impact-category"
                                                     label="Categoria personal"
                                                     hint="Solo se guarda en tu Finp personal."
                                                 >
@@ -459,7 +431,7 @@ export function SpacePersonalImpactDialog({
                                                             setCategoryId(value === 'none' ? undefined : value)
                                                         }
                                                     >
-                                                        <SelectTrigger className="w-full">
+                                                        <SelectTrigger id="personal-impact-category" className="w-full">
                                                             <SelectValue placeholder="Sin categoria" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -491,6 +463,7 @@ export function SpacePersonalImpactDialog({
                             {error ? (
                                 <motion.p
                                     {...fadeInFast}
+                                    role="alert"
                                     className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive"
                                 >
                                     {error}
@@ -499,10 +472,10 @@ export function SpacePersonalImpactDialog({
                         </div>
                     </motion.div>
 
-                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
+                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 safe-area-pb sm:px-6">
                         <Button
                             variant="outline"
-                            className="rounded-full"
+                            className="min-h-11 rounded-full"
                             onClick={() => onOpenChange(false)}
                             disabled={submitting}
                         >
@@ -510,7 +483,7 @@ export function SpacePersonalImpactDialog({
                         </Button>
                         {!existingImpact ? (
                             <Button
-                                className="rounded-full"
+                                className="min-h-11 rounded-full"
                                 onClick={() => void handleSubmit()}
                                 disabled={
                                     submitting ||

@@ -4,6 +4,12 @@ import { Debt, Space, SpaceEntry, SpaceParticipant, Transaction } from '@/lib/mo
 import { ServiceError } from '@/lib/server/errors'
 import { getSpaceCapabilitiesV2 } from '@/lib/server/space-capabilities'
 import {
+    assessLinkCandidateV2,
+    expectedLinkTransactionType,
+    linkAccountRuleForVariant,
+    resolveLinkImpactVariant,
+} from '@/lib/server/space-link-candidate-v2'
+import {
     calculateSpaceSharesV2,
     calculateSpaceDebtProjectionsV2,
     convertSpaceAmountV2,
@@ -158,6 +164,12 @@ export async function previewSpaceEntryV2(input: {
         currency: input.currency,
         isPayer: input.paidByParticipantId === currentParticipantId,
     })
+    // Sin fecha ni impactId en el contrato de preview, esta evaluación no puede
+    // chequear día financiero ni excluir una transacción ya vinculada a OTRO
+    // movimiento: ambas quedan a cargo del `resolve` autoritativo, que sí las
+    // tiene. El resto de las reglas es exactamente el mismo `assessLinkCandidateV2`
+    // que usa `resolve`, así que un candidato que preview marca compatible ya no
+    // puede fallar en esas dimensiones al confirmar.
     let linkExisting: SpaceEntryPreviewDto['linkExisting']
     if (input.linkedTransactionId) {
         const transaction = Types.ObjectId.isValid(input.linkedTransactionId)
@@ -167,16 +179,38 @@ export async function previewSpaceEntryV2(input: {
                 status: { $ne: 'voided' },
             }).lean<ITransaction | null>()
             : null
-        const issues: NonNullable<SpaceEntryPreviewDto['linkExisting']>['issues'] = []
-        if (!transaction) issues.push('transaction_not_found')
-        if (transaction && transaction.currency !== input.currency) issues.push('currency_mismatch')
-        const expectedAmount = amounts.accountImpactAmount || amounts.ownShareAmount
-        if (transaction && moneyFromDecimal(input.currency, transaction.amount).minorUnits !==
-            moneyFromDecimal(input.currency, expectedAmount).minorUnits) issues.push('amount_mismatch')
-        linkExisting = {
-            transactionId: input.linkedTransactionId,
-            compatible: issues.length === 0,
-            issues,
+        if (!transaction) {
+            linkExisting = {
+                transactionId: input.linkedTransactionId,
+                compatible: false,
+                issues: ['transaction_not_found'],
+            }
+        } else if (amounts.action === 'none') {
+            // Sin acción financiera personal no hay nada que vincular — el mismo
+            // caso que `resolve` corta antes con `SPACE_IMPACT_NOT_REQUIRED`.
+            linkExisting = {
+                transactionId: input.linkedTransactionId,
+                compatible: false,
+                issues: ['type_mismatch'],
+            }
+        } else {
+            const variant = resolveLinkImpactVariant({
+                kind: amounts.kind,
+                isPayer: input.paidByParticipantId === currentParticipantId,
+            })
+            const expectedAmount = amounts.accountImpactAmount || amounts.ownShareAmount
+            const assessment = assessLinkCandidateV2(transaction, {
+                transactionType: expectedLinkTransactionType(variant),
+                currency: input.currency,
+                amount: expectedAmount,
+                operationalAmount: amounts.operationalAmount,
+                accountRule: linkAccountRuleForVariant(variant),
+            })
+            linkExisting = {
+                transactionId: input.linkedTransactionId,
+                compatible: assessment.compatible,
+                issues: assessment.issues,
+            }
         }
     }
     const ownReportingShare = ownShare?.reportingAmount ?? 0

@@ -187,7 +187,7 @@ export function SpaceAttachmentsUploader({
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
                         <SpaceDialogSectionEyebrow>Comprobantes</SpaceDialogSectionEyebrow>
-                        <span className="rounded-full border border-border/80 bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span className="rounded-full border border-border/80 bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
                             Opcional
                         </span>
                     </div>

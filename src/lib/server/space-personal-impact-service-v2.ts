@@ -16,9 +16,17 @@ import {
     type CreateInternalSpaceTransactionInput,
 } from '@/lib/server/transactions'
 import {
+    assessLinkCandidateV2,
+    describeLinkIssue,
+    expectedLinkTransactionType,
+    firstLinkIssue,
+    linkAccountRuleForVariant,
+    linkIssueErrorCode,
+    resolveLinkImpactVariant,
+} from '@/lib/server/space-link-candidate-v2'
+import {
     calculateSpaceSharesV2,
     derivePersonalImpactAmountsV2,
-    financialDateKeyFromInstant,
 } from '@/lib/utils/space-financial-v2'
 import { extractId } from '@/lib/utils/spaces'
 import type { ISpaceEntry, ISpaceEntryPersonalImpact, ITransaction } from '@/types'
@@ -31,7 +39,7 @@ type PersonalImpactDecisionV2 =
     | { type: 'sync_transaction' }
     | { type: 'remove_transaction' }
 
-function amountsForImpact(entry: ISpaceEntry, impact: ISpaceEntryPersonalImpact) {
+export function amountsForImpact(entry: ISpaceEntry, impact: ISpaceEntryPersonalImpact) {
     const participantId = impact.participantId.toString()
     const shares = calculateSpaceSharesV2({
         amount: entry.amount,
@@ -52,28 +60,6 @@ function amountsForImpact(entry: ISpaceEntry, impact: ISpaceEntryPersonalImpact)
         isPayer: extractId(entry.paidByParticipantId) === participantId,
         isReceiver: entry.type === 'settlement' && extractId(entry.sharedWithParticipantIds?.[0]) === participantId,
     })
-}
-
-function impactVariant(input: {
-    kind: 'personal_expense' | 'advance' | 'settlement_paid' | 'settlement_received'
-    isPayer: boolean
-}) {
-    if (input.kind === 'advance') return 'advance' as const
-    if (input.kind === 'settlement_paid') return 'settlement_paid' as const
-    if (input.kind === 'settlement_received') return 'settlement_received' as const
-    return input.isPayer ? 'payer_expense' as const : 'participant_expense' as const
-}
-
-function expectedTransactionType(variant: ReturnType<typeof impactVariant>): ITransaction['type'] {
-    if (variant === 'settlement_paid') return 'personal_debt_payment'
-    if (variant === 'settlement_received') return 'personal_debt_collect'
-    return 'expense'
-}
-
-function assertAmountsClose(actual: number | undefined, expected: number, code: string) {
-    if (actual === undefined || Math.abs(actual - expected) > 0.01) {
-        throw new ServiceError(409, code, 'La transacción elegida no coincide con el impacto esperado.')
-    }
 }
 
 async function reconcileImpactPresentation(impactId?: Types.ObjectId) {
@@ -207,7 +193,7 @@ export async function resolveSpacePersonalImpactV2(input: {
                     throw new ServiceError(409, 'SPACE_IMPACT_NOT_REQUIRED', 'La nueva versión ya no produce un impacto personal.')
                 }
                 const isPayer = extractId(entry.paidByParticipantId) === impact.participantId.toString()
-                const variant = impactVariant({ kind: amounts.kind, isPayer })
+                const variant = resolveLinkImpactVariant({ kind: amounts.kind, isPayer })
                 const transaction = await Transaction.findOne({
                     _id: impact.transactionId,
                     userId: input.actorUserId,
@@ -219,13 +205,14 @@ export async function resolveSpacePersonalImpactV2(input: {
                 if (!transaction) throw new ServiceError(409, 'SPACE_TRANSACTION_LINK_CONFLICT', 'La transacción vinculada ya no coincide.')
                 const sourceAccountId = extractId(transaction.sourceAccountId)
                 const destinationAccountId = extractId(transaction.destinationAccountId)
-                if (variant === 'participant_expense' && (sourceAccountId || destinationAccountId)) {
+                const accountRule = linkAccountRuleForVariant(variant)
+                if (accountRule === 'none' && (sourceAccountId || destinationAccountId)) {
                     throw new ServiceError(409, 'SPACE_TRANSACTION_SHAPE_CHANGED', 'El nuevo impacto ya no debe mover una cuenta; quitá y recreá la vinculación.')
                 }
-                if ((variant === 'payer_expense' || variant === 'advance' || variant === 'settlement_paid') && !sourceAccountId) {
+                if (accountRule === 'source_required' && !sourceAccountId) {
                     throw new ServiceError(409, 'SPACE_TRANSACTION_SHAPE_CHANGED', 'El nuevo impacto exige una cuenta de salida.')
                 }
-                if (variant === 'settlement_received' && !destinationAccountId) {
+                if (accountRule === 'destination_required' && !destinationAccountId) {
                     throw new ServiceError(409, 'SPACE_TRANSACTION_SHAPE_CHANGED', 'El nuevo impacto exige una cuenta de entrada.')
                 }
                 const transactionAmount = amounts.accountImpactAmount || amounts.ownShareAmount
@@ -233,7 +220,7 @@ export async function resolveSpacePersonalImpactV2(input: {
                     { _id: transaction._id, userId: input.actorUserId, spaceImpactId: impact._id },
                     {
                         $set: {
-                            type: expectedTransactionType(variant),
+                            type: expectedLinkTransactionType(variant),
                             amount: transactionAmount,
                             operationalAmount: amounts.operationalAmount,
                             currency: entry.currency,
@@ -322,7 +309,7 @@ export async function resolveSpacePersonalImpactV2(input: {
                 throw new ServiceError(409, 'SPACE_IMPACT_NOT_REQUIRED', 'Este movimiento no produce una acción financiera personal.')
             }
             const isPayer = extractId(entry.paidByParticipantId) === impact.participantId.toString()
-            const variant = impactVariant({ kind: amounts.kind, isPayer })
+            const variant = resolveLinkImpactVariant({ kind: amounts.kind, isPayer })
             const transactionAmount = amounts.accountImpactAmount > 0
                 ? amounts.accountImpactAmount
                 : amounts.ownShareAmount
@@ -342,28 +329,22 @@ export async function resolveSpacePersonalImpactV2(input: {
                 if (!transaction) {
                     throw new ServiceError(404, 'SPACE_TRANSACTION_NOT_FOUND', 'La transacción no existe o ya está vinculada.')
                 }
-                if (transaction.type !== expectedTransactionType(variant) || transaction.currency !== entry.currency) {
-                    throw new ServiceError(409, 'SPACE_TRANSACTION_TYPE_MISMATCH', 'Tipo o moneda incompatibles con el Espacio.')
-                }
-                assertAmountsClose(transaction.amount, transactionAmount, 'SPACE_TRANSACTION_AMOUNT_MISMATCH')
-                assertAmountsClose(
-                    transaction.operationalAmount ?? transaction.amount,
-                    amounts.operationalAmount,
-                    'SPACE_TRANSACTION_OPERATIONAL_MISMATCH'
-                )
-                if (!entry.timezone || !entry.dateKey || financialDateKeyFromInstant(transaction.date, entry.timezone) !== entry.dateKey) {
+                const accountRule = linkAccountRuleForVariant(variant)
+                if (!entry.timezone || !entry.dateKey) {
                     throw new ServiceError(409, 'SPACE_TRANSACTION_DATE_MISMATCH', 'La fecha no coincide con el día financiero del Espacio.')
                 }
-                const sourceAccountId = extractId(transaction.sourceAccountId)
-                const destinationAccountId = extractId(transaction.destinationAccountId)
-                if (variant === 'participant_expense' && (sourceAccountId || destinationAccountId)) {
-                    throw new ServiceError(409, 'SPACE_TRANSACTION_ACCOUNT_MISMATCH', 'La parte de un no pagador no debe mover una cuenta.')
-                }
-                if ((variant === 'payer_expense' || variant === 'advance' || variant === 'settlement_paid') && !sourceAccountId) {
-                    throw new ServiceError(409, 'SPACE_TRANSACTION_ACCOUNT_MISMATCH', 'La salida real exige cuenta origen.')
-                }
-                if (variant === 'settlement_received' && !destinationAccountId) {
-                    throw new ServiceError(409, 'SPACE_TRANSACTION_ACCOUNT_MISMATCH', 'La entrada real exige cuenta destino.')
+                const assessment = assessLinkCandidateV2(transaction, {
+                    transactionType: expectedLinkTransactionType(variant),
+                    currency: entry.currency,
+                    amount: transactionAmount,
+                    operationalAmount: amounts.operationalAmount,
+                    accountRule,
+                    dateKey: entry.dateKey,
+                    timezone: entry.timezone,
+                })
+                const issue = firstLinkIssue(assessment.issues)
+                if (issue) {
+                    throw new ServiceError(409, linkIssueErrorCode(issue), describeLinkIssue(issue, accountRule))
                 }
                 const link = await Transaction.updateOne(
                     {
@@ -384,7 +365,7 @@ export async function resolveSpacePersonalImpactV2(input: {
                 )
                 if (link.matchedCount !== 1) throw new ServiceError(409, 'SPACE_TRANSACTION_LINK_CONFLICT', 'La transacción cambió.')
                 transactionId = transaction._id
-                accountId = sourceAccountId ?? destinationAccountId
+                accountId = extractId(transaction.sourceAccountId) ?? extractId(transaction.destinationAccountId)
                 categoryId = extractId(transaction.categoryId)
             } else {
                 const accountIdInput = input.decision.accountId

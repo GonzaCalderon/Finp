@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-10
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -196,7 +196,7 @@ Servicios relevantes en `src/lib/server/`:
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
-| `spaces.ts` y servicios legacy `space-*.ts` | contrato vigente de permisos, movimientos, actividad, invitaciones e impacto durante la compatibilidad |
+| `spaces.ts`, `space-activity.ts`, `space-invites.ts`, `space-personal-settings.ts` | contexto accesible, listado, detalle, actividad, invitaciones y configuración personal; desde PR 38 no queda ningún cuerpo legacy de escritura |
 | `space-*-service-v2.ts` | servicios de aplicación para movimiento, historia, impacto privado, liquidación y administración, compartidos por las rutas existentes |
 | `space-operation-executor.ts` | transacción MongoDB, idempotencia de intención y referencias de resultado de Espacios v2 |
 | `money.ts` e `iso-currencies.ts` | `MoneyDto`, registro ISO de curso legal, conversión exacta, redondeo y reparto por restos mayores |
@@ -206,9 +206,8 @@ Servicios relevantes en `src/lib/server/`:
 | `space-debt-materialization-v2.ts` | ledger y materialización de deudas y movimientos separados por moneda dentro de la sesión financiera |
 | `space-legacy-adapter.ts` | lectura determinista del estado legacy sin convertir ambigüedad en autoridad v2 |
 | `space-read-service-v2.ts` y `space-api-contract.ts` | DTOs JSON, capacidades y paginación por cursor; errores y mutaciones normalizados |
-| `space-v2-write-gate.ts` y `space-legacy-write-facade.ts` | activación exclusiva en `finp-e2e` y frontera que impide fallback v2 hacia escrituras legacy |
+| `space-v2-write-gate.ts` | activación de escrituras v2 por base; toda mutación de un documento que no sea v2 rechaza con `409` |
 | `migrations/space-v2-migration-*.ts` | contratos, clasificación fail-closed, fingerprint, sanitización, copia por lotes, preimágenes, backfill por Espacio, verificación y rollback del ensayo v2 |
-| `debt-sync.ts` | materialización idempotente desde Espacios |
 | `debt-settlement.ts` | pago/cobro atómico |
 | `notifications.ts` | creación, dedupe y resolución |
 | `nav-insights.ts` | señales de navegación |
@@ -220,6 +219,105 @@ Antes de crear un servicio:
 2. extender la fuente común;
 3. evitar una versión “especial” en un endpoint;
 4. agregar tests sobre el servicio compartido.
+
+### Candidatos de vínculo personal
+
+Estado: implementado el 2026-09-10 en la etapa 4 de FINP-P1-013, bloque 2.
+
+Antes había CUATRO copias independientes de la misma regla, no dos: el alta
+guiada (`space-entry-service-v2.ts`) las aplicaba al vincular en la misma
+transacción que crea el movimiento, `resolve` (`space-personal-impact-service-v2.ts`)
+las reaplicaba al resolver un impacto pendiente, el preview
+(`space-financial-preview-v2.ts`) traía una versión más corta, y ninguna ruta
+ofrecía candidatos: ambos diálogos pedían `/api/transactions?limit=25` y
+filtraban por monto en el cliente. Las cuatro copias habían divergido: sólo el
+alta aceptaba `credit_card_expense` como equivalente de `expense` (decisión
+0012) y sólo `resolve` validaba la cuenta — el alta podía vincular una
+transacción de un no pagador que sí movía cuenta, sin que nada lo impidiera.
+
+Autoridad. `assessLinkCandidateV2(transaction, requirement)` en
+`space-link-candidate-v2.ts`: pura sobre un documento ya leído, sin acceso a
+datos. Devuelve `{ compatible, issues[] }` con `issues` de
+`'type_mismatch' | 'currency_mismatch' | 'amount_mismatch' |
+'operational_mismatch' | 'date_mismatch' | 'account_mismatch'`; acepta
+`credit_card_expense` donde se espera `expense`. El módulo también exporta
+`resolveLinkImpactVariant`, `expectedLinkTransactionType`,
+`linkAccountRuleForVariant` (antes duplicadas como `impactVariant`/
+`resolveImpactVariant` y `expectedTransactionType`), y `firstLinkIssue`/
+`linkIssueErrorCode`/`describeLinkIssue`, que `resolve` usa para conservar
+exactamente sus códigos y mensajes previos (`SPACE_TRANSACTION_TYPE_MISMATCH`
+para tipo o moneda, luego `..._AMOUNT_MISMATCH`, `..._OPERATIONAL_MISMATCH`,
+`..._DATE_MISMATCH`, `..._ACCOUNT_MISMATCH`, en ese orden de prioridad).
+"Ya vinculada a otro impacto" sigue sin ser un `issue` de la función pura: la
+decide la consulta (el mismo `$or` que ya usaba `resolve`), no una comparación
+en memoria.
+
+Requisito. `LinkRequirementV2 = { transactionType, currency, amount,
+operationalAmount, accountRule: 'none' | 'source_required' |
+'destination_required', dateKey?, timezone? }`. `amount` es
+`accountImpactAmount` si es positivo y `ownShareAmount` en caso contrario,
+igual en las cuatro superficies. `dateKey`/`timezone` son opcionales a
+propósito: el preview de alta no recibe la fecha del movimiento en su
+contrato actual (`entries/preview` nunca la pidió), así que su `linkExisting`
+evalúa tipo, moneda, monto, operacional y cuenta, pero no fecha ni "ya
+vinculada a otro impacto" — ambas quedan a cargo del `resolve` autoritativo,
+que si las tiene. Ensanchar el contrato de `entries/preview` para cerrar esa
+brecha queda fuera de este bloque.
+
+Ruta. `POST /api/spaces/[id]/link-candidates`
+(`space-link-candidates-v2.ts`), lectura pura sin escritura. Cuerpo
+discriminado por `mode`:
+
+- `preview`: subconjunto de `entries/preview` — sin los campos de conversión
+  (`exchangeRate`, `exchangeRateDecimal`, `conversionSnapshot`), que sólo
+  afectan el monto de reporte y no el impacto personal — más `dateKey` y
+  `timezone`;
+- `impact`: `{ entryId, impactId }`; el impacto debe pertenecer al actor.
+
+Autorización: sesión, `getAccessibleSpaceContext` (no `loadSpaceApplicationContextV2`,
+que exige sesión Mongo transaccional; esta ruta sólo lee) más
+`contractVersion === 2` explícito y `getContextCapabilities` — `create_entry`
+para `preview`, `resolve_personal_impact` para `impact`. Respuesta `200`
+`{ data: { applicable, requirement?, candidates, excluded } }`:
+`applicable: false` cuando el reparto no produce acción financiera personal
+(`requirement` ausente); `candidates` ordenados por fecha descendente, máximo
+20, cada uno `{ transactionId, description, amount, currency, date,
+accountName? }` y siempre compatibles; `excluded` cuenta sólo lo que la
+consulta no pudo filtrar por sí sola — `amountMismatch`, `operationalMismatch`,
+`accountMismatch` y `alreadyLinked` — porque tipo, moneda y fecha ya los
+excluye la consulta antes de evaluar nada. Errores: `400` validación, `401`,
+`404` Espacio, movimiento o impacto inexistente o no v2, `403` sin capacidad.
+
+Consulta. `Transaction.find` acotado por `userId`, `currency`,
+`status != 'voided'`, `type` (`expense` amplía a `['expense',
+'credit_card_expense']` cuando corresponde) y un margen de ±24 h alrededor del
+instante representativo del `dateKey` — generoso a propósito: el filtro exacto
+de día lo hace `assessLinkCandidateV2` en memoria después, así que el margen
+amplio no puede dejar pasar un falso positivo, sólo evita construir un
+utilitario nuevo de límites exactos de día. `spaceImpactId` ausente o igual al
+`impactId` cuando corresponde; `alreadyLinked` se cuenta con la misma consulta
+sin esa exclusión. El día acota el tamaño; no hace falta índice nuevo.
+
+Cliente. `fetchLinkCandidatesForNewEntry`/`fetchLinkCandidatesForImpact`
+(`space-personal-impact.ts`) y el componente compartido
+`SpaceLinkCandidateList` (`SpaceDialogPrimitives.tsx`) reemplazan el
+`<Select>` en ambos diálogos con estados `cargando` (skeleton), `vacío` con
+motivos, `error` con reintento (`ErrorState`, bloque 1) y una lista de radios
+con monto, fecha y cuenta. La misma invalidación que la preview: cambiar
+monto, moneda, fecha, pagador o reparto descarta la lista y, si el
+seleccionado ya no aparece, también la selección.
+
+Verificación. 20 unitarias de `assessLinkCandidateV2` y los helpers
+compartidos por issue, incluida la leniencia `credit_card_expense`; 3
+integraciones con sesión Mongo real: preview y `resolve` coinciden sobre la
+misma transacción (compatible se vincula sin `409`, incompatible falla con el
+mismo motivo que preview señaló), la lista de candidatos sólo devuelve lo que
+`resolve` acepta y explica lo demás por motivo, y el modo de alta no exige un
+impacto persistido; 7 unitarias de la ruta HTTP (401/400/despacho por
+modo/403/404); el E2E de vínculo se endureció para tolerar candidato o
+vacío explicado sin combobox. La propiedad completa —cada candidato que la
+ruta ofrece se vincula sin fricción— queda demostrada por integración con
+datos reales, no simulada.
 
 ## 9. Persistencia
 
@@ -552,8 +650,8 @@ Cada Espacio se transforma en su propia transacción; sus preimágenes tienen
 checksum y el rollback restaura por lotes el fingerprint anterior exacto.
 
 La activación futura es por Espacio. `contractVersion: 2` se confirma al final
-de la transacción verificada y desde entonces la fachada legacy no es una salida
-válida. Un agregado no elegible queda en sólo lectura, sin balances parciales.
+de la transacción verificada y desde entonces no existe fachada legacy: toda
+mutación de un documento que no sea v2 rechaza con `409`. Un agregado no elegible queda en sólo lectura, sin balances parciales.
 El contrato público sólo expone estado y motivo seguro; nunca metadata interna
 de migración. La autoridad completa está en la
 [`decisión 0010`](../decisiones/0010-migracion-progresiva-espacios-v2.md).
@@ -564,10 +662,11 @@ Compatibilidad conocida:
 - datos previos a políticas variables de compromisos;
 - relaciones incompletas entre transacciones y cuotas.
 
-Los campos monetarios exactos y los índices multimoneda permanecen limitados a
-`contractVersion: 2` en `finp-e2e`. El ensayo `e2e-migration` no modifica esta
-regla: development no recibió backfill ni cutover y producción permanece fuera
-de alcance hasta aprobar FINP-P0-006.
+Los campos monetarios exactos y los índices multimoneda rigen sobre
+`contractVersion: 2` en `finp-e2e` y, desde el cutover del 2026-08-29
+([`decisión 0011`](../decisiones/0011-cutover-espacios-v2-en-development.md)),
+en `finm`. FINP-P0-006 cerró el 2026-09-10; producción permanece fuera de
+alcance hasta una decisión propia equivalente a la 0011.
 
 El roadmap contiene la prioridad de limpieza.
 

@@ -78,6 +78,9 @@ export function SpaceQuoteTicker({
                 <div
                     ref={viewportRef}
                     className="mt-1.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Cotizaciones de referencia, desplazables horizontalmente"
                     onPointerEnter={() => setPaused(true)}
                     onPointerLeave={() => setPaused(false)}
                     onPointerDown={() => setPaused(true)}

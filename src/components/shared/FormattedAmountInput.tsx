@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ReactNode, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Input } from '@/components/ui/input'
 import { CurrencyFlagIcon } from '@/components/shared/CurrencyFlagIcon'
 import { FieldShell } from '@/components/shared/FieldShell'
@@ -143,6 +143,25 @@ export function FormattedAmountInput({
     const scale = getCurrencyScale(currency) ?? 2
     const [displayValue, setDisplayValue] = useState(displayFromNumber(value, scale))
     const [isFocused, setIsFocused] = useState(false)
+    // El diálogo de Espacios permanece montado al cerrarse. Si un borrador
+    // rehidrata el monto mientras el input conserva foco interno, no debemos
+    // mostrar el texto vacío del formulario anterior. Se distingue esa
+    // actualización externa de la escritura local para no perder una coma
+    // decimal intermedia (por ejemplo, «345,»).
+    const lastEmittedValueRef = useRef(value)
+
+    useEffect(() => {
+        const isExternalUpdate = value !== lastEmittedValueRef.current
+        lastEmittedValueRef.current = value
+
+        if (!isFocused || isExternalUpdate) {
+            const frame = requestAnimationFrame(() => {
+                setDisplayValue(displayFromNumber(value, scale))
+            })
+
+            return () => cancelAnimationFrame(frame)
+        }
+    }, [isFocused, scale, value])
 
     const currencyLabel = useMemo(() => getCurrencySymbol(currency), [currency])
     const renderedValue = isFocused ? displayValue : displayFromNumber(value, scale)
@@ -206,7 +225,9 @@ export function FormattedAmountInput({
 
                         setDisplayValue(signedDisplay)
                         if (isNegative) onNegativeInputDetectedAction?.()
-                        onValueChangeAction(parseDisplayToNumber(signedDisplay))
+                        const parsedValue = parseDisplayToNumber(signedDisplay)
+                        lastEmittedValueRef.current = parsedValue || undefined
+                        onValueChangeAction(parsedValue)
                     }}
                     className={cn(
                         compact ? 'h-7 rounded-md text-right text-xs' : 'text-base md:text-sm',

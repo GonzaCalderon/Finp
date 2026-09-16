@@ -310,7 +310,43 @@ export interface SpaceEntryPreviewDto {
     linkExisting?: {
         transactionId: string
         compatible: boolean
-        issues: Array<'currency_mismatch' | 'amount_mismatch' | 'transaction_not_found'>
+        // `date_mismatch` nunca lo produce este preview — no recibe fecha del
+        // movimiento — pero comparte el tipo con `resolve` y con `link-candidates`,
+        // que sí la evalúan.
+        issues: Array<
+            | 'transaction_not_found'
+            | 'type_mismatch'
+            | 'currency_mismatch'
+            | 'amount_mismatch'
+            | 'operational_mismatch'
+            | 'date_mismatch'
+            | 'account_mismatch'
+        >
+    }
+}
+
+export interface SpaceLinkCandidateDto {
+    transactionId: string
+    description: string
+    amount: number
+    currency: string
+    date: string
+    accountName?: string
+}
+
+export interface SpaceLinkCandidatesResultDto {
+    applicable: boolean
+    requirement?: {
+        transactionType: string
+        currency: string
+        amount: number
+    }
+    candidates: SpaceLinkCandidateDto[]
+    excluded: {
+        alreadyLinked: number
+        amountMismatch: number
+        operationalMismatch: number
+        accountMismatch: number
     }
 }
 
