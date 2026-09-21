@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo y agentes
-> Última actualización: 2026-07-28
+> Última actualización: 2026-08-25
 > Fuente de verdad: prácticas técnicas de implementación
 
 ## Índice
@@ -191,6 +191,104 @@ Cada endpoint debe considerar:
 - Script de escritura: `dry-run`, `--apply`, conteos, anomalías e idempotencia.
 - Antes de aplicar: ambiente, backup y aprobación.
 - Después: verificación y plan de retiro legacy.
+
+### Auditoría legacy de Espacios
+
+Antes de modificar el modelo o preparar el backfill de FINP-P0-006:
+
+```bash
+npm run audit:spaces:legacy -- --env test
+npm run audit:spaces:legacy -- --env development --confirm-database <nombre>
+```
+
+Garantías:
+
+- `test` carga `.env.test.local` y atraviesa el mismo preflight de aislamiento
+  que Playwright y el seed;
+- `development` carga `.env.local`, se rechaza en CI y exige que
+  `--confirm-database` coincida exactamente con la URI;
+- producción y bases reservadas se rechazan;
+- la lectura ocurre dentro de una transacción MongoDB con `readConcern:
+  snapshot` que se aborta al terminar;
+- el CLI no tiene modo `apply` y rechaza argumentos de escritura;
+- `--fail-on never|high|critical` controla sólo el código de salida, no cambia
+  el contenido de la auditoría;
+- `summary.md`, `details.json` y `manifest.json` se escriben bajo
+  `test-results/audits/spaces/<entorno>-<timestamp>/`, que está excluido de Git;
+- consola y resumen no contienen identificadores, datos personales, URI,
+  secretos ni montos; el detalle técnico local conserva únicamente ids,
+  relaciones, códigos estables y evidencia mínima.
+
+Un `GO` habilita preparar el modelo compatible; nunca autoriza por sí solo un
+backfill. Cualquier escritura mantiene el protocolo de migración, aprobación y
+rollback de esta sección.
+
+### Ensayo de migración de Espacios v2
+
+El CLI canónico usa siempre la misma identidad de run y un destino nuevo con
+marcador `e2e-migration`:
+
+```bash
+npm run migrate:spaces:v2 -- plan --run-id <id> --confirm-database <development> --target-database <e2e-migration> \
+  --approve-safe-defaults --approved-by <identidad>
+npm run migrate:spaces:v2 -- clone --run-id <id> --confirm-database <development> --target-database <e2e-migration>
+npm run migrate:spaces:v2 -- clone --run-id <id> --confirm-database <development> --target-database <e2e-migration> --execute
+npm run migrate:spaces:v2 -- apply --run-id <id> --confirm-database <development> --target-database <e2e-migration> --execute
+npm run migrate:spaces:v2 -- verify --run-id <id> --confirm-database <development> --target-database <e2e-migration> --execute
+npm run migrate:spaces:v2 -- rollback --run-id <id> --confirm-database <development> --target-database <e2e-migration> --execute
+```
+
+Garantías:
+
+- todos los subcomandos son `dry-run` salvo `--execute`; `plan` nunca escribe;
+- development se abre sólo con snapshot read-only y confirmación exacta;
+- fuente, auditoría, plan, manifiesto y copia deben conservar sus fingerprints;
+- el manifiesto privado exige acción, justificación, aprobación y fingerprint
+  por cada caso manual, y vive bajo `test-results/`, fuera de Git;
+- `clone` usa lotes de hasta 100 y anonimiza identidad, texto libre, secretos,
+  tokens, adjuntos y URLs sin cambiar dinero ni relaciones;
+- `apply` usa una transacción por Espacio, conserva preimágenes con checksum y
+  puede reanudarse sin repetir un Espacio confirmado;
+- `verify` compara compatibilidad, deudas, vínculos privados, ledger personal y
+  replay; `rollback` debe recuperar el fingerprint previo exacto;
+- una fase con 1.000 movimientos debe terminar en menos de 30 segundos;
+- el ensayo no habilita escrituras en development o producción.
+
+No versionar `plan.private.json`, `resolutions.private.json`, backups ni reportes
+del run. La política completa está en la
+[`decisión 0010`](../decisiones/0010-migracion-progresiva-espacios-v2.md).
+
+### Índices compatibles de Espacios v2
+
+La etapa de modelo de FINP-P0-006 usa un manifiesto independiente de
+`autoIndex`:
+
+```bash
+npm run indexes:spaces:v2 -- --env test
+npm run indexes:spaces:v2 -- --env test --apply
+npm run indexes:spaces:v2 -- --env development --confirm-database <nombre>
+```
+
+Garantías:
+
+- el comando es `dry-run` por defecto y muestra colección, nombre y propósito;
+- `--apply` sólo se admite contra la base aislada `finp-e2e` después del mismo
+  preflight que Playwright;
+- development exige coincidencia exacta de base y permanece siempre read-only;
+- producción, CI sin entorno E2E y bases reservadas se rechazan;
+- crear nuevamente el mismo manifiesto es idempotente;
+- los índices únicos v2 son parciales por versión o procedencia y conviven con
+  documentos legacy;
+- aplicar índices no autoriza backfill, activación de rutas ni cutover.
+
+La integración transaccional canónica de esta base se ejecuta con:
+
+```bash
+npm run test:integration:spaces:v2
+```
+
+El recorrido crea datos identificables sólo en `finp-e2e`, valida operaciones
+con sesión real y elimina exclusivamente esos fixtures al terminar.
 
 ## 9. Errores
 

@@ -1805,7 +1805,6 @@ export function QuickCaptureDialog({
         >
             <DialogContent
                 className="flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
-                aria-describedby="quick-capture-description"
             >
                 <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12 sm:px-6 sm:py-4">
                     <div className="flex items-center gap-2">
@@ -1814,7 +1813,7 @@ export function QuickCaptureDialog({
                         </span>
                         <div className="min-w-0 flex-1">
                             <DialogTitle>Captura rápida</DialogTitle>
-                            <DialogDescription id="quick-capture-description">
+                            <DialogDescription>
                                 Escribí como te salga. Revisamos todo antes de guardar.
                             </DialogDescription>
                         </div>

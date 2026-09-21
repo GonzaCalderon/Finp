@@ -124,6 +124,21 @@ describe('buildTransactionPeriodSummary', () => {
         expect(summary.balance).toEqual({ ars: -12500, usd: 5 })
     })
 
+    it('usa la parte propia para reporting sin reducir la deuda de tarjeta', () => {
+        const summary = buildTransactionPeriodSummary({
+            month: '2026-03',
+            transactions: [],
+            plans: [installmentPlan({
+                totalAmount: 3000,
+                installmentAmount: 1000,
+                operationalTotalAmount: 1200,
+                operationalInstallmentAmount: 400,
+            })],
+        })
+
+        expect(summary.creditCardExpense).toEqual({ ars: 400, usd: 0 })
+    })
+
     it('no cuenta ajustes como ingresos ni gastos operativos', () => {
         const summary = buildTransactionPeriodSummary({
             month: '2026-03',

@@ -292,7 +292,6 @@ export function buildSpaceBalances(entries: ISpaceEntry[], participants: ISpaceP
         .filter((entry) => {
             if (entry.isVoided) return false
             if (entry.status === 'rejected') return false
-            if (entry.type === 'settlement' && entry.status === 'pending_confirmation') return false
             return true
         })
         .forEach((entry) => {
@@ -487,7 +486,6 @@ export function buildSpaceSummary({
         pendingToPayReporting: yourBalanceReporting < 0 ? Math.abs(yourBalanceReporting) : 0,
         pendingToCollectReporting: yourBalanceReporting > 0 ? yourBalanceReporting : 0,
         participantCount: participants.filter((participant) => participant.isActive).length,
-        pendingEntryCount: relevantEntries.filter((entry) => entry.status === 'pending_confirmation').length,
         totalEntryCount: relevantEntries.length,
         categoryBreakdown,
         balances,
@@ -516,22 +514,22 @@ export function resolveSpaceStatusTone(status: SpaceStatus) {
         case 'active':
             return {
                 background: 'rgba(16,185,129,0.12)',
-                color: '#10B981',
+                color: '#047857',
             }
         case 'paused':
             return {
                 background: 'rgba(245,158,11,0.14)',
-                color: '#D97706',
+                color: '#92400E',
             }
         case 'closed':
             return {
                 background: 'rgba(107,114,128,0.14)',
-                color: '#6B7280',
+                color: '#4B5563',
             }
         case 'archived':
             return {
                 background: 'rgba(99,102,241,0.12)',
-                color: '#6366F1',
+                color: '#4338CA',
             }
     }
 }
@@ -539,18 +537,18 @@ export function resolveSpaceStatusTone(status: SpaceStatus) {
 export function resolveSpaceTypeAccent(type: SpaceType) {
     switch (type) {
         case 'couple':
-            return { background: 'rgba(59,130,246,0.12)', color: '#3B82F6' }
+            return { background: 'rgba(59,130,246,0.12)', color: '#1D4ED8' }
         case 'home':
-            return { background: 'rgba(249,115,22,0.12)', color: '#F97316' }
+            return { background: 'rgba(249,115,22,0.12)', color: '#9A3412' }
         case 'travel':
-            return { background: 'rgba(37,99,235,0.12)', color: '#2563EB' }
+            return { background: 'rgba(37,99,235,0.12)', color: '#1D4ED8' }
         case 'project':
-            return { background: 'rgba(139,92,246,0.12)', color: '#8B5CF6' }
+            return { background: 'rgba(139,92,246,0.12)', color: '#6D28D9' }
         case 'event':
-            return { background: 'rgba(168,85,247,0.12)', color: '#A855F7' }
+            return { background: 'rgba(168,85,247,0.12)', color: '#7E22CE' }
         case 'personal':
-            return { background: 'rgba(6,182,212,0.12)', color: '#0891B2' }
+            return { background: 'rgba(6,182,212,0.12)', color: '#0E7490' }
         case 'other':
-            return { background: 'rgba(16,185,129,0.12)', color: '#10B981' }
+            return { background: 'rgba(16,185,129,0.12)', color: '#047857' }
     }
 }

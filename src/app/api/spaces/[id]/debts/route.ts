@@ -3,6 +3,9 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { Debt, Space, SpaceParticipant } from '@/lib/models'
 import { DEBT_STATUSES, SPACE_DEBT_MODES } from '@/lib/constants'
+import { assertSpaceCapabilityV2 } from '@/lib/server/space-capabilities'
+import { extractId } from '@/lib/utils/spaces'
+import type { SpaceDebtDto } from '@/types'
 
 export async function GET(
     _request: Request,
@@ -16,14 +19,12 @@ export async function GET(
 
         await connectDB()
 
-        // Verificar que el usuario es participante del espacio
         const space = await Space.findById(id)
         if (!space) return NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 })
 
         const participant = await SpaceParticipant.findOne({
             spaceId: id,
             userId: session.user.id,
-            isActive: true,
         })
 
         if (!participant) {
@@ -33,11 +34,49 @@ export async function GET(
             )
         }
 
+        try {
+            assertSpaceCapabilityV2({
+                status: space.status,
+                role: participant.role,
+                isActiveParticipant: participant.isActive,
+                isOwnerRecord: extractId(space.ownerUserId) === session.user.id,
+            }, 'view')
+        } catch {
+            return NextResponse.json(
+                { error: 'No podés ver las deudas de este espacio.' },
+                { status: 403 }
+            )
+        }
+
+        // Una obligación saldada deja de ser deuda: nunca se expone como abierta.
         const debts = await Debt.find({
             userId: session.user.id,
             spaceId: id,
             status: { $in: [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID, DEBT_STATUSES.IGNORED] },
-        }).sort({ createdAt: -1 })
+            remainingAmount: { $gt: 0 },
+            ...(space.contractVersion === 2 ? { contractVersion: 2 } : {}),
+        }).sort({ createdAt: -1 }).lean()
+
+        if (space.contractVersion === 2) {
+            const data: SpaceDebtDto[] = debts.map((debt) => ({
+                id: debt._id.toString(),
+                direction: debt.direction,
+                counterpartyParticipantId: debt.counterpartyParticipantId?.toString() ?? '',
+                counterpartyName: debt.counterpartyNameSnapshot,
+                amount: debt.amount,
+                remainingAmount: debt.remainingAmount,
+                currency: debt.currency,
+                status: debt.status,
+                contractVersion: 2,
+                spaceRevision: space.revision ?? 0,
+                amountMoney: debt.amountMoney,
+                remainingMoney: debt.remainingMoney,
+            }))
+            return NextResponse.json({
+                data,
+                spaceDebtMode: space.debtMode ?? SPACE_DEBT_MODES.SIMPLIFIED,
+            })
+        }
 
         return NextResponse.json({
             debts,

@@ -34,11 +34,13 @@ import {
     SPACE_IMPACT_ACCOUNT_NAME,
     SPACE_IMPACT_FIXTURES,
 } from './space-impact'
+import { SPACE_MIGRATION_E2E, SPACE_V2_E2E } from './spaces-v2'
 
 const TEST_NAME = 'Test User'
 const P2_CANDIDATE_DESCRIPTION = 'Cobertura P2'
 const P2_CANDIDATE_SUBJECT_KEY = 'create_commitment|ARS|cobertura p2'
 const P2_HISTORY_ACCOUNT_NAME = 'Historial P2'
+const GENERAL_CASH_INITIAL_BALANCE = 100_000
 
 async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
     const db = mongoose.connection.db
@@ -48,12 +50,236 @@ async function resetGeneralE2EFinancialData(userId: mongoose.Types.ObjectId) {
         db.collection('transactions').deleteMany({ userId }),
         db.collection('installmentplans').deleteMany({ userId }),
         db.collection('spaceentrypersonalimpacts').deleteMany({ userId }),
+        db.collection('spaceentrydrafts').deleteMany({ creatorUserId: userId }),
         db.collection('spaceentries').deleteMany({ createdByUserId: userId }),
         db.collection('spaceparticipants').deleteMany({ userId }),
         db.collection('spaces').deleteMany({ ownerUserId: userId }),
+        db.collection('debts').deleteMany({ userId }),
+        db.collection('debtmovements').deleteMany({ userId }),
+        db.collection('spaceoperations').deleteMany({ actorUserId: userId }),
         db.collection('notifications').deleteMany({ recipientUserId: userId }),
+        Account.deleteMany({ userId }),
         ScheduledCommitment.deleteMany({ userId }),
         FunctionalSuggestionDismissal.deleteMany({ userId }),
+    ])
+}
+
+async function purgeStaleSpaceEntries(
+    db: NonNullable<typeof mongoose.connection.db>,
+    spaceId: mongoose.Types.ObjectId,
+    keepEntryIds: string[],
+    label: string
+) {
+    const result = await db.collection('spaceentries').deleteMany({
+        spaceId,
+        _id: { $nin: keepEntryIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    })
+    if (result.deletedCount > 0) {
+        console.log(
+            `   ${label}: ${result.deletedCount} movimientos de prueba obsoletos eliminados`
+        )
+    }
+}
+
+async function seedSpaceV2Fixtures(userId: mongoose.Types.ObjectId) {
+    const db = mongoose.connection.db
+    if (!db) throw new Error('MongoDB no está conectado para sembrar Espacios v2 E2E.')
+    const spaceId = new mongoose.Types.ObjectId(SPACE_V2_E2E.spaceId)
+    const blockedSpaceId = new mongoose.Types.ObjectId(SPACE_MIGRATION_E2E.blockedSpaceId)
+    const now = new Date()
+    const timestamps = { createdAt: now, updatedAt: now }
+    // Los tests del recorrido financiero crean movimientos nuevos en cada
+    // corrida (descripciones únicas por proyecto) y nunca los borran. Sin
+    // esta purga, ese Espacio fijo crece sin límite y los movimientos fijos
+    // (arsEntryId/usdEntryId) terminan fuera de la página por defecto de la
+    // lista de movimientos (ordenada por fecha, ver DEFAULT_MOVEMENT_LIMIT en
+    // space-read-service-v2.ts), volviéndolos invisibles en la UI.
+    await purgeStaleSpaceEntries(
+        db,
+        spaceId,
+        [SPACE_V2_E2E.arsEntryId, SPACE_V2_E2E.usdEntryId],
+        'Espacios v2'
+    )
+    // Las fechas de los movimientos fijos se calculan relativas a `now` (en
+    // vez de una fecha fija) para que sigan cerca del tope del orden por
+    // fecha descendente sin depender de qué tan seguido se corre el seed.
+    const arsEntryDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const usdEntryDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+    const arsEntryDateKey = arsEntryDate.toISOString().slice(0, 10)
+    const usdEntryDateKey = usdEntryDate.toISOString().slice(0, 10)
+    await Promise.all([
+        db.collection('spaces').replaceOne(
+            { _id: spaceId },
+            {
+                _id: spaceId,
+                contractVersion: 2,
+                ownerUserId: userId,
+                name: SPACE_V2_E2E.name,
+                type: 'travel',
+                mode: 'managed',
+                status: 'active',
+                currencies: ['ARS', 'USD', 'EUR'],
+                reportingCurrency: 'ARS',
+                defaultSplitMode: 'equal',
+                debtMode: 'simplified',
+                timezone: 'America/Argentina/Buenos_Aires',
+                revision: 0,
+                migration: {
+                    state: 'migrated',
+                    runId: SPACE_MIGRATION_E2E.runId,
+                    sourceFingerprint: SPACE_MIGRATION_E2E.sourceFingerprint,
+                    reason: 'migration_verified',
+                    migratedAt: now,
+                },
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaces').replaceOne(
+            { _id: blockedSpaceId },
+            {
+                _id: blockedSpaceId,
+                contractVersion: 1,
+                ownerUserId: userId,
+                name: SPACE_MIGRATION_E2E.blockedName,
+                type: 'other',
+                mode: 'managed',
+                status: 'active',
+                currency: 'ARS',
+                reportingCurrency: 'ARS',
+                defaultSplitMode: 'equal',
+                debtMode: 'simplified',
+                timezone: 'America/Argentina/Buenos_Aires',
+                revision: 0,
+                migration: {
+                    state: 'blocked',
+                    runId: SPACE_MIGRATION_E2E.runId,
+                    sourceFingerprint: SPACE_MIGRATION_E2E.sourceFingerprint,
+                    reason: 'manual_review_required',
+                },
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                spaceId,
+                kind: 'finp_user',
+                userId,
+                displayName: TEST_NAME,
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_MIGRATION_E2E.blockedParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_MIGRATION_E2E.blockedParticipantId),
+                spaceId: blockedSpaceId,
+                kind: 'finp_user',
+                userId,
+                displayName: TEST_NAME,
+                role: 'owner',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceparticipants').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId),
+                spaceId,
+                kind: 'external',
+                displayName: SPACE_V2_E2E.externalName,
+                role: 'participant',
+                inviteStatus: 'accepted',
+                isActive: true,
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceentries').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.arsEntryId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.arsEntryId),
+                contractVersion: 2,
+                spaceId,
+                createdByUserId: userId,
+                createdByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                type: 'expense',
+                status: 'recorded',
+                title: 'Alojamiento en ARS',
+                amount: 10_000,
+                currency: 'ARS',
+                reportingAmount: 10_000,
+                originalMoney: { currency: 'ARS', minorUnits: '1000000', scale: 2 },
+                reportingMoney: { currency: 'ARS', minorUnits: '1000000', scale: 2 },
+                date: arsEntryDate,
+                dateKey: arsEntryDateKey,
+                timezone: 'America/Argentina/Buenos_Aires',
+                paidByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                sharedWithParticipantIds: [
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId),
+                ],
+                splitMode: 'equal',
+                splitAllocations: [],
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
+        db.collection('spaceentries').replaceOne(
+            { _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.usdEntryId) },
+            {
+                _id: new mongoose.Types.ObjectId(SPACE_V2_E2E.usdEntryId),
+                contractVersion: 2,
+                spaceId,
+                createdByUserId: userId,
+                createdByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                type: 'expense',
+                status: 'recorded',
+                title: 'Hotel en USD',
+                amount: 100,
+                currency: 'USD',
+                reportingAmount: 130_000,
+                exchangeRate: 1300,
+                originalMoney: { currency: 'USD', minorUnits: '10000', scale: 2 },
+                reportingMoney: { currency: 'ARS', minorUnits: '13000000', scale: 2 },
+                conversionSnapshot: {
+                    rate: '1300',
+                    direction: 'multiply',
+                    source: 'manual',
+                    manualAuthorUserId: userId,
+                    observedAt: now.toISOString(),
+                    capturedAt: now.toISOString(),
+                    path: [{ fromCurrency: 'USD', toCurrency: 'ARS', rate: '1300', source: 'manual' }],
+                },
+                date: usdEntryDate,
+                dateKey: usdEntryDateKey,
+                timezone: 'America/Argentina/Buenos_Aires',
+                paidByParticipantId: new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                sharedWithParticipantIds: [
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.ownerParticipantId),
+                    new mongoose.Types.ObjectId(SPACE_V2_E2E.externalParticipantId),
+                ],
+                splitMode: 'equal',
+                splitAllocations: [],
+                revision: 0,
+                ...timestamps,
+            },
+            { upsert: true }
+        ),
     ])
 }
 
@@ -83,11 +309,19 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
         const orphanEntryId = new mongoose.Types.ObjectId(fixture.orphanEntryId)
         const orphanTransactionId = new mongoose.Types.ObjectId(fixture.orphanTransactionId)
 
+        await purgeStaleSpaceEntries(
+            db,
+            spaceId,
+            [fixture.normalEntryId, fixture.orphanEntryId],
+            `Espacios (${fixture.spaceName})`
+        )
+
         await Promise.all([
             db.collection('spaces').replaceOne(
                 { _id: spaceId },
                 {
                     _id: spaceId,
+                    contractVersion: 2,
                     ownerUserId: userId,
                     name: fixture.spaceName,
                     type: 'home',
@@ -98,6 +332,8 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
                     defaultSplitMode: 'none',
                     simplifyDebts: false,
                     debtMode: 'direct',
+                    timezone: 'America/Argentina/Buenos_Aires',
+                    revision: 0,
                     ...timestamps,
                 },
                 { upsert: true }
@@ -121,11 +357,12 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
                 { _id: normalEntryId },
                 {
                     _id: normalEntryId,
+                    contractVersion: 2,
                     spaceId,
                     createdByUserId: userId,
                     createdByParticipantId: participantId,
                     type: 'expense',
-                    status: 'confirmed',
+                    status: 'recorded',
                     title: fixture.normalDescription,
                     amount: 7_000,
                     currency: 'ARS',
@@ -134,11 +371,38 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
                     paidByParticipantId: participantId,
                     sharedWithParticipantIds: [participantId],
                     splitMode: 'none',
-                    confirmationRequired: false,
-                    confirmedByUserId: userId,
-                    confirmedAt: now,
+                    timezone: 'America/Argentina/Buenos_Aires',
+                    dateKey: '2026-09-10',
+                    revision: 0,
                     isVoided: false,
                     editCount: 0,
+                    ...timestamps,
+                },
+                { upsert: true }
+            ),
+            db.collection('spaceentries').replaceOne(
+                { _id: orphanEntryId },
+                {
+                    _id: orphanEntryId,
+                    contractVersion: 2,
+                    spaceId,
+                    createdByUserId: userId,
+                    createdByParticipantId: participantId,
+                    type: 'expense',
+                    status: 'recorded',
+                    title: fixture.orphanDescription,
+                    amount: 9_000,
+                    currency: 'ARS',
+                    reportingAmount: 9_000,
+                    date: transactionDate,
+                    paidByParticipantId: participantId,
+                    sharedWithParticipantIds: [participantId],
+                    splitMode: 'none',
+                    timezone: 'America/Argentina/Buenos_Aires',
+                    dateKey: '2026-09-10',
+                    isVoided: false,
+                    editCount: 0,
+                    revision: 0,
                     ...timestamps,
                 },
                 { upsert: true }
@@ -159,6 +423,8 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
                     createdFrom: 'system',
                     spaceId,
                     spaceEntryId: normalEntryId,
+                    spaceImpactId: new mongoose.Types.ObjectId(fixture.normalImpactId),
+                    spaceContractVersion: 2,
                     spaceNameSnapshot: fixture.spaceName,
                     tags: ['e2e-space-impact'],
                     ...timestamps,
@@ -193,6 +459,7 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
                     _id: new mongoose.Types.ObjectId(fixture.normalImpactId),
                     spaceId,
                     entryId: normalEntryId,
+                    contractVersion: 2,
                     userId,
                     participantId,
                     transactionId: normalTransactionId,
@@ -202,6 +469,7 @@ async function seedSpaceImpactFixtures(userId: mongoose.Types.ObjectId) {
                     amount: 7_000,
                     currency: 'ARS',
                     status: 'linked',
+                    revision: 0,
                     resolvedAt: now,
                     ...timestamps,
                 },
@@ -279,11 +547,11 @@ async function ensureAccount(
     if (account) {
         Object.assign(account, values)
         await account.save()
-        return false
+        return { account, created: false }
     }
 
-    await Account.create({ userId, name, ...values })
-    return true
+    const createdAccount = await Account.create({ userId, name, ...values })
+    return { account: createdAccount, created: true }
 }
 
 async function seedP2RecurringCandidate(userId: mongoose.Types.ObjectId) {
@@ -931,19 +1199,22 @@ async function seed() {
         )
         await resetGeneralE2EFinancialData(user._id)
         const categories = await ensureDefaultCategories(user._id)
-        const cashCreated = await ensureAccount(user._id, 'Efectivo', {
+        const { account: cashAccount, created: cashCreated } = await ensureAccount(user._id, 'Efectivo', {
             type: 'cash',
             currency: 'ARS',
             supportedCurrencies: ['ARS'],
             defaultPaymentMethods: ['cash'],
-            initialBalance: 0,
-            initialBalances: { ARS: 0, USD: 0 },
+            // Los impactos de Espacios agregan $16.000 de egresos antes de los
+            // tests de Transacciones. El saldo base evita que el resultado
+            // dependa del orden entre specs sin permitir sobregiros reales.
+            initialBalance: GENERAL_CASH_INITIAL_BALANCE,
+            initialBalances: { ARS: GENERAL_CASH_INITIAL_BALANCE, USD: 0 },
             color: '#10B981',
             isActive: true,
             includeInNetWorth: true,
             allowNegativeBalance: false,
         })
-        const cardCreated = await ensureAccount(user._id, 'Tarjeta E2E', {
+        const { created: cardCreated } = await ensureAccount(user._id, 'Tarjeta E2E', {
             type: 'credit_card',
             currency: 'ARS',
             supportedCurrencies: ['ARS', 'USD'],
@@ -960,7 +1231,7 @@ async function seed() {
                 creditLimit: 1_000_000,
             },
         })
-        const p2HistoryCreated = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
+        const { created: p2HistoryCreated } = await ensureAccount(user._id, P2_HISTORY_ACCOUNT_NAME, {
             type: 'cash',
             currency: 'ARS',
             supportedCurrencies: ['ARS'],
@@ -972,8 +1243,11 @@ async function seed() {
             includeInNetWorth: false,
             allowNegativeBalance: false,
         })
+        user.set('preferences.defaultAccountId', cashAccount._id)
+        await user.save()
         await seedP2RecurringCandidate(user._id)
         await seedSpaceImpactFixtures(user._id)
+        await seedSpaceV2Fixtures(user._id)
         const financialSmoke = await seedFinancialSmokeData(
             TEST_USER_EMAIL,
             TEST_USER_PASSWORD
@@ -993,6 +1267,7 @@ async function seed() {
         )
         console.log('   P2: candidato mensual explicable verificado')
         console.log('   Espacios: impactos normal y huerfano preparados para desktop/mobile')
+        console.log('   Espacios v2: fixture contractual preparado para desktop/mobile')
         console.log(
             `   Smoke financiero: usuario ${financialSmoke.created ? 'creado' : 'actualizado'}, ` +
             `períodos ${financialSmoke.historical} y ${financialSmoke.current}`

@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-09-21
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -162,7 +162,20 @@ Casos especializados:
 - deuda manual/derivada;
 - parte propia y total de Espacio;
 - compromiso fijo/variable;
-- snapshot histórico.
+- snapshot histórico;
+- escalas ISO 0, 2 y 3, límites, redondeo y reparto por restos mayores;
+- cotización directa, derivada por USD/EUR, oficial compra/venta, manual,
+  cambiada y vencida;
+- deuda y simplificación independientes por moneda;
+- liquidación con varios componentes y tramos, pagos parciales, sobrepago,
+  rollback, replay y reversión;
+- composición histórica y revaluación actual sin presentar totales parciales;
+- gasto de Espacio pagado con tarjeta: cargo total real, parte propia
+  operacional por cuota, adelanto, ARS/USD, primer cierre, pago parcial/total y
+  eliminación atómica del plan;
+- borrador privado único: elección al cancelar, salida sin guardado, reanudación,
+  aislamiento, revisión optimista, publicación idempotente y adjuntos
+  recuperables.
 
 ## 7. APIs y seguridad
 
@@ -243,7 +256,17 @@ Un flujo no está cerrado si sólo funciona en desktop.
 - importación;
 - deuda;
 - impacto personal de Espacio;
-- permisos de invitación.
+- permisos de invitación;
+- Espacio ARS/USD/EUR con composición y filtros;
+- pago de deuda sólo ARS, sólo USD y combinado ARS+USD;
+- referencia manual, automática, vencida y proveedor caído;
+- liquidación propia o representada y continuidad hacia Mi Finp;
+- nuevo gasto desde portada y detalle con el mismo contrato v2, fecha civil,
+  dinero exacto y revisión completa;
+- consumo privado de tarjeta en una o varias cuotas, con total distinto de parte
+  propia, primer cierre y pago posterior;
+- borrador que sobrevive a cierre y sesión, sólo visible al autor, con conflicto,
+  adjunto, descarte y reemplazo por un único movimiento al publicar.
 
 ### CI
 
@@ -350,6 +373,31 @@ Recomendado:
 - Scripts destructivos requieren destino explícito.
 - Seeds y factories deben ser idempotentes o indicar precondición.
 
+### Auditorías de datos
+
+La caracterización previa a una migración financiera debe:
+
+- separar detectores puros del adaptador de persistencia;
+- usar códigos y severidades estables;
+- verificar referencias, aislamiento, estados, snapshots, fechas, monedas,
+  idempotencia y relaciones derivadas;
+- leer por lotes dentro de un snapshot y no exponer primitivas de escritura;
+- producir un resumen sanitizado y un detalle local excluido de Git;
+- probar rechazo de entornos inseguros, determinismo y ausencia de escrituras;
+- ejecutarse primero sobre E2E y después sobre development con confirmación
+  exacta; producción queda fuera de alcance.
+
+Para FINP-P0-006 el comando canónico es `npm run audit:spaces:legacy`; su uso y
+sus garantías están documentados en
+[`../tecnico/guia_desarrollo.md`](../tecnico/guia_desarrollo.md#auditoría-legacy-de-espacios).
+
+La etapa de migración agrega `npm run migrate:spaces:v2`. La calidad mínima
+exige clasificación fail-closed, sanitización, fingerprint estable, manifiesto
+aprobado, transacción por Espacio, invariancia del ledger personal, replay sin
+cambios y rollback al fingerprint previo. La integración usa una base única
+`e2e-migration` y prueba también una historia de 1.000 movimientos con límite de
+30 segundos por fase.
+
 ## 14. Criterio de release
 
 Una versión puede promoverse cuando:
@@ -365,25 +413,79 @@ Una versión puede promoverse cuando:
 
 ## 15. Estado actual
 
-Verificado 2026-08-04:
+Checks base, contratos y recorridos financieros de Espacios verificados hasta
+el 2026-09-21 sobre `codex/fix-spaces-v2-autosave-loop`:
 
-- 804 pruebas unitarias aprobadas en 100 archivos;
-- build, typecheck, lint y validación documental aprobados;
-- 4 de 4 E2E focales de Espacios aprobados en Chromium desktop y Pixel 7;
-- la corrida global adicional cerró 52 de 60: queda pendiente aislar cuentas
-  residuales del smoke financiero y estabilizar el servidor largo de `next dev`,
-  que devolvió 404 para rutas dinámicas y afectó otras dos altas;
+- FINP-P1-013 etapa 4: nueve checkpoints de axe más aserciones dirigidas de
+  foco, teclado, áreas táctiles y `safe area`, aprobados 9/9 en Chromium desktop
+  y Pixel 7; un control sin nombre inyectado fue bloqueado como crítico y luego
+  revertido.
+
+- 962 pruebas unitarias aprobadas en 130 archivos;
+- 20 recorridos de integración de Espacios v2 aprobados contra bases E2E con
+  sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
+  deuda por moneda, configuración monetaria, lifecycle, ownership, participantes
+  inactivos, borrador privado, impacto personal y liquidaciones propias o
+  representadas; los recorridos de migración agregan apply, replay, verify,
+  rollback, resolución huérfana y una historia de 1.000 movimientos;
+- typecheck, lint, build y validación documental aprobados; `docs:check` cierra
+  válido sobre 38 archivos activos;
+- 82 de 82 E2E globales aprobados contra el build de producción en Chromium
+  desktop y Pixel 7. La intermitencia histórica de
+  `quick-capture.spec.ts:591` quedó corregida el 2026-09-10 con payload
+  prefetcheado y timeout alineado; no reapareció en esta matriz;
+- el conteo previo de 895 unitarias y 68 E2E quedaba corto por la suite, no por
+  regresión; el de 923 unitarias que la rama declaró en su primer registro nunca
+  existió: eran 902, dos de ellas en rojo contra el contrato que la propia rama
+  había retirado;
 - CI con lint, build y unit;
 - job E2E activo y protegido: sin `MONGODB_URI_TEST` informa el bloqueo sin
   conectar; con la credencial ejecuta preflight, seed, build y Playwright;
 - preflight de aislamiento aprobado contra `finp-e2e`;
-- seed focal de Espacios repetible y aislado del usuario del smoke; la limpieza
-  global del dataset financiero queda asociada a FINP-P0-004;
+- seed repetible: recrea todas las cuentas sólo para el usuario general y
+  mantiene usuarios independientes para smoke financiero, Proyección e impactos
+  personales de Espacios;
 - cobertura no bloqueante;
-- el smoke financiero conserva datos representativos de dos períodos, pero su
-  próxima corrida verde depende de limpiar todas las cuentas residuales;
+- fixture contractual v2 y recorrido de gasto en tres pasos con preview e
+  impacto vinculado aprobados en desktop y mobile;
+- el recorrido focal de edición v2, aprobado el 2026-09-10 en Chromium desktop
+  y Pixel 7, retarda el preview luego de cambiar el monto y verifica que
+  `Guardar cambios` permanezca bloqueado hasta recibir una revisión vigente;
+- historia de 1.000 movimientos medida en 45.987 bytes y 859 ms para una página
+  de 50 elementos, sin cache, colas ni dependencias nuevas;
+- el smoke financiero conserva datos representativos de dos períodos y volvió a
+  quedar verde sin depender de cuentas residuales ni de la hora de la corrida:
+  fecha cada movimiento del período en curso antes del instante actual, porque
+  el saldo acumulado corta en `now` y no al cierre del día;
+- la regresión de Captura rápida recarga un Dashboard sin primera capa del
+  Sankey, espera el SVG, valida la descripción accesible del diálogo y falla si
+  reaparece cualquiera de los dos avisos cerrados por FINP-P1-012;
 - recorridos P2 aprobados para candidato recurrente, compra en un pago con
   Deshacer, cuotas, pago de resumen y revisión sin duplicar plan.
+- auditoría legacy de Espacios aprobada como herramienta read-only: detectores,
+  barreras del CLI y adaptador Mongo pasan 30 casos focales junto con el
+  preflight; el recorrido Playwright lee el seed E2E y caracteriza el huérfano
+  conocido sin escribir;
+- resultado sanitizado: E2E 18 hallazgos y development 337; ambos permanecen en
+  `NO-GO` para migración automática y habilitan la etapa de modelo compatible.
+- los 10 índices v2 parciales se aplicaron y reaplicaron sólo en `finp-e2e`;
+  development fue validado en `dry-run` y no recibió escrituras.
+- el checkpoint multimoneda agrega cobertura focal de dinero exacto, registro
+  ISO, cotizaciones, composición accesible y asignación de liquidaciones por
+  moneda; la matriz E2E usa un Espacio ARS/USD/EUR y conserva el rollout
+  exclusivamente en `finp-e2e`.
+- la clasificación crítica/alta de development quedó cerrada en 56 reparaciones
+  automáticas, 33 representaciones `needs_review` y 8 resoluciones manuales;
+- el ensayo sanitizado sobre copia `e2e-migration` migró 11 de 11 Espacios, sin
+  balances, deudas o vínculos privados incompatibles y con ledger personal
+  invariante; replay no produjo cambios y rollback recuperó el fingerprint
+  previo exacto;
+- el apply real del ensayo quedó por debajo de 30 segundos y verify alrededor
+  de 3,3 segundos; una integración sintética de 1.000 movimientos ejecutó
+  apply, verify y rollback por debajo de 30 segundos por fase;
+- en ese checkpoint development y producción no recibieron escrituras, backfill
+  ni cutover; la decisión 0016 registró posteriormente el cutover productivo ya
+  ejecutado.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

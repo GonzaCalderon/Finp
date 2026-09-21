@@ -21,4 +21,17 @@ describe('ResponsiveAmount', () => {
         expect(screen.getByTitle(/\$\s?1\.250/)).toBeInTheDocument()
         expect(warn).toHaveBeenCalledOnce()
     })
+
+    it('muestra el importe completo y su escala cuando no debe abreviarse', () => {
+        render(
+            <ResponsiveAmount
+                amount={1250.5}
+                currency="ARS"
+                abbreviateOnMobile={false}
+            />
+        )
+
+        expect(screen.getByText(/\$\s?1\.250,50/)).toBeInTheDocument()
+        expect(screen.getAllByText(/\$\s?1\.250,50/)).toHaveLength(1)
+    })
 })

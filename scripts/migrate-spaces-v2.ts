@@ -1,0 +1,369 @@
+import { execFileSync } from 'node:child_process'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { MongoClient, type ClientSession, type Db } from 'mongodb'
+
+import { resolveDevelopmentAuditTarget } from '@/lib/server/audits/space-legacy-audit-cli'
+import { runMongoSpaceLegacyAudit } from '@/lib/server/audits/space-legacy-audit-mongo'
+import { parseSpaceMigrationCliArguments } from '@/lib/server/migrations/space-v2-migration-cli'
+import {
+    buildSafeResolutionTemplate,
+    buildSpaceV2MigrationPlan,
+} from '@/lib/server/migrations/space-v2-migration-classifier'
+import type {
+    MigrationPlan,
+    MigrationResolutionManifest,
+} from '@/lib/server/migrations/space-v2-migration-contract'
+import {
+    buildFindingSpaceResolver,
+    cloneSpaceMigrationDatabase,
+    fingerprintSpaceMigrationDatabase,
+} from '@/lib/server/migrations/space-v2-migration-data'
+import {
+    applyPendingResolutions,
+    applySpaceMigrationRun,
+    registerClonedMigrationRun,
+    registerInPlaceMigrationRun,
+    rollbackMigrationRun,
+    verifySpaceMigrationRun,
+} from '@/lib/server/migrations/space-v2-migration-runner'
+import {
+    assertSpaceCutoverTarget,
+    assertSpaceMigrationTargets,
+    replaceMongoDatabaseName,
+} from '@/lib/server/migrations/space-v2-migration-target'
+import { resolveE2EEnvironment } from '../tests/e2e/helpers/environment'
+
+const HELP = `Migración compatible v2 de Espacios (ensayo aislado y cutover in-place)
+
+Uso:
+  npm run migrate:spaces:v2 -- plan --run-id <id> --confirm-database finm --target-database <e2e-migration-db>
+  npm run migrate:spaces:v2 -- clone|apply|verify|rollback [opciones anteriores] [--execute]
+  npm run migrate:spaces:v2 -- prepare|apply|verify|rollback --run-id <id> --confirm-database <db> --target-database <db> --cutover [--execute]
+  npm run migrate:spaces:v2 -- resolve [opciones de la corrida] [--execute]
+
+Todos los subcomandos son dry-run por defecto. Sólo --execute habilita escrituras y las barreras
+rechazan cualquier destino sin marcador e2e-migration. Development se abre read-only por snapshot.
+
+Opciones:
+  --approve-safe-defaults --approved-by <identidad>  Completa el manifiesto privado con las
+                                                    resoluciones fijadas en el plan aprobado.
+  resolve                                           Aplica las resoluciones manuales aprobadas de una
+                                                    corrida ya aplicada cuyo efecto falta en la base.
+                                                    No recorre Espacios ni vuelve a transformar.
+  --cutover                                         Modo in-place autorizado por la decisión 0011.
+                                                    Escribe sobre la misma base de development, que
+                                                    hay que confirmar dos veces por su nombre exacto.
+                                                    Reemplaza clone por prepare.
+  --help                                            Mostrar ayuda.`
+
+const MAX_PHASE_MS = 30_000
+
+function currentCommit(cwd: string) {
+    try {
+        return execFileSync('git', [
+            '-c', `safe.directory=${cwd.replace(/\\/g, '/')}`,
+            'rev-parse', 'HEAD',
+        ], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    } catch {
+        return 'unknown'
+    }
+}
+
+function artifactDirectory(cwd: string, runId: string) {
+    return resolve(cwd, 'test-results', 'migrations', 'spaces', runId)
+}
+
+async function writeJson(path: string, value: unknown) {
+    await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+}
+
+async function readArtifacts(cwd: string, runId: string) {
+    const directory = artifactDirectory(cwd, runId)
+    const [plan, manifest] = await Promise.all([
+        readFile(resolve(directory, 'plan.private.json'), 'utf8').then((value) => JSON.parse(value) as MigrationPlan),
+        readFile(resolve(directory, 'resolutions.private.json'), 'utf8').then((value) => JSON.parse(value) as MigrationResolutionManifest),
+    ])
+    return { directory, plan, manifest }
+}
+
+async function inspectSource(input: {
+    db: Db
+    session: ClientSession
+    runId: string
+    commit: string
+}) {
+    const [auditRun, sourceFingerprint, resolveSpaceId] = await Promise.all([
+        runMongoSpaceLegacyAudit(input.db, input.session),
+        fingerprintSpaceMigrationDatabase(input.db, input.session),
+        buildFindingSpaceResolver(input.db, input.session),
+    ])
+    return {
+        auditRun,
+        sourceFingerprint,
+        plan: buildSpaceV2MigrationPlan({
+            runId: input.runId,
+            audit: auditRun.result,
+            sourceDatabaseFingerprint: sourceFingerprint,
+            sourceCommit: input.commit,
+            sourceEnvironment: 'development',
+            resolveSpaceId,
+        }),
+    }
+}
+
+function approveManifest(plan: MigrationPlan, approvedBy: string): MigrationResolutionManifest {
+    const now = new Date().toISOString()
+    const template = buildSafeResolutionTemplate(plan)
+    return {
+        ...template,
+        resolutions: template.resolutions.map((resolution) => ({
+            ...resolution,
+            justification: resolution.action === 'detach_preserve_personal_transaction'
+                ? 'Se conserva la transacción con su propietario y se elimina sólo el vínculo cross-user incompatible.'
+                : resolution.action === 'retain_legacy_quarantine'
+                    ? 'Se conserva el documento huérfano en cuarentena legacy sin inventar un Espacio padre.'
+                    : 'El Espacio queda excluido del cutover hasta una resolución verificable.',
+            approvedBy,
+            approvedAt: now,
+        })),
+    }
+}
+
+async function reportApply(input: {
+    db: Db
+    clientSession: () => ClientSession
+    plan: MigrationPlan
+    manifest: MigrationResolutionManifest
+    execute: boolean
+}) {
+    const result = await applySpaceMigrationRun(input)
+    console.log(`Apply ${input.execute ? 'ejecutado' : 'simulado'}: ${result.spacesMigrated} migrados, ${result.spacesBlocked} bloqueados; replay: ${result.replayed}.`)
+}
+
+async function reportVerify(input: {
+    db: Db
+    plan: MigrationPlan
+    manifest: MigrationResolutionManifest
+    persist: boolean
+}) {
+    const verification = await verifySpaceMigrationRun(input)
+    console.log(`Verify: válido=${verification.valid}; Espacios=${verification.spaces.length}; replay con cambios=${verification.replayProducesChanges}; manuales sin resolver=${verification.unresolvedManualIssues}; resoluciones sin aplicar=${verification.unappliedResolutions}; duración=${verification.elapsedMs}ms.`)
+    console.log(`Detalle seguro: bloqueados=${verification.spaces.filter((space) => space.state === 'blocked').length}; balances incompatibles=${verification.spaces.filter((space) => !space.balancesMatch).length}; deudas incompatibles=${verification.spaces.filter((space) => !space.debtsMatch).length}; vínculos privados incompatibles=${verification.spaces.reduce((sum, space) => sum + space.crossUserLinks, 0)}; ledger personal invariante=${verification.spaces.every((space) => space.personalLedgerUnchanged)}.`)
+    if (!verification.valid) process.exitCode = 2
+}
+
+function assertSamePlan(expected: MigrationPlan, current: MigrationPlan) {
+    if (
+        expected.runId !== current.runId ||
+        expected.sourceDatabaseFingerprint !== current.sourceDatabaseFingerprint ||
+        expected.auditFingerprint !== current.auditFingerprint ||
+        expected.sourceCommit !== current.sourceCommit
+    ) {
+        throw new Error('SPACE_MIGRATION_SOURCE_OR_PLAN_CHANGED')
+    }
+}
+
+async function main() {
+    const cwd = process.cwd()
+    const options = parseSpaceMigrationCliArguments(process.argv.slice(2))
+    if (options.help) {
+        console.log(HELP)
+        return
+    }
+    const sourceTarget = resolveDevelopmentAuditTarget({
+        cwd,
+        confirmDatabase: options.confirmDatabase,
+    })
+    let targetUri: string
+    if (options.cutover) {
+        assertSpaceCutoverTarget({
+            sourceUri: sourceTarget.uri,
+            sourceDatabaseName: sourceTarget.databaseName,
+            targetDatabaseName: options.targetDatabase,
+        })
+        targetUri = sourceTarget.uri
+    } else {
+        const e2e = resolveE2EEnvironment({ cwd })
+        targetUri = replaceMongoDatabaseName(e2e.variables.MONGODB_URI, options.targetDatabase)
+        assertSpaceMigrationTargets({
+            sourceUri: sourceTarget.uri,
+            sourceDatabaseName: sourceTarget.databaseName,
+            targetUri,
+            targetDatabaseName: options.targetDatabase,
+        })
+    }
+
+    const sourceClient = new MongoClient(sourceTarget.uri, { serverSelectionTimeoutMS: 10_000 })
+    const targetClient = new MongoClient(targetUri, { serverSelectionTimeoutMS: 10_000 })
+    const phaseStartedAt = Date.now()
+    try {
+        if (options.command === 'resolve') {
+            const { plan, manifest } = await readArtifacts(cwd, options.runId)
+            await targetClient.connect()
+            const result = await applyPendingResolutions({
+                db: targetClient.db(options.targetDatabase),
+                clientSession: () => targetClient.startSession(),
+                plan,
+                manifest,
+                execute: options.execute,
+            })
+            console.log(`Resoluciones pendientes: ${result.pending}; aplicadas ${options.execute ? 'de verdad' : 'en simulación'}: ${result.applied}.`)
+            return
+        }
+
+        if (options.command === 'rollback') {
+            const { plan, manifest } = await readArtifacts(cwd, options.runId)
+            await targetClient.connect()
+            const result = await rollbackMigrationRun({
+                db: targetClient.db(options.targetDatabase),
+                clientSession: () => targetClient.startSession(),
+                plan,
+                manifest,
+                execute: options.execute,
+            })
+            console.log(`Rollback ${options.execute ? 'ejecutado' : 'simulado'}: ${result.documents ?? result.restored ?? 0} documentos; fingerprint restaurado: ${'fingerprintRestored' in result ? result.fingerprintRestored : 'pendiente'}.`)
+            return
+        }
+
+        /**
+         * En el cutover in-place la fuente es el propio destino: volver a
+         * inspeccionarla después de transformar nunca podría coincidir con el
+         * plan. Las garantías las dan los fingerprints que ya guarda la corrida.
+         */
+        if (options.cutover && options.command !== 'plan') {
+            const { plan, manifest } = await readArtifacts(cwd, options.runId)
+            await targetClient.connect()
+            const targetDb = targetClient.db(options.targetDatabase)
+            if (options.command === 'prepare') {
+                if (plan.sourceCommit !== currentCommit(cwd)) {
+                    throw new Error('SPACE_MIGRATION_SOURCE_OR_PLAN_CHANGED')
+                }
+                const baselineFingerprint = await fingerprintSpaceMigrationDatabase(targetDb)
+                if (baselineFingerprint !== plan.sourceDatabaseFingerprint) {
+                    throw new Error('SPACE_MIGRATION_INPLACE_BASELINE_MISMATCH')
+                }
+                if (options.execute) {
+                    await registerInPlaceMigrationRun({
+                        db: targetDb,
+                        plan,
+                        manifest,
+                        targetDatabaseName: options.targetDatabase,
+                        baselineFingerprint,
+                    })
+                }
+                console.log(`Cutover ${options.execute ? 'registrado' : 'simulado'}: base intacta, sin copia y fingerprint idéntico al del plan.`)
+                return
+            }
+            if (options.command === 'apply') {
+                await reportApply({
+                    db: targetDb,
+                    clientSession: () => targetClient.startSession(),
+                    plan,
+                    manifest,
+                    execute: options.execute,
+                })
+                return
+            }
+            await reportVerify({ db: targetDb, plan, manifest, persist: options.execute })
+            return
+        }
+
+        await sourceClient.connect()
+        const sourceDb = sourceClient.db(sourceTarget.databaseName)
+        const sourceSession = sourceClient.startSession()
+        let sourceInspection: Awaited<ReturnType<typeof inspectSource>>
+        try {
+            sourceSession.startTransaction({ readConcern: { level: 'snapshot' } })
+            sourceInspection = await inspectSource({
+                db: sourceDb,
+                session: sourceSession,
+                runId: options.runId,
+                commit: currentCommit(cwd),
+            })
+
+            if (options.command === 'plan') {
+                const directory = artifactDirectory(cwd, options.runId)
+                await mkdir(directory, { recursive: true })
+                const manifest = options.approveSafeDefaults
+                    ? approveManifest(sourceInspection.plan, options.approvedBy!)
+                    : buildSafeResolutionTemplate(sourceInspection.plan)
+                await Promise.all([
+                    writeJson(resolve(directory, 'plan.private.json'), sourceInspection.plan),
+                    writeJson(resolve(directory, 'resolutions.private.json'), manifest),
+                    writeJson(resolve(directory, 'summary.json'), {
+                        schemaVersion: sourceInspection.plan.schemaVersion,
+                        runId: options.runId,
+                        spaces: sourceInspection.plan.spacesAudited,
+                        counts: sourceInspection.plan.counts,
+                        sourceSnapshot: true,
+                        containsFinancialData: false,
+                    }),
+                ])
+                await sourceSession.abortTransaction()
+                console.log(`Plan creado: ${sourceInspection.plan.spacesAudited} Espacios; ${sourceInspection.plan.counts.automatic} automáticos, ${sourceInspection.plan.counts.review} de revisión y ${sourceInspection.plan.counts.manual} manuales.`)
+                return
+            }
+
+            const { plan, manifest } = await readArtifacts(cwd, options.runId)
+            assertSamePlan(plan, sourceInspection.plan)
+            await targetClient.connect()
+            const targetDb = targetClient.db(options.targetDatabase)
+
+            if (options.command === 'clone') {
+                const counts = await cloneSpaceMigrationDatabase({
+                    source: sourceDb,
+                    target: targetDb,
+                    session: sourceSession,
+                    execute: options.execute,
+                })
+                await sourceSession.abortTransaction()
+                if (options.execute) {
+                    const cloneFingerprint = await fingerprintSpaceMigrationDatabase(targetDb)
+                    if (cloneFingerprint !== plan.sourceDatabaseFingerprint) {
+                        throw new Error('SPACE_MIGRATION_CLONE_EXACTNESS_MISMATCH')
+                    }
+                    await registerClonedMigrationRun({
+                        db: targetDb,
+                        plan,
+                        manifest,
+                        targetDatabaseName: options.targetDatabase,
+                        cloneFingerprint,
+                    })
+                }
+                const documents = Object.values(counts).reduce((sum, count) => sum + count, 0)
+                console.log(`Copia ${options.execute ? 'creada' : 'simulada'}: ${documents} documentos en lotes de hasta 100; contenido sensible sanitizado.`)
+                return
+            }
+
+            await sourceSession.abortTransaction()
+            if (options.command === 'apply') {
+                await reportApply({
+                    db: targetDb,
+                    clientSession: () => targetClient.startSession(),
+                    plan,
+                    manifest,
+                    execute: options.execute,
+                })
+                return
+            }
+            await reportVerify({ db: targetDb, plan, manifest, persist: options.execute })
+        } finally {
+            if (sourceSession.inTransaction()) await sourceSession.abortTransaction()
+            await sourceSession.endSession()
+        }
+    } finally {
+        await Promise.allSettled([sourceClient.close(), targetClient.close()])
+        const elapsedMs = Date.now() - phaseStartedAt
+        if (elapsedMs > MAX_PHASE_MS && process.exitCode !== 1) {
+            console.error(`La fase excedió el objetivo de ${MAX_PHASE_MS}ms (${elapsedMs}ms).`)
+            process.exitCode = 3
+        }
+    }
+}
+
+main().catch((error: unknown) => {
+    const code = error instanceof Error ? error.message : 'SPACE_MIGRATION_UNKNOWN_ERROR'
+    console.error(`La migración se detuvo de forma segura (${code.startsWith('SPACE_MIGRATION_') ? code : 'SPACE_MIGRATION_INTERNAL_ERROR'}).`)
+    process.exitCode = 1
+})

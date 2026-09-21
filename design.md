@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-07-26
+> Última actualización: 2026-09-16
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -218,9 +218,11 @@ En Compromisos, alta y edición siguen `Compromiso → Frecuencia → Aplicació
 La agenda de montos no forma parte del formulario general: se administra desde
 `Cambiar monto` para no mezclar configuración, vigencia e historia.
 
-En mobile, el progreso se resume como `Paso N de 3 · Nombre` y una barra
-compacta; no se reservan tres columnas sin contenido para representar el
-stepper. En desktop se conservan los tres pasos visibles. El día mensual usa el
+En mobile, el progreso se resume como `Paso N de M · Nombre` y una barra
+compacta; no se reservan columnas sin contenido para representar el stepper. En
+desktop se conservan todos los pasos visibles y navegables hacia atrás. `M` es
+la cantidad real de pasos del flujo: tres en Compromisos, cuatro en el gasto de
+un Espacio compartido y tres en uno `solo`. El día mensual usa el
 mismo patrón de datepicker de Nueva transacción, adaptado a un calendario fijo
 de 31 días; no usa texto libre, un desplegable largo ni una cuadrícula siempre
 abierta. Debe mostrar una vista previa del vencimiento y el recordatorio
@@ -281,6 +283,83 @@ La revisión final explica:
 - qué saldo o estado cambia;
 - qué regla, compromiso o sugerencia intervino.
 
+El monto que autoriza una acción financiera se muestra completo, con moneda y
+escala correctas. Puede abreviarse en una visualización secundaria, nunca en la
+revisión final, el CTA, un error ni el resultado confirmado. La fecha civil se
+presenta igual en todos los pasos y no cambia de formato o día al revisar.
+
+### Borradores recuperables
+
+Abrir o editar un formulario financiero no crea ni actualiza un borrador por sí
+solo. Si una creación tiene cambios locales y la persona intenta cerrarla, la
+acción de salida ofrece `Guardar borrador`, `Salir sin guardar` y `Seguir
+editando`. Un formulario nuevo sin cambios cierra sin crear recursos.
+
+Cuando la persona elige guardar, el formulario comunica su estado junto al
+encabezado o la acción de cierre, sin competir con el CTA:
+
+- `Guardando…`: cambio local pendiente de confirmación;
+- `Guardado`: versión persistida;
+- `No se pudo guardar`: conserva la edición y ofrece reintento;
+- `Conflicto`: existe una versión más nueva y debe revisarse antes de continuar.
+
+`Salir sin guardar` no elimina un borrador que ya existía al abrir: conserva su
+última versión persistida y descarta sólo los cambios locales. Si el formulario
+nuevo tuvo que preparar un borrador técnico para adjuntos, salir sin guardar lo
+descarta y revoca esos archivos. El descarte de un borrador ya persistido sigue
+siendo una acción separada, explícita y confirmada. Al reanudar, el formulario
+vuelve al último paso útil y restaura el foco sin saltar directamente sobre un
+error antiguo.
+
+En Movimientos, un borrador usa una card diferenciada por etiqueta y texto, no
+sólo por color. Muestra información parcial disponible, última edición y
+`Continuar`, pero no usa iconos o copy de movimiento confirmado ni participa en
+totales. Sólo su autor puede verlo.
+
+### Tarjeta privada desde Espacios
+
+Cuando `Crear en Mi Finp` usa una tarjeta de crédito, el mismo bloque de cuenta
+muestra cantidad de cuotas, primera cuota, valor por cuota y resumen de
+períodos. La propuesta inicial es una cuota en el mes calendario siguiente a la
+compra, siempre editable. La ayuda para calcular el total desde el valor de una
+cuota sólo aparece durante `Nuevo gasto`, donde el total compartido todavía se
+está definiendo.
+
+El bloque explica que el plan es privado y no divide el movimiento compartido.
+Si el total cargado en la tarjeta difiere de la parte propia, la revisión muestra
+ambas magnitudes y la parte propia por cuota. Mobile usa una sola columna y
+controles táctiles de al menos 44 px; desktop puede disponer cuotas y primer mes
+en dos columnas sin cambiar el orden de lectura.
+
+### Adjuntos recuperables
+
+Seleccionar un archivo inicia su preparación privada sin esperar la confirmación
+del formulario. La superficie anuncia el límite antes del selector y representa
+cada archivo como una fila estable con nombre saneado, tipo, tamaño y uno de
+estos estados textuales: `Subiendo…`, `Listo`, `No se pudo subir` o `Quitando…`.
+Color y animación pueden acompañar, pero nunca ser la única señal.
+
+Un fallo pertenece a la fila afectada, conserva las demás y ofrece `Reintentar`
+o `Quitar`; no se comunica sólo mediante toast. Mientras haya una carga o error
+sin resolver, el CTA final queda deshabilitado y explica el siguiente paso. La
+escritura del resto del formulario continúa disponible.
+
+Cerrar no cancela ni descarta una preparación ya aceptada por el servidor. Al
+reanudar se reconstruye la lista desde el borrador, sin guardar binarios en el
+navegador. Después de descartar, las filas desaparecen junto con la card privada;
+la limpieza técnica posterior no ocupa la interfaz.
+
+En mobile, las filas mantienen un área táctil mínima de 44 px, acciones con
+nombre accesible y CTA sobre la `safe area`. En desktop no se convierte el
+uploader en una superficie paralela. El foco vuelve a la fila al fallar y pasa a
+la siguiente acción útil al quitarla; los cambios de estado se anuncian mediante
+una región `aria-live` no intrusiva.
+
+Una preview asíncrona reserva el espacio necesario y distingue `Calculando`,
+`Lista para revisar`, `Faltan datos` y `No se pudo calcular`. No muestra un error
+durante el debounce ni reemplaza silenciosamente una revisión anterior con una
+respuesta obsoleta.
+
 ## 10. Estados y feedback
 
 Todo flujo contempla:
@@ -303,6 +382,16 @@ Todo flujo contempla:
 - Indicar si hubo o no impacto financiero.
 - Permitir reintentar o corregir.
 - Conservar el borrador siempre que sea seguro.
+
+La primitiva compartida para un error de lectura es `ErrorState`
+(`src/components/shared/ErrorState.tsx`): espejo de `EmptyState` más
+recuperación, con `icon`, `title`, `description?`, `retryLabel?` y `onRetry?`.
+Renderiza `role="alert"`, un contenedor enfocable que recibe el foco al
+montarse y, si existe `onRetry`, un botón secundario de reintento. Un módulo no
+dibuja su propio cuadro destructivo cuando esta primitiva alcanza, y un error
+de lectura nunca se comunica sólo por toast. Un error de mutación va junto al
+formulario, conserva el borrador y dice si no escribió, revirtió o sólo falló
+un refresco.
 
 ### Éxito
 

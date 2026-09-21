@@ -320,7 +320,6 @@ export function getMobileFabConfig(params: {
             [{
                 id: 'space-action',
                 label: spaceAction.label,
-                description: 'Accion contextual',
                 icon: BriefcaseBusiness,
                 tone: 'amber',
                 onPress: spaceAction.onPress,
@@ -551,7 +550,7 @@ function SidebarContent({ insight, insightLoading }: { insight: NavInsightType; 
                     <div className="flex items-center gap-2">
                         <div className="text-right leading-tight">
                             <div className="text-[11px] font-semibold text-white">{period.monthLabel}</div>
-                            <div className="text-[10px] font-medium text-white/42">{period.percentLabel}</div>
+                            <div className="text-[10px] font-medium text-white/60">{period.percentLabel}</div>
                         </div>
                         <AvatarProgressRing
                             initials={initials}
@@ -576,7 +575,7 @@ function SidebarContent({ insight, insightLoading }: { insight: NavInsightType; 
                         transition={{ duration: 0.2, delay: 0.04 + groupIndex * 0.035, ease: [0.22, 1, 0.36, 1] }}
                     >
                         <motion.div
-                            className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/32"
+                            className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/60"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.18, delay: 0.06 + groupIndex * 0.035 }}
@@ -958,6 +957,7 @@ function DesktopFloatingTransactionButton() {
                                                 boxShadow: `0 12px 28px ${tone.shadow}`,
                                             }}
                                             aria-label={action.label}
+                                            data-fab-action={action.id}
                                             disabled={action.disabled}
                                             onClick={() => {
                                                 setOpenState(false)
@@ -978,7 +978,7 @@ function DesktopFloatingTransactionButton() {
                                             <span className="min-w-0 flex-1">
                                                 <span className="block truncate text-sm font-semibold">{action.label}</span>
                                                 {action.description && (
-                                                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                                    <span className="mt-0.5 block truncate text-xs text-foreground">
                                                         {action.description}
                                                     </span>
                                                 )}
@@ -1188,6 +1188,7 @@ function MobileContextualFab({
                                             boxShadow: `0 12px 28px ${tone.shadow}`,
                                         }}
                                         aria-label={action.label}
+                                        data-fab-action={action.id}
                                         disabled={action.disabled}
                                         onClick={() => {
                                             setOpenState(false)
@@ -1208,7 +1209,7 @@ function MobileContextualFab({
                                         <span className="min-w-0 flex-1">
                                             <span className="block truncate text-sm font-semibold">{action.label}</span>
                                             {action.description && (
-                                                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                                <span className="mt-0.5 block truncate text-xs text-foreground">
                                                     {action.description}
                                                 </span>
                                             )}
@@ -1241,7 +1242,7 @@ function MobileContextualFab({
                         {config.mode === 'direct' && config.icon ? config.icon : <Plus size={23} strokeWidth={2.6} />}
                     </span>
                 </button>
-                <span className="max-w-[4.8rem] truncate text-center text-[10px] font-medium leading-none text-muted-foreground">
+                <span className="max-w-[4.8rem] truncate text-center text-[10px] font-medium leading-none text-foreground/75">
                     Agregar
                 </span>
             </motion.div>

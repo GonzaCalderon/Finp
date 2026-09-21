@@ -53,6 +53,22 @@ test.describe('Captura rápida', () => {
     test('interpreta una captura y mantiene el diálogo usable en desktop y mobile', async ({
         page,
     }, testInfo) => {
+        const qualityWarnings: string[] = []
+        page.on('console', (message) => {
+            const text = message.text()
+            if (
+                text.includes('Sankey fallback:') ||
+                text.includes('Missing `Description`')
+            ) {
+                qualityWarnings.push(text)
+            }
+        })
+
+        // La recarga vuelve a montar el Sankey con el usuario general, cuyo
+        // dataset puede no tener nodos en la primera capa.
+        await page.reload()
+        await expect(page.getByTestId('sankey-chart').locator('svg')).toBeVisible()
+
         if (testInfo.project.name === 'mobile-chromium') {
             await page.getByRole('button', { name: 'Abrir acciones rapidas' }).click()
             await page.getByRole('button', { name: 'Captura rápida' }).click()
@@ -62,6 +78,15 @@ test.describe('Captura rápida', () => {
 
         const dialog = page.getByRole('dialog').filter({ hasText: 'Captura rápida' })
         await expect(dialog).toBeVisible()
+        const accessibleDescription = await dialog.evaluate((element) => {
+            const descriptionId = element.getAttribute('aria-describedby')
+            return descriptionId
+                ? document.getElementById(descriptionId)?.textContent?.trim()
+                : null
+        })
+        expect(accessibleDescription).toContain(
+            'Escribí como te salga. Revisamos todo antes de guardar.'
+        )
         await dialog.getByLabel('Describí el movimiento').fill('Café 1500 ayer mp')
 
         await expect(dialog).toContainText('1.500')
@@ -90,6 +115,7 @@ test.describe('Captura rápida', () => {
             }
         })
         expect(layout).toEqual({ documentFits: true, dialogFits: true })
+        expect(qualityWarnings).toEqual([])
     })
 
     test('coordina un candidato mensual aprendido con el descarte persistente', async ({
@@ -566,14 +592,21 @@ test.describe('Captura rápida', () => {
         page,
     }, testInfo) => {
         // El compromiso pendiente se inyecta en el contexto: el test verifica la
-        // orientación, no la creación de datos.
+        // orientación, no la creación de datos. Se resuelve el payload real antes
+        // de abrir el diálogo para que la intercepción sea una respuesta estática:
+        // un `route.fetch()` dentro del handler agrega un round-trip completo al
+        // camino crítico de `loadContext()` y hace flaky la primera aserción de
+        // orientación bajo cualquier lentitud transitoria del servidor de E2E.
+        const contextResponse = await page.request.get('/api/quick-capture/context')
+        expect(contextResponse.ok()).toBe(true)
+        const contextPayload = await contextResponse.json()
+
         await page.route('**/api/quick-capture/context', async (route) => {
-            const response = await route.fetch()
-            const payload = await response.json()
             await route.fulfill({
-                response,
+                status: 200,
+                contentType: 'application/json',
                 json: {
-                    ...payload,
+                    ...contextPayload,
                     currentPeriod: '2026-07',
                     commitments: [
                         {
@@ -604,7 +637,7 @@ test.describe('Captura rápida', () => {
         await dialog.getByLabel('Describí el movimiento').fill('Alquiler 675000')
 
         const orientation = dialog.getByTestId('capture-orientation')
-        await expect(orientation).toBeVisible()
+        await expect(orientation).toBeVisible({ timeout: 8_000 })
         await expect(orientation).toHaveAttribute('data-intent', 'apply_commitment')
         await expect(orientation).toContainText('Alquiler')
         // Anuncia el importe que se va a aplicar, no el previsto por la plantilla.

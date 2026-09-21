@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { Fragment } from 'react'
 import { ArrowRight, CreditCard } from 'lucide-react'
 import {
     Breadcrumb,
@@ -66,7 +67,7 @@ export function AppBreadcrumb() {
                         const isLast = index === segments.length - 1
 
                         return (
-                            <span key={href} className="flex items-center gap-1.5">
+                            <Fragment key={href}>
                                 <BreadcrumbSeparator className="text-muted-foreground/50" />
                                 <BreadcrumbItem>
                                     {isLast ? (
@@ -82,7 +83,7 @@ export function AppBreadcrumb() {
                                         </BreadcrumbLink>
                                     )}
                                 </BreadcrumbItem>
-                            </span>
+                            </Fragment>
                         )
                     })}
                 </BreadcrumbList>

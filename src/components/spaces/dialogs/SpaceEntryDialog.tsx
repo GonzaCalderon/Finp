@@ -1,23 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     AlertTriangle,
-    Banknote,
-    Building2,
-    CalendarRange,
-    CircleDollarSign,
-    Coins,
-    CreditCard,
-    PiggyBank,
+    Loader2,
     Save,
-    Wallet,
+    Trash2,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useCategories } from '@/hooks/useCategories'
 import { useSpaceCategories } from '@/hooks/useSpaceCategories'
 import { useToast } from '@/hooks/useToast'
+import { useSpaceEntryDraft } from '@/hooks/useSpaceEntryDraft'
+import type { SpaceEntryCreateOptions } from '@/hooks/useSpaceEntries'
 import { apiJson } from '@/lib/client/auth-client'
 import {
     invalidateData,
@@ -25,8 +20,15 @@ import {
 } from '@/lib/client/data-sync'
 import { spaceEntryEditSchema, spaceEntrySchema, type SpaceEntryFormData, type SpaceFormData } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
-import type { AccountType } from '@/lib/constants'
-import type { IAccount, ICategory, ISpaceCategory, ISpaceEntry, ISpaceParticipant } from '@/types'
+import type { Currency } from '@/lib/constants'
+import type {
+    ISpaceEntry,
+    ISpaceParticipant,
+    SpaceEntryPreviewDto,
+    SpaceEntryDraftDto,
+    SpaceLinkCandidateDto,
+    SpaceQuotesDto,
+} from '@/types'
 import {
     Dialog,
     DialogContent,
@@ -36,60 +38,47 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import type { DialogProps } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
+import { SpaceEntryStepper } from '@/components/spaces/dialogs/entry-steps/SpaceEntryStepper'
+import { SpaceEntryDataStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntryDataStep'
+import { SpaceEntrySplitStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntrySplitStep'
+import { SpaceEntryExtrasStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntryExtrasStep'
+import { SpaceEntryReviewStep } from '@/components/spaces/dialogs/entry-steps/SpaceEntryReviewStep'
+import { SpaceEntryNotesPanel } from '@/components/spaces/dialogs/entry-steps/SpaceEntryNotesPanel'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
+    buildSpaceEntrySteps,
+    SPACE_ENTRY_STEP_NUMBER,
+    stepIndexFromNumber,
+    type SpaceEntryPersonalIntent,
+} from '@/components/spaces/dialogs/entry-steps/types'
+import { useScrollToFirstError } from '@/hooks/useScrollToFirstError'
+import { clientDateToDateKey, dateKeyToClientDate } from '@/lib/client/space-api-adapter'
+import { fetchLinkCandidatesForNewEntry } from '@/lib/client/space-personal-impact'
+import { moneyFromDecimal } from '@/lib/utils/money'
+import { supportsCurrency } from '@/lib/utils/accounts'
+import { getDefaultFirstClosingMonth } from '@/lib/utils/installments'
 import {
-    SpaceAmountInline,
-    SpaceEntryTypeBadge,
-    SpaceInitialsAvatar,
-    SpaceMetaBadge,
-} from '@/components/spaces/SpaceUi'
-import {
-    DialogProps,
-    formatDateInput,
-    SpaceDialogField,
-    SpaceDialogPanel,
-    SpaceDialogSectionEyebrow,
-    SpaceDialogTextArea,
-} from '@/components/spaces/dialogs/SpaceDialogPrimitives'
-import {
-    SpaceAttachmentDraft,
-    SpaceAttachmentsUploader,
-} from '@/components/spaces/dialogs/SpaceAttachmentsUploader'
-import { SpaceSplitConfigurator } from '@/components/spaces/dialogs/SpaceSplitConfigurator'
-import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
-import { FormattedAmountInput } from '@/components/shared/FormattedAmountInput'
-import { CurrencySelector } from '@/components/shared/CurrencySelector'
-
-// ── Account type helpers ──────────────────────────────────────────────────────
-
-function getAccountTypeMeta(type: AccountType): { label: string; icon: LucideIcon } {
-    switch (type) {
-        case 'bank':
-            return { label: 'Cuenta bancaria', icon: Building2 }
-        case 'cash':
-            return { label: 'Efectivo', icon: Banknote }
-        case 'wallet':
-            return { label: 'Billetera', icon: Wallet }
-        case 'credit_card':
-            return { label: 'Tarjeta de crédito', icon: CreditCard }
-        case 'savings':
-            return { label: 'Caja de ahorro', icon: PiggyBank }
-        default:
-            return { label: 'Cuenta', icon: CircleDollarSign }
-    }
-}
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 // ── Internal types ────────────────────────────────────────────────────────────
 
 type EntryDraftPayload = Omit<SpaceEntryFormData, 'date'> & {
     date: string
+}
+
+function parseDraftDate(value: string, fallback: Date) {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? dateKeyToClientDate(value)
+        : new Date(value)
+    return Number.isNaN(date.getTime()) ? fallback : date
 }
 
 function buildDefaultSplitAllocations(
@@ -214,6 +203,9 @@ function buildDefaultForm({
         notes: '',
         personalAccountId: undefined,
         linkedTransactionId: undefined,
+        installmentCount: undefined,
+        firstClosingMonth: undefined,
+        installmentQuoteAmount: undefined,
     }
 }
 
@@ -247,7 +239,7 @@ function sanitizeDraft({
             type: 'expense',
             amount: typeof parsed.amount === 'number' && Number.isFinite(parsed.amount) ? parsed.amount : defaults.amount,
             currency: parsed.currency ?? defaults.currency,
-            date: parsed.date ? new Date(parsed.date) : defaults.date,
+            date: parsed.date ? parseDraftDate(parsed.date, defaults.date) : defaults.date,
             paidByParticipantId:
                 parsed.paidByParticipantId && activeParticipantIds.has(parsed.paidByParticipantId)
                     ? parsed.paidByParticipantId
@@ -271,10 +263,104 @@ function sanitizeDraft({
     }
 }
 
-function revokeAttachment(attachment: SpaceAttachmentDraft) {
-    if (attachment.previewUrl) {
-        URL.revokeObjectURL(attachment.previewUrl)
+function draftPayloadFromDto(draft: SpaceEntryDraftDto): EntryDraftPayload {
+    return {
+        type: 'expense',
+        title: draft.fields.title ?? '',
+        description: draft.fields.description ?? '',
+        amount: draft.fields.amount ?? 0,
+        currency: draft.fields.currency ?? '',
+        exchangeRate: draft.fields.exchangeRate,
+        date: draft.fields.dateKey ?? clientDateToDateKey(new Date()),
+        spaceCategoryId: draft.fields.spaceCategoryId,
+        paidByParticipantId: draft.fields.paidByParticipantId,
+        sharedWithParticipantIds: draft.fields.sharedWithParticipantIds,
+        splitMode: draft.fields.splitMode ?? 'equal',
+        splitAllocations: draft.fields.splitAllocations,
+        notes: draft.fields.notes ?? '',
+        personalAccountId: draft.fields.personalImpact?.accountId,
+        categoryId: draft.fields.personalImpact?.categoryId,
+        linkedTransactionId: draft.fields.personalImpact?.linkedTransactionId,
+        installmentCount: draft.fields.personalImpact?.installmentPlan?.installmentCount,
+        firstClosingMonth: draft.fields.personalImpact?.installmentPlan?.firstClosingMonth,
     }
+}
+
+function draftFieldsFromForm(
+    form: SpaceEntryFormData,
+    reportingCurrency: string,
+    quotes?: SpaceQuotesDto | null
+): SpaceEntryDraftDto['fields'] {
+    const quote = quotes?.quotes.find((candidate) =>
+        candidate.sourceCurrency === form.currency &&
+        candidate.targetCurrency === reportingCurrency &&
+        candidate.status === 'current' &&
+        Number(candidate.rate) === form.exchangeRate
+    )
+
+    return {
+        title: form.title,
+        description: form.description,
+        amount: Number.isFinite(form.amount) ? form.amount : 0,
+        money: moneyFromDecimal(form.currency, Number.isFinite(form.amount) ? form.amount : 0),
+        currency: form.currency,
+        exchangeRate: form.exchangeRate,
+        exchangeRateDecimal: quote?.rate,
+        conversionSnapshot: quote ? {
+            rate: quote.rate,
+            direction: quote.direction,
+            source: quote.source,
+            observedAt: quote.observedAt,
+            capturedAt: quote.capturedAt,
+            expiresAt: quote.expiresAt,
+            path: quote.path,
+        } : undefined,
+        expectedQuoteFingerprint: quote?.fingerprint,
+        dateKey: clientDateToDateKey(form.date),
+        paidByParticipantId: form.paidByParticipantId,
+        sharedWithParticipantIds: form.sharedWithParticipantIds,
+        splitMode: form.splitMode,
+        splitAllocations: form.splitAllocations,
+        spaceCategoryId: form.spaceCategoryId,
+        notes: form.notes,
+        personalImpact: form.personalAccountId || form.categoryId || form.linkedTransactionId ? {
+            accountId: form.personalAccountId,
+            categoryId: form.categoryId,
+            description: form.title,
+            linkedTransactionId: form.linkedTransactionId,
+            installmentPlan: form.installmentCount && form.firstClosingMonth ? {
+                installmentCount: form.installmentCount,
+                firstClosingMonth: form.firstClosingMonth,
+            } : undefined,
+        } : undefined,
+    }
+}
+
+function formFingerprint(form: SpaceEntryFormData, step: 1 | 2 | 3 | 4) {
+    return JSON.stringify({
+        ...form,
+        date: clientDateToDateKey(form.date),
+        step,
+    })
+}
+
+/**
+ * Un borrador recuperado no guarda la intención: la deduce de qué campo quedó
+ * elegido. Los dos nunca conviven — el servidor rechaza cuenta personal y
+ * vínculo a la vez— así que la lectura no es ambigua.
+ */
+function personalIntentFromForm(form: SpaceEntryFormData): SpaceEntryPersonalIntent {
+    if (form.linkedTransactionId) return 'link_existing'
+    if (form.personalAccountId) return 'create_transaction'
+    return 'space_only'
+}
+
+function formatFinancialDate(date: Date) {
+    return new Intl.DateTimeFormat('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(date)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -292,12 +378,17 @@ export function SpaceEntryDialog({
     spaceCurrencies,
     defaultSplitMode,
     spaceMode,
+    spaceTimezone,
     draftKey,
     mode = 'create',
     initialData,
     initialHasSubsequentSettlement,
+    contractVersion,
+    spaceRevision = 0,
+    quotes,
+    onDraftChange,
 }: DialogProps & {
-    onSubmit: (data: SpaceEntryFormData) => Promise<ISpaceEntry>
+    onSubmit: (data: SpaceEntryFormData, options?: SpaceEntryCreateOptions) => Promise<ISpaceEntry>
     onEditComplete?: (entry: ISpaceEntry) => void
     spaceId: string
     participants: ISpaceParticipant[]
@@ -307,19 +398,54 @@ export function SpaceEntryDialog({
     spaceCurrencies: string[]
     defaultSplitMode: SpaceEntryFormData['splitMode']
     spaceMode: SpaceFormData['mode']
+    spaceTimezone?: string
     draftKey?: string
     mode?: 'create' | 'edit'
     initialData?: ISpaceEntry
     initialHasSubsequentSettlement?: boolean
+    contractVersion?: 2
+    spaceRevision?: number
+    quotes?: SpaceQuotesDto | null
+    onDraftChange?: (draft: SpaceEntryDraftDto | null) => void
 }) {
     const { categories } = useSpaceCategories(spaceId)
     const { categories: personalCategories } = useCategories()
-    const { accounts } = useAccounts()
+    const { accounts, loading: accountsLoading } = useAccounts()
     const { success, warning } = useToast()
 
     const activeParticipants = useMemo(
         () => participants.filter((participant) => participant.isActive),
         [participants]
+    )
+    const historicalPayerId = extractId(initialData?.paidByParticipantId)
+    const historicalSharedParticipantIds = useMemo(() => new Set([
+        ...(initialData?.sharedWithParticipantIds ?? []).map((participantId) => extractId(participantId)),
+        ...(initialData?.splitAllocations ?? []).map((allocation) => extractId(allocation.participantId)),
+    ].filter((participantId): participantId is string => Boolean(participantId))), [initialData])
+    const historicalParticipantIds = useMemo(() => new Set([
+        historicalPayerId,
+        ...historicalSharedParticipantIds,
+    ].filter((participantId): participantId is string => Boolean(participantId))), [
+        historicalPayerId,
+        historicalSharedParticipantIds,
+    ])
+    const availableParticipants = useMemo(
+        () => participants.filter((participant) =>
+            participant.isActive || historicalParticipantIds.has(extractId(participant._id) ?? '')
+        ),
+        [historicalParticipantIds, participants]
+    )
+    const payerParticipants = useMemo(
+        () => participants.filter((participant) =>
+            participant.isActive || extractId(participant._id) === historicalPayerId
+        ),
+        [historicalPayerId, participants]
+    )
+    const splitParticipants = useMemo(
+        () => participants.filter((participant) =>
+            participant.isActive || historicalSharedParticipantIds.has(extractId(participant._id) ?? '')
+        ),
+        [historicalSharedParticipantIds, participants]
     )
 
     const [form, setForm] = useState<SpaceEntryFormData>(
@@ -331,45 +457,106 @@ export function SpaceEntryDialog({
             spaceMode,
         })
     )
-    const [attachments, setAttachments] = useState<SpaceAttachmentDraft[]>([])
+    const [draftAttachmentsBlocked, setDraftAttachmentsBlocked] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [datePickerOpen, setDatePickerOpen] = useState(false)
     const [hasSubsequentSettlementWarning, setHasSubsequentSettlementWarning] = useState(false)
-    const attachmentsRef = useRef<SpaceAttachmentDraft[]>([])
+    const steps = useMemo(() => buildSpaceEntrySteps(spaceMode), [spaceMode])
+    const [stepIndex, setStepIndex] = useState(0)
+    const currentStep = steps[Math.min(stepIndex, steps.length - 1)]
+    const step = SPACE_ENTRY_STEP_NUMBER[currentStep.id]
+    const isLastStep = stepIndex >= steps.length - 1
+    const setStep = useCallback(
+        (value: number) => setStepIndex(stepIndexFromNumber(steps, value)),
+        [steps]
+    )
+    const [preview, setPreview] = useState<SpaceEntryPreviewDto | null>(null)
+    const [previewLoading, setPreviewLoading] = useState(false)
+    const [previewError, setPreviewError] = useState<string | null>(null)
+    // Un fallo de red sin cambiar ningún campo no vuelve a disparar el efecto de
+    // preview por sí solo: "Reintentar" lo fuerza incrementando este nonce.
+    const [previewRetryNonce, setPreviewRetryNonce] = useState(0)
+    // Las tres formas de impacto personal son excluyentes: el estado es la
+    // intención, no un efecto lateral de qué campo quedó lleno.
+    const [personalIntent, setPersonalIntent] = useState<SpaceEntryPersonalIntent>('space_only')
+    const [candidates, setCandidates] = useState<SpaceLinkCandidateDto[]>([])
+    const [candidatesLoading, setCandidatesLoading] = useState(false)
+    const [candidatesError, setCandidatesError] = useState<string | null>(null)
+    const [candidatesExcludedCount, setCandidatesExcludedCount] = useState(0)
+    const [candidatesRetryNonce, setCandidatesRetryNonce] = useState(0)
+    const [draftHydrated, setDraftHydrated] = useState(false)
+    const [discardDraftOpen, setDiscardDraftOpen] = useState(false)
+    const [cancelDraftOpen, setCancelDraftOpen] = useState(false)
+    const [cancelDraftPending, setCancelDraftPending] = useState(false)
+    const [cancelDraftError, setCancelDraftError] = useState<string | null>(null)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+    // Cada intento rechazado incrementa el contador; el hook compartido lleva el
+    // foco y el scroll al primer error (design.md §9, espacios.md §11).
+    const [submitAttempt, setSubmitAttempt] = useState(0)
+    // Sólo se incrementa cuando el intento se rechaza, así que siempre hay un
+    // error visible que reclamar.
+    const rejectAttempt = useCallback(() => setSubmitAttempt((current) => current + 1), [])
+    useScrollToFirstError(submitAttempt, true, scrollContainerRef, {
+        focus: true,
+        block: 'center',
+    })
+    const previousCurrencyRef = useRef(form.currency)
+    const draftBaselineRef = useRef<string | null>(null)
+    const draftExistedAtOpenRef = useRef(false)
+    const initializedOpenRef = useRef(false)
+    const hydrationRunRef = useRef(0)
 
-    const draftStorageKey = draftKey ? `finp:space-entry-draft:${draftKey}` : undefined
+    const legacyDraftStorageKey = draftKey ? `finp:space-entry-draft:${draftKey}` : undefined
+    const fallbackDraftStorageKey = draftKey ? `finp:space-entry-draft-fallback:v2:${draftKey}` : undefined
+    const draftApi = useSpaceEntryDraft({
+        spaceId,
+        expectedSpaceRevision: spaceRevision,
+    })
+    const {
+        draft: persistedDraft,
+        loading: draftLoading,
+        saveState: draftSaveState,
+        error: draftError,
+        load: loadDraft,
+        save: saveDraft,
+        discard: discardDraft,
+        uploadAttachment: uploadDraftAttachment,
+        removeAttachment: removeDraftAttachment,
+        setDraft: setPersistedDraft,
+    } = draftApi
 
     useEffect(() => {
-        attachmentsRef.current = attachments
-    }, [attachments])
-
-    useEffect(() => {
-        return () => {
-            attachmentsRef.current.forEach(revokeAttachment)
+        if (!open) {
+            initializedOpenRef.current = false
+            hydrationRunRef.current += 1
+            return
         }
-    }, [])
-
-    useEffect(() => {
-        if (open) return
-        setAttachments((previous) => {
-            previous.forEach(revokeAttachment)
-            return previous.length > 0 ? [] : previous
-        })
-    }, [open])
-
-    useEffect(() => {
-        if (!open) return
+        if (initializedOpenRef.current) return
+        initializedOpenRef.current = true
+        const hydrationRun = ++hydrationRunRef.current
 
         setSubmitting(false)
         setError(null)
         setHasSubsequentSettlementWarning(false)
+        setStepIndex(0)
+        setPreview(null)
+        setPreviewError(null)
+        setPersonalIntent('space_only')
+        setCandidates([])
+        setCandidatesError(null)
+        setCandidatesExcludedCount(0)
+        setDiscardDraftOpen(false)
+        setCancelDraftOpen(false)
+        setCancelDraftPending(false)
+        setCancelDraftError(null)
+        draftExistedAtOpenRef.current = false
 
         // Edit mode: pre-populate form from initialData
         if (mode === 'edit' && initialData) {
-            const activeIds = new Set(activeParticipants.map((p) => extractId(p._id) ?? ''))
+            const knownIds = new Set(availableParticipants.map((p) => extractId(p._id) ?? ''))
             setForm({
                 type: 'expense',
                 title: initialData.title,
@@ -377,12 +564,16 @@ export function SpaceEntryDialog({
                 amount: initialData.amount,
                 currency: initialData.currency,
                 exchangeRate: initialData.exchangeRate,
-                date: initialData.date instanceof Date ? initialData.date : new Date(initialData.date),
+                date: initialData.dateKey
+                    ? dateKeyToClientDate(initialData.dateKey)
+                    : initialData.date instanceof Date
+                        ? initialData.date
+                        : new Date(initialData.date),
                 spaceCategoryId: extractId(initialData.spaceCategoryId) ?? undefined,
                 paidByParticipantId: extractId(initialData.paidByParticipantId) ?? undefined,
                 sharedWithParticipantIds: (initialData.sharedWithParticipantIds ?? [])
                     .map((id) => extractId(id) ?? '')
-                    .filter((id) => id && activeIds.has(id)),
+                    .filter((id) => id && knownIds.has(id)),
                 splitMode: spaceMode === 'solo' ? 'none' : initialData.splitMode,
                 splitAllocations: (initialData.splitAllocations ?? [])
                     .map((a) => ({
@@ -396,10 +587,8 @@ export function SpaceEntryDialog({
                 linkedTransactionId: undefined,
             })
             setHasSubsequentSettlementWarning(initialHasSubsequentSettlement ?? false)
-            setAttachments((previous) => {
-                previous.forEach(revokeAttachment)
-                return []
-            })
+            setDraftAttachmentsBlocked(false)
+            setDraftHydrated(true)
             return
         }
 
@@ -410,35 +599,127 @@ export function SpaceEntryDialog({
             defaultSplitMode,
             spaceMode,
         })
-        const savedDraft =
-            draftStorageKey && typeof window !== 'undefined'
-                ? window.sessionStorage.getItem(draftStorageKey)
-                : null
+        setForm(defaults)
+        setDraftAttachmentsBlocked(false)
 
-        setForm(
-            savedDraft
-                ? sanitizeDraft({
-                      raw: savedDraft,
-                      defaults,
-                      activeParticipants,
-                      spaceMode,
-                  })
+        if (contractVersion !== 2) {
+            const savedDraft =
+                legacyDraftStorageKey && typeof window !== 'undefined'
+                    ? window.sessionStorage.getItem(legacyDraftStorageKey)
+                    : null
+            const nextForm = savedDraft
+                ? sanitizeDraft({ raw: savedDraft, defaults, activeParticipants, spaceMode })
                 : defaults
-        )
-        setAttachments((previous) => {
-            previous.forEach(revokeAttachment)
-            return []
-        })
+            setForm(nextForm)
+            setPersonalIntent(personalIntentFromForm(nextForm))
+            draftBaselineRef.current = formFingerprint(nextForm, 1)
+            setDraftHydrated(true)
+            return
+        }
+
+        setDraftHydrated(false)
+        void loadDraft()
+            .then((serverDraft) => {
+                if (hydrationRunRef.current !== hydrationRun) return
+                draftExistedAtOpenRef.current = Boolean(serverDraft)
+                let nextForm = defaults
+                let nextStep: 1 | 2 | 3 | 4 = 1
+
+                if (serverDraft) {
+                    nextForm = sanitizeDraft({
+                        raw: JSON.stringify(draftPayloadFromDto(serverDraft)),
+                        defaults,
+                        activeParticipants,
+                        spaceMode,
+                    })
+                    nextStep = serverDraft.step
+                } else if (typeof window !== 'undefined') {
+                    let recoveredFallback = false
+                    const cached = fallbackDraftStorageKey
+                        ? window.localStorage.getItem(fallbackDraftStorageKey)
+                        : null
+                    if (cached) {
+                        try {
+                            const parsed = JSON.parse(cached) as { form?: EntryDraftPayload; step?: 1 | 2 | 3 | 4 }
+                            if (parsed.form) {
+                                nextForm = sanitizeDraft({
+                                    raw: JSON.stringify(parsed.form),
+                                    defaults,
+                                    activeParticipants,
+                                    spaceMode,
+                                })
+                                recoveredFallback = true
+                            }
+                            if (parsed.step && [1, 2, 3, 4].includes(parsed.step)) nextStep = parsed.step
+                        } catch {
+                            if (fallbackDraftStorageKey) {
+                                window.localStorage.removeItem(fallbackDraftStorageKey)
+                            }
+                        }
+                    }
+                    if (!recoveredFallback && legacyDraftStorageKey) {
+                        const legacyDraft = window.sessionStorage.getItem(legacyDraftStorageKey)
+                        if (legacyDraft) {
+                            nextForm = sanitizeDraft({
+                                raw: legacyDraft,
+                                defaults,
+                                activeParticipants,
+                                spaceMode,
+                            })
+                        }
+                    }
+                }
+
+                setForm(nextForm)
+                setPersonalIntent(personalIntentFromForm(nextForm))
+                setStep(nextStep)
+                draftBaselineRef.current = formFingerprint(nextForm, nextStep)
+                setDraftHydrated(true)
+            })
+            .catch(() => {
+                if (hydrationRunRef.current !== hydrationRun) return
+                let nextForm = defaults
+                let nextStep: 1 | 2 | 3 | 4 = 1
+                if (fallbackDraftStorageKey && typeof window !== 'undefined') {
+                    const cached = window.localStorage.getItem(fallbackDraftStorageKey)
+                    if (cached) {
+                        try {
+                            const parsed = JSON.parse(cached) as { form?: EntryDraftPayload; step?: 1 | 2 | 3 | 4 }
+                            if (parsed.form) {
+                                nextForm = sanitizeDraft({
+                                    raw: JSON.stringify(parsed.form),
+                                    defaults,
+                                    activeParticipants,
+                                    spaceMode,
+                                })
+                            }
+                            if (parsed.step && [1, 2, 3, 4].includes(parsed.step)) nextStep = parsed.step
+                        } catch {
+                            window.localStorage.removeItem(fallbackDraftStorageKey)
+                        }
+                    }
+                }
+                setForm(nextForm)
+                setPersonalIntent(personalIntentFromForm(nextForm))
+                setStep(nextStep)
+                draftBaselineRef.current = formFingerprint(nextForm, nextStep)
+                setDraftHydrated(true)
+            })
     }, [
         activeParticipants,
+        availableParticipants,
         currentUserId,
         defaultCurrency,
         defaultSplitMode,
-        draftStorageKey,
+        contractVersion,
+        fallbackDraftStorageKey,
         initialData,
         initialHasSubsequentSettlement,
+        legacyDraftStorageKey,
+        loadDraft,
         mode,
         open,
+        setStep,
         spaceMode,
     ])
 
@@ -475,27 +756,64 @@ export function SpaceEntryDialog({
             currency: spaceCurrencies[0] ?? reportingCurrency,
             personalAccountId: undefined,
             categoryId: undefined,
+            installmentCount: undefined,
+            firstClosingMonth: undefined,
+            installmentQuoteAmount: undefined,
         }))
     }, [form.currency, reportingCurrency, spaceCurrencies])
 
-    const paidByParticipant = activeParticipants.find(
+    const activeQuote = useMemo(
+        () => quotes?.quotes.find((quote) =>
+            quote.sourceCurrency === form.currency &&
+            quote.targetCurrency === reportingCurrency
+        ),
+        [form.currency, quotes?.quotes, reportingCurrency]
+    )
+    const automaticQuoteSelected = Boolean(
+        activeQuote?.status === 'current' && Number(activeQuote.rate) === form.exchangeRate
+    )
+
+    useEffect(() => {
+        const currencyChanged = previousCurrencyRef.current !== form.currency
+        previousCurrencyRef.current = form.currency
+        if (form.currency === reportingCurrency) {
+            if (form.exchangeRate !== undefined) {
+                setForm((previous) => ({ ...previous, exchangeRate: undefined }))
+            }
+            return
+        }
+        if (activeQuote?.status !== 'current') return
+        if (!currencyChanged && form.exchangeRate !== undefined) return
+        setForm((previous) => ({ ...previous, exchangeRate: Number(activeQuote.rate) }))
+    }, [activeQuote?.rate, activeQuote?.status, form.currency, form.exchangeRate, reportingCurrency])
+
+    const paidByParticipant = availableParticipants.find(
         (participant) => extractId(participant._id) === form.paidByParticipantId
     )
     const isCurrentUserPayer = extractId(paidByParticipant?.userId) === currentUserId
-    const initialLinkedTransactionImpactsCurrentUser = Boolean(
-        initialData?.linkedTransactionId &&
-        currentUserId &&
-        extractId(activeParticipants.find(
-            (participant) => extractId(participant._id) === extractId(initialData.paidByParticipantId)
-        )?.userId) === currentUserId
-    )
     const filteredAccounts = useMemo(
         () =>
-            accounts.filter((account) =>
-                (account.supportedCurrencies ?? [account.currency]).includes(form.currency as never)
+            accounts.filter((account) => account.isActive !== false &&
+                supportsCurrency(account, form.currency as Currency)
             ),
         [accounts, form.currency]
     )
+    const selectedPersonalAccount = useMemo(
+        () => filteredAccounts.find((account) => extractId(account._id) === form.personalAccountId),
+        [filteredAccounts, form.personalAccountId]
+    )
+
+    useEffect(() => {
+        if (accountsLoading || !form.personalAccountId || selectedPersonalAccount) return
+        setForm((previous) => ({
+            ...previous,
+            personalAccountId: undefined,
+            categoryId: undefined,
+            installmentCount: undefined,
+            firstClosingMonth: undefined,
+            installmentQuoteAmount: undefined,
+        }))
+    }, [accountsLoading, form.personalAccountId, selectedPersonalAccount])
     const filteredCategories = useMemo(
         () => categories.filter((category) => category.type === 'expense'),
         [categories]
@@ -508,6 +826,217 @@ export function SpaceEntryDialog({
         () => filteredCategories.find((category) => extractId(category._id) === form.spaceCategoryId),
         [filteredCategories, form.spaceCategoryId]
     )
+
+    // Cambiar de paso lleva el foco al encabezado del paso (`espacios.md` §11).
+    // No corre al abrir ni al rehidratar un borrador: reanudar no debe saltar
+    // sobre el contenido que el usuario todavía no vio.
+    const announcedStepRef = useRef<number | null>(null)
+    useEffect(() => {
+        if (!open || mode !== 'create') {
+            announcedStepRef.current = null
+            return
+        }
+        // Hasta que el borrador termina de hidratar, el paso todavía puede
+        // cambiar solo: se registra sin mover el foco.
+        if (!draftHydrated || announcedStepRef.current === null) {
+            announcedStepRef.current = stepIndex
+            return
+        }
+        if (announcedStepRef.current === stepIndex) return
+        announcedStepRef.current = stepIndex
+        stepHeadingRef.current?.focus()
+    }, [draftHydrated, mode, open, stepIndex])
+
+    const hasSplitStep = steps.some((item) => item.id === 'split')
+    /**
+     * La autoridad de si hace falta una cuenta personal es la revisión del
+     * servidor: sólo una salida real la exige. Mientras no hay revisión se
+     * asume que sí, que es el caso del pagador.
+     */
+    const requiresPersonalAccount = preview ? preview.accountImpactAmount > 0 : true
+
+    const handlePersonalIntentChange = (next: SpaceEntryPersonalIntent) => {
+        setPersonalIntent(next)
+        clearFieldError('personalIntent')
+        setForm((previous) => ({
+            ...previous,
+            personalAccountId: next === 'create_transaction' ? previous.personalAccountId : undefined,
+            categoryId: next === 'create_transaction' ? previous.categoryId : undefined,
+            linkedTransactionId: next === 'link_existing' ? previous.linkedTransactionId : undefined,
+            installmentCount: next === 'create_transaction' ? previous.installmentCount : undefined,
+            firstClosingMonth: next === 'create_transaction' ? previous.firstClosingMonth : undefined,
+            installmentQuoteAmount: next === 'create_transaction' ? previous.installmentQuoteAmount : undefined,
+        }))
+    }
+
+    useEffect(() => {
+        const previewEligible =
+            mode === 'edit' ||
+            (mode === 'create' && (currentStep.id === 'extras' || currentStep.id === 'review'))
+        if (!open || !previewEligible || contractVersion !== 2) {
+            setPreviewLoading(false)
+            return
+        }
+        const sharedParticipantIds = form.sharedWithParticipantIds?.length
+            ? form.sharedWithParticipantIds
+            : form.paidByParticipantId
+                ? [form.paidByParticipantId]
+                : []
+        if (
+            !form.paidByParticipantId ||
+            !sharedParticipantIds.length ||
+            !Number.isFinite(form.amount) ||
+            form.amount <= 0
+        ) {
+            setPreview(null)
+            setPreviewLoading(false)
+            return
+        }
+        let cancelled = false
+        setPreview(null)
+        setPreviewLoading(true)
+        setPreviewError(null)
+        const timer = window.setTimeout(async () => {
+            try {
+                const response = await apiJson<{ data: SpaceEntryPreviewDto }>(
+                    `/api/spaces/${spaceId}/entries/preview`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: form.amount,
+                            money: moneyFromDecimal(form.currency, form.amount),
+                            currency: form.currency,
+                            exchangeRate: form.exchangeRate,
+                            exchangeRateDecimal: automaticQuoteSelected ? activeQuote?.rate : undefined,
+                            conversionSnapshot: automaticQuoteSelected && activeQuote ? {
+                                rate: activeQuote.rate,
+                                direction: activeQuote.direction,
+                                source: activeQuote.source,
+                                observedAt: activeQuote.observedAt,
+                                capturedAt: activeQuote.capturedAt,
+                                expiresAt: activeQuote.expiresAt,
+                                path: activeQuote.path,
+                            } : undefined,
+                            paidByParticipantId: form.paidByParticipantId,
+                            sharedWithParticipantIds: sharedParticipantIds,
+                            splitMode: form.splitMode,
+                            splitAllocations: form.splitAllocations,
+                            linkedTransactionId: form.linkedTransactionId,
+                        }),
+                    }
+                )
+                if (!cancelled) setPreview(response.data)
+            } catch (err) {
+                if (!cancelled) {
+                    setPreview(null)
+                    setPreviewError(err instanceof Error ? err.message : 'No se pudo calcular la revisión financiera.')
+                }
+            } finally {
+                if (!cancelled) setPreviewLoading(false)
+            }
+        }, 250)
+        return () => {
+            cancelled = true
+            window.clearTimeout(timer)
+        }
+    }, [
+        contractVersion,
+        activeQuote,
+        automaticQuoteSelected,
+        form.amount,
+        form.currency,
+        form.date,
+        form.exchangeRate,
+        form.linkedTransactionId,
+        form.paidByParticipantId,
+        form.sharedWithParticipantIds,
+        form.splitAllocations,
+        form.splitMode,
+        mode,
+        open,
+        previewRetryNonce,
+        spaceId,
+        currentStep.id,
+    ])
+
+    useEffect(() => {
+        if (
+            !open ||
+            mode !== 'create' ||
+            currentStep.id !== 'extras' ||
+            personalIntent !== 'link_existing' ||
+            !spaceTimezone
+        ) {
+            return
+        }
+        const sharedParticipantIds = form.sharedWithParticipantIds?.length
+            ? form.sharedWithParticipantIds
+            : form.paidByParticipantId
+                ? [form.paidByParticipantId]
+                : []
+        if (!form.paidByParticipantId || !sharedParticipantIds.length || !Number.isFinite(form.amount) || form.amount <= 0) {
+            setCandidates([])
+            setCandidatesExcludedCount(0)
+            setCandidatesLoading(false)
+            return
+        }
+        let cancelled = false
+        setCandidatesLoading(true)
+        setCandidatesError(null)
+        fetchLinkCandidatesForNewEntry({
+            spaceId,
+            amount: form.amount,
+            currency: form.currency,
+            paidByParticipantId: form.paidByParticipantId,
+            sharedWithParticipantIds: sharedParticipantIds,
+            splitMode: form.splitMode,
+            splitAllocations: form.splitAllocations,
+            dateKey: clientDateToDateKey(form.date),
+            timezone: spaceTimezone,
+        }).then((result) => {
+            if (cancelled) return
+            setCandidates(result.candidates)
+            const excludedTotal = result.excluded.amountMismatch
+                + result.excluded.operationalMismatch
+                + result.excluded.accountMismatch
+                + result.excluded.alreadyLinked
+            setCandidatesExcludedCount(excludedTotal)
+        }).catch((err) => {
+            if (cancelled) return
+            setCandidates([])
+            setCandidatesError(err instanceof Error ? err.message : 'No pudimos cargar tus transacciones.')
+        }).finally(() => {
+            if (!cancelled) setCandidatesLoading(false)
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [
+        candidatesRetryNonce,
+        form.amount,
+        form.currency,
+        form.date,
+        form.paidByParticipantId,
+        form.sharedWithParticipantIds,
+        form.splitAllocations,
+        form.splitMode,
+        mode,
+        open,
+        personalIntent,
+        spaceId,
+        spaceTimezone,
+        currentStep.id,
+    ])
+
+    useEffect(() => {
+        if (!form.linkedTransactionId || candidatesLoading) return
+        const selectedStillMatches = candidates.some(
+            (candidate) => candidate.transactionId === form.linkedTransactionId
+        )
+        if (selectedStillMatches) return
+        setForm((previous) => ({ ...previous, linkedTransactionId: undefined }))
+    }, [candidates, candidatesLoading, form.linkedTransactionId])
 
     useEffect(() => {
         if (!form.spaceCategoryId) return
@@ -587,7 +1116,7 @@ export function SpaceEntryDialog({
     }
 
     const applySplitPreset = (preset: SpaceEntryFormData['splitMode']) => {
-        const allParticipantIds = activeParticipants
+        const allParticipantIds = splitParticipants
             .map((participant) => extractId(participant._id) ?? '')
             .filter(Boolean)
 
@@ -652,67 +1181,191 @@ export function SpaceEntryDialog({
         })
     }
 
-    const clearDraft = () => {
-        if (!draftStorageKey || typeof window === 'undefined') return
-        window.sessionStorage.removeItem(draftStorageKey)
+    const clearLocalDraftCopies = useCallback(() => {
+        if (typeof window !== 'undefined') {
+            if (legacyDraftStorageKey) window.sessionStorage.removeItem(legacyDraftStorageKey)
+            if (fallbackDraftStorageKey) window.localStorage.removeItem(fallbackDraftStorageKey)
+        }
+    }, [fallbackDraftStorageKey, legacyDraftStorageKey])
+
+    const clearDraftCaches = useCallback(() => {
+        clearLocalDraftCopies()
+        setPersistedDraft(null)
+        onDraftChange?.(null)
+    }, [clearLocalDraftCopies, onDraftChange, setPersistedDraft])
+
+    const persistDraftSnapshot = useCallback(async (
+        snapshot: SpaceEntryFormData = form,
+        currentStep: 1 | 2 | 3 | 4 = step,
+        notify = false
+    ) => {
+        if (mode !== 'create') return null
+
+        const payload: EntryDraftPayload = {
+            ...snapshot,
+            amount: Number.isFinite(snapshot.amount) ? snapshot.amount : 0,
+            date: clientDateToDateKey(snapshot.date),
+        }
+
+        if (contractVersion !== 2) {
+            if (legacyDraftStorageKey && typeof window !== 'undefined') {
+                window.sessionStorage.setItem(legacyDraftStorageKey, JSON.stringify(payload))
+                if (notify) success('Borrador guardado')
+            }
+            return null
+        }
+
+        const fingerprint = formFingerprint(snapshot, currentStep)
+        if (!persistedDraft && draftBaselineRef.current === fingerprint) return null
+
+        try {
+            const saved = await saveDraft(
+                draftFieldsFromForm(snapshot, reportingCurrency, quotes),
+                currentStep
+            )
+            if (typeof window !== 'undefined') {
+                if (fallbackDraftStorageKey) window.localStorage.removeItem(fallbackDraftStorageKey)
+                if (legacyDraftStorageKey) window.sessionStorage.removeItem(legacyDraftStorageKey)
+            }
+            draftBaselineRef.current = fingerprint
+            onDraftChange?.(saved)
+            if (notify) success('Borrador guardado')
+            return saved
+        } catch (saveError) {
+            if (fallbackDraftStorageKey && typeof window !== 'undefined') {
+                window.localStorage.setItem(
+                    fallbackDraftStorageKey,
+                    JSON.stringify({ form: payload, step: currentStep })
+                )
+            }
+            throw saveError
+        }
+    }, [
+        contractVersion,
+        fallbackDraftStorageKey,
+        form,
+        legacyDraftStorageKey,
+        mode,
+        onDraftChange,
+        persistedDraft,
+        quotes,
+        reportingCurrency,
+        saveDraft,
+        step,
+        success,
+    ])
+
+    const handleSaveDraft = async () => {
+        setCancelDraftPending(true)
+        setCancelDraftError(null)
+        try {
+            await persistDraftSnapshot(form, step, true)
+            setCancelDraftOpen(false)
+            onOpenChange(false)
+        } catch (cause) {
+            setCancelDraftError(cause instanceof Error ? cause.message : 'No pudimos guardar el borrador.')
+        } finally {
+            setCancelDraftPending(false)
+        }
     }
 
-    const handleSaveDraft = () => {
-        if (!draftStorageKey || typeof window === 'undefined') {
+    const handleRetryDraftSave = async () => {
+        try {
+            await persistDraftSnapshot(form, step)
+        } catch {
+            // El hook mantiene el error visible y el fallback local conserva los datos.
+        }
+    }
+
+    const handleExitWithoutSaving = async () => {
+        setCancelDraftPending(true)
+        setCancelDraftError(null)
+        try {
+            if (!draftExistedAtOpenRef.current) {
+                if (persistedDraft) await discardDraft()
+                clearDraftCaches()
+            } else {
+                clearLocalDraftCopies()
+            }
+            setCancelDraftOpen(false)
+            onOpenChange(false)
+        } catch (cause) {
+            setCancelDraftError(cause instanceof Error ? cause.message : 'No pudimos salir sin guardar.')
+        } finally {
+            setCancelDraftPending(false)
+        }
+    }
+
+    const handleDialogOpenChange = (nextOpen: boolean) => {
+        if (nextOpen) {
+            onOpenChange(true)
+            return
+        }
+        if (mode !== 'create' || contractVersion !== 2 || !draftHydrated) {
             onOpenChange(false)
             return
         }
-
-        const payload: EntryDraftPayload = {
-            ...form,
-            amount: Number.isFinite(form.amount) ? form.amount : 0,
-            date: form.date.toISOString(),
+        const hasLocalChanges = draftBaselineRef.current !== formFingerprint(form, step)
+        const createdDraftDuringThisOpen = !draftExistedAtOpenRef.current && Boolean(persistedDraft)
+        if (!hasLocalChanges && !createdDraftDuringThisOpen) {
+            onOpenChange(false)
+            return
         }
-
-        window.sessionStorage.setItem(draftStorageKey, JSON.stringify(payload))
-        success('Borrador local guardado')
-        onOpenChange(false)
+        setCancelDraftError(null)
+        setCancelDraftOpen(true)
     }
 
-    const handleFilesSelected = (files: File[]) => {
-        const nextAttachments = files.map((file, index) => ({
-            id:
-                typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                    ? crypto.randomUUID()
-                    : `${Date.now()}-${index}`,
-            file,
-            previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-        }))
-        setAttachments((previous) => [...previous, ...nextAttachments])
-    }
-
-    const handleRemoveAttachment = (id: string) => {
-        setAttachments((previous) => {
-            const target = previous.find((attachment) => attachment.id === id)
-            if (target) revokeAttachment(target)
-            return previous.filter((attachment) => attachment.id !== id)
-        })
-    }
-
-    const uploadDraftAttachments = async (entryId: string, draftAttachments: SpaceAttachmentDraft[]) => {
-        if (draftAttachments.length === 0) return true
-
-        let allUploaded = true
-        for (const attachment of draftAttachments) {
-            try {
-                const formData = new FormData()
-                formData.append('file', attachment.file)
-                await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/attachments`, {
-                    method: 'POST',
-                    body: formData,
-                })
-            } catch {
-                allUploaded = false
-            }
+    const handleDiscardDraft = async () => {
+        try {
+            await discardDraft()
+            clearDraftCaches()
+            setDiscardDraftOpen(false)
+            success('Borrador descartado')
+            onOpenChange(false)
+        } catch (discardError) {
+            setError(discardError instanceof Error ? discardError.message : 'No pudimos descartar el borrador.')
+            setDiscardDraftOpen(false)
         }
+    }
 
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        return allUploaded
+    const handleReloadDraft = async () => {
+        try {
+            const latest = await loadDraft()
+            if (!latest) return
+            const defaults = buildDefaultForm({
+                activeParticipants,
+                currentUserId,
+                defaultCurrency,
+                defaultSplitMode,
+                spaceMode,
+            })
+            const nextForm = sanitizeDraft({
+                raw: JSON.stringify(draftPayloadFromDto(latest)),
+                defaults,
+                activeParticipants,
+                spaceMode,
+            })
+            setForm(nextForm)
+            setPersonalIntent(personalIntentFromForm(nextForm))
+            setStep(latest.step)
+            draftBaselineRef.current = formFingerprint(nextForm, latest.step)
+            draftExistedAtOpenRef.current = true
+        } catch {
+            // loadDraft ya expone el error recuperable en el panel.
+        }
+    }
+
+    const handleDraftAttachmentUpload = async (
+        file: File,
+        idempotencyKey: string,
+        attachmentId?: string
+    ) => {
+        let saved = await persistDraftSnapshot(form, step)
+        if (!saved) {
+            saved = await saveDraft(draftFieldsFromForm(form, reportingCurrency, quotes), step)
+            onDraftChange?.(saved)
+        }
+        await uploadDraftAttachment({ file, idempotencyKey, attachmentId })
     }
 
     const handleEditSubmit = async () => {
@@ -757,11 +1410,19 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
-            requestAnimationFrame(() => {
-                scrollContainerRef.current
-                    ?.querySelector<HTMLElement>('.text-destructive')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            })
+            rejectAttempt()
+            return
+        }
+
+        // La edición cambia balances y deuda: usa la misma revisión vigente que el alta.
+        if (contractVersion === 2 && (previewLoading || !preview)) {
+            setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
+            rejectAttempt()
+            return
+        }
+        if (preview?.linkExisting && !preview.linkExisting.compatible) {
+            setError('La transacción elegida no coincide con la revisión financiera. Elegí otra o creá una nueva.')
+            rejectAttempt()
             return
         }
 
@@ -770,6 +1431,47 @@ export function SpaceEntryDialog({
         setFieldErrors({})
 
         try {
+            if (contractVersion === 2) {
+                await apiJson(`/api/spaces/${spaceId}/entries/${entryId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': crypto.randomUUID(),
+                    },
+                    body: JSON.stringify({
+                        expectedRevision: initialData.revision ?? 0,
+                        title: form.title,
+                        description: form.description || undefined,
+                        amount: form.amount,
+                        money: moneyFromDecimal(form.currency, form.amount),
+                        currency: form.currency,
+                        exchangeRate: form.exchangeRate,
+                        dateKey: clientDateToDateKey(form.date),
+                        spaceCategoryId: form.spaceCategoryId,
+                        paidByParticipantId: form.paidByParticipantId,
+                        sharedWithParticipantIds: form.sharedWithParticipantIds?.length
+                            ? form.sharedWithParticipantIds
+                            : form.paidByParticipantId
+                                ? [form.paidByParticipantId]
+                                : [],
+                        splitMode: spaceMode === 'solo' ? 'none' : form.splitMode,
+                        splitAllocations:
+                            form.splitMode === 'percentage' || form.splitMode === 'fixed'
+                                ? normalizedAllocations
+                                : undefined,
+                        notes: form.notes || undefined,
+                    }),
+                })
+                invalidateData(SPACE_INVALIDATION_TAGS)
+                onEditComplete?.({
+                    ...initialData,
+                    ...form,
+                    status: 'recorded',
+                    revision: (initialData.revision ?? 0) + 1,
+                } as ISpaceEntry)
+                onOpenChange(false)
+                return
+            }
             const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -793,6 +1495,97 @@ export function SpaceEntryDialog({
             setError(err instanceof Error ? err.message : 'No pudimos guardar los cambios.')
         } finally {
             setSubmitting(false)
+        }
+    }
+
+    const parseWithSchema = () => {
+        const parsed = spaceEntrySchema.safeParse({ ...form, type: 'expense' })
+        if (parsed.success) return null
+        const nextErrors: Record<string, string> = {}
+        for (const issue of parsed.error.issues) {
+            const key = String(issue.path[0] ?? '')
+            if (key && !nextErrors[key]) nextErrors[key] = issue.message
+        }
+        return nextErrors
+    }
+
+    /**
+     * La intención personal ya elegida tiene que poder confirmarse: el servidor
+     * exige cuenta cuando la revisión indica salida real, y un vínculo sin
+     * transacción elegida no es un vínculo (`espacios.md` §10).
+     */
+    const validatePersonalIntent = (): Record<string, string> | null => {
+        if (!isCurrentUserPayer) return null
+        if (personalIntent === 'create_transaction') {
+            if (!requiresPersonalAccount) return null
+            if (filteredAccounts.length === 0) {
+                return {
+                    personalIntent: `Necesitás una cuenta en ${form.currency} para registrarlo en tu Finp, o elegí «Sólo en el Espacio».`,
+                }
+            }
+            if (!form.personalAccountId) {
+                return { personalIntent: 'Elegí la cuenta o tarjeta desde la que pagaste.' }
+            }
+            if (selectedPersonalAccount?.type === 'credit_card' && !form.firstClosingMonth) {
+                return { personalIntent: 'Elegí el mes de la primera cuota.' }
+            }
+            return null
+        }
+        if (personalIntent === 'link_existing' && !form.linkedTransactionId) {
+            return { personalIntent: 'Elegí una transacción compatible o cambiá la opción.' }
+        }
+        return null
+    }
+
+    const goToStep = (index: number) => {
+        setFieldErrors({})
+        setStepIndex(Math.max(0, Math.min(index, steps.length - 1)))
+    }
+
+    const handleNextStep = () => {
+        if (mode === 'edit') return
+
+        if (currentStep.id === 'data') {
+            const nextErrors: Record<string, string> = {}
+            if (!form.title.trim()) nextErrors.title = 'Ingresá una descripción.'
+            if (!Number.isFinite(form.amount) || form.amount <= 0) nextErrors.amount = 'Ingresá un monto mayor a cero.'
+            if (!form.paidByParticipantId) nextErrors.paidByParticipantId = 'Elegí quién pagó.'
+            if (form.currency !== reportingCurrency && !form.exchangeRate) {
+                nextErrors.exchangeRate = 'Ingresá la cotización para la moneda de reporte.'
+            }
+            // Sin paso de reparto —un Espacio `solo`— el esquema completo se
+            // valida acá; si no, nada lo verificaría antes de la revisión.
+            if (!Object.keys(nextErrors).length && !hasSplitStep) {
+                Object.assign(nextErrors, parseWithSchema() ?? {})
+            }
+            if (Object.keys(nextErrors).length) {
+                setFieldErrors(nextErrors)
+                rejectAttempt()
+                return
+            }
+            goToStep(stepIndex + 1)
+            return
+        }
+
+        if (currentStep.id === 'split') {
+            const nextErrors = parseWithSchema()
+            if (nextErrors) {
+                setFieldErrors(nextErrors)
+                rejectAttempt()
+                return
+            }
+            goToStep(stepIndex + 1)
+            return
+        }
+
+        if (currentStep.id === 'extras') {
+            const nextErrors = validatePersonalIntent()
+            if (nextErrors) {
+                setFieldErrors(nextErrors)
+                rejectAttempt()
+                return
+            }
+            goToStep(stepIndex + 1)
         }
     }
 
@@ -831,12 +1624,18 @@ export function SpaceEntryDialog({
             }
             setFieldErrors(nextFieldErrors)
             setError(null)
-            // Scroll to first inline error after render
-            requestAnimationFrame(() => {
-                scrollContainerRef.current
-                    ?.querySelector<HTMLElement>('.text-destructive')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            })
+            rejectAttempt()
+            return
+        }
+
+        if (contractVersion === 2 && (previewLoading || !preview)) {
+            setError(previewError ?? 'Esperá a que termine la revisión financiera antes de confirmar.')
+            rejectAttempt()
+            return
+        }
+        if (preview?.linkExisting && !preview.linkExisting.compatible) {
+            setError('La transacción elegida no coincide con la revisión financiera. Elegí otra o creá una nueva.')
+            rejectAttempt()
             return
         }
 
@@ -845,22 +1644,26 @@ export function SpaceEntryDialog({
         setFieldErrors({})
 
         try {
-            const entry = await onSubmit({
+            const submission = {
                 ...parsed.data,
                 categoryId: parsed.data.personalAccountId ? parsed.data.categoryId : undefined,
-            })
-            const entryId = extractId(entry._id)
-            if (entryId && attachmentsRef.current.length > 0) {
-                const uploaded = await uploadDraftAttachments(entryId, attachmentsRef.current)
-                if (!uploaded) {
-                    warning('El movimiento se guardó, pero algún comprobante no pudo subirse.')
-                }
             }
-            clearDraft()
-            setAttachments((previous) => {
-                previous.forEach(revokeAttachment)
-                return []
-            })
+            const savedDraft = contractVersion === 2
+                ? await persistDraftSnapshot(submission, SPACE_ENTRY_STEP_NUMBER.review)
+                : null
+            if (contractVersion === 2 && !savedDraft) {
+                throw new Error('No pudimos preparar el borrador para publicarlo.')
+            }
+            await onSubmit(
+                submission,
+                savedDraft ? {
+                    draftPublication: {
+                        draftId: savedDraft.id,
+                        expectedRevision: savedDraft.revision,
+                    },
+                } : undefined
+            )
+            clearDraftCaches()
             onOpenChange(false)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No pudimos guardar el gasto.')
@@ -869,11 +1672,237 @@ export function SpaceEntryDialog({
         }
     }
 
+    const linkedCandidate = candidates.find(
+        (candidate) => candidate.transactionId === form.linkedTransactionId
+    )
+    const personalIntentSummary = !isCurrentUserPayer
+        ? undefined
+        : personalIntent === 'link_existing'
+            ? linkedCandidate
+                ? `Se vinculará con «${linkedCandidate.description}» de tu Finp.`
+                : 'Se vinculará con una transacción existente de tu Finp.'
+            : personalIntent === 'create_transaction'
+                ? selectedPersonalAccount
+                    ? selectedPersonalAccount.type === 'credit_card'
+                        ? `Se creará un plan de ${form.installmentCount ?? 1} cuota${(form.installmentCount ?? 1) === 1 ? '' : 's'} en ${selectedPersonalAccount.name}.`
+                        : `Se creará una transacción en ${selectedPersonalAccount.name}.`
+                    : 'Se registrará como gasto operacional en tu Finp, sin mover una cuenta.'
+                : 'Queda sólo en el Espacio; podés decidir tu Finp después.'
+
+    const dataStep = (
+        <SpaceEntryDataStep
+            amount={form.amount}
+            currency={form.currency}
+            date={form.date instanceof Date ? form.date : undefined}
+            title={form.title}
+            paidByParticipantId={form.paidByParticipantId}
+            spaceCategoryId={form.spaceCategoryId}
+            exchangeRate={form.exchangeRate}
+            reportingCurrency={reportingCurrency}
+            spaceCurrencies={spaceCurrencies}
+            payerParticipants={payerParticipants}
+            spaceCategories={filteredCategories}
+            datePickerOpen={datePickerOpen}
+            fieldErrors={fieldErrors}
+            activeQuote={activeQuote}
+            automaticQuoteSelected={automaticQuoteSelected}
+            onAmountChange={(value) => {
+                setForm((previous) => ({ ...previous, amount: value }))
+                clearFieldError('amount')
+            }}
+            onCurrencyChange={(currency) => {
+                setForm((previous) => ({
+                    ...previous,
+                    currency,
+                    personalAccountId: undefined,
+                    categoryId: undefined,
+                    installmentCount: undefined,
+                    firstClosingMonth: undefined,
+                    installmentQuoteAmount: undefined,
+                }))
+                clearFieldError('currency')
+            }}
+            onDateChange={(date) => setForm((previous) => ({ ...previous, date }))}
+            onDatePickerOpenChange={(nextOpen) => {
+                if (nextOpen) clearFieldError('date')
+                setDatePickerOpen(nextOpen)
+            }}
+            onTitleChange={(value) => {
+                setForm((previous) => ({ ...previous, title: value }))
+                clearFieldError('title')
+            }}
+            onPaidByChange={(value) => {
+                clearFieldError('paidByParticipantId')
+                setForm((previous) => {
+                    const nextIsCurrentUser =
+                        extractId(
+                            availableParticipants.find(
+                                (participant) => extractId(participant._id) === value
+                            )?.userId
+                        ) === currentUserId
+                    const shouldMoveResponsibility =
+                        previous.splitMode === 'none' &&
+                        (!previous.sharedWithParticipantIds?.[0] ||
+                            previous.sharedWithParticipantIds[0] === previous.paidByParticipantId)
+
+                    return {
+                        ...previous,
+                        paidByParticipantId: value,
+                        sharedWithParticipantIds: shouldMoveResponsibility
+                            ? [value]
+                            : previous.sharedWithParticipantIds,
+                        personalAccountId: nextIsCurrentUser ? previous.personalAccountId : undefined,
+                        installmentCount: nextIsCurrentUser ? previous.installmentCount : undefined,
+                        firstClosingMonth: nextIsCurrentUser ? previous.firstClosingMonth : undefined,
+                        installmentQuoteAmount: nextIsCurrentUser ? previous.installmentQuoteAmount : undefined,
+                    }
+                })
+            }}
+            onSpaceCategoryChange={(spaceCategoryId) =>
+                setForm((previous) => ({ ...previous, spaceCategoryId }))
+            }
+            onExchangeRateChange={(exchangeRate) => {
+                setForm((previous) => ({ ...previous, exchangeRate }))
+                clearFieldError('exchangeRate')
+            }}
+        />
+    )
+
+    const splitStep = (
+        <SpaceEntrySplitStep
+            participants={splitParticipants}
+            amount={Number.isFinite(form.amount) ? form.amount : 0}
+            currency={form.currency}
+            paidByParticipantId={form.paidByParticipantId}
+            selectedParticipantIds={form.sharedWithParticipantIds ?? []}
+            splitMode={form.splitMode}
+            allocations={form.splitAllocations}
+            error={fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations}
+            onToggleParticipant={(id) => {
+                toggleSharedParticipant(id)
+                clearFieldError('sharedWithParticipantIds')
+                clearFieldError('splitAllocations')
+            }}
+            onResponsibleChange={setResponsibleParticipant}
+            onApplyPreset={(preset) => {
+                applySplitPreset(preset)
+                clearFieldError('splitAllocations')
+            }}
+            onAllocationsChange={(allocations) => {
+                updateSplitAllocations(allocations)
+                clearFieldError('splitAllocations')
+            }}
+        />
+    )
+
+    const reviewStep = (
+        <SpaceEntryReviewStep
+            entryType={form.type}
+            amount={form.amount}
+            currency={form.currency}
+            reportingCurrency={reportingCurrency}
+            formattedDate={formatFinancialDate(form.date)}
+            payerName={paidByParticipant?.displayName}
+            personalIntentSummary={mode === 'create' ? personalIntentSummary : undefined}
+            preview={preview}
+            previewLoading={previewLoading}
+            previewError={previewError}
+            showFinancialReview={mode === 'create' || contractVersion === 2}
+            onPreviewRetry={() => setPreviewRetryNonce((current) => current + 1)}
+        />
+    )
+
+    const renderCurrentStep = () => {
+        if (currentStep.id === 'data') return dataStep
+        if (currentStep.id === 'split') return splitStep
+        if (currentStep.id === 'review') return reviewStep
+        return (
+            <SpaceEntryExtrasStep
+                isCurrentUserPayer={isCurrentUserPayer}
+                intent={personalIntent}
+                personalAccountId={form.personalAccountId}
+                categoryId={form.categoryId}
+                linkedTransactionId={form.linkedTransactionId}
+                currency={form.currency}
+                amount={Number.isFinite(form.amount) ? form.amount : 0}
+                operationalAmount={preview?.operationalAmount}
+                purchaseDate={form.date instanceof Date ? form.date : new Date(form.date)}
+                installmentCount={form.installmentCount ?? 1}
+                firstClosingMonth={form.firstClosingMonth ?? ''}
+                installmentQuoteAmount={form.installmentQuoteAmount}
+                requiresPersonalAccount={requiresPersonalAccount}
+                accounts={filteredAccounts}
+                personalCategories={personalExpenseCategories}
+                intentError={fieldErrors.personalIntent}
+                linkIncompatible={Boolean(preview?.linkExisting && !preview.linkExisting.compatible)}
+                candidates={candidates}
+                candidatesLoading={candidatesLoading}
+                candidatesError={candidatesError}
+                candidatesExcludedCount={candidatesExcludedCount}
+                attachments={persistedDraft?.attachments ?? []}
+                attachmentsDisabled={submitting || draftLoading}
+                onIntentChange={handlePersonalIntentChange}
+                onPersonalAccountChange={(personalAccountId) => {
+                    clearFieldError('personalIntent')
+                    const selectedAccount = filteredAccounts.find(
+                        (account) => extractId(account._id) === personalAccountId
+                    )
+                    setForm((previous) => ({
+                        ...previous,
+                        personalAccountId,
+                        linkedTransactionId: undefined,
+                        installmentCount: selectedAccount?.type === 'credit_card'
+                            ? previous.installmentCount ?? 1
+                            : undefined,
+                        firstClosingMonth: selectedAccount?.type === 'credit_card'
+                            ? previous.firstClosingMonth ?? getDefaultFirstClosingMonth(previous.date)
+                            : undefined,
+                        installmentQuoteAmount: selectedAccount?.type === 'credit_card'
+                            ? previous.installmentQuoteAmount
+                            : undefined,
+                    }))
+                }}
+                onCategoryChange={(categoryId) => setForm((previous) => ({ ...previous, categoryId }))}
+                onLinkedTransactionChange={(linkedTransactionId) => {
+                    clearFieldError('personalIntent')
+                    setForm((previous) => ({
+                        ...previous,
+                        linkedTransactionId,
+                        personalAccountId: undefined,
+                        categoryId: undefined,
+                        installmentCount: undefined,
+                        firstClosingMonth: undefined,
+                        installmentQuoteAmount: undefined,
+                    }))
+                }}
+                onInstallmentCountChange={(installmentCount) =>
+                    setForm((previous) => ({ ...previous, installmentCount }))
+                }
+                onFirstClosingMonthChange={(firstClosingMonth) => {
+                    clearFieldError('personalIntent')
+                    setForm((previous) => ({ ...previous, firstClosingMonth }))
+                }}
+                onInstallmentQuoteAmountChange={(installmentQuoteAmount) =>
+                    setForm((previous) => ({ ...previous, installmentQuoteAmount }))
+                }
+                onTotalAmountChange={(amount) => setForm((previous) => ({ ...previous, amount }))}
+                onCandidatesRetry={() => setCandidatesRetryNonce((current) => current + 1)}
+                onAttachmentUpload={handleDraftAttachmentUpload}
+                onAttachmentRemove={async (attachmentId) => {
+                    await removeDraftAttachment(attachmentId)
+                }}
+                onAttachmentsBlockingChange={setDraftAttachmentsBlocked}
+                notes={form.notes ?? ''}
+                onNotesChange={(notes) => setForm((previous) => ({ ...previous, notes }))}
+            />
+        )
+    }
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={handleDialogOpenChange}>
             <DialogContent
                 variant="fullscreen-mobile"
-                className="max-w-[1120px] gap-0 overflow-hidden p-0 sm:max-h-[94vh] sm:max-w-[1120px]"
+                className="max-w-[1120px] gap-0 overflow-hidden p-0 [&_[data-slot=dialog-close]]:size-11 sm:max-h-[94vh] sm:max-w-[1120px] sm:[&_[data-slot=dialog-close]]:size-7"
             >
                 <div className="flex h-full min-h-0 flex-col sm:h-[94vh]">
                     {/* ── Header ── */}
@@ -893,12 +1922,103 @@ export function SpaceEntryDialog({
                                 </DialogDescription>
                             </div>
                         </DialogHeader>
-                        {mode === 'edit' && initialLinkedTransactionImpactsCurrentUser ? (
-                            <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                <span>
-                                    Este movimiento impactó en tu Finp personal. Revisá la transacción vinculada para mantener tus finanzas consistentes.
-                                </span>
+                        {mode === 'create' ? (
+                            <SpaceEntryStepper
+                                steps={steps}
+                                currentIndex={stepIndex}
+                                onSelectStep={goToStep}
+                            />
+                        ) : null}
+                        {mode === 'create' && contractVersion === 2 && (
+                            draftLoading ||
+                            Boolean(persistedDraft) ||
+                            draftSaveState === 'saving' ||
+                            Boolean(draftError)
+                        ) ? (
+                            <div className="mt-3 space-y-2">
+                                <p
+                                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                                    aria-live="polite"
+                                    data-testid="space-entry-draft-save-status"
+                                >
+                                    {draftLoading || draftSaveState === 'saving' ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                        <Save className="h-3.5 w-3.5" />
+                                    )}
+                                    {draftLoading
+                                        ? 'Recuperando borrador…'
+                                        : draftSaveState === 'saving'
+                                            ? 'Guardando…'
+                                            : draftSaveState === 'saved'
+                                                ? 'Borrador guardado de forma privada'
+                                                : draftSaveState === 'conflict'
+                                                    ? 'Hay una versión más reciente'
+                                                    : draftSaveState === 'error'
+                                                        ? 'No se pudo guardar; conservamos una copia en este dispositivo'
+                                                        : 'Borrador privado guardado'}
+                                </p>
+                                {draftError ? (
+                                    <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+                                        <p>{draftError}</p>
+                                        {draftSaveState === 'conflict' ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="mt-2 h-7 rounded-full px-2"
+                                                onClick={() => void handleReloadDraft()}
+                                            >
+                                                Cargar la versión más reciente
+                                            </Button>
+                                        ) : draftSaveState === 'error' ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="mt-2 h-7 rounded-full px-2"
+                                                onClick={() => void handleRetryDraftSave()}
+                                            >
+                                                Reintentar guardado
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                                {persistedDraft ? (
+                                    <AlertDialog open={discardDraftOpen} onOpenChange={setDiscardDraftOpen}>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 rounded-full px-2 text-xs text-destructive hover:text-destructive"
+                                            onClick={() => setDiscardDraftOpen(true)}
+                                            disabled={submitting || draftSaveState === 'saving'}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Descartar borrador
+                                        </Button>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Descartar este borrador?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Se eliminará sólo tu borrador privado. No cambiarán los movimientos ni los balances del espacio.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Conservar</AlertDialogCancel>
+                                                <AlertDialogAction
+                                                    variant="destructive"
+                                                    onClick={(event) => {
+                                                        event.preventDefault()
+                                                        void handleDiscardDraft()
+                                                    }}
+                                                >
+                                                    Descartar
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                ) : null}
                             </div>
                         ) : null}
                         {hasSubsequentSettlementWarning ? (
@@ -912,444 +2032,153 @@ export function SpaceEntryDialog({
                     </div>
 
                     {/* ── Body ── */}
-                    <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-                        <div className="space-y-5">
-                            <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-
-                                {/* ── Left column ── */}
-                                <div className="space-y-5">
-
-                                    {/* Monto, moneda, fecha, descripción, pagó, categoría */}
-                                    <SpaceDialogPanel>
-                                        <div className="grid gap-4">
-                                            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.55fr_0.7fr]">
-                                                <FormattedAmountInput
-                                                    id="entry-amount"
-                                                    label="Monto"
-                                                    value={form.amount || undefined}
-                                                    currency={form.currency}
-                                                    error={fieldErrors.amount}
-                                                    labelClassName="text-sm font-medium text-foreground"
-                                                    onValueChangeAction={(value) => {
-                                                        setForm((previous) => ({ ...previous, amount: value }))
-                                                        clearFieldError('amount')
-                                                    }}
-                                                />
-
-                                                <CurrencySelector
-                                                    value={form.currency}
-                                                    options={spaceCurrencies}
-                                                    onValueChange={(currency) => {
-                                                        setForm((previous) => ({
-                                                            ...previous,
-                                                            currency,
-                                                            personalAccountId: undefined,
-                                                            categoryId: undefined,
-                                                        }))
-                                                        clearFieldError('currency')
-                                                    }}
-                                                    error={fieldErrors.currency}
-                                                />
-
-                                                <DatePickerField
-                                                    label="Fecha"
-                                                    value={form.date instanceof Date ? form.date : undefined}
-                                                    isOpen={datePickerOpen}
-                                                    onOpenChange={(open) => {
-                                                        if (open) clearFieldError('date')
-                                                        setDatePickerOpen(open)
-                                                    }}
-                                                    onChange={(date) => {
-                                                        if (date) setForm((previous) => ({ ...previous, date }))
-                                                    }}
-                                                    error={fieldErrors.date}
-                                                    showErrors={Boolean(fieldErrors.date)}
-                                                />
-                                            </div>
-
-                                            <SpaceDialogField label="Descripción" error={fieldErrors.title}>
-                                                <Input
-                                                    value={form.title}
-                                                    onChange={(event) => {
-                                                        setForm((previous) => ({ ...previous, title: event.target.value }))
-                                                        clearFieldError('title')
-                                                    }}
-                                                    placeholder="Ej. Almuerzo equipo en Santiago"
-                                                    className={fieldErrors.title ? 'border-destructive focus-visible:ring-destructive/25' : ''}
-                                                />
-                                            </SpaceDialogField>
-
-                                            <div className="grid gap-4 lg:grid-cols-2">
-                                                <SpaceDialogField label="Pagó" error={fieldErrors.paidByParticipantId}>
-                                                    <Select
-                                                        value={form.paidByParticipantId}
-                                                        onValueChange={(value) => {
-                                                            clearFieldError('paidByParticipantId')
-                                                            setForm((previous) => {
-                                                                const nextIsCurrentUser =
-                                                                    extractId(
-                                                                        activeParticipants.find(
-                                                                            (participant) =>
-                                                                                extractId(participant._id) === value
-                                                                        )?.userId
-                                                                    ) === currentUserId
-                                                                const shouldMoveResponsibility =
-                                                                    previous.splitMode === 'none' &&
-                                                                    (!previous.sharedWithParticipantIds?.[0] ||
-                                                                        previous.sharedWithParticipantIds[0] ===
-                                                                            previous.paidByParticipantId)
-
-                                                                return {
-                                                                    ...previous,
-                                                                    paidByParticipantId: value,
-                                                                    sharedWithParticipantIds: shouldMoveResponsibility
-                                                                        ? [value]
-                                                                        : previous.sharedWithParticipantIds,
-                                                                    personalAccountId: nextIsCurrentUser
-                                                                        ? previous.personalAccountId
-                                                                        : undefined,
-                                                                }
-                                                            })
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Elegí un participante" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {activeParticipants.map((participant) => (
-                                                                <SelectItem
-                                                                    key={extractId(participant._id)}
-                                                                    value={extractId(participant._id) ?? ''}
-                                                                >
-                                                                    <span className="flex items-center gap-2">
-                                                                        <SpaceInitialsAvatar
-                                                                            name={participant.displayName}
-                                                                            className="h-6 w-6 text-[10px]"
-                                                                        />
-                                                                        <span>{participant.displayName}</span>
-                                                                    </span>
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </SpaceDialogField>
-
-                                                <SpaceDialogField label="Categoría del espacio">
-                                                    <Select
-                                                        value={form.spaceCategoryId ?? 'none'}
-                                                        onValueChange={(value) =>
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                spaceCategoryId: value === 'none' ? undefined : value,
-                                                            }))
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Sin categoría" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">Sin categoría</SelectItem>
-                                                            {filteredCategories.map((category: ISpaceCategory) => (
-                                                                <SelectItem
-                                                                    key={extractId(category._id)}
-                                                                    value={extractId(category._id) ?? ''}
-                                                                >
-                                                                    {category.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </SpaceDialogField>
-                                            </div>
-
-                                            {form.currency !== reportingCurrency ? (
-                                                <FormattedAmountInput
-                                                    id="space-exchange-rate"
-                                                    label={`Cotización a ${reportingCurrency}`}
-                                                    value={form.exchangeRate}
-                                                    currency={reportingCurrency}
-                                                    helperText="Necesaria para reflejar el movimiento correctamente en la moneda de reporte."
-                                                    error={fieldErrors.exchangeRate}
-                                                    placeholder={`Valor de 1 ${form.currency}`}
-                                                    onValueChangeAction={(exchangeRate) => {
-                                                        setForm((previous) => ({
-                                                            ...previous,
-                                                            exchangeRate: exchangeRate || undefined,
-                                                        }))
-                                                        clearFieldError('exchangeRate')
-                                                    }}
-                                                />
-                                            ) : null}
-                                        </div>
-                                    </SpaceDialogPanel>
-
-                                    {/* Split configurator */}
-                                    {spaceMode !== 'solo' ? (
-                                        <div>
-                                            <SpaceSplitConfigurator
-                                                participants={activeParticipants}
-                                                amount={Number.isFinite(form.amount) ? form.amount : 0}
-                                                currency={form.currency}
-                                                paidByParticipantId={form.paidByParticipantId}
-                                                selectedParticipantIds={form.sharedWithParticipantIds ?? []}
-                                                splitMode={form.splitMode}
-                                                allocations={form.splitAllocations}
-                                                onToggleParticipant={(id) => {
-                                                    toggleSharedParticipant(id)
-                                                    clearFieldError('sharedWithParticipantIds')
-                                                    clearFieldError('splitAllocations')
-                                                }}
-                                                onResponsibleChange={setResponsibleParticipant}
-                                                onApplyPreset={(preset) => {
-                                                    applySplitPreset(preset)
-                                                    clearFieldError('splitAllocations')
-                                                }}
-                                                onAllocationsChange={(allocs) => {
-                                                    updateSplitAllocations(allocs)
-                                                    clearFieldError('splitAllocations')
-                                                }}
-                                            />
-                                            {(fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations) ? (
-                                                <p className="mt-2 text-xs font-medium text-destructive">
-                                                    {fieldErrors.sharedWithParticipantIds ?? fieldErrors.splitAllocations}
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    ) : null}
-                                </div>
-
-                                {/* ── Right column ── */}
-                                <div className="space-y-5">
-
-                                    {/* Resumen */}
-                                    <SpaceDialogPanel>
-                                        <div className="space-y-4">
-                                            <div className="space-y-1">
-                                                <SpaceDialogSectionEyebrow>Resumen</SpaceDialogSectionEyebrow>
-                                                <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                    Vista rápida antes de guardar
-                                                </h3>
-                                            </div>
-
-                                            <div className="flex flex-wrap gap-2">
-                                                <SpaceEntryTypeBadge type={form.type} />
-                                                <SpaceMetaBadge icon={Coins}>
-                                                    {form.currency} · reporte en {reportingCurrency}
-                                                </SpaceMetaBadge>
-                                                <SpaceMetaBadge icon={CalendarRange}>
-                                                    {formatDateInput(form.date)}
-                                                </SpaceMetaBadge>
-                                            </div>
-
-                                            <div className="rounded-[24px] border border-foreground/[0.07] bg-background/72 p-4">
-                                                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                                                    Monto
-                                                </p>
-                                                <SpaceAmountInline
-                                                    amount={Number.isFinite(form.amount) ? form.amount : 0}
-                                                    currency={form.currency}
-                                                    hidden={false}
-                                                    className="mt-2 text-2xl font-semibold"
-                                                />
-                                                <p className="mt-2 text-sm text-muted-foreground">
-                                                    {paidByParticipant
-                                                        ? `Lo registra ${paidByParticipant.displayName}.`
-                                                        : 'Todavía falta elegir quién paga.'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </SpaceDialogPanel>
-
-                                    {/* Pagado desde — solo en modo crear */}
-                                    {mode === 'create' && isCurrentUserPayer ? (
-                                        <SpaceDialogPanel>
-                                            <div className="space-y-3">
-                                                <div className="space-y-1">
-                                                    <SpaceDialogSectionEyebrow>Impacto personal</SpaceDialogSectionEyebrow>
-                                                    <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                                        Pagado desde
-                                                    </h3>
-                                                </div>
-
-                                                <SpaceDialogField label="Cuenta o tarjeta">
-                                                    <Select
-                                                        value={form.personalAccountId ?? 'none'}
-                                                        onValueChange={(value) =>
-                                                            setForm((previous) => ({
-                                                                ...previous,
-                                                                personalAccountId:
-                                                                    value === 'none' ? undefined : value,
-                                                                categoryId:
-                                                                    value === 'none' ? undefined : previous.categoryId,
-                                                            }))
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Solo registrar en el espacio" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none" textValue="Solo registrar en el espacio">
-                                                                <span className="flex items-center gap-2.5">
-                                                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-muted">
-                                                                        <CircleDollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                    </span>
-                                                                    <span className="text-sm text-muted-foreground">
-                                                                        Solo registrar en el espacio
-                                                                    </span>
-                                                                </span>
-                                                            </SelectItem>
-                                                            {filteredAccounts.map((account: IAccount) => {
-                                                                const meta = getAccountTypeMeta(account.type)
-                                                                const Icon = meta.icon
-                                                                return (
-                                                                    <SelectItem
-                                                                        key={extractId(account._id)}
-                                                                        value={extractId(account._id) ?? ''}
-                                                                        textValue={account.name}
-                                                                    >
-                                                                        <span className="flex items-center gap-2.5">
-                                                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-muted">
-                                                                                <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                            </span>
-                                                                            <span>
-                                                                                <span className="block text-sm font-medium leading-tight">
-                                                                                    {account.name}
-                                                                                </span>
-                                                                                <span className="block text-xs leading-tight text-muted-foreground">
-                                                                                    {meta.label} · {account.currency}
-                                                                                </span>
-                                                                            </span>
-                                                                        </span>
-                                                                    </SelectItem>
-                                                                )
-                                                            })}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </SpaceDialogField>
-
-                                                {filteredAccounts.length === 0 ? (
-                                                    <p className="rounded-[18px] border border-warning-soft bg-warning-soft/40 px-3 py-2 text-xs text-warning-foreground">
-                                                        Para impactarlo en Finp personal vas a necesitar registrarlo en una moneda compatible o resolverlo con una conversión.
-                                                    </p>
-                                                ) : null}
-
-                                                {form.personalAccountId ? (
-                                                    <SpaceDialogField
-                                                        label="Categoría personal"
-                                                        hint="Solo impacta en tu Finp personal. La categoría del espacio se conserva aparte."
-                                                    >
-                                                        <Select
-                                                            value={form.categoryId ?? 'none'}
-                                                            onValueChange={(value) =>
-                                                                setForm((previous) => ({
-                                                                    ...previous,
-                                                                    categoryId: value === 'none' ? undefined : value,
-                                                                }))
-                                                            }
-                                                        >
-                                                            <SelectTrigger className="w-full">
-                                                                <SelectValue placeholder="Sin categoría" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="none">Sin categoría</SelectItem>
-                                                                {personalExpenseCategories.map((category: ICategory) => (
-                                                                    <SelectItem
-                                                                        key={extractId(category._id)}
-                                                                        value={extractId(category._id) ?? ''}
-                                                                    >
-                                                                        {category.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </SpaceDialogField>
-                                                ) : null}
-
-                                                <p className="text-xs text-muted-foreground">
-                                                    Elegí una cuenta o tarjeta si querés impactarlo también en tu Finp personal.
-                                                </p>
-                                            </div>
-                                        </SpaceDialogPanel>
-                                    ) : null}
-
-                                    {/* Adjuntos — solo en modo crear */}
-                                    {mode === 'create' ? (
-                                        <SpaceAttachmentsUploader
-                                            attachments={attachments}
-                                            onFilesSelected={handleFilesSelected}
-                                            onRemove={handleRemoveAttachment}
-                                        />
-                                    ) : null}
-
-                                    {/* Borrador — solo en modo crear */}
-                                    {mode === 'create' ? (
-                                    <SpaceDialogPanel>
-                                        <div className="space-y-3">
-                                            <SpaceDialogSectionEyebrow>Borrador</SpaceDialogSectionEyebrow>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="w-full justify-start rounded-full text-muted-foreground"
-                                                onClick={handleSaveDraft}
-                                                disabled={submitting}
-                                            >
-                                                <Save className="h-4 w-4" />
-                                                Guardar borrador local
-                                            </Button>
-                                        </div>
-                                    </SpaceDialogPanel>
-                                    ) : null}
+                    <div
+                        ref={scrollContainerRef}
+                        tabIndex={0}
+                        aria-label="Contenido del movimiento"
+                        className="relative min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6"
+                    >
+                        {mode === 'create' && contractVersion === 2 && !draftHydrated ? (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/90 backdrop-blur-sm" aria-live="polite">
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Recuperando tu borrador…
                                 </div>
                             </div>
+                        ) : null}
 
-                            {/* Notas */}
-                            <SpaceDialogPanel>
-                                <div className="space-y-3">
-                                    <div className="space-y-1">
-                                        <SpaceDialogSectionEyebrow>Notas</SpaceDialogSectionEyebrow>
-                                        <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                                            Contexto adicional
-                                        </h3>
-                                    </div>
-                                    <SpaceDialogTextArea
-                                        value={form.notes ?? ''}
-                                        onChange={(event) =>
-                                            setForm((previous) => ({
-                                                ...previous,
-                                                notes: event.target.value,
-                                            }))
-                                        }
-                                        rows={4}
-                                        placeholder="Notas internas, contexto o recordatorios útiles para el equipo."
-                                    />
+                        {mode === 'create' ? (
+                            <div className="space-y-5" data-testid={`space-entry-step-${currentStep.id}`}>
+                                <div className="space-y-1">
+                                    <h2
+                                        ref={stepHeadingRef}
+                                        tabIndex={-1}
+                                        className="text-lg font-semibold tracking-tight text-foreground outline-none"
+                                    >
+                                        {currentStep.title}
+                                    </h2>
+                                    <p className="text-sm text-muted-foreground">{currentStep.description}</p>
                                 </div>
-                            </SpaceDialogPanel>
-
-                            {error ? (
-                                <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                                    {error}
-                                </p>
-                            ) : null}
-                        </div>
+                                {renderCurrentStep()}
+                                {error ? (
+                                    <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive" tabIndex={-1}>
+                                        {error}
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : (
+                            <div className="space-y-5">
+                                <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+                                    <div className="space-y-5">
+                                        {dataStep}
+                                        {hasSplitStep ? splitStep : null}
+                                    </div>
+                                    <div className="space-y-5">{reviewStep}</div>
+                                </div>
+                                <SpaceEntryNotesPanel
+                                    notes={form.notes ?? ''}
+                                    onNotesChange={(notes) => setForm((previous) => ({ ...previous, notes }))}
+                                />
+                                {error ? (
+                                    <p className="rounded-[22px] border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive" tabIndex={-1}>
+                                        {error}
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
                     </div>
 
                     {/* ── Footer ── */}
-                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 sm:px-6">
-                        <Button className="rounded-full" onClick={() => void handleSubmit()} disabled={submitting}>
+                    <DialogFooter className="shrink-0 border-t border-border/70 bg-background/96 px-5 py-4 safe-area-pb sm:px-6">
+                        <Button
+                            className="min-h-11 rounded-full"
+                            onClick={() => {
+                                if (mode === 'create' && !isLastStep) handleNextStep()
+                                else void handleSubmit()
+                            }}
+                            disabled={
+                                submitting ||
+                                draftAttachmentsBlocked ||
+                                (contractVersion === 2 &&
+                                    (mode === 'edit' || (mode === 'create' && isLastStep)) &&
+                                    (previewLoading || !preview))
+                            }
+                        >
                             {submitting
                                 ? (mode === 'edit' ? 'Guardando cambios...' : 'Guardando...')
-                                : (mode === 'edit' ? 'Guardar cambios' : 'Guardar gasto')}
+                                : mode === 'edit'
+                                    ? 'Guardar cambios'
+                                    : !isLastStep
+                                        ? 'Continuar'
+                                        : personalIntent !== 'space_only'
+                                            ? 'Guardar y agregar a Mi Finp'
+                                            : preview?.personalAction === 'not_applicable'
+                                                ? 'Guardar en Espacios'
+                                                : 'Guardar; decidir Mi Finp después'}
                         </Button>
+                        {mode === 'create' && stepIndex > 0 ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="min-h-11 rounded-full"
+                                onClick={() => goToStep(stepIndex - 1)}
+                                disabled={submitting}
+                            >
+                                Atrás
+                            </Button>
+                        ) : null}
                         <Button
                             variant="ghost"
-                            className="rounded-full"
-                            onClick={() => onOpenChange(false)}
+                            className="min-h-11 rounded-full"
+                            onClick={() => handleDialogOpenChange(false)}
                             disabled={submitting}
                         >
                             Cancelar
                         </Button>
                     </DialogFooter>
+
+                    <AlertDialog
+                        open={cancelDraftOpen}
+                        onOpenChange={(nextOpen) => {
+                            if (!cancelDraftPending) setCancelDraftOpen(nextOpen)
+                        }}
+                    >
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Querés guardar este movimiento para después?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Podés conservarlo como borrador privado, salir sin guardar estos cambios o seguir editando.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            {cancelDraftError ? (
+                                <p className="text-sm text-destructive" role="alert">
+                                    {cancelDraftError}
+                                </p>
+                            ) : null}
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={cancelDraftPending}>
+                                    Seguir editando
+                                </AlertDialogCancel>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={cancelDraftPending}
+                                    onClick={() => void handleExitWithoutSaving()}
+                                >
+                                    Salir sin guardar
+                                </Button>
+                                <AlertDialogAction
+                                    disabled={cancelDraftPending}
+                                    onClick={(event) => {
+                                        event.preventDefault()
+                                        void handleSaveDraft()
+                                    }}
+                                >
+                                    {cancelDraftPending ? 'Guardando…' : 'Guardar borrador'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </div>
             </DialogContent>
         </Dialog>

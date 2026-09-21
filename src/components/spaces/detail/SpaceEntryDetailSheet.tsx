@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { AlertTriangle, ArrowUpRight, Ban, CalendarRange, Coins, FileBadge2, FileText, HandCoins, History, Paperclip, Pencil, RefreshCw, Trash2, Users, WalletCards } from 'lucide-react'
@@ -88,7 +88,6 @@ export function SpaceEntryDetailSheet({
     participants,
     spaceId,
     currency,
-    currentUserId,
     personalImpact,
     reviewImpact,
     canEdit,
@@ -105,7 +104,6 @@ export function SpaceEntryDetailSheet({
     participants: ISpaceParticipant[]
     spaceId: string
     currency: string
-    currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
     reviewImpact?: ISpaceEntryPersonalImpact
     canEdit?: boolean
@@ -121,9 +119,18 @@ export function SpaceEntryDetailSheet({
     const [revisionSheetOpen, setRevisionSheetOpen] = useState(false)
     const [selectedSnapshot, setSelectedSnapshot] = useState<ISpaceEntrySnapshot | null>(null)
     const [impactDialogOpen, setImpactDialogOpen] = useState(false)
+    const personalImpactTriggerRef = useRef<HTMLButtonElement>(null)
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
     const [resolving, setResolving] = useState(false)
     const [voidContext, setVoidContext] = useState({ hasLinkedTransaction: false, hasSubsequentSettlement: false, affectedUsersCount: 0 })
+
+    const handleImpactDialogOpenChange = (nextOpen: boolean) => {
+        setImpactDialogOpen(nextOpen)
+
+        if (!nextOpen) {
+            requestAnimationFrame(() => personalImpactTriggerRef.current?.focus())
+        }
+    }
 
     useEffect(() => {
         setCurrentEntry(entry)
@@ -156,15 +163,14 @@ export function SpaceEntryDetailSheet({
         .map((participantId) => participantsById.get(extractId(participantId) ?? ''))
         .filter((participant): participant is ISpaceParticipant => Boolean(participant))
     const category = resolveCategory(currentEntry)
-    const legacyImpactsCurrentUser = Boolean(
-        currentEntry.linkedTransactionId &&
-        currentUserId &&
-        payer &&
-        (extractId(currentEntry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
-    )
-    const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
+    const impactsCurrentUser = personalImpact?.status === 'linked'
     const isVoided = currentEntry.isVoided === true
     const hasReview = Boolean(reviewImpact && !isVoided)
+    // Sin un pending v2 no hay decisión que enviar: escrituras legacy están
+    // retiradas server-side (ver docs/producto/espacios.md #14), y sin un
+    // impacto propio el movimiento no afecta el Finp de este usuario.
+    const canRegisterPersonalImpact = currentEntry.contractVersion === 2
+        && personalImpact?.status === 'pending'
     const isEdited = (currentEntry.editCount ?? 0) > 0
     const previousVersions = currentEntry.previousVersions ?? []
     const hasPreviousVersions = previousVersions.length > 0
@@ -215,8 +221,15 @@ export function SpaceEntryDetailSheet({
     async function handleVoidConfirm(voidReason?: string) {
         const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}/void`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ voidReason }),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(currentEntry?.contractVersion === 2
+                    ? { 'Idempotency-Key': crypto.randomUUID() }
+                    : {}),
+            },
+            body: JSON.stringify(currentEntry?.contractVersion === 2
+                ? { expectedRevision: currentEntry.revision ?? 0, reason: voidReason ?? 'Anulado por el usuario' }
+                : { voidReason }),
         })
 
         if (!response.ok) {
@@ -224,9 +237,15 @@ export function SpaceEntryDetailSheet({
             throw new Error(json.error ?? 'Error al anular el movimiento')
         }
 
-        const json = await response.json() as { entry: ISpaceEntry; hasLinkedTransaction: boolean; hasSubsequentSettlement: boolean }
-        setCurrentEntry(json.entry)
-        onVoided?.(json.entry)
+        const json = await response.json() as { entry?: ISpaceEntry }
+        const voidedEntry = json.entry ?? ({
+            ...currentEntry,
+            status: 'voided',
+            isVoided: true,
+            revision: (currentEntry?.revision ?? 0) + 1,
+        } as ISpaceEntry)
+        setCurrentEntry(voidedEntry)
+        onVoided?.(voidedEntry)
     }
 
     async function handleEditClick() {
@@ -423,9 +442,11 @@ export function SpaceEntryDetailSheet({
                                                 ? 'El movimiento fue editado. Tu transacción en Finp puede estar desactualizada.'
                                                 : isVoided
                                                     ? 'Este movimiento esta anulado.'
-                                                    : 'Todavia no registraste este movimiento en tu Finp.'}
+                                                    : canRegisterPersonalImpact
+                                                        ? 'Todavia no registraste este movimiento en tu Finp.'
+                                                        : 'Este movimiento no afecta tu Finp personal.'}
                                     </p>
-                                    {isEdited && !isVoided && !impactsCurrentUser && !hasReview ? (
+                                    {isEdited && !isVoided && !impactsCurrentUser && !hasReview && canRegisterPersonalImpact ? (
                                         <p className="text-xs text-amber-700 dark:text-amber-400">
                                             Este movimiento fue editado. Revisa el monto antes de registrarlo en tu Finp.
                                         </p>
@@ -440,10 +461,11 @@ export function SpaceEntryDetailSheet({
                                         <RefreshCw className="h-3.5 w-3.5" />
                                         Resolver
                                     </Button>
-                                ) : !impactsCurrentUser && !hasReview ? (
+                                ) : !impactsCurrentUser && !hasReview && canRegisterPersonalImpact ? (
                                     <Button
                                         size="sm"
                                         className="rounded-full"
+                                        ref={personalImpactTriggerRef}
                                         onClick={() => setImpactDialogOpen(true)}
                                         disabled={isVoided}
                                     >
@@ -630,9 +652,10 @@ export function SpaceEntryDetailSheet({
 
             <SpacePersonalImpactDialog
                 open={impactDialogOpen}
-                onOpenChange={setImpactDialogOpen}
+                onOpenChange={handleImpactDialogOpenChange}
                 spaceId={spaceId}
                 entry={currentEntry}
+                initialImpact={personalImpact}
                 onCreated={(impact) => {
                     onPersonalImpactCreated?.(entryId, impact)
                 }}

@@ -4,18 +4,15 @@ import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceCategory, SpaceEntry } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
-import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { getAccessibleSpaceContext, getContextCapabilities } from '@/lib/server/spaces'
 import { spaceCategoryUpdateSchema } from '@/lib/validations'
 import { extractId } from '@/lib/utils/spaces'
 
-function canManageSpace(context: { isOwner: boolean; currentParticipant?: { role?: string } | null }) {
-    return context.isOwner || context.currentParticipant?.role === 'owner' || context.currentParticipant?.role === 'admin'
-}
 
 async function getEditableContext(spaceId: string, userId: string) {
     const context = await getAccessibleSpaceContext(spaceId, userId)
     if (!context) return { context: null, response: NextResponse.json({ error: 'Espacio no encontrado' }, { status: 404 }) }
-    if (!canManageSpace(context)) {
+    if (!getContextCapabilities(context).has('manage_shared_settings')) {
         return {
             context: null,
             response: NextResponse.json(

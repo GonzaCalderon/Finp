@@ -64,7 +64,12 @@ export function sanitizeFileName(fileName: string) {
         .trim()
         .replace(/^[.\s-]+|[.\s-]+$/g, '')
 
-    return sanitized || 'archivo'
+    const fallback = sanitized || 'archivo'
+    if (fallback.length <= 160) return fallback
+
+    const extensionIndex = fallback.lastIndexOf('.')
+    const extension = extensionIndex > 0 ? fallback.slice(extensionIndex).slice(0, 12) : ''
+    return `${fallback.slice(0, 160 - extension.length)}${extension}`
 }
 
 export function isAllowedMimeType(mimeType: string) {

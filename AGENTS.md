@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: agentes de IA y personas que desarrollan Finp
-> Última actualización: 2026-07-26
+> Última actualización: 2026-09-10
 > Fuente de verdad: reglas obligatorias de trabajo para todo el repositorio
 
 ## Índice
@@ -39,7 +39,7 @@ Antes de actuar:
 1. Leer este archivo completo.
 2. Abrir [`docs/README.md`](docs/README.md) y elegir la ruta de lectura según la tarea.
 3. Consultar sólo los documentos indicados para ese tipo de trabajo.
-4. Revisar el estado y la prioridad correspondiente en [`docs/producto/roadmap_finp.md`](docs/producto/roadmap_finp.md).
+4. Revisar el estado y la prioridad correspondiente en [`docs/producto/roadmap_finp.md`](docs/producto/roadmap_finp.md). Si el ítem declara una entrega en curso, ahí están su rama, lo entregado y lo que resta: continuarla antes de abrir trabajo nuevo.
 5. Inspeccionar el código real antes de asumir que la documentación refleja toda la implementación.
 6. Si código y documentación difieren, informar la diferencia y corregir la fuente canónica dentro del alcance autorizado.
 
@@ -53,8 +53,6 @@ Lecturas mínimas por tipo:
 | Automatización o aprendizaje | estrategia de automatización, arquitectura y criterio de entrega |
 | Priorización o producto | especificación funcional, estado actual y roadmap |
 | Documentación | guía de documentación y documento canónico afectado |
-
-Los documentos archivados no se leen salvo que haga falta reconstruir una decisión histórica.
 
 ## 3. Jerarquía documental
 
@@ -222,6 +220,12 @@ Los E2E requieren un entorno y una base de prueba aislados.
 - La documentación es parte de la entrega.
 - El backlog vive sólo en `docs/producto/roadmap_finp.md`.
 - No crear listas paralelas de pendientes.
+- Antes de implementar una etapa no trivial, su documentación canónica debe ser
+  ejecutable: alcance y fuera de alcance, contratos, estados, autorización,
+  consistencia, fallos y recuperación, experiencia, compatibilidad y verificación.
+- Una etapa no está lista si quien la retoma debe inventar una decisión material.
+  La ambigüedad se resuelve primero en el dominio, arquitectura o decisión
+  correspondiente, sin convertir el documento en otro backlog.
 - Actualizar el documento canónico cuando cambie comportamiento, arquitectura, diseño, operación o prioridad.
 - Agregar una decisión en `docs/decisiones/` cuando haya alternativas relevantes o una consecuencia duradera.
 - Mantener el índice general y el índice interno del documento.
@@ -269,5 +273,7 @@ Una tarea está terminada cuando:
 - tiene pruebas proporcionales al riesgo;
 - pasa los chequeos aplicables;
 - actualiza documentación, índice, decisión y roadmap cuando corresponde;
+- puede retomarse desde sus fuentes canónicas sin redescubrir ni decidir aspectos
+  materiales ya incluidos en el alcance;
 - declara límites y pendientes reales;
 - no deja una fuente documental contradictoria.

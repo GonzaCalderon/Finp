@@ -151,9 +151,7 @@ async function validatePersonalCategory(categoryId: string | undefined, userId: 
 export async function getPersonalImpactForEntries(
     spaceId: string,
     userId: string,
-    entryIds: string[],
-    entries: ISpaceEntry[] = [],
-    participants: ISpaceParticipant[] = []
+    entryIds: string[]
 ): Promise<Record<string, ISpaceEntryPersonalImpactByEntry>> {
     const validEntryIds = entryIds.filter((entryId) => Types.ObjectId.isValid(entryId))
     if (validEntryIds.length === 0) return {}
@@ -185,50 +183,6 @@ export async function getPersonalImpactForEntries(
             byEntryId[entryId].reviewImpact = impact
         } else {
             byEntryId[entryId].pendingActions.push(impact)
-        }
-    })
-
-    // Soporte legado: entries con linkedTransactionId pero sin SpaceEntryPersonalImpact
-    entries.forEach((entry) => {
-        const entryId = extractId(entry._id)
-        if (!entryId || byEntryId[entryId]?.linkedImpact || byEntryId[entryId]?.reviewImpact) return
-        if (entry.status !== 'linked' && !entry.linkedTransactionId) return
-
-        const confirmedByUserId = extractId(entry.confirmedByUserId)
-        const payer = participants.find(
-            (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
-        )
-        const payerUserId = extractId(payer?.userId)
-        const legacyBelongsToUser = confirmedByUserId === userId || payerUserId === userId
-
-        if (!legacyBelongsToUser || !entry.linkedTransactionId) return
-
-        const share = resolveCurrentUserEntryShare(entry, participants, userId)
-        if (!share) return
-        const participantId = extractId(share.participant._id)
-        const linkedTransactionId = extractId(entry.linkedTransactionId)
-        if (!participantId || !linkedTransactionId) return
-        const legacyCategoryId = extractId(entry.categoryId)
-
-        if (!byEntryId[entryId]) {
-            byEntryId[entryId] = { pendingActions: [] }
-        }
-        byEntryId[entryId].linkedImpact = {
-            _id: new Types.ObjectId(),
-            spaceId: new Types.ObjectId(extractId(entry.spaceId) ?? spaceId),
-            entryId: new Types.ObjectId(entryId),
-            userId: new Types.ObjectId(userId),
-            participantId: new Types.ObjectId(participantId),
-            transactionId: new Types.ObjectId(linkedTransactionId),
-            categoryId: legacyCategoryId
-                ? new Types.ObjectId(legacyCategoryId)
-                : undefined,
-            impactKind: share.impactKind,
-            amount: share.amount,
-            currency: entry.currency,
-            status: SPACE_PERSONAL_IMPACT_STATUSES.LINKED,
-            createdAt: entry.confirmedAt ?? entry.createdAt,
-            updatedAt: entry.updatedAt,
         }
     })
 

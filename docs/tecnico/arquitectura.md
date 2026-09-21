@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-09-21
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -178,9 +178,10 @@ La preview ejecuta resolución sin persistir. La confirmación vuelve a validar 
 | Aplicación | subdocumento/relación de compromiso | Snapshot por período y transacción. |
 | Regla | `TransactionRule` | Servicio compartido resuelve coincidencia y acciones. |
 | Aprendizaje | perfil, eventos, alias y control de patrones | Menor autoridad que entrada explícita y reglas. |
-| Espacio | `Space`, participantes y movimientos | Contexto compartido. |
-| Impacto personal | `SpaceEntryPersonalImpact` | Privado por usuario; no usar estado global `linked`. |
-| Deuda | `Debt` + `DebtMovement` | Manual o derivada; pagos sin impacto operacional. |
+| Espacio | `Space`, participantes y `SpaceEntry` | En contrato v2, el movimiento contiene sólo contexto compartido, dinero exacto, día financiero y snapshots. La moneda de reporte no reemplaza la original. |
+| Borrador de movimiento de Espacio | `SpaceEntryDraft` | Recurso privado del autor, separado de `SpaceEntry`; no participa en balances ni actividad hasta publicarse. Diseñado en 0013, pendiente de implementación. |
+| Impacto personal | `SpaceEntryPersonalImpact` | Privado por usuario; parte propia, impacto real y operacional son magnitudes explícitas. No usar estado global `linked`. |
+| Deuda | `Debt` + `DebtMovement` | Manual o derivada; el ledger de Espacios por moneda manda sobre la derivada. El dinero pagado y el aplicado se conservan separados y no tienen impacto operacional. |
 | Notificación | `Notification` | Información y presentación. |
 | Pendiente | entidad de acción correspondiente | No se resuelve por leer notificación. |
 
@@ -195,8 +196,18 @@ Servicios relevantes en `src/lib/server/`:
 | `commitments*.ts` | políticas de monto, contexto, matching y aplicación |
 | `projection.ts` | proyección compartida por API y superficies |
 | `quick-capture*.ts` | contexto, preview, aprendizaje y feedback |
-| `spaces.ts` y `space-*.ts` | permisos, movimientos, actividad, invitaciones e impacto |
-| `debt-sync.ts` | materialización idempotente desde Espacios |
+| `spaces.ts`, `space-activity.ts`, `space-invites.ts`, `space-personal-settings.ts` | contexto accesible, listado, detalle, actividad, invitaciones y configuración personal; desde PR 38 no queda ningún cuerpo legacy de escritura |
+| `space-*-service-v2.ts` | servicios de aplicación para movimiento, historia, impacto privado, liquidación y administración, compartidos por las rutas existentes |
+| `space-operation-executor.ts` | transacción MongoDB, idempotencia de intención y referencias de resultado de Espacios v2 |
+| `money.ts` e `iso-currencies.ts` | `MoneyDto`, registro ISO de curso legal, conversión exacta, redondeo y reparto por restos mayores |
+| `space-financial-v2.ts` | reparto, día financiero, impactos y balances puros por moneda en unidades menores exactas |
+| `space-quote-service.ts` | lote de referencias DolarAPI/Frankfurter, cache, caminos directos o derivados, snapshots manuales y conflictos por antigüedad o cambio |
+| `space-settlement-allocator-v2.ts` | aplicación determinista de tramos contra componentes de deuda, primero en la misma moneda y luego mediante conversiones explícitas |
+| `space-debt-materialization-v2.ts` | ledger y materialización de deudas y movimientos separados por moneda dentro de la sesión financiera |
+| `space-legacy-adapter.ts` | lectura determinista del estado legacy sin convertir ambigüedad en autoridad v2 |
+| `space-read-service-v2.ts` y `space-api-contract.ts` | DTOs JSON, capacidades y paginación por cursor; errores y mutaciones normalizados |
+| `space-v2-write-gate.ts` | activación de escrituras v2 por base; toda mutación de un documento que no sea v2 rechaza con `409` |
+| `migrations/space-v2-migration-*.ts` | contratos, clasificación fail-closed, fingerprint, sanitización, copia por lotes, preimágenes, backfill por Espacio, verificación y rollback del ensayo v2 |
 | `debt-settlement.ts` | pago/cobro atómico |
 | `notifications.ts` | creación, dedupe y resolución |
 | `nav-insights.ts` | señales de navegación |
@@ -208,6 +219,105 @@ Antes de crear un servicio:
 2. extender la fuente común;
 3. evitar una versión “especial” en un endpoint;
 4. agregar tests sobre el servicio compartido.
+
+### Candidatos de vínculo personal
+
+Estado: implementado el 2026-09-10 en la etapa 4 de FINP-P1-013, bloque 2.
+
+Antes había CUATRO copias independientes de la misma regla, no dos: el alta
+guiada (`space-entry-service-v2.ts`) las aplicaba al vincular en la misma
+transacción que crea el movimiento, `resolve` (`space-personal-impact-service-v2.ts`)
+las reaplicaba al resolver un impacto pendiente, el preview
+(`space-financial-preview-v2.ts`) traía una versión más corta, y ninguna ruta
+ofrecía candidatos: ambos diálogos pedían `/api/transactions?limit=25` y
+filtraban por monto en el cliente. Las cuatro copias habían divergido: sólo el
+alta aceptaba `credit_card_expense` como equivalente de `expense` (decisión
+0012) y sólo `resolve` validaba la cuenta — el alta podía vincular una
+transacción de un no pagador que sí movía cuenta, sin que nada lo impidiera.
+
+Autoridad. `assessLinkCandidateV2(transaction, requirement)` en
+`space-link-candidate-v2.ts`: pura sobre un documento ya leído, sin acceso a
+datos. Devuelve `{ compatible, issues[] }` con `issues` de
+`'type_mismatch' | 'currency_mismatch' | 'amount_mismatch' |
+'operational_mismatch' | 'date_mismatch' | 'account_mismatch'`; acepta
+`credit_card_expense` donde se espera `expense`. El módulo también exporta
+`resolveLinkImpactVariant`, `expectedLinkTransactionType`,
+`linkAccountRuleForVariant` (antes duplicadas como `impactVariant`/
+`resolveImpactVariant` y `expectedTransactionType`), y `firstLinkIssue`/
+`linkIssueErrorCode`/`describeLinkIssue`, que `resolve` usa para conservar
+exactamente sus códigos y mensajes previos (`SPACE_TRANSACTION_TYPE_MISMATCH`
+para tipo o moneda, luego `..._AMOUNT_MISMATCH`, `..._OPERATIONAL_MISMATCH`,
+`..._DATE_MISMATCH`, `..._ACCOUNT_MISMATCH`, en ese orden de prioridad).
+"Ya vinculada a otro impacto" sigue sin ser un `issue` de la función pura: la
+decide la consulta (el mismo `$or` que ya usaba `resolve`), no una comparación
+en memoria.
+
+Requisito. `LinkRequirementV2 = { transactionType, currency, amount,
+operationalAmount, accountRule: 'none' | 'source_required' |
+'destination_required', dateKey?, timezone? }`. `amount` es
+`accountImpactAmount` si es positivo y `ownShareAmount` en caso contrario,
+igual en las cuatro superficies. `dateKey`/`timezone` son opcionales a
+propósito: el preview de alta no recibe la fecha del movimiento en su
+contrato actual (`entries/preview` nunca la pidió), así que su `linkExisting`
+evalúa tipo, moneda, monto, operacional y cuenta, pero no fecha ni "ya
+vinculada a otro impacto" — ambas quedan a cargo del `resolve` autoritativo,
+que si las tiene. Ensanchar el contrato de `entries/preview` para cerrar esa
+brecha queda fuera de este bloque.
+
+Ruta. `POST /api/spaces/[id]/link-candidates`
+(`space-link-candidates-v2.ts`), lectura pura sin escritura. Cuerpo
+discriminado por `mode`:
+
+- `preview`: subconjunto de `entries/preview` — sin los campos de conversión
+  (`exchangeRate`, `exchangeRateDecimal`, `conversionSnapshot`), que sólo
+  afectan el monto de reporte y no el impacto personal — más `dateKey` y
+  `timezone`;
+- `impact`: `{ entryId, impactId }`; el impacto debe pertenecer al actor.
+
+Autorización: sesión, `getAccessibleSpaceContext` (no `loadSpaceApplicationContextV2`,
+que exige sesión Mongo transaccional; esta ruta sólo lee) más
+`contractVersion === 2` explícito y `getContextCapabilities` — `create_entry`
+para `preview`, `resolve_personal_impact` para `impact`. Respuesta `200`
+`{ data: { applicable, requirement?, candidates, excluded } }`:
+`applicable: false` cuando el reparto no produce acción financiera personal
+(`requirement` ausente); `candidates` ordenados por fecha descendente, máximo
+20, cada uno `{ transactionId, description, amount, currency, date,
+accountName? }` y siempre compatibles; `excluded` cuenta sólo lo que la
+consulta no pudo filtrar por sí sola — `amountMismatch`, `operationalMismatch`,
+`accountMismatch` y `alreadyLinked` — porque tipo, moneda y fecha ya los
+excluye la consulta antes de evaluar nada. Errores: `400` validación, `401`,
+`404` Espacio, movimiento o impacto inexistente o no v2, `403` sin capacidad.
+
+Consulta. `Transaction.find` acotado por `userId`, `currency`,
+`status != 'voided'`, `type` (`expense` amplía a `['expense',
+'credit_card_expense']` cuando corresponde) y un margen de ±24 h alrededor del
+instante representativo del `dateKey` — generoso a propósito: el filtro exacto
+de día lo hace `assessLinkCandidateV2` en memoria después, así que el margen
+amplio no puede dejar pasar un falso positivo, sólo evita construir un
+utilitario nuevo de límites exactos de día. `spaceImpactId` ausente o igual al
+`impactId` cuando corresponde; `alreadyLinked` se cuenta con la misma consulta
+sin esa exclusión. El día acota el tamaño; no hace falta índice nuevo.
+
+Cliente. `fetchLinkCandidatesForNewEntry`/`fetchLinkCandidatesForImpact`
+(`space-personal-impact.ts`) y el componente compartido
+`SpaceLinkCandidateList` (`SpaceDialogPrimitives.tsx`) reemplazan el
+`<Select>` en ambos diálogos con estados `cargando` (skeleton), `vacío` con
+motivos, `error` con reintento (`ErrorState`, bloque 1) y una lista de radios
+con monto, fecha y cuenta. La misma invalidación que la preview: cambiar
+monto, moneda, fecha, pagador o reparto descarta la lista y, si el
+seleccionado ya no aparece, también la selección.
+
+Verificación. 20 unitarias de `assessLinkCandidateV2` y los helpers
+compartidos por issue, incluida la leniencia `credit_card_expense`; 3
+integraciones con sesión Mongo real: preview y `resolve` coinciden sobre la
+misma transacción (compatible se vincula sin `409`, incompatible falla con el
+mismo motivo que preview señaló), la lista de candidatos sólo devuelve lo que
+`resolve` acepta y explica lo demás por motivo, y el modo de alta no exige un
+impacto persistido; 7 unitarias de la ruta HTTP (401/400/despacho por
+modo/403/404); el E2E de vínculo se endureció para tolerar candidato o
+vacío explicado sin combobox. La propiedad completa —cada candidato que la
+ruta ofrece se vincula sin fricción— queda demostrada por integración con
+datos reales, no simulada.
 
 ## 9. Persistencia
 
@@ -229,6 +339,70 @@ En desarrollo, Mongoose puede conservar modelos compilados. Al agregar campos se
 
 Los adjuntos persistentes usan Vercel Blob. La base conserva metadata y relación, no el archivo binario.
 
+Los adjuntos de un nuevo gasto de Espacio se preparan bajo la identidad privada
+del borrador. La metadata cambia a la relación confirmada sólo cuando la
+publicación crea el movimiento; un fallo conserva el borrador recuperable y un
+descarte limpia la relación de forma idempotente. La descarga autoriza al autor
+antes de publicar y aplica los permisos del movimiento después.
+
+La etapa 3 de FINP-P1-013 usa un adapter servidor para Blob; rutas y servicios
+de dominio no llaman al SDK directamente. El adapter expone preparación, inspección y
+borrado idempotente, permite inyectar fallos en pruebas y nunca devuelve una URL
+pública como autoridad. Los binarios se guardan con una clave determinista
+formada por Espacio, borrador e ID de adjunto; el nombre original sólo existe
+como metadata saneada.
+
+`SpaceEntryDraft.attachments` conserva los estados `preparing`, `ready`,
+`upload_failed`, `cleanup_pending` y `deleted`. Reserva identidad en MongoDB
+antes de escribir Blob. Publicar no mueve el archivo: copia metadata `ready`, con
+el mismo ID y `storageKey`, al `SpaceEntry` dentro de la transacción financiera.
+Así, Blob queda fuera de la transacción sin abrir una confirmación parcial.
+
+Quitar o descartar revoca primero la relación en MongoDB y después elimina el
+Blob. Un fallo físico deja `cleanup_pending`, ya inaccesible, y el reconciliador
+idempotente lo reintenta. También revisa preparaciones con más de 15 minutos y
+confirma, falla o limpia según la metadata real del proveedor. Se ejecuta en
+lotes, `dry-run` por defecto, sin una cola ni dependencia nueva.
+
+El límite canónico es cinco adjuntos de hasta 10 MB cada uno, JPEG, PNG, WebP o
+PDF. El servidor compara firma real y hash con el MIME admitido, sanea el
+nombre y no serializará `storageKey`, tokens ni errores internos. La especificación completa de
+estados, rutas, autorización y fallos vive en
+[`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md#6-etapa-3-contrato-ejecutable-de-adjuntos).
+
+### Borrador privado de movimiento de Espacio
+
+FINP-P1-013 incorpora `SpaceEntryDraft` con índice único parcial para un
+borrador `active` por `creatorUserId + spaceId + intent`. El recurso usa el mismo
+contrato v2 de dinero, fecha, reparto y cotizaciones, pero admite campos
+incompletos y agrega `revision` para concurrencia optimista.
+
+Las rutas de borrador filtran siempre por autor y Espacio. Listar Movimientos
+compone su card privada sólo para ese autor; no consulta ni serializa borradores
+de otros participantes. `owner` y `admin` no adquieren acceso por su rol. Los
+estados terminales `published` y `discarded` impiden reactivación o segunda
+publicación.
+
+El cliente no persiste mientras la persona completa el formulario. Al cancelar
+con cambios ofrece guardar, salir sin guardar o continuar. El guardado elegido,
+las mutaciones de adjuntos y la preparación previa a publicar se serializan para
+que una respuesta anterior no pueda pisar una revisión posterior. La base es la
+autoridad; `localStorage` conserva una copia versionada únicamente cuando falla
+un guardado explícito y se elimina al confirmarse el siguiente.
+
+Las mutaciones de adjuntos participan de esa misma cola cliente. Cada reserva,
+confirmación, reintento o eliminación incrementa la revisión del borrador y su
+respuesta reemplaza la revisión local. Un archivo `preparing` o `upload_failed`
+bloquea publicar, pero no bloquea editar campos; el siguiente guardado explícito
+espera la operación en curso y conserva los cambios locales.
+
+La ejecución operativa canónica es
+`npm run reconcile:space-draft-attachments`; usa `finp-e2e`, inspecciona en
+`dry-run` por defecto, admite `--draft`, limita el lote entre 1 y 200 y exige
+`--apply` para cambiar estados. El modo de memoria existe sólo para navegador y
+pruebas contra una base aislada; producción falla cerrado si Blob no está
+configurado.
+
 ### Fechas
 
 - Guardar fechas de forma consistente.
@@ -245,6 +419,48 @@ Casos:
 - pago/cobro de deuda + movimiento;
 - aplicación de compromiso + transacción + snapshot;
 - acciones multi-entidad que no pueden confirmarse parcialmente.
+
+En Espacios v2, una intención financiera se identifica por actor, Espacio, tipo
+de operación y hash de una clave idempotente. `SpaceOperation` y todas las
+escrituras financieras se confirman en la misma sesión MongoDB. Un reintento con
+la misma carga devuelve las referencias confirmadas; la misma clave con otra
+carga produce conflicto. Alta, edición, anulación, impacto personal, liquidación,
+deuda, actividad y pendientes no usan compensación manual.
+
+Publicar un `SpaceEntryDraft` reutiliza ese ejecutor con una clave estable del
+borrador y la última `revision` esperada. Movimiento, impacto privado,
+transacción, balances, deuda, actividad y cierre del borrador se confirman en la
+misma sesión. Preparar el binario en Blob no confirma el movimiento; si la sesión
+falla, el borrador y su metadata siguen disponibles para reintentar.
+
+Cuando el pagador registra una tarjeta propia, la transacción privada es
+`credit_card_expense`, `amount` conserva el total real y `operationalAmount` la
+parte propia. Crea en la misma sesión un `InstallmentPlan`, incluso para `1/1`:
+`installmentAmount` alimenta deuda y resumen, mientras
+`operationalInstallmentAmount` distribuye sólo la parte propia en reporting.
+Los planes históricos sin estas magnitudes conservan el total como fallback.
+Tarjeta, cuenta, cuotas y estado del resumen no se copian a `SpaceEntry`.
+
+Las notificaciones son presentación posterior al commit: se derivan de impactos
+`pending` o `needs_review`, admiten reconciliación observable y no repiten la
+operación financiera. Edición, anulación, roles, ownership y modo de deuda exigen
+la revisión esperada para evitar sobrescritura silenciosa.
+
+Los importes v2 no usan `number` como autoridad persistida. `MoneyDto` transporta
+moneda, unidades menores como entero decimal y escala ISO. Cada conversión
+confirmada conserva un `ConversionSnapshot`: el gasto histórico se lee con ese
+snapshot y una posición abierta se puede revaluar por separado.
+
+Una liquidación multimoneda registra componentes objetivo, varios tramos y sus
+aplicaciones. Cada aplicación distingue dinero pagado, dinero aplicado y
+conversión. Movimiento compartido, `Debt`, `DebtMovement`, actividad y
+decisiones privadas se confirman atómicamente; una liquidación confirmada se
+revierte y no se edita en sitio.
+
+Los diez índices v2 viven en un manifiesto explícito y no dependen de
+`autoIndex`. Durante esta etapa sólo se aplican en la base E2E aislada;
+development admite validación `dry-run` y producción se rechaza. Los índices
+parciales por `contractVersion: 2` preservan la lectura de documentos legacy.
 
 Los efectos derivados deben:
 
@@ -285,6 +501,8 @@ No confiar en IDs enviados por cliente sin comprobar propiedad.
 
 - El cliente recibe sólo datos necesarios.
 - Datos personales de un participante no se exponen al Espacio.
+- Un borrador y sus adjuntos sólo son legibles por su autor; los roles del
+  Espacio no conceden acceso a contenido incompleto privado.
 - Telemetría de aprendizaje evita frase, monto, fecha y notas.
 - Tokens de invitación se almacenan hasheados.
 - Errores y logs no incluyen secretos ni datos financieros libres.
@@ -303,7 +521,11 @@ Reglas:
 - conservar borradores ante errores recuperables;
 - no guardar datos financieros sensibles en URLs.
 
-Los borradores entre funciones usan `sessionStorage`, versión y un ID opaco en la URL.
+Los handoffs efímeros entre funciones usan `sessionStorage`, versión y un ID
+opaco en la URL. El borrador de nuevo gasto de Espacio es una excepción
+deliberada: persistirá en servidor mediante `SpaceEntryDraft` porque debe
+sobrevivir a sesión y dispositivo, aparecer sólo al autor en Movimientos y
+coordinar adjuntos y publicación idempotente.
 
 ## 13. Errores y observabilidad
 
@@ -400,6 +622,12 @@ Prácticas:
 
 No agregar cache derivada sin estrategia de invalidación.
 
+Las referencias externas de Espacios son una excepción acotada: DolarAPI usa
+cache de 15 minutos y Frankfurter su frecuencia diaria. La interfaz solicita un
+lote por Espacio al recuperar foco y cada 15 minutos sólo con pestaña visible;
+nunca realiza una consulta por movimiento. La caída del proveedor conserva las
+monedas originales y no habilita un agregado parcial como total exacto.
+
 ## 16. Migraciones y compatibilidad
 
 Toda migración:
@@ -413,11 +641,36 @@ Toda migración:
 - conserva compatibilidad durante el despliegue;
 - documenta retiro del legado.
 
+Para Espacios, `migrate:spaces:v2` concentra `plan`, `clone`, `apply`, `verify`
+y `rollback`. Cada subcomando es `dry-run` por defecto y sólo admite escritura
+con `--execute` contra una base nueva con marcador `e2e-migration`. La fuente de
+development se lee dentro de un snapshot abortado y exige confirmación exacta.
+
+El plan vincula commit, auditoría, snapshot, copia y manifiesto mediante
+fingerprints. La copia conserva IDs, importes, monedas, fechas y relaciones,
+pero anonimiza identidad, texto libre, credenciales, tokens, adjuntos y URLs.
+Cada Espacio se transforma en su propia transacción; sus preimágenes tienen
+checksum y el rollback restaura por lotes el fingerprint anterior exacto.
+
+La activación futura es por Espacio. `contractVersion: 2` se confirma al final
+de la transacción verificada y desde entonces no existe fachada legacy: toda
+mutación de un documento que no sea v2 rechaza con `409`. Un agregado no elegible queda en sólo lectura, sin balances parciales.
+El contrato público sólo expone estado y motivo seguro; nunca metadata interna
+de migración. La autoridad completa está en la
+[`decisión 0010`](../decisiones/0010-migracion-progresiva-espacios-v2.md).
+
 Compatibilidad conocida:
 
 - campos legacy de vinculación en Espacios;
 - datos previos a políticas variables de compromisos;
 - relaciones incompletas entre transacciones y cuotas.
+
+Los campos monetarios exactos y los índices multimoneda rigen sobre
+`contractVersion: 2` en `finp-e2e` y, desde el cutover del 2026-08-29
+([`decisión 0011`](../decisiones/0011-cutover-espacios-v2-en-development.md)),
+en `finm`. FINP-P0-006 cerró el 2026-09-10 y la
+[`decisión 0016`](../decisiones/0016-cutover-productivo-espacios-v2.md)
+registró el cutover productivo ya ejecutado el 2026-09-21.
 
 El roadmap contiene la prioridad de limpieza.
 

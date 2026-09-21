@@ -14,6 +14,7 @@ export function SpaceHero({
     space,
     summary,
     canManage,
+    canCreateEntry,
     onInvite,
     onCreateEntry,
     className,
@@ -21,6 +22,7 @@ export function SpaceHero({
     space: ISpace
     summary: SpaceSummarySnapshot
     canManage: boolean
+    canCreateEntry: boolean
     onInvite: () => void
     onCreateEntry: () => void
     className?: string
@@ -93,10 +95,12 @@ export function SpaceHero({
                             Invitar
                         </Button>
                     ) : null}
-                    <Button size="sm" className="rounded-full" onClick={onCreateEntry}>
-                        <Coins className="h-4 w-4" />
-                        Nuevo movimiento
-                    </Button>
+                    {canCreateEntry ? (
+                        <Button size="sm" className="rounded-full" onClick={onCreateEntry}>
+                            <Coins className="h-4 w-4" />
+                            Nuevo movimiento
+                        </Button>
+                    ) : null}
                 </div>
             </div>
         </section>

@@ -116,6 +116,7 @@ export const CREATED_FROM = {
     QUICK_CAPTURE: 'quick_capture',
     TELEGRAM: 'telegram',
     SYSTEM: 'system',
+    SPACE: 'space',
 } as const
 
 export const RULE_APPLIES_TO = {
@@ -218,10 +219,20 @@ export const SPACE_ENTRY_TYPES = {
 
 export const SPACE_ENTRY_STATUSES = {
     RECORDED: 'recorded',
-    PENDING_CONFIRMATION: 'pending_confirmation',
+    VOIDED: 'voided',
     CONFIRMED: 'confirmed',
     LINKED: 'linked',
     REJECTED: 'rejected',
+} as const
+
+/** Estados compartidos válidos para escrituras del contrato financiero v2. */
+export const SPACE_ENTRY_V2_STATUSES = {
+    RECORDED: 'recorded',
+    VOIDED: 'voided',
+} as const
+
+export const SPACE_CONTRACT_VERSIONS = {
+    V2: 2,
 } as const
 
 export const SPACE_SPLIT_MODES = {
@@ -246,6 +257,7 @@ export const SPACE_ACTIVITY_EVENT_TYPES = {
     PARTICIPANT_REMOVED: 'participant_removed',
     ROLE_CHANGED: 'role_changed',
     SPACE_UPDATED: 'space_updated',
+    MIGRATION_IMPORTED: 'migration_imported',
 } as const
 
 export const SPACE_ACTIVITY_ENTITY_TYPES = {
@@ -258,10 +270,48 @@ export const SPACE_ACTIVITY_ENTITY_TYPES = {
 } as const
 
 export const SPACE_PERSONAL_IMPACT_KINDS = {
+    PERSONAL_EXPENSE: 'personal_expense',
+    ADVANCE: 'advance',
     PAYER_FULL_AMOUNT: 'payer_full_amount',
     PARTICIPANT_SHARE: 'participant_share',
     SETTLEMENT_PAID: 'settlement_paid',
     SETTLEMENT_RECEIVED: 'settlement_received',
+} as const
+
+export const SPACE_OPERATION_TYPES = {
+    CREATE_ENTRY: 'create_entry',
+    EDIT_ENTRY: 'edit_entry',
+    VOID_ENTRY: 'void_entry',
+    RESOLVE_PERSONAL_IMPACT: 'resolve_personal_impact',
+    LINK_PERSONAL_IMPACT: 'link_personal_impact',
+    IGNORE_PERSONAL_IMPACT: 'ignore_personal_impact',
+    REVIEW_PERSONAL_IMPACT: 'review_personal_impact',
+    REMOVE_PERSONAL_IMPACT: 'remove_personal_impact',
+    SETTLE_DEBT: 'settle_debt',
+    CHANGE_DEBT_MODE: 'change_debt_mode',
+    CHANGE_LIFECYCLE: 'change_lifecycle',
+    CHANGE_ROLE: 'change_role',
+    TRANSFER_OWNERSHIP: 'transfer_ownership',
+    UPDATE_SETTINGS: 'update_settings',
+    CHANGE_PARTICIPANT_STATE: 'change_participant_state',
+    ADD_PARTICIPANT: 'add_participant',
+    RESPOND_INVITE: 'respond_invite',
+} as const
+
+export const SPACE_ENTRY_DRAFT_INTENTS = {
+    NEW_EXPENSE: 'new_expense',
+} as const
+
+export const SPACE_ENTRY_DRAFT_STATUSES = {
+    ACTIVE: 'active',
+    PUBLISHING: 'publishing',
+    PUBLISHED: 'published',
+    DISCARDED: 'discarded',
+} as const
+
+export const SPACE_OPERATION_STATUSES = {
+    PENDING: 'pending',
+    COMMITTED: 'committed',
 } as const
 
 export const SPACE_PERSONAL_IMPACT_STATUSES = {
@@ -414,6 +464,10 @@ export type SpacePersonalCategoryStrategy =
 export type SpaceEntryType = typeof SPACE_ENTRY_TYPES[keyof typeof SPACE_ENTRY_TYPES]
 export type SpaceEntryStatus =
     typeof SPACE_ENTRY_STATUSES[keyof typeof SPACE_ENTRY_STATUSES]
+export type SpaceEntryV2Status =
+    typeof SPACE_ENTRY_V2_STATUSES[keyof typeof SPACE_ENTRY_V2_STATUSES]
+export type SpaceContractVersion =
+    typeof SPACE_CONTRACT_VERSIONS[keyof typeof SPACE_CONTRACT_VERSIONS]
 export type SpaceSplitMode = typeof SPACE_SPLIT_MODES[keyof typeof SPACE_SPLIT_MODES]
 export type SpaceActivityEventType =
     typeof SPACE_ACTIVITY_EVENT_TYPES[keyof typeof SPACE_ACTIVITY_EVENT_TYPES]
@@ -427,6 +481,14 @@ export type SpacePersonalPendingActionType =
     typeof SPACE_PERSONAL_PENDING_ACTION_TYPES[keyof typeof SPACE_PERSONAL_PENDING_ACTION_TYPES]
 export type SpacePersonalImpactSourceType =
     typeof SPACE_PERSONAL_IMPACT_SOURCE_TYPES[keyof typeof SPACE_PERSONAL_IMPACT_SOURCE_TYPES]
+export type SpaceOperationType =
+    typeof SPACE_OPERATION_TYPES[keyof typeof SPACE_OPERATION_TYPES]
+export type SpaceEntryDraftIntent =
+    typeof SPACE_ENTRY_DRAFT_INTENTS[keyof typeof SPACE_ENTRY_DRAFT_INTENTS]
+export type SpaceEntryDraftStatus =
+    typeof SPACE_ENTRY_DRAFT_STATUSES[keyof typeof SPACE_ENTRY_DRAFT_STATUSES]
+export type SpaceOperationStatus =
+    typeof SPACE_OPERATION_STATUSES[keyof typeof SPACE_OPERATION_STATUSES]
 export type DebtDirection = typeof DEBT_DIRECTIONS[keyof typeof DEBT_DIRECTIONS]
 export type DebtSourceType = typeof DEBT_SOURCE_TYPES[keyof typeof DEBT_SOURCE_TYPES]
 export type DebtStatus = typeof DEBT_STATUSES[keyof typeof DEBT_STATUSES]

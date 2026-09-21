@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-07-31
+> Última actualización: 2026-09-16
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -91,3 +91,35 @@ La referencia informa; la decisión sigue siendo propia de Finp.
 - [`0006 — Período, clasificación y lectura de Proyección`](0006-periodo-clasificacion-y-lectura-de-proyeccion.md):
   período de tarjetas, compra `1/1`, certeza, agrupaciones invariantes y límites
   del cierre operativo.
+- [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](0007-autoridad-espacios-finp-deudas.md):
+  origen compartido, parte propia exacta, impacto privado y una sola operación
+  de liquidación entre Espacios y Deudas.
+- [`0008 — Modelo y consistencia financiera de Espacios`](0008-modelo-consistencia-financiera-espacios.md):
+  modelo discriminado, servicios de aplicación, atomicidad, idempotencia,
+  permisos, migración y retiro del legado.
+- [`0009 — Autoridad multimoneda de Espacios`](0009-autoridad-multimoneda-espacios.md):
+  dinero exacto, snapshots, cotizaciones, saldos por moneda, liquidaciones
+  multitramos y presentación de composiciones.
+- [`0010 — Migración progresiva de Espacios v2`](0010-migracion-progresiva-espacios-v2.md):
+  clasificación cerrada, copia sanitizada, manifiesto privado, backfill por
+  Espacio, verificación y rollback exacto.
+- [`0011 — Cutover de Espacios v2 en development`](0011-cutover-espacios-v2-en-development.md):
+  autorización explícita, transformación in-place sobre `finm`, corte único de
+  los 11 Espacios, respaldo local y límites frente a producción y al fallback
+  global.
+- [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](0012-gasto-espacio-tarjeta-un-pago.md):
+  antecedente histórico del cargo privado por total real y parte propia; su
+  restricción sin plan fue reemplazada por la decisión 0015.
+- [`0013 — Borrador privado persistente de movimiento de Espacio`](0013-borrador-privado-persistente-movimiento-espacio.md):
+  recurso por autor y Espacio, guardado elegido al cancelar, listado privado,
+  adjuntos recuperables y publicación atómica e idempotente.
+- [`0014 — @axe-core/playwright en los recorridos E2E de Espacios`](0014-axe-core-playwright-en-recorridos-de-espacios.md):
+  evaluación de dependencia, alcance por superficie, umbral de fallo por
+  impacto y complemento de las aserciones dirigidas.
+- [`0015 — Plan privado de cuotas para un impacto de Espacio`](0015-plan-privado-cuotas-impacto-espacio.md):
+  plan privado por tarjeta, separación entre cargo real y parte propia,
+  creación atómica y remoción conjunta sin convertir el movimiento compartido
+  en un plan.
+- [`0016 — Cutover productivo de Espacios v2`](0016-cutover-productivo-espacios-v2.md):
+  reconoce el cutover productivo ejecutado, levanta el límite de la decisión
+  0011 y separa la promoción de código de una migración ya realizada.

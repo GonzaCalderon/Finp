@@ -86,4 +86,20 @@ describe('FormattedAmountInput', () => {
         )
         expect(screen.getByLabelText('Monto')).toHaveAttribute('readonly')
     })
+
+    it('respeta escalas monetarias 0 y 3 sin reinterpretar decimales como centenas', () => {
+        const { rerender } = render(<ControlledAmount initialValue={1250} currency="JPY" />)
+        const input = screen.getByLabelText('Monto')
+
+        expect(input).toHaveValue('1.250')
+        fireEvent.focus(input)
+        fireEvent.change(input, { target: { value: '12,5' } })
+        expect(input).toHaveValue('12')
+
+        rerender(<ControlledAmount currency="KWD" />)
+        const kwdInput = screen.getByLabelText('Monto')
+        fireEvent.focus(kwdInput)
+        fireEvent.change(kwdInput, { target: { value: '1,234' } })
+        expect(kwdInput).toHaveValue('1,234')
+    })
 })

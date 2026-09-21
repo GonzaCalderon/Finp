@@ -148,6 +148,25 @@ describe('resumen mensual de tarjetas', () => {
         })).toEqual([])
     })
 
+    it('separa la deuda real de la parte operacional de un plan de Espacio', () => {
+        const visa = card('visa', 'Visa')
+        const sharedPlan = plan('space-plan', visa, 'ARS', 1000, 3)
+        sharedPlan.operationalTotalAmount = 1200
+        sharedPlan.operationalInstallmentAmount = 400
+
+        const [summary] = buildMonthlyCardPaymentSummary({
+            month: '2026-07',
+            plans: [sharedPlan],
+            transactions: [],
+        })
+
+        expect(summary.due.ars).toBe(1000)
+        expect(summary.items[0]).toMatchObject({
+            amount: 1000,
+            operationalAmount: 400,
+        })
+    })
+
     it('ubica un consumo historico sin plan en el periodo financiero de su fecha', () => {
         const visa = card('visa', 'Visa')
         const historical = transaction('historical', {
@@ -168,6 +187,7 @@ describe('resumen mensual de tarjetas', () => {
             kind: 'single',
             sourceId: 'historical',
             installmentCount: 1,
+            operationalAmount: 20_000,
         })
         expect(buildMonthlyCardPaymentSummary({
             month: '2026-07',

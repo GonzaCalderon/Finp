@@ -163,6 +163,9 @@ export interface ITransaction {
     importSourceType?: ImportSourceType
     spaceId?: Types.ObjectId
     spaceEntryId?: Types.ObjectId
+    spaceImpactId?: Types.ObjectId
+    spaceOperationId?: Types.ObjectId
+    spaceContractVersion?: 2
     spaceNameSnapshot?: string
     /**
      * For space payer transactions: the portion of the amount that counts for
@@ -272,8 +275,12 @@ export interface IInstallmentPlan {
     merchant?: string
     currency: Currency
     totalAmount: number
+    /** Parte propia total para reporting; si falta, coincide con totalAmount. */
+    operationalTotalAmount?: number
     installmentCount: number
     installmentAmount: number
+    /** Parte propia por cuota; si falta, coincide con installmentAmount. */
+    operationalInstallmentAmount?: number
     purchaseDate: Date
     firstClosingMonth: string
     createdAt: Date
@@ -367,3 +374,4 @@ export interface ICommitmentApplication {
 }
 
 export * from './space'
+export * from './space-api'

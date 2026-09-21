@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-07-31
+> Última actualización: 2026-09-21
 > Fuente de verdad: índice canónico de documentación
 
 ## Índice
@@ -112,6 +112,16 @@ Decisiones vigentes:
 - [`0004 — Resumen bimonetario de tarjetas`](decisiones/0004-resumen-bimonetario-de-tarjetas.md).
 - [`0005 — Captura rápida, tarjetas y handoffs tipados`](decisiones/0005-captura-rapida-tarjetas-y-handoffs.md).
 - [`0006 — Período, clasificación y lectura de Proyección`](decisiones/0006-periodo-clasificacion-y-lectura-de-proyeccion.md).
+- [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](decisiones/0007-autoridad-espacios-finp-deudas.md).
+- [`0008 — Modelo y consistencia financiera de Espacios`](decisiones/0008-modelo-consistencia-financiera-espacios.md).
+- [`0009 — Autoridad multimoneda de Espacios`](decisiones/0009-autoridad-multimoneda-espacios.md).
+- [`0010 — Migración progresiva de Espacios v2`](decisiones/0010-migracion-progresiva-espacios-v2.md).
+- [`0011 — Cutover de Espacios v2 en development`](decisiones/0011-cutover-espacios-v2-en-development.md).
+- [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
+- [`0013 — Borrador privado persistente de movimiento de Espacio`](decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
+- [`0014 — @axe-core/playwright en los recorridos E2E de Espacios`](decisiones/0014-axe-core-playwright-en-recorridos-de-espacios.md).
+- [`0015 — Plan privado de cuotas para un impacto de Espacio`](decisiones/0015-plan-privado-cuotas-impacto-espacio.md).
+- [`0016 — Cutover productivo de Espacios v2`](decisiones/0016-cutover-productivo-espacios-v2.md).
 
 Una decisión se documenta cuando:
 
@@ -132,6 +142,9 @@ Una decisión se documenta cuando:
 - Un concepto tiene una fuente canónica; los demás documentos enlazan.
 - El roadmap es el único backlog.
 - Una función nueva actualiza especificación, estado, roadmap y documentación técnica según corresponda.
+- Una etapa no trivial se implementa sólo cuando sus fuentes canónicas permiten
+  retomarla sin inventar contratos, estados, permisos, recuperación o criterios
+  de cierre; el detalle obligatorio vive en el estándar de documentación.
 - Una decisión duradera crea o actualiza un registro en `decisiones/`.
 - Un documento reemplazado se archiva y deja un enlace desde el índice sólo si conserva valor histórico.
 - No duplicar listas de pendientes en documentos de dominio.

@@ -25,11 +25,22 @@ export async function GET(request: Request) {
         if (sourceType) query.sourceType = sourceType
         if (currency) query.currency = currency
 
+        const openStatuses: string[] = [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID]
+
         if (status) {
             query.status = status
         } else if (!includeIgnored) {
             // Por defecto excluir ignored, paid, cancelled
-            query.status = { $in: [DEBT_STATUSES.ACTIVE, DEBT_STATUSES.PARTIALLY_PAID] }
+            query.status = { $in: openStatuses }
+        }
+
+        // Una obligación sin saldo no es una deuda abierta. El filtro sólo aplica
+        // cuando se piden estados abiertos: pedir `paid` debe seguir devolviéndolos.
+        const asksOnlyOpenStatuses = status
+            ? openStatuses.includes(status)
+            : !includeIgnored
+        if (asksOnlyOpenStatuses) {
+            query.remainingAmount = { $gt: 0 }
         }
 
         const debts = await Debt.find(query).sort({ createdAt: -1 })

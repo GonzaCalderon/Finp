@@ -109,6 +109,40 @@ describe('spaceEntrySchema', () => {
         expect(result.success).toBe(false)
     })
 
+    it('valida el reparto fijo con la escala de la moneda', () => {
+        const validJpy = spaceEntrySchema.safeParse({
+            type: 'expense',
+            title: 'Tren',
+            amount: 100.4,
+            currency: 'JPY',
+            date: new Date('2026-04-10'),
+            paidByParticipantId: PARTICIPANT_A,
+            splitMode: 'fixed',
+            sharedWithParticipantIds: [PARTICIPANT_A, PARTICIPANT_B],
+            splitAllocations: [
+                { participantId: PARTICIPANT_A, amount: 50.4 },
+                { participantId: PARTICIPANT_B, amount: 50.4 },
+            ],
+        })
+        const invalidKwd = spaceEntrySchema.safeParse({
+            type: 'expense',
+            title: 'Cena',
+            amount: 1.002,
+            currency: 'KWD',
+            date: new Date('2026-04-10'),
+            paidByParticipantId: PARTICIPANT_A,
+            splitMode: 'fixed',
+            sharedWithParticipantIds: [PARTICIPANT_A, PARTICIPANT_B],
+            splitAllocations: [
+                { participantId: PARTICIPANT_A, amount: 0.333 },
+                { participantId: PARTICIPANT_B, amount: 0.668 },
+            ],
+        })
+
+        expect(validJpy.success).toBe(true)
+        expect(invalidKwd.success).toBe(false)
+    })
+
     it('acepta liquidaciones con splitMode none y un receptor', () => {
         const result = spaceEntrySchema.safeParse({
             type: 'settlement',

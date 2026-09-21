@@ -10,6 +10,7 @@
         "docs:check": "node scripts/check-docs.mjs",
         "test": "vitest run",
         "test:unit": "vitest run tests/unit",
+        "test:integration:spaces:v2": "vitest run --config vitest.integration.config.ts",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage tests/unit",
         "test:e2e:check": "tsx tests/e2e/helpers/check-environment.ts",
@@ -18,6 +19,11 @@
         "test:e2e:debug": "playwright test --debug",
         "test:seed": "tsx tests/e2e/helpers/seed.ts",
         "typecheck": "tsc --noEmit",
+        "audit:spaces:legacy": "tsx scripts/audit-spaces-legacy.ts",
+        "migrate:spaces:v2": "tsx scripts/migrate-spaces-v2.ts",
+        "indexes:spaces:v2": "tsx scripts/manage-spaces-v2-indexes.ts",
+        "cleanup:spaces:legacy-fields": "tsx scripts/cleanup-space-entry-legacy-fields.ts",
+        "reconcile:space-draft-attachments": "tsx scripts/reconcile-space-draft-attachments.ts",
         "backfill:commitments": "tsx scripts/backfill-commitments.ts",
         "repair:payment-groups": "tsx scripts/repair-payment-groups.ts"
     },
@@ -53,6 +59,7 @@
         "zod": "^4.3.6"
     },
     "devDependencies": {
+        "@axe-core/playwright": "^4.13.0",
         "@playwright/test": "^1.49.0",
         "@tailwindcss/postcss": "^4",
         "@testing-library/jest-dom": "^6.6.3",

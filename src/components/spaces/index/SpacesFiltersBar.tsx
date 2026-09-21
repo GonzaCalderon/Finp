@@ -84,7 +84,7 @@ function SortSelect({
         <div className={cn('flex items-center gap-2 text-xs text-muted-foreground', className)}>
             <span className="shrink-0">Ordenar por:</span>
             <Select value={sort} onValueChange={(v) => onSortChange(v as SpaceSortOption)}>
-                <SelectTrigger size="sm" className="h-7 rounded-full border-border/70 bg-background/80 text-xs">
+                <SelectTrigger aria-label="Ordenar espacios" size="sm" className="h-7 rounded-full border-border/70 bg-background/80 text-xs">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent position="popper" align="end">

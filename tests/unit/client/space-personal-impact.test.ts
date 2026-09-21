@@ -6,56 +6,46 @@ vi.mock('@/lib/client/auth-client', () => ({ apiJson: mocks.apiJson }))
 
 const {
     PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS,
-    PersonalSpaceTransactionNotDeletedError,
     removePersonalSpaceTransaction,
     withoutSelectedTransaction,
 } = await import('@/lib/client/space-personal-impact')
 
+const TARGET = {
+    transactionId: '64b000000000000000000004',
+    spaceId: '64b000000000000000000001',
+    spaceEntryId: '64b000000000000000000002',
+}
+const DELETE_URL =
+    '/api/transactions/64b000000000000000000004?spaceId=64b000000000000000000001&spaceEntryId=64b000000000000000000002'
+
 describe('removePersonalSpaceTransaction', () => {
     beforeEach(() => vi.clearAllMocks())
 
-    it('envia el transactionId de la tarjeta seleccionada y acepta una eliminacion confirmada', async () => {
-        mocks.apiJson.mockResolvedValue({
-            ok: true,
-            deletedTransaction: true,
-            orphanTransactionDeleted: true,
-        })
+    it('elimina la transacción por su recurso exacto y deja el teardown resolver el impacto', async () => {
+        mocks.apiJson.mockResolvedValueOnce({ reverted: { personalImpact: true } })
 
-        const response = await removePersonalSpaceTransaction({
-            transactionId: '64b000000000000000000004',
-            spaceId: '64b000000000000000000001',
-            spaceEntryId: '64b000000000000000000002',
-        })
+        const response = await removePersonalSpaceTransaction(TARGET)
 
-        expect(mocks.apiJson).toHaveBeenCalledWith(
-            '/api/spaces/64b000000000000000000001/entries/64b000000000000000000002/personal-impact?transactionId=64b000000000000000000004',
-            { method: 'DELETE' }
-        )
+        expect(mocks.apiJson).toHaveBeenCalledWith(DELETE_URL, { method: 'DELETE' })
+        expect(response.orphanTransactionDeleted).toBe(false)
+    })
+
+    it('informa cuando eliminó una transacción huérfana sin impacto persistido', async () => {
+        mocks.apiJson.mockResolvedValueOnce({ reverted: { personalImpact: false } })
+
+        const response = await removePersonalSpaceTransaction(TARGET)
+
+        expect(mocks.apiJson).toHaveBeenCalledWith(DELETE_URL, { method: 'DELETE' })
         expect(response.orphanTransactionDeleted).toBe(true)
     })
 
-    it('no interpreta deletedTransaction false como exito', async () => {
-        mocks.apiJson.mockResolvedValue({
-            ok: true,
-            deletedTransaction: false,
-            orphanTransactionDeleted: false,
-        })
-
-        await expect(removePersonalSpaceTransaction({
-            transactionId: '64b000000000000000000004',
-            spaceId: '64b000000000000000000001',
-            spaceEntryId: '64b000000000000000000002',
-        })).rejects.toBeInstanceOf(PersonalSpaceTransactionNotDeletedError)
-    })
-
-    it('propaga un fallo de red para permitir reintentar', async () => {
+    it('propaga un fallo del teardown para permitir reintentar', async () => {
         mocks.apiJson.mockRejectedValue(new Error('Sin conexion'))
 
-        await expect(removePersonalSpaceTransaction({
-            transactionId: '64b000000000000000000004',
-            spaceId: '64b000000000000000000001',
-            spaceEntryId: '64b000000000000000000002',
-        })).rejects.toThrow('Sin conexion')
+        await expect(removePersonalSpaceTransaction(TARGET)).rejects.toThrow(
+            'Sin conexion'
+        )
+        expect(mocks.apiJson).toHaveBeenCalledTimes(1)
     })
 
     it('quita solo la tarjeta confirmada e invalida finanzas y Espacios', () => {

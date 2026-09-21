@@ -1,4 +1,17 @@
 import { z } from 'zod'
+import { moneyFromDecimal } from '@/lib/utils/money'
+
+function fixedAllocationsMatchTotal(amounts: number[], total: number, currency: string) {
+    try {
+        const allocatedMinorUnits = amounts.reduce(
+            (sum, amount) => sum + BigInt(moneyFromDecimal(currency, amount).minorUnits),
+            BigInt(0)
+        )
+        return allocatedMinorUnits === BigInt(moneyFromDecimal(currency, total).minorUnits)
+    } catch {
+        return Math.abs(amounts.reduce((sum, amount) => sum + amount, 0) - total) <= 0.01
+    }
+}
 
 const currencySchema = z
     .string()
@@ -168,6 +181,12 @@ export const spaceEntrySchema = z
         ),
         personalAccountId: optionalObjectIdString,
         linkedTransactionId: optionalObjectIdString,
+        installmentCount: z.number().int().min(1, 'Mínimo 1 cuota').optional(),
+        firstClosingMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'El mes de la primera cuota no es válido').optional(),
+        installmentQuoteAmount: optionalAmountSchema.refine(
+            (value) => value === undefined || value > 0,
+            'El valor de cuota debe ser mayor a 0'
+        ),
     })
     .superRefine((data, ctx) => {
         if (data.splitMode !== 'none') {
@@ -198,12 +217,9 @@ export const spaceEntrySchema = z
         }
 
         if (data.splitMode === 'fixed') {
-            const total = (data.splitAllocations ?? []).reduce(
-                (acc, allocation) => acc + (allocation.amount ?? 0),
-                0
-            )
+            const amounts = (data.splitAllocations ?? []).map((allocation) => allocation.amount ?? 0)
 
-            if (Math.abs(total - data.amount) > 0.01) {
+            if (!fixedAllocationsMatchTotal(amounts, data.amount, data.currency)) {
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     message: 'Los montos fijos deben sumar el total del movimiento',
@@ -275,32 +291,6 @@ export const spaceCategorySchema = z.object({
 export const spaceCategoryUpdateSchema = spaceCategorySchema.partial().extend({
     isArchived: z.boolean().optional(),
 })
-
-export const spaceEntryConfirmSchema = z
-    .object({
-        mode: z.enum(['create', 'link']).default('create'),
-        description: optionalTrimmedString,
-        categoryId: optionalObjectIdString,
-        accountId: optionalObjectIdString,
-        linkedTransactionId: optionalObjectIdString,
-    })
-    .superRefine((data, ctx) => {
-        if (data.mode === 'create' && !data.accountId) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'Seleccioná una cuenta para registrar la transacción',
-                path: ['accountId'],
-            })
-        }
-
-        if (data.mode === 'link' && !data.linkedTransactionId) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'Seleccioná una transacción existente para vincular',
-                path: ['linkedTransactionId'],
-            })
-        }
-    })
 
 export const spacePersonalImpactSchema = z
     .object({
@@ -402,11 +392,8 @@ export const spaceEntryEditSchema = z
         }
 
         if (data.splitMode === 'fixed' && data.splitAllocations && data.amount !== undefined) {
-            const total = data.splitAllocations.reduce(
-                (acc, allocation) => acc + (allocation.amount ?? 0),
-                0
-            )
-            if (Math.abs(total - data.amount) > 0.01) {
+            const amounts = data.splitAllocations.map((allocation) => allocation.amount ?? 0)
+            if (!fixedAllocationsMatchTotal(amounts, data.amount, data.currency ?? 'ARS')) {
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     message: 'Los montos fijos deben sumar el total del movimiento',
@@ -481,5 +468,3 @@ export type SpaceParticipantFormData = z.output<typeof spaceParticipantSchema>
 export type SpaceEntryFormInput = z.input<typeof spaceEntrySchema>
 export type SpaceEntryFormData = z.output<typeof spaceEntrySchema>
 export type SpaceCategoryFormData = z.output<typeof spaceCategorySchema>
-export type SpaceEntryConfirmInput = z.input<typeof spaceEntryConfirmSchema>
-export type SpaceEntryConfirmData = z.output<typeof spaceEntryConfirmSchema>

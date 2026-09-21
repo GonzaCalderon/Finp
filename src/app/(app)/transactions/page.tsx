@@ -1016,11 +1016,30 @@ function TransactionsPageInner() {
 
     const handleSyncImpact = async (transaction: ITransaction) => {
         if (!transaction.spaceId || !transaction.spaceEntryId) return
+        const spaceId = transaction.spaceId.toString()
+        const entryId = transaction.spaceEntryId.toString()
+        const impactUrl = `/api/spaces/${spaceId}/entries/${entryId}/personal-impact`
         try {
-            await apiJson(
-                `/api/spaces/${transaction.spaceId.toString()}/entries/${transaction.spaceEntryId.toString()}/personal-impact/sync`,
-                { method: 'POST' }
-            )
+            const { reviewImpact } = await apiJson<{
+                reviewImpact: { _id: string; revision?: number } | null
+            }>(impactUrl)
+
+            if (!reviewImpact) {
+                throw new Error('Este movimiento ya no requiere revisión.')
+            }
+
+            await apiJson(impactUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': crypto.randomUUID(),
+                },
+                body: JSON.stringify({
+                    impactId: reviewImpact._id.toString(),
+                    expectedRevision: reviewImpact.revision ?? 0,
+                    decision: { type: 'sync_transaction' },
+                }),
+            })
             setHighlightedId(null)
             success('Transacción actualizada')
             invalidateData([...NOTIFICATION_INVALIDATION_TAGS, ...TRANSACTION_INVALIDATION_TAGS])

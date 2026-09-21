@@ -1,14 +1,14 @@
 import { Types } from 'mongoose'
-import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
 import { SpaceEntry } from '@/lib/models'
 import { createSpaceActivityEvent } from '@/lib/server/space-activity'
-import { getAccessibleSpaceContext } from '@/lib/server/spaces'
+import { spaceApiErrorResponse } from '@/lib/server/space-api-contract'
+import { validateSpaceAttachmentFile } from '@/lib/server/space-attachment-file'
+import { resolveSpaceAttachmentStorage } from '@/lib/server/space-attachment-storage'
+import { getAccessibleSpaceContext, getContextCapabilities } from '@/lib/server/spaces'
 import {
-    isAllowedMimeType,
-    isWithinSizeLimit,
     sanitizeFileName,
 } from '@/lib/utils/space-categories'
 import { extractId } from '@/lib/utils/spaces'
@@ -29,13 +29,6 @@ export async function POST(
             return NextResponse.json({ error: 'Movimiento inválido' }, { status: 400 })
         }
 
-        if (!process.env.BLOB_READ_WRITE_TOKEN) {
-            return NextResponse.json(
-                { error: 'El almacenamiento de comprobantes no está configurado.' },
-                { status: 503 }
-            )
-        }
-
         await connectDB()
 
         const context = await getAccessibleSpaceContext(id, session.user.id)
@@ -46,6 +39,22 @@ export async function POST(
         const entry = await SpaceEntry.findOne({ _id: entryId, spaceId: id }).lean<ISpaceEntry | null>()
         if (!entry) {
             return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
+        }
+
+        // Adjuntar es una edición del movimiento compartido: exige la misma
+        // capacidad, para que un Espacio pausado, cerrado o archivado no acepte
+        // archivos nuevos ni un movimiento anulado siga creciendo.
+        const capabilities = getContextCapabilities(context)
+        const isOwnEntry = extractId(entry.createdByParticipantId) === extractId(context.currentParticipant._id)
+        const canAttach = entry.isVoided !== true && (
+            capabilities.has('edit_any_entry') ||
+            (isOwnEntry && capabilities.has('edit_own_entry'))
+        )
+        if (!canAttach) {
+            return NextResponse.json(
+                { error: 'No podés adjuntar comprobantes a este movimiento.' },
+                { status: 403 }
+            )
         }
 
         if ((entry.attachments?.length ?? 0) >= 5) {
@@ -61,48 +70,31 @@ export async function POST(
             return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 })
         }
 
-        if (!isAllowedMimeType(file.type)) {
-            return NextResponse.json(
-                { error: 'Formato no permitido. Usá JPG, PNG, WebP o PDF.' },
-                { status: 400 }
-            )
-        }
-
-        if (!isWithinSizeLimit(file.size)) {
-            return NextResponse.json(
-                { error: 'El archivo debe pesar hasta 10 MB.' },
-                { status: 400 }
-            )
-        }
-
-        const safeFileName = sanitizeFileName(file.name)
-        const buffer = Buffer.from(await file.arrayBuffer())
-        const blob = await put(
-            `spaces/${id}/entries/${entryId}/${Date.now()}-${safeFileName}`,
-            buffer,
-            {
-                access: 'private',
-                token: process.env.BLOB_READ_WRITE_TOKEN,
-                contentType: file.type,
-            }
-        )
-
+        const validated = await validateSpaceAttachmentFile(file)
         const attachmentId = new Types.ObjectId()
+        const storageKey = `spaces/${id}/entries/${entryId}/${attachmentId.toString()}.${validated.extension}`
+        const storage = resolveSpaceAttachmentStorage()
+        await storage.put({ storageKey, body: validated.buffer, mimeType: validated.mimeType })
         const attachment = {
             _id: attachmentId,
             uploadedByUserId: new Types.ObjectId(session.user.id),
-            fileName: safeFileName,
-            mimeType: file.type,
-            size: file.size,
+            fileName: sanitizeFileName(validated.fileName),
+            mimeType: validated.mimeType,
+            size: validated.size,
             storageProvider: 'vercel_blob',
-            storageKey: blob.pathname,
+            storageKey,
+            contentSha256: validated.contentSha256,
             createdAt: new Date(),
         } satisfies ISpaceEntryAttachment
 
-        await SpaceEntry.updateOne(
-            { _id: entryId, spaceId: id },
+        const stored = await SpaceEntry.updateOne(
+            { _id: entryId, spaceId: id, $expr: { $lt: [{ $size: { $ifNull: ['$attachments', []] } }, 5] } },
             { $push: { attachments: attachment } }
         )
+        if (stored.modifiedCount !== 1) {
+            await storage.delete(storageKey).catch(() => undefined)
+            return NextResponse.json({ error: 'No se pudo vincular el archivo.', code: 'ATTACHMENT_LIMIT_REACHED' }, { status: 409 })
+        }
 
         createSpaceActivityEvent({
             spaceId: id,
@@ -121,7 +113,6 @@ export async function POST(
 
         return NextResponse.json({ attachment }, { status: 201 })
     } catch (error) {
-        console.error('Error al subir comprobante:', error)
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+        return spaceApiErrorResponse(error, 'No se pudo subir el comprobante.')
     }
 }

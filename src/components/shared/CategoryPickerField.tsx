@@ -89,7 +89,6 @@ export function CategoryPickerField({
                                 category={category}
                                 selected={selectedCategoryId === category._id.toString()}
                                 onClick={() => onSelect(category._id.toString())}
-                                animateOnMount={false}
                             />
                         ))}
                     </div>

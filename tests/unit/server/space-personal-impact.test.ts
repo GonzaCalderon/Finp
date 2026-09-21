@@ -81,7 +81,6 @@ function entry(overrides: Record<string, unknown>): ISpaceEntry {
         paidByParticipantId: new Types.ObjectId(),
         sharedWithParticipantIds: [],
         splitMode: 'equal',
-        confirmationRequired: false,
         createdAt: new Date('2026-04-10'),
         updatedAt: new Date('2026-04-10'),
         ...overrides,
@@ -228,36 +227,6 @@ describe('getPersonalImpactForEntries', () => {
         expect(filter.status.$in).toEqual(['linked', 'pending', 'needs_review'])
     })
 
-    it('soporta legacy linkedTransactionId si pertenece al usuario actual', async () => {
-        const spaceId = new Types.ObjectId()
-        const userId = new Types.ObjectId()
-        const participantId = new Types.ObjectId()
-        const entryId = new Types.ObjectId()
-        const transactionId = new Types.ObjectId()
-        const participants = [
-            participant({ _id: participantId, userId, displayName: 'Yo' }),
-        ]
-        const legacyEntry = entry({
-            _id: entryId,
-            spaceId,
-            status: 'linked',
-            linkedTransactionId: transactionId,
-            paidByParticipantId: participantId,
-            sharedWithParticipantIds: [participantId],
-            confirmedByUserId: userId,
-        })
-
-        const result = await getPersonalImpactForEntries(
-            spaceId.toString(),
-            userId.toString(),
-            [entryId.toString()],
-            [legacyEntry],
-            participants
-        )
-
-        expect(result[entryId.toString()].linkedImpact?.transactionId?.toString()).toBe(transactionId.toString())
-        expect(result[entryId.toString()].linkedImpact?.status).toBe('linked')
-    })
 })
 
 describe('upsertLinkedPersonalImpact', () => {

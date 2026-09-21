@@ -90,22 +90,22 @@ export const SPACE_ENTRY_TYPE_META: Record<
     expense: {
         icon: HandCoins,
         accent: 'var(--chart-4)',
-        softAccent: 'rgba(239,68,68,0.12)',
+        softAccent: 'color-mix(in srgb, var(--chart-4) 12%, transparent)',
     },
     income: {
         icon: CircleDollarSign,
         accent: 'var(--chart-3)',
-        softAccent: 'rgba(16,185,129,0.12)',
+        softAccent: 'color-mix(in srgb, var(--chart-3) 12%, transparent)',
     },
     adjustment: {
         icon: Settings2,
         accent: 'var(--chart-2)',
-        softAccent: 'rgba(212,160,23,0.14)',
+        softAccent: 'color-mix(in srgb, var(--chart-2) 14%, transparent)',
     },
     settlement: {
         icon: ArrowDownLeft,
         accent: 'var(--sky)',
-        softAccent: 'rgba(74,158,204,0.14)',
+        softAccent: 'color-mix(in srgb, var(--sky) 14%, transparent)',
     },
 }
 
@@ -431,10 +431,10 @@ export function SpaceInviteStatusBadge({
 }) {
     const tone =
         status === 'accepted'
-            ? { background: 'rgba(16,185,129,0.12)', color: '#10B981' }
+            ? { background: 'rgba(16,185,129,0.12)', color: 'var(--chart-3)' }
             : status === 'declined'
-                ? { background: 'rgba(239,68,68,0.12)', color: '#EF4444' }
-                : { background: 'rgba(212,160,23,0.14)', color: '#A67C00' }
+                ? { background: 'rgba(239,68,68,0.12)', color: 'var(--chart-4)' }
+                : { background: 'rgba(212,160,23,0.14)', color: 'var(--warning-foreground)' }
 
     return (
         <Badge
@@ -485,9 +485,7 @@ export function SpaceEntryStatusBadge({
             ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
             : status === 'confirmed'
                 ? { background: 'rgba(74,158,204,0.14)', color: 'var(--sky)', label: 'Confirmado' }
-                : status === 'pending_confirmation'
-                    ? { background: 'rgba(212,160,23,0.14)', color: '#A67C00', label: 'Pendiente' }
-                    : { background: 'rgba(239,68,68,0.12)', color: '#EF4444', label: 'Rechazado' }
+                : { background: 'rgba(239,68,68,0.12)', color: 'var(--chart-4)', label: 'Rechazado' }
 
     return (
         <Badge
@@ -511,6 +509,7 @@ export function SpaceMetricCard({
     accent,
     footer,
     compact = false,
+    amountContent,
 }: {
     label: string
     amount: number
@@ -520,6 +519,7 @@ export function SpaceMetricCard({
     accent?: string
     footer?: ReactNode
     compact?: boolean
+    amountContent?: ReactNode
 }) {
     return (
         <div
@@ -537,16 +537,18 @@ export function SpaceMetricCard({
             >
                 {label}
             </p>
-            <ResponsiveAmount
-                amount={amount}
-                currency={currency}
-                hidden={hidden}
-                color={accent}
-                className={cn(
-                    'font-semibold tracking-tight',
-                    compact ? 'mt-2 text-[1.35rem] md:text-[1.45rem]' : 'mt-3 text-[1.7rem]'
-                )}
-            />
+            {amountContent ?? (
+                <ResponsiveAmount
+                    amount={amount}
+                    currency={currency}
+                    hidden={hidden}
+                    color={accent}
+                    className={cn(
+                        'font-semibold tracking-tight',
+                        compact ? 'mt-2 text-[1.35rem] md:text-[1.45rem]' : 'mt-3 text-[1.7rem]'
+                    )}
+                />
+            )}
             {footer ? (
                 <div
                     className={cn(
@@ -567,12 +569,14 @@ export function SpaceAmountInline({
     hidden,
     className,
     color,
+    exact = false,
 }: {
     amount: number
     currency: string
     hidden: boolean
     className?: string
     color?: string
+    exact?: boolean
 }) {
     return (
         <ResponsiveAmount
@@ -581,6 +585,7 @@ export function SpaceAmountInline({
             hidden={hidden}
             className={className}
             color={color}
+            abbreviateOnMobile={!exact}
         />
     )
 }
@@ -602,7 +607,7 @@ export function SpaceTonePill({
             )}
             style={{
                 background: positive ? 'rgba(16,185,129,0.12)' : 'rgba(212,160,23,0.14)',
-                color: positive ? '#10B981' : '#A67C00',
+                color: positive ? 'var(--chart-3)' : 'var(--warning-foreground)',
             }}
         >
             {positive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}

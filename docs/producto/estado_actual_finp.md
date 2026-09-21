@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-08-04
+> Última actualización: 2026-09-21
 > Fuente de verdad: alcance implementado y verificado
 
 ## Índice
@@ -26,55 +26,102 @@ Finp es una aplicación web funcional de finanzas personales y compartidas. Cubr
 
 Estado general:
 
-- base apta para preproducción controlada;
+- base personal apta para preproducción controlada; Espacios tiene su exactitud
+  P0 y su cierre integral de experiencia (FINP-P1-013) completados en `dev`;
+- Espacios v2 tiene su cutover ejecutado y verificado sobre `finm`; el estado
+  productivo fue confirmado el 2026-09-21 por la decisión 0016;
 - dominio personal amplio;
-- Espacios y Deudas operativos;
+- Espacios y Deudas tienen capacidades operativas amplias, con inconsistencias
+  de integración y experiencia verificadas;
 - Captura rápida con aprendizaje y orientación;
 - calidad automatizada sólida en lógica y servicios;
-- E2E local reproducible en una base aislada;
-- smoke financiero real aprobado;
-- falta rotar la credencial de pruebas para que el job E2E ya configurado pueda
-  ejecutarse en CI.
+- entorno E2E local aislado y reproducible, con 82 escenarios globales en desktop
+  y mobile;
+- smoke financiero con validación histórica y fixtures independientes del orden
+  de ejecución y de la fecha en que corre la suite;
+- primera ejecución E2E remota pendiente de configurar `MONGODB_URI_TEST` con
+  alcance exclusivo sobre `finp-e2e`.
 
 La especificación completa está en [`especificacion_funcional.md`](especificacion_funcional.md). Las prioridades viven sólo en [`roadmap_finp.md`](roadmap_finp.md).
 
 ## 2. Estado técnico
 
-Verificado localmente el 2026-08-04 sobre
-`codex/fix-orphan-space-transactions`:
+El checkpoint multimoneda quedó integrado en `dev` mediante el merge
+`8b31c87`. Sus checks focales se verificaron el 2026-08-25 y se reejecutaron
+sobre el estado actual el 2026-09-09:
 
 - Next.js 16.2.6, React 19.2.3 y TypeScript;
 - MongoDB y Mongoose;
 - autenticación con NextAuth;
-- 98 rutas API;
+- 99 rutas API;
 - typecheck limpio;
 - ESLint limpio;
+- validación documental limpia;
 - build de producción limpio, con 62 páginas generadas;
-- 804 unit tests aprobados en 100 archivos, sin tests en `todo`;
-- 4 de 4 escenarios E2E focales de impactos personales de Espacios aprobados
-  para desktop y mobile;
-- la corrida E2E global adicional completó 52 de 60: el smoke financiero leyó
-  cuentas residuales y, después de varios minutos de `next dev`, rutas dinámicas
-  devolvieron 404 y dos altas de transacciones no cerraron el diálogo;
+- 962 unit tests aprobados en 130 archivos, sin tests en `todo` (verificado el
+  2026-09-21 sobre `codex/fix-spaces-v2-autosave-loop`);
+- 20 recorridos de integración de Espacios v2 aprobados contra bases E2E con
+  sesiones MongoDB reales; la suite corre desde entorno local sin la limitación
+  EACCES/whitelist de Atlas que quedó registrada al cerrar la etapa 3 de
+  FINP-P1-013;
+- la suite global tiene 82 escenarios E2E en Chromium desktop y Pixel 7. El
+  registro previo de «68 de 68» quedó desactualizado por crecimiento de la suite
+  y, además, era optimista: el smoke financiero sembraba tres movimientos con
+  fecha futura y sólo cuadraba corriendo la suite pasado el día 15 del mes. La
+  problema del fixture quedó corregido en `codex/spaces-p0-006-closure`. Los 82
+  escenarios quedaron verdes el 2026-09-21 contra el build de producción;
 - preflight E2E sin conexión y seed repetible implementados; ambos rechazan
   bases sin marcador explícito o iguales a desarrollo;
 - `.env.test.local` selecciona la base Atlas exclusiva `finp-e2e`, mientras
   desarrollo conserva `finm`;
-- el seed acotado de Espacios es repetible y restaura el usuario general; la
-  limpieza completa del usuario independiente del smoke financiero requiere
-  estabilización antes de considerar verde la suite global;
-- CI activo para lint, build y unit tests;
-- job E2E activo; omite conexiones hasta recibir `MONGODB_URI_TEST` después de
-  la rotación.
+- el seed recrea todas las cuentas del usuario general, restaura su cuenta
+  predeterminada y mantiene usuarios independientes para smoke financiero,
+  Proyección e impactos personales de Espacios;
+- CI activo para lint, build y unit tests; el PR 37 además corrió y aprobó
+  `E2E Critical` contra `finp-e2e` antes de mergear a `dev`;
+- job E2E activo; informa la configuración pendiente y no conecta hasta recibir
+  `MONGODB_URI_TEST` limitada a `finp-e2e`;
+- auditoría legacy de Espacios disponible como lectura snapshot estrictamente
+  read-only para E2E y development, con confirmación de base, códigos estables,
+  reportes locales sanitizados y rechazo de producción;
+- CLI de migración con `plan`, `clone`, `apply`, `verify`, `resolve` y
+  `rollback`; el modo `--cutover` admite `finm` como destino con confirmación
+  exacta de nombre y registra la corrida como no-ensayo, sin relajar el rechazo
+  de producción ni el límite a `e2e-migration` del resto de los modos.
+
+El cutover de Espacios v2 sobre `finm` se ejecutó el 2026-08-29, autorizado por
+la decisión [`0011`](../decisiones/0011-cutover-espacios-v2-en-development.md):
+
+- 11 Espacios migrados, 0 bloqueados, 354 preimágenes guardadas;
+- `verify` válido con 0 incompatibilidades de balance, deuda o vínculo privado
+  y ledger personal invariante; las 736 transacciones personales y las 33
+  cuentas conservaron su conteo previo;
+- respaldo `mongodump` verificado por lectura y 10 índices v2 creados sin
+  violaciones de unicidad;
+- el huérfano global quedó resuelto el mismo día mediante el subcomando
+  `resolve`, dentro de la corrida `cutover-20260829`; `verify` cierra con 0
+  resoluciones sin aplicar;
+- el cutover productivo posterior está confirmado en la decisión
+  [`0016`](../decisiones/0016-cutover-productivo-espacios-v2.md). Promover código
+  no repite la migración ni escribe datos productivos.
 
 Ramas:
 
 - `main`: producción;
-- `dev`: desarrollo;
-- `dev` coincide con `origin/dev` en `d8ae0e6`;
-- `origin/main` es ancestro de `origin/dev` y está 17 commits detrás;
-- la rama local `main` está 87 commits detrás de `origin/main` y no se usa para
-  trabajo hasta actualizarla de forma autorizada.
+- `dev`: base de integración del próximo estado productivo;
+- `codex/spaces-multicurrency`: integrada en `dev` mediante PR 31 y merge
+  `8b31c87`;
+- `codex/spaces-new-entry-exactness`: integrada en `dev` mediante PR 37 el
+  2026-09-09 (borrador privado y adjuntos recuperables de `Nuevo gasto`);
+- `codex/spaces-p0-006-closure`: abierta el 2026-09-09, mergeada a `dev` el
+  2026-09-10 como PR 38. Retira el
+  legado que podía escribir sobre datos v2 y completa la etapa 5 de FINP-P0-006.
+  Su estado, sus correcciones al diagnóstico y lo que resta viven en
+  [`roadmap_finp.md`](roadmap_finp.md);
+- antes del checkpoint se verificó que `origin/main` fuera ancestro de
+  `origin/dev`;
+- la rama local `main` está desactualizada y no se usa para trabajo hasta
+  actualizarla de forma autorizada.
 
 ## 3. Finanzas personales
 
@@ -273,11 +320,145 @@ elige el usuario.
   la transacción recién creada si falla el alta del impacto;
 - revisión cuando cambia el origen;
 - reconciliación de pendientes al cambiar el reparto: se actualizan, cancelan o
-  crean según quién deba decidir con el reparto nuevo.
+  crean según quién deba decidir con el reparto nuevo;
+- contrato público v2 sin documentos Mongoose, lectura legacy normalizada y
+  modo seguro de sólo lectura cuando no se puede demostrar un saldo;
+- movimientos paginados por `dateKey + _id`, capacidades calculadas por servidor
+  y mutaciones con idempotencia y revisión esperada;
+- gasto v2 en cuatro pasos (datos, reparto, extras y revisión) con revisión de
+  total, parte propia, cuenta, gasto operacional, adelanto y deuda antes de
+  confirmar;
+- liquidación propia o representada compartida por Espacios y Deudas, con
+  decisión personal separada para cada contraparte;
+- configuración v2 con moneda de reporte inmutable desde el primer movimiento,
+  preservación de monedas usadas y continuidad histórica de participantes;
+- dinero v2 exacto en unidades menores y registro ISO activo con escalas 0, 2
+  y 3;
+- gastos, partes y equivalencias históricas con snapshot inmutable, más
+  revaluación separada de posiciones abiertas;
+- referencias DolarAPI/Frankfurter en lote, reemplazo manual y recuperación
+  segura ante cambio, vencimiento o proveedor caído;
+- balances y deudas independientes por moneda, con liquidaciones atómicas de
+  varios componentes y tramos;
+- tira de cotizaciones, composición `Incluye…` y filtros combinables por moneda
+  original, pagada o de deuda;
+- alta de `Nuevo gasto` unificada entre portada y detalle sobre contrato v2,
+  dinero exacto por escala ISO, fecha civil, preview e idempotencia;
+- consumo privado de tarjeta ARS/USD con cantidad y primer cierre explícitos,
+  plan por el total real y parte propia operacional proporcional;
+- revisión final sin abreviar montos, bloqueo mientras calcula y edición que
+  preserva participantes históricos inactivos en su rol original;
+- borrador de nuevo gasto separado del movimiento, único por autor y Espacio,
+  persistente, reanudable y visible sólo para ese autor en Movimientos;
+- guardado elegido al cancelar, revisión optimista, estado accesible, fallback
+  local ante error, descarte confirmado y publicación atómica e idempotente sin
+  afectar balances, deuda, actividad ni Mi Finp antes de confirmar.
+- clasificación cerrada de los 97 hallazgos críticos/altos, contratos internos
+  de plan, run, issue, disposición y resolución, y estado público seguro de
+  migración;
+- copia aislada que conserva dinero y relaciones mientras anonimiza identidad,
+  texto libre, credenciales, tokens, adjuntos y URLs;
+- backfill por Espacio con snapshots `legacy`, preimágenes con checksum,
+  manifiesto privado aprobado, replay y rollback exacto;
+- cutover ejecutado sobre `finm` (development) el 2026-08-29: los 11 Espacios
+  operan en contrato v2, con preimágenes conservadas para rollback y el
+  fallback legacy retirado por Espacio migrado.
+
+### Brechas verificadas
+
+La auditoría funcional y de interfaz confirmó que la amplitud disponible no
+equivale todavía a un recorrido confiable de punta a punta. La rama
+`codex/spaces-p0-006-closure`, mergeada a `dev` el 2026-09-10 (PR 38), cerró
+estas brechas de exactitud:
+
+- la confirmación global del movimiento, que presentaba una decisión privada como
+  si una persona tuviera que confirmar para los demás;
+- la parte propia, el adelanto recuperable y la ausencia de acción del no pagador
+  con parte cero, que el dominio v2 ya separaba pero una ruta legacy de
+  sincronización volvía a mezclar al reescribir el monto de la transacción;
+- las fechas editables desplazadas por conversión UTC, cuyo último origen era esa
+  misma ruta legacy;
+- las relaciones de deuda sin saldo útil, ahora inalcanzables como deuda abierta
+  desde Espacios y desde Mi Finp;
+- el cierre del Espacio y los roles aplicados de forma despareja entre rutas: las
+  de categorías, invitaciones y adjuntos ignoraban el estado del Espacio.
+
+FINP-P1-013 cerró el 2026-09-16: mobile y desktop comparten el recorrido de
+Espacios, con recuperación, foco y accesibilidad verificados en sus flujos
+principales y secundarios.
+
+FINP-P1-016 cerró el 2026-09-21: las dos altas privadas admiten un plan de
+tarjeta con cuotas y primer cierre explícitos, y `Quitar de mi Finp` usa una
+baja autorizada e idempotente que no altera el movimiento compartido. La matriz
+global aprobó 82 de 82 E2E contra el build de producción en desktop y mobile.
+
+Las etapas 1, 2, 3 y el gate financiero de edición de la auditoría específica de `Nuevo gasto` están
+implementadas y verificadas. La primera cerró tarjeta `1/1`, contrato v2 único,
+dinero exacto, fecha civil, revisión vigente y preservación histórica. La segunda
+y la tercera, cerradas el 2026-09-09, incorporaron el borrador privado
+persistente con su card personal, la publicación transaccional y los adjuntos
+preparados sobre el borrador antes de publicar. El 2026-09-10, editar pasó a
+bloquear el CTA y el despacho hasta contar con un preview vigente; monto, moneda,
+fecha, pagador y reparto lo invalidan. El recorrido focal pasó en Chromium
+desktop y Pixel 7.
+
+Los candidatos se resuelven en el servidor y carga, error, vacío, foco, labels
+y stepper forman un recorrido accesible y coherente de punta a punta.
+
+Las resoluciones aprobadas viven en las decisiones
+[`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md) y
+[`0013`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
+Su secuencia de implementación está absorbida por FINP-P0-006 y FINP-P1-013.
+
+La caracterización de datos, actualizada mediante snapshot el 2026-08-25,
+confirmó:
+
+- E2E: 2 Espacios y 18 hallazgos — 6 críticos, 4 altos, 6 medios y 2
+  informativos;
+- development: 11 Espacios y 337 hallazgos — 20 críticos, 77 altos, 149 medios
+  y 91 informativos;
+- los grupos críticos y altos incluyen huérfanos, deriva entre balance y deuda,
+  liquidaciones aplicadas dos veces, impactos privados duplicados o incompletos,
+  vínculos personales globales y pendientes faltantes;
+- los 97 críticos/altos se clasifican en 56 automáticos, 33 de revisión y 8
+  manuales; un código nuevo falla cerrado como manual.
+
+La base compatible v2 completada el 2026-08-24 incorpora:
+
+- modelo explícito de parte propia, impacto real y operacional, snapshots de
+  origen, día financiero, revisión y procedencia;
+- cálculo cent-based de repartos, moneda, balances y deuda directa o simplificada;
+- permisos y transiciones centralizados, protección del último `owner` y control
+  de concurrencia optimista;
+- servicios transaccionales e idempotentes para movimientos, historia, impacto
+  privado, liquidaciones, deudas y administración;
+- reconciliación de notificaciones posterior al commit, sin repetir la unidad
+  financiera;
+- 10 índices compatibles aplicados sólo en E2E y una prueba de integración real
+  de rollback, concurrencia, replay, historia y ambas superficies de liquidación.
+
+Las etapas 2 y 3 están conectadas a las rutas e interfaz existentes, y el
+checkpoint multimoneda amplía ese contrato sin rutas paralelas. La etapa 4
+preparó y ensayó la migración sobre una copia sanitizada — migró 11 de 11
+Espacios, conservó el ledger personal, dejó cero saldos o vínculos
+incompatibles, produjo replay sin cambios y restauró el fingerprint previo al
+revertir — y el 2026-08-29 se autorizó y ejecutó el cutover in-place sobre
+  `finm`: 11 Espacios migrados, 0 bloqueados, `verify` válido y ledger personal
+  invariante, con `mongodump` como respaldo externo verificado. La decisión 0016
+  registra la confirmación posterior del cutover productivo sin repetir la
+  migración desde esta entrega.
+
+Los detalles con identificadores permanecen locales en
+`test-results/audits/spaces/` y no se versionan.
+
+La fuente del comportamiento esperado es [`espacios.md`](espacios.md). La
+corrección y el rediseño están registrados una sola vez como FINP-P0-006 y
+FINP-P1-013 en [`roadmap_finp.md`](roadmap_finp.md).
 
 ### No disponible todavía
 
-- cuotas dentro de Espacios;
+- periodización compartida de cuotas dentro de Espacios; el plan privado de Mi
+  Finp ya está disponible;
 - compromisos de Espacios;
 - reintegros avanzados;
 - realtime;
@@ -364,18 +545,38 @@ Mobile web sigue siendo la superficie prioritaria.
 - preflight E2E compartido por configuración, seed y Playwright;
 - seed repetible que repara los usuarios general, financiero y de Proyección,
   categorías, cuentas y datasets representativos;
-- suite completa aprobada contra `finp-e2e` sin escrituras en desarrollo;
+- suite global aprobada contra `finp-e2e` en Chromium desktop y Pixel 7 tanto
+  sobre el build de producción como con `next dev`, sin escrituras en desarrollo;
+- regresión E2E para el Sankey con capas dispersas y la descripción accesible de
+  Captura rápida, sin recuperar desde excepciones ni advertencias de Radix;
 - CI para verificaciones principales y job E2E listo para ejecutarse apenas
-  reciba la credencial rotada;
+  reciba `MONGODB_URI_TEST` limitada a la base aislada;
 - build de producción reproducible.
+- auditoría legacy de Espacios cubierta con detectores puros, barreras de
+  entorno, adaptador Mongo sin primitivas de escritura y prueba E2E contra el
+  seed aislado;
+- el checkpoint multimoneda previo quedó cubierto por 881 unitarias globales y
+  10 recorridos de integración sobre transacciones MongoDB reales;
+- la rama de cierre de FINP-P1-016 suma 962 unitarias globales y 20 recorridos
+  de integración de Espacios v2, incluidos plan privado, baja normal y huérfana,
+  adjuntos, replay, concurrencia, rollback y aislamiento;
+- `codex/spaces-p0-006-closure` lleva ese piso a 906 unitarias y 17 recorridos de
+  integración, con la primera cobertura real de `resolveSpacePersonalImpactV2`,
+  que era el servicio del impacto personal y no tenía ninguna. Su registro previo
+  declaraba 923 unitarias verdes: eran 902 y dos estaban en rojo, caracterizando
+  el contrato que la misma rama había retirado;
+- la matriz global E2E cierra en 82 de 82 escenarios contra el build de
+  producción en Chromium desktop y Pixel 7, con el smoke financiero independiente
+  de la hora de la corrida;
 
 ### Brechas
 
-- primera ejecución remota de E2E bloqueada por la rotación de credenciales;
+- primera ejecución remota de E2E pendiente de configurar el secreto aislado;
 - cobertura de integración/API desigual;
 - validación visual y accesibilidad no sistematizadas;
 - cobertura no bloquea CI;
-- faltan métricas de rendimiento y presupuesto de bundle.
+- falta extender las métricas de rendimiento a los demás dominios y establecer
+  un presupuesto global de bundle.
 
 ## 11. Limitaciones conocidas
 
@@ -384,6 +585,19 @@ Mobile web sigue siendo la superficie prioritaria.
   aplicarse sin identificar la base y revisar el resultado.
 - `auto_month_start` no tiene scheduler.
 - La orientación aún no cubre reglas, Deudas, Espacios e Importación.
+- Los recorridos v2 de Espacios cumplen el contrato de parte propia, autonomía,
+  consistencia y permisos definido en las decisiones
+  [`0007`](../decisiones/0007-autoridad-espacios-finp-deudas.md) y
+  [`0008`](../decisiones/0008-modelo-consistencia-financiera-espacios.md), y la
+  autoridad multimoneda definida en
+  [`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md). El cutover
+  del 2026-08-29
+  ([`0011`](../decisiones/0011-cutover-espacios-v2-en-development.md)) activó
+  el contrato v2 sobre `finm`; la decisión
+  [`0016`](../decisiones/0016-cutover-productivo-espacios-v2.md) registra el
+  cutover productivo ya ejecutado.
+- La clasificación, el ensayo de rollback y los cutovers de development y
+  producción están cerrados. Promover código no vuelve a migrar datos.
 - La clasificación de tarjetas es determinista; no aprende todavía qué tarjeta
   elegir.
 - Proyección no calcula cashflow por cuenta ni escenarios y todavía no incluye
@@ -396,15 +610,61 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 
 ## 12. Último bloque entregado
 
-Cierre operativo de Proyección, 2026-07-31:
+Cierre de FINP-P1-016, 2026-09-21
+(`codex/fix-spaces-v2-autosave-loop`):
 
-- contrato compartido y serializable con fuente, certeza, contexto, enlaces y
-  totales separados;
-- compras `1/1`, históricos sin plan y cuotas incluidos en el período correcto,
-  sin contar la transacción padre ni pagos de tarjeta;
-- agrupaciones por tipo, tarjeta y categoría con los mismos ítems y totales;
-- seis meses por defecto, Año calendario, resumen, gráfico y detalle expandible;
-- preferencias privadas, fallback local, hidratación estable e invalidaciones;
-- carga, vacío, período vacío, error, reintento, privacidad, accesibilidad,
-  contenido largo, dark mode y movimiento reducido;
-- verificación unitaria, API/servicio y E2E aislada en desktop y Pixel 7.
+- plan privado de tarjeta con cantidad de cuotas y primer cierre explícitos en
+  las dos altas desde Espacios, persistido atómicamente con el impacto personal;
+- baja autorizada e idempotente de la transacción personal normal o huérfana,
+  sin modificar el movimiento compartido;
+- recuperación de borradores y adjuntos compatible con el build productivo de
+  prueba, restringida a bases marcadas explícitamente como `e2e`, `test` o `ci`;
+- corrección de foco y accesibilidad del contenido desplazable del diálogo;
+- matriz de release: typecheck, ESLint, build, documentación, 962 unitarias, 20
+  integraciones MongoDB y 82 de 82 E2E en Chromium desktop y Pixel 7.
+
+Bloque previo — cierre de FINP-P0-006, 2026-09-10 (PR 38,
+`codex/spaces-p0-006-closure` → `dev`):
+
+- retiro de las rutas legacy de impacto personal, de la confirmación global del
+  movimiento y de los cuerpos legacy de escritura; toda mutación de un documento
+  no v2 rechaza con `409` y `debt-sync` desaparece con sus llamadas best-effort;
+- una obligación saldada es inalcanzable como deuda abierta desde Espacios y Mi
+  Finp; categorías, invitaciones y adjuntos resuelven permisos por la matriz v2;
+- `finm` limpio de los campos globales retirados en sus 91 documentos v2;
+- la edición bloquea guardar sin preview vigente e invalida al cambiar monto,
+  moneda, fecha, pagador o reparto;
+- smoke financiero independiente del día y de la hora de la corrida;
+- matriz completa: typecheck, ESLint, 906 unitarias, 17 de integración con
+  sesión MongoDB real, 80 de 80 E2E en Chromium desktop y Pixel 7 y `docs:check`.
+  Un escenario intermitente ajeno (`quick-capture.spec.ts:591`) queda declarado
+  como límite en el roadmap.
+
+Bloque previo — borrador privado y adjuntos recuperables de `Nuevo gasto`,
+2026-09-09 (PR 37, `codex/spaces-new-entry-exactness` → `dev`):
+
+- colección y contrato parcial separados de `SpaceEntry`, con un activo por
+  autor, Espacio e intención y sin efecto financiero antes de publicar;
+- lectura, guardado, descarte y publicación filtrados por autor, con revisión
+  optimista y clave estable de idempotencia;
+- publicación en la misma transacción MongoDB que movimiento, impacto privado,
+  actividad y relaciones derivadas; un fallo revierte todo y conserva el
+  borrador activo;
+- guardado explícito y serializado al cancelar, recuperación del paso, estado
+  accesible, conflicto explícito y copia local sólo como contingencia;
+- card `Borrador privado` fuera de contadores y totales, reanudación y descarte
+  confirmado;
+- preparación inmediata de hasta cinco archivos privados, validación real de
+  firma, MIME, extensión, tamaño y hash, sin persistir binarios en el navegador;
+- estados accesibles por fila, reintento, remoción con revocación previa y
+  publicación bloqueada mientras exista una carga o fallo sin resolver;
+- metadata `ready` transferida en la misma transacción del movimiento y lectura
+  posterior por permisos, sin URL ni clave interna en DTO públicos;
+- reconciliación `dry-run` por defecto para preparaciones antiguas y limpiezas
+  pendientes, con fallos de carga y borrado inyectados en integración;
+- integración real y recorrido de preparación, cierre, reanudación, publicación
+  y lectura aprobados en Chromium desktop y Pixel 7. FINP-P1-013 cerró su etapa
+  4 de experiencia y accesibilidad integral el 2026-09-16, con 9/9 recorridos
+  de su matriz en cada proyecto. El EACCES/whitelist de
+  MongoDB Atlas anotado entonces no volvió a reproducirse: la suite completa de
+  integración corre desde el entorno local.

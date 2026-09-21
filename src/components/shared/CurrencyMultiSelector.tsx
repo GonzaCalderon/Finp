@@ -24,6 +24,7 @@ type CurrencyMultiSelectorProps<TCurrency extends string> = {
     helperText?: string
     disabled?: boolean
     minimumSelections?: number
+    lockedValues?: readonly TCurrency[]
     density?: 'default' | 'compact'
     className?: string
 }
@@ -41,6 +42,7 @@ export function CurrencyMultiSelector<TCurrency extends string>({
     helperText,
     disabled,
     minimumSelections = 1,
+    lockedValues = [],
     density = 'default',
     className,
 }: CurrencyMultiSelectorProps<TCurrency>) {
@@ -62,7 +64,7 @@ export function CurrencyMultiSelector<TCurrency extends string>({
 
     function toggle(currency: TCurrency) {
         const selected = value.includes(currency)
-        if (selected && value.length <= minimumSelections) return
+        if (selected && (value.length <= minimumSelections || lockedValues.includes(currency))) return
         onValueChange(
             selected
                 ? value.filter((item) => item !== currency)
@@ -81,7 +83,7 @@ export function CurrencyMultiSelector<TCurrency extends string>({
                 <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label={label}>
                     {options.map((currency) => {
                         const selected = value.includes(currency)
-                        const locked = selected && value.length <= minimumSelections
+                        const locked = selected && (value.length <= minimumSelections || lockedValues.includes(currency))
                         return (
                             <MotionButton
                                 key={currency}
@@ -175,7 +177,7 @@ export function CurrencyMultiSelector<TCurrency extends string>({
                     <div className="max-h-64 space-y-1 overflow-y-auto" role="listbox" aria-multiselectable>
                         {filteredOptions.map((currency) => {
                             const selected = value.includes(currency)
-                            const locked = selected && value.length <= minimumSelections
+                            const locked = selected && (value.length <= minimumSelections || lockedValues.includes(currency))
                             return (
                                 <button
                                     key={currency}

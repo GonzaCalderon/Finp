@@ -52,6 +52,9 @@ const TransactionSchema = new Schema<ITransaction>(
         importSourceType: { type: String, enum: Object.values(IMPORT_SOURCE_TYPES) },
         spaceId: { type: Schema.Types.ObjectId, ref: 'Space' },
         spaceEntryId: { type: Schema.Types.ObjectId, ref: 'SpaceEntry' },
+        spaceImpactId: { type: Schema.Types.ObjectId, ref: 'SpaceEntryPersonalImpact' },
+        spaceOperationId: { type: Schema.Types.ObjectId, ref: 'SpaceOperation' },
+        spaceContractVersion: { type: Number, enum: [2] },
         spaceNameSnapshot: { type: String },
         operationalAmount: { type: Number },
         // Procedencia de compromiso, denormalizada para no hacer un lookup
@@ -85,6 +88,7 @@ const hasSpaceIdPath = Boolean(existingTransactionModel?.schema.path('spaceId'))
 const hasSpaceEntryIdPath = Boolean(existingTransactionModel?.schema.path('spaceEntryId'))
 const hasSpaceNameSnapshotPath = Boolean(existingTransactionModel?.schema.path('spaceNameSnapshot'))
 const hasOperationalAmountPath = Boolean(existingTransactionModel?.schema.path('operationalAmount'))
+const hasSpaceImpactIdPath = Boolean(existingTransactionModel?.schema.path('spaceImpactId'))
 const hasAppliedRuleMatchSnapshotPath = Boolean(
     existingTransactionModel?.schema.path('appliedRuleMatchSnapshot.field')
 )
@@ -101,6 +105,7 @@ const needsSchemaRefresh =
     !!existingTransactionModel &&
     (!currentTypeEnum ||
         !currentCreatedFromEnum?.includes(CREATED_FROM.QUICK_CAPTURE) ||
+        !currentCreatedFromEnum?.includes(CREATED_FROM.SPACE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.CREDIT_CARD_EXPENSE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.EXCHANGE) ||
         !currentTypeEnum.includes(TRANSACTION_TYPES.PERSONAL_DEBT_PAYMENT) ||
@@ -111,6 +116,7 @@ const needsSchemaRefresh =
         !hasSpaceEntryIdPath ||
         !hasSpaceNameSnapshotPath ||
         !hasOperationalAmountPath ||
+        !hasSpaceImpactIdPath ||
         !hasAppliedRuleMatchSnapshotPath ||
         !hasAppliedRuleActionsPath ||
         !hasCommitmentApplicationIdPath ||

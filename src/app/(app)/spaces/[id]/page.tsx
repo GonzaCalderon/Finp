@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { Suspense, useMemo, useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, Coins, Plus, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Coins, Plus, Users } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
@@ -13,11 +14,11 @@ import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useSpace } from '@/hooks/useSpace'
 import { useSpaceActivity } from '@/hooks/useSpaceActivity'
-import { useSpaceEntries } from '@/hooks/useSpaceEntries'
+import { useSpaceEntries, type SpaceMovementFilters } from '@/hooks/useSpaceEntries'
+import { useSpaceQuotes } from '@/hooks/useSpaceQuotes'
 import { useSpaceParticipants } from '@/hooks/useSpaceParticipants'
 import { useToast } from '@/hooks/useToast'
 import {
-    ConfirmSpaceEntryDialog,
     EditSpaceSettingsDialog,
     SpaceEntryDialog,
     SpaceParticipantDialog,
@@ -47,6 +48,8 @@ import {
 import { SpaceHero } from '@/components/spaces/detail/SpaceHero'
 import { SpaceDetailMobileHeader } from '@/components/spaces/detail/SpaceDetailMobileHeader'
 import { SpaceKpiRow } from '@/components/spaces/detail/SpaceKpiRow'
+import { SpaceQuoteTicker } from '@/components/spaces/detail/SpaceQuoteTicker'
+import { SpaceMigrationNotice } from '@/components/spaces/detail/SpaceMigrationNotice'
 import { SpaceMobileSettingsSheet } from '@/components/spaces/detail/SpaceMobileSettingsSheet'
 import { SpaceEntryDetailSheet } from '@/components/spaces/detail/SpaceEntryDetailSheet'
 import { VoidEntryDialog } from '@/components/spaces/dialogs/VoidEntryDialog'
@@ -100,11 +103,9 @@ function DetailSkeleton() {
 
 function MobileTabBar({
     activeTab,
-    pendingCount,
     onChange,
 }: {
     activeTab: SpaceTab
-    pendingCount: number
     onChange: (tab: SpaceTab) => void
 }) {
     const activeMobile = MOBILE_TABS.some((t) => t.value === activeTab) ? activeTab : 'summary'
@@ -114,8 +115,6 @@ function MobileTabBar({
             <div className="grid grid-cols-3 gap-1">
                 {MOBILE_TABS.map((tab) => {
                     const active = activeMobile === tab.value
-                    const showPending = tab.value === 'entries' && pendingCount > 0
-
                     return (
                         <button
                             key={tab.value}
@@ -125,11 +124,6 @@ function MobileTabBar({
                         >
                             {active ? <motion.span layoutId="space-mobile-tab" className="absolute inset-0 rounded-[16px] bg-background shadow-sm" /> : null}
                             <span className="relative truncate">{tab.label}</span>
-                            {showPending ? (
-                                <span className="relative shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
-                                    {pendingCount}
-                                </span>
-                            ) : null}
                         </button>
                     )
                 })}
@@ -140,11 +134,9 @@ function MobileTabBar({
 
 function DesktopTabBar({
     activeTab,
-    pendingCount,
     onChange,
 }: {
     activeTab: SpaceTab
-    pendingCount: number
     onChange: (tab: SpaceTab) => void
 }) {
     return (
@@ -152,8 +144,6 @@ function DesktopTabBar({
             <div className="grid grid-cols-4 gap-1">
                 {DESKTOP_TABS.map((tab) => {
                     const active = activeTab === tab.value
-                    const showPending = tab.value === 'entries' && pendingCount > 0
-
                     return (
                         <button
                             key={tab.value}
@@ -163,11 +153,6 @@ function DesktopTabBar({
                         >
                             {active ? <motion.span layoutId="space-desktop-tab" className="absolute inset-0 rounded-[16px] bg-background shadow-sm" /> : null}
                             <span className="relative truncate">{tab.label}</span>
-                            {showPending ? (
-                                <span className="relative shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-foreground">
-                                    {pendingCount}
-                                </span>
-                            ) : null}
                         </button>
                     )
                 })}
@@ -188,8 +173,7 @@ function SpaceMovementsKpiRow({
     const items: Array<{ label: string; value: number; footer: string; accent?: string; isAmount: boolean }> = [
         { label: 'Total gastado', value: summary.totalReporting, footer: `${summary.totalEntryCount} movimientos`, accent: undefined, isAmount: true },
         { label: 'Tu parte', value: summary.yourShareReporting, footer: 'Correspondiente', accent: 'var(--chart-1)', isAmount: true },
-        { label: 'Confirmados', value: Math.max(0, summary.totalEntryCount - summary.pendingEntryCount), footer: 'Movimientos cerrados', accent: 'var(--chart-3)', isAmount: false },
-        { label: 'Pendientes', value: summary.pendingEntryCount, footer: 'Por confirmar', accent: 'var(--destructive)', isAmount: false },
+        { label: 'Participantes', value: summary.participantCount, footer: 'Con acceso al espacio', accent: 'var(--chart-3)', isAmount: false },
     ]
 
     return (
@@ -221,10 +205,12 @@ function SpaceDetailPageInner() {
     const spaceId = params?.id
     const { hidden } = useHideAmounts()
     const { success, error: toastError } = useToast()
-    const { data, loading, error, updateSpace } = useSpace(spaceId)
+    const { data, loading, error, updateSpace, fetchSpace } = useSpace(spaceId)
     const spaceActivity = useSpaceActivity(spaceId)
-    const entriesApi = useSpaceEntries(spaceId)
-    const participantsApi = useSpaceParticipants(spaceId)
+    const quotesApi = useSpaceQuotes(spaceId, (data?.space.currencies?.length ?? 0) > 1)
+    const [currencyFilters, setCurrencyFilters] = useState<SpaceMovementFilters>({})
+    const entriesApi = useSpaceEntries(spaceId, currencyFilters, data?.api, quotesApi.data)
+    const participantsApi = useSpaceParticipants(spaceId, data?.api)
     const [activeTab, setActiveTab] = useState<SpaceTab>(() => focusEntryId ? 'entries' : 'summary')
     const [entryFilter, setEntryFilter] = useState<SpaceEntryFilter>('all')
     const [entryDialogOpen, setEntryDialogOpen] = useState(false)
@@ -232,8 +218,6 @@ function SpaceDetailPageInner() {
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
     const [pendingSheetOpen, setPendingSheetOpen] = useState(false)
-    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
-    const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
     const [focusedEntryId, setFocusedEntryId] = useState<string | null>(focusEntryId)
     const [detailEntry, setDetailEntry] = useState<ISpaceEntry | null>(null)
     const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
@@ -247,9 +231,14 @@ function SpaceDetailPageInner() {
     const [showJoinedNotice, setShowJoinedNotice] = useState(joinedFromInvite)
 
     const currentUserId = data?.currentUserId ?? ''
+    const canCreateEntry = data?.capabilities.includes('create_entry') ?? false
     const { setAction, clearAction } = useSpaceAction()
 
     useEffect(() => {
+        if (!canCreateEntry) {
+            clearAction()
+            return
+        }
         setAction({
             label: 'Agregar movimiento',
             icon: <Plus size={18} color="#fff" />,
@@ -259,7 +248,7 @@ function SpaceDetailPageInner() {
             },
         })
         return () => clearAction()
-    }, [setAction, clearAction])
+    }, [canCreateEntry, setAction, clearAction])
 
     useEffect(() => {
         if (!focusEntryId) return
@@ -288,15 +277,22 @@ function SpaceDetailPageInner() {
         [currentUserId, data?.participants]
     )
 
-    const canManage =
-        currentParticipant?.role === 'owner' ||
-        currentParticipant?.role === 'admin'
+    const canManage = data?.capabilities.includes('manage_shared_settings') ?? false
 
     const suggestedPayments = data?.summary.balances ? buildRecommendedPayments(data.summary.balances) : []
+    const entryCapabilitiesById = useMemo(
+        () => Object.fromEntries(
+            (data?.api.movements.items ?? []).map((entry) => [entry.id, entry.capabilities])
+        ),
+        [data?.api.movements.items]
+    )
 
-    const handleCreateEntry = async (payload: Parameters<typeof entriesApi.createEntry>[0]) => {
+    const handleCreateEntry = async (
+        payload: Parameters<typeof entriesApi.createEntry>[0],
+        options?: Parameters<typeof entriesApi.createEntry>[1]
+    ) => {
         setFocusedEntryId(null)
-        const entry = await entriesApi.createEntry(payload)
+        const entry = await entriesApi.createEntry(payload, options)
         success('Movimiento guardado')
         return entry
     }
@@ -308,6 +304,10 @@ function SpaceDetailPageInner() {
     }
 
     async function handleCreateSettlementDirect(payerId: string, receiverId: string, amount: number) {
+        if (data?.space.contractVersion === 2) {
+            handleRegisterSettlement({ payerId, receiverId, amount })
+            return
+        }
         const payerParticipant = data?.participants.find((p) => extractId(p._id) === payerId)
         const receiverParticipant = data?.participants.find((p) => extractId(p._id) === receiverId)
         await handleCreateEntry({
@@ -400,47 +400,26 @@ function SpaceDetailPageInner() {
         }
     }
 
-    const handleReviewPending = (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        setSelectedPendingEntry(action.entry)
-        setConfirmDialogOpen(true)
-    }
-
-    const handleRejectConfirmation = async (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        await apiJson(`/api/space-entries/${extractId(action.entry._id)}/reject`, {
-            method: 'POST',
-        })
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        success('Movimiento rechazado')
-    }
-
-    const handleConfirmPendingEntry = async (payload: {
-        mode: 'create' | 'link'
-        description?: string
-        categoryId?: string
-        accountId?: string
-        linkedTransactionId?: string
-    }) => {
-        if (!selectedPendingEntry) return
-
-        await apiJson(`/api/space-entries/${extractId(selectedPendingEntry._id)}/confirm`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        })
-
-        invalidateData(SPACE_INVALIDATION_TAGS)
-        success('Movimiento confirmado')
-    }
-
     async function handleSyncImpact(entry: ISpaceEntry) {
         const entryId = extractId(entry._id)
         if (!entryId) return
         try {
-            await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact/sync`, { method: 'POST' })
+            const reviewImpact = data?.personalImpactsByEntryId[entryId]?.reviewImpact
+            if (!reviewImpact) {
+                throw new Error('Este movimiento ya no requiere revisión.')
+            }
+            await apiJson(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': crypto.randomUUID(),
+                },
+                body: JSON.stringify({
+                    impactId: extractId(reviewImpact._id),
+                    expectedRevision: reviewImpact.revision ?? 0,
+                    decision: { type: 'sync_transaction' },
+                }),
+            })
             invalidateData([...SPACE_INVALIDATION_TAGS, ...NOTIFICATION_INVALIDATION_TAGS])
             success('Transacción actualizada')
         } catch (err) {
@@ -454,18 +433,7 @@ function SpaceDetailPageInner() {
         setVoidingEntry(entry)
         let hasLinkedTransaction = false
         let hasSubsequentSettlement = false
-        const payer = data?.participants.find(
-            (participant) => extractId(participant._id) === extractId(entry.paidByParticipantId)
-        )
-        const impactsCurrentUser = Boolean(
-            data?.personalImpactsByEntryId[entryId ?? '']?.linkedImpact?.status === 'linked' ||
-            (
-                entry.linkedTransactionId &&
-                currentUserId &&
-                payer &&
-                (extractId(entry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
-            )
-        )
+        const impactsCurrentUser = data?.personalImpactsByEntryId[entryId ?? '']?.linkedImpact?.status === 'linked'
         try {
             const res = await fetch(`/api/spaces/${spaceId}/entries/${entryId}`)
             if (res.ok) {
@@ -485,8 +453,15 @@ function SpaceDetailPageInner() {
         if (!entryId) return
         const response = await fetch(`/api/spaces/${spaceId}/entries/${entryId}/void`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ voidReason }),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(voidingEntry?.contractVersion === 2
+                    ? { 'Idempotency-Key': crypto.randomUUID() }
+                    : {}),
+            },
+            body: JSON.stringify(voidingEntry?.contractVersion === 2
+                ? { expectedRevision: voidingEntry.revision ?? 0, reason: voidReason ?? 'Anulado por el usuario' }
+                : { voidReason }),
         })
         const json = await response.json() as { entry?: ISpaceEntry; error?: string }
         if (!response.ok) throw new Error(json.error ?? 'No se pudo anular el movimiento.')
@@ -501,9 +476,12 @@ function SpaceDetailPageInner() {
     if (error || !data) {
         return (
             <div className="mx-auto max-w-[920px] px-4 py-8 md:px-6">
-                <div className="rounded-[28px] border border-destructive/15 bg-destructive/5 px-5 py-10 text-center text-sm text-destructive">
-                    {error ?? 'No pudimos cargar el espacio.'}
-                </div>
+                <ErrorState
+                    icon={AlertTriangle}
+                    title="No pudimos cargar el espacio"
+                    description={error ?? undefined}
+                    onRetry={() => void fetchSpace()}
+                />
             </div>
         )
     }
@@ -557,6 +535,7 @@ function SpaceDetailPageInner() {
                             space={data.space}
                             summary={data.summary}
                             canManage={canManage}
+                            canCreateEntry={canCreateEntry}
                             onInvite={() => setParticipantDialogOpen(true)}
                             onCreateEntry={() => setEntryDialogOpen(true)}
                         />
@@ -564,10 +543,18 @@ function SpaceDetailPageInner() {
                 </div>
                 <div className="hidden border-t border-border/70 md:block" />
 
+                {data.space.currencies.length > 1 ? (
+                    <SpaceQuoteTicker
+                        data={quotesApi.data}
+                        loading={quotesApi.loading}
+                        error={quotesApi.error}
+                        onRefresh={() => void quotesApi.refresh()}
+                    />
+                ) : null}
+
                 {/* Mobile tab bar (3 tabs) */}
                 <MobileTabBar
                     activeTab={activeTab}
-                    pendingCount={data.summary.pendingEntryCount}
                     onChange={(tab) => {
                         setFocusedEntryId(null)
                         setActiveTab(tab)
@@ -577,7 +564,6 @@ function SpaceDetailPageInner() {
                 {/* Desktop tab bar (6 tabs) */}
                 <DesktopTabBar
                     activeTab={activeTab}
-                    pendingCount={data.summary.pendingEntryCount}
                     onChange={(tab) => {
                         setFocusedEntryId(null)
                         setActiveTab(tab)
@@ -624,6 +610,8 @@ function SpaceDetailPageInner() {
                     </motion.div>
                 ) : null}
 
+                <SpaceMigrationNotice status={data.api} />
+
                 {/* Summary tab */}
                 {activeTab === 'summary' ? (
                     <div className="space-y-4">
@@ -636,6 +624,11 @@ function SpaceDetailPageInner() {
                             summary={data.summary}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
+                            onFilterCurrency={(currency) => {
+                                setCurrencyFilters({ originalCurrencies: [currency] })
+                                setEntryFilter('all')
+                                setActiveTab('entries')
+                            }}
                         />
 
                         <SpaceSettlementPanel
@@ -673,11 +666,14 @@ function SpaceDetailPageInner() {
                             hidden={hidden}
                         />
                         <SpaceMovementsPanel
-                            entries={data.entries}
+                            entries={entriesApi.loading ? data.entries : entriesApi.entries}
+                            draft={entriesApi.loading
+                                ? data.api.movements.draft
+                                : entriesApi.draft ?? undefined}
                             participants={data.participants}
                             currentUserId={currentUserId}
                             personalImpactsByEntryId={data.personalImpactsByEntryId}
-                            canManage={canManage}
+                            entryCapabilitiesById={entryCapabilitiesById}
                             entryFilter={entryFilter}
                             onFilterChange={(filter) => {
                                 setFocusedEntryId(null)
@@ -685,11 +681,19 @@ function SpaceDetailPageInner() {
                             }}
                             reportingCurrency={data.space.reportingCurrency}
                             hidden={hidden}
+                            currencies={data.space.currencies}
+                            currencyFilters={currencyFilters}
+                            subtotalByCurrency={entriesApi.subtotalByCurrency}
+                            onCurrencyFiltersChange={setCurrencyFilters}
                             focusEntryId={focusedEntryId}
-                            onCreate={() => {
+                            onCreate={canCreateEntry ? () => {
                                 setFocusedEntryId(null)
                                 setEntryDialogOpen(true)
-                            }}
+                            } : undefined}
+                            onDraftContinue={canCreateEntry ? () => {
+                                setFocusedEntryId(null)
+                                setEntryDialogOpen(true)
+                            } : undefined}
                             onEntryClick={(entry) => {
                                 setFocusedEntryId(null)
                                 setDetailEntry(entry)
@@ -752,13 +756,18 @@ function SpaceDetailPageInner() {
                 onSubmit={handleCreateEntry}
                 spaceId={spaceId}
                 participants={data.participants}
-                currentUserId={currentUserId}
                 defaultCurrency={data.space.reportingCurrency}
                 reportingCurrency={data.space.reportingCurrency}
                 spaceCurrencies={data.space.currencies}
                 defaultSplitMode={data.space.defaultSplitMode}
                 spaceMode={data.space.mode}
+                spaceTimezone={data.space.timezone}
+                contractVersion={data.space.contractVersion}
+                spaceRevision={data.space.revision ?? 0}
+                currentUserId={currentUserId}
                 draftKey={spaceId}
+                quotes={quotesApi.data}
+                onDraftChange={entriesApi.setDraft}
             />
 
             <SpaceParticipantDialog
@@ -779,6 +788,16 @@ function SpaceDetailPageInner() {
                 reportingCurrency={data.space.reportingCurrency}
                 prefill={settlementPrefill}
                 suggestedPayments={suggestedPayments}
+                spaceCurrencies={data.space.currencies}
+                quotes={quotesApi.data}
+                balancesByCurrency={data.summary.balancesByCurrency}
+                onQuotesRefresh={quotesApi.refresh}
+                v2={data.space.contractVersion === 2 ? {
+                    spaceId,
+                    expectedRevision: data.space.revision ?? 0,
+                    currentUserId,
+                    capabilities: data.capabilities,
+                } : undefined}
             />
 
             <SpacesPendingSheet
@@ -791,8 +810,6 @@ function SpaceDetailPageInner() {
                 initialTab="pending"
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
-                onReviewConfirmation={handleReviewPending}
-                onRejectConfirmation={(action) => void handleRejectConfirmation(action)}
             />
 
             {canManage ? (
@@ -817,15 +834,10 @@ function SpaceDetailPageInner() {
                         simplifyDebts: data.space.simplifyDebts,
                         debtMode: data.space.debtMode,
                     }}
+                    reportingCurrencyLocked={data.api.space.currencyPolicy?.reportingCurrencyLocked}
+                    lockedCurrencies={data.api.space.currencyPolicy?.usedCurrencies}
                 />
             ) : null}
-
-            <ConfirmSpaceEntryDialog
-                open={confirmDialogOpen}
-                onOpenChange={setConfirmDialogOpen}
-                entry={selectedPendingEntry}
-                onSubmit={handleConfirmPendingEntry}
-            />
 
             <SpaceEntryDetailSheet
                 open={detailEntry !== null}
@@ -836,24 +848,18 @@ function SpaceDetailPageInner() {
                 participants={data.participants}
                 spaceId={spaceId}
                 currency={data.space.reportingCurrency}
-                currentUserId={currentUserId}
-                personalImpact={detailEntry ? data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.linkedImpact : undefined}
+                personalImpact={detailEntry ? (
+                    data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.linkedImpact ??
+                    data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.pendingActions[0]
+                ) : undefined}
                 reviewImpact={detailEntry ? data.personalImpactsByEntryId[extractId(detailEntry._id) ?? '']?.reviewImpact : undefined}
                 onSyncImpact={handleSyncImpact}
                 activityEvents={spaceActivity.events}
                 canEdit={Boolean(
-                    detailEntry && (
-                        extractId(detailEntry.createdByUserId) === currentUserId ||
-                        currentParticipant?.role === 'owner' ||
-                        currentParticipant?.role === 'admin'
-                    )
+                    detailEntry && entryCapabilitiesById[extractId(detailEntry._id) ?? '']?.includes('edit')
                 )}
                 canVoid={Boolean(
-                    detailEntry && !detailEntry.isVoided && (
-                        extractId(detailEntry.createdByUserId) === currentUserId ||
-                        currentParticipant?.role === 'owner' ||
-                        currentParticipant?.role === 'admin'
-                    )
+                    detailEntry && !detailEntry.isVoided && entryCapabilitiesById[extractId(detailEntry._id) ?? '']?.includes('void')
                 )}
                 onEdit={(entry, hasSubsequentSettlement) => {
                     setEditingEntry(entry)
@@ -889,9 +895,13 @@ function SpaceDetailPageInner() {
                 spaceCurrencies={data.space.currencies}
                 defaultSplitMode={data.space.defaultSplitMode}
                 spaceMode={data.space.mode}
+                spaceTimezone={data.space.timezone}
+                contractVersion={data.space.contractVersion}
+                spaceRevision={data.space.revision ?? 0}
                 mode="edit"
                 initialData={editingEntry ?? undefined}
                 initialHasSubsequentSettlement={editEntryHasSubsequentSettlement}
+                quotes={quotesApi.data}
             />
 
             {/* Dialog anulación rápida desde MovementCard */}

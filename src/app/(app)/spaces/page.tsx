@@ -2,9 +2,10 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Layers3, Plus, Sparkles } from 'lucide-react'
+import { AlertTriangle, Layers3, Plus, Sparkles } from 'lucide-react'
 import { useAppStartupReady } from '@/components/shared/AppStartupGate'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     Dialog,
@@ -17,12 +18,12 @@ import { Button } from '@/components/ui/button'
 import { useHideAmounts } from '@/contexts/HideAmountsContext'
 import { useSpaceAction } from '@/contexts/SpaceActionContext'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { useSpaceEntries } from '@/hooks/useSpaceEntries'
+import { useSpaceEntries, type SpaceEntryCreateContext } from '@/hooks/useSpaceEntries'
 import { useSpacePendingActions } from '@/hooks/useSpacePendingActions'
+import { useSpaceQuotes } from '@/hooks/useSpaceQuotes'
 import { useSpaces } from '@/hooks/useSpaces'
 import { useToast } from '@/hooks/useToast'
 import {
-    ConfirmSpaceEntryDialog,
     CreateSpaceDialog,
     SpaceEntryDialog,
 } from '@/components/spaces/SpaceDialogs'
@@ -37,7 +38,7 @@ import type { SpaceSortOption } from '@/components/spaces/index/SpacesFiltersBar
 import { SpacesPageTopBar } from '@/components/spaces/index/SpacesPageHeader'
 import { SpacesPendingSheet } from '@/components/spaces/pending/SpacePendingViews'
 import { extractId } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpaceListItem, ISpacePendingAction } from '@/types'
+import type { ISpaceListItem, ISpacePendingAction } from '@/types'
 import type { SpaceEntryFormData } from '@/lib/validations'
 
 type SpaceStatusFilter = 'all' | 'active' | 'paused' | 'closed' | 'archived'
@@ -149,12 +150,31 @@ function SpacesQuickEntryFlow({
     onSaved: () => void
 }) {
     const spaceId = item ? extractId(item.space._id) : undefined
-    const entriesApi = useSpaceEntries(spaceId)
+    const entryContext = useMemo<SpaceEntryCreateContext | undefined>(() => {
+        if (!item || !spaceId) return undefined
+        return {
+            sourceContract: item.space.contractVersion === 2 ? 'v2' : 'legacy',
+            currentUserId,
+            space: {
+                id: spaceId,
+                revision: item.space.revision ?? 0,
+                reportingCurrency: item.space.reportingCurrency,
+            },
+        }
+    }, [currentUserId, item, spaceId])
+    const quotesApi = useSpaceQuotes(
+        spaceId,
+        item?.space.contractVersion === 2 && (item.space.currencies?.length ?? 0) > 1
+    )
+    const entriesApi = useSpaceEntries(spaceId, {}, entryContext, quotesApi.data)
 
     if (!item || !spaceId) return null
 
-    const handleCreateEntry = async (payload: SpaceEntryFormData) => {
-        const entry = await entriesApi.createEntry(payload)
+    const handleCreateEntry = async (
+        payload: SpaceEntryFormData,
+        options?: Parameters<typeof entriesApi.createEntry>[1]
+    ) => {
+        const entry = await entriesApi.createEntry(payload, options)
         onSaved()
         return entry
     }
@@ -172,7 +192,11 @@ function SpacesQuickEntryFlow({
             spaceCurrencies={item.space.currencies}
             defaultSplitMode={item.space.defaultSplitMode}
             spaceMode={item.space.mode}
-            draftKey={`spaces-home-${spaceId}`}
+            spaceTimezone={item.space.timezone}
+            contractVersion={item.space.contractVersion}
+            spaceRevision={item.space.revision ?? 0}
+            draftKey={spaceId}
+            quotes={quotesApi.data}
         />
     )
 }
@@ -183,7 +207,7 @@ function SpacesPageInner() {
     const { hidden } = useHideAmounts()
     const { setAction: setSpaceAction, clearAction: clearSpaceAction } = useSpaceAction()
     const { success, error: toastError } = useToast()
-    const { spaces, loading, error, createSpace, currentUserId } = useSpaces()
+    const { spaces, loading, error, createSpace, currentUserId, fetchSpaces } = useSpaces()
     const pending = useSpacePendingActions()
     const [statusFilter, setStatusFilter] = useState<SpaceStatusFilter>('all')
     const [search, setSearch] = useState('')
@@ -195,8 +219,6 @@ function SpacesPageInner() {
     const [entryDialogOpen, setEntryDialogOpen] = useState(false)
     const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null)
     const [pendingDialogOpen, setPendingDialogOpen] = useState(false)
-    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
-    const [selectedPendingEntry, setSelectedPendingEntry] = useState<ISpaceEntry | null>(null)
 
     usePageTitle('Espacios')
     useAppStartupReady(!loading)
@@ -210,6 +232,11 @@ function SpacesPageInner() {
     }, [router, searchParams])
 
     useEffect(() => {
+        if (loading) {
+            clearSpaceAction()
+            return
+        }
+
         setSpaceAction({
             label: 'Nuevo gasto',
             icon: <Plus size={18} color="#fff" />,
@@ -224,7 +251,7 @@ function SpacesPageInner() {
         })
 
         return () => clearSpaceAction()
-    }, [clearSpaceAction, setSpaceAction, spaces.length])
+    }, [clearSpaceAction, loading, setSpaceAction, spaces.length])
 
     const filteredSpaces = useMemo(() => {
         const normalizedSearch = search.trim().toLowerCase()
@@ -334,39 +361,6 @@ function SpacesPageInner() {
         }
     }
 
-    const handleRejectConfirmation = async (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        try {
-            await pending.rejectEntry(extractId(action.entry._id) ?? '')
-            success('Movimiento rechazado')
-        } catch (err) {
-            toastError(
-                err instanceof Error ? err.message : 'No pudimos rechazar el movimiento.'
-            )
-        }
-    }
-
-    const handleReviewConfirmation = (
-        action: Extract<ISpacePendingAction, { kind: 'confirmation' }>
-    ) => {
-        setSelectedPendingEntry(action.entry)
-        setConfirmDialogOpen(true)
-    }
-
-    const handleConfirmPendingEntry = async (payload: {
-        mode: 'create' | 'link'
-        description?: string
-        categoryId?: string
-        accountId?: string
-        linkedTransactionId?: string
-    }) => {
-        if (!selectedPendingEntry) return
-
-        await pending.confirmEntry(extractId(selectedPendingEntry._id) ?? '', payload)
-        success('Movimiento confirmado')
-    }
-
     return (
         <>
             <div className="mx-auto max-w-[1600px] space-y-5 px-4 pb-28 pt-4 md:space-y-6 md:px-6 md:py-6">
@@ -395,9 +389,12 @@ function SpacesPageInner() {
                         ))}
                     </div>
                 ) : error ? (
-                    <div className="rounded-[28px] border border-destructive/15 bg-destructive/5 px-5 py-10 text-center text-sm text-destructive">
-                        {error}
-                    </div>
+                    <ErrorState
+                        icon={AlertTriangle}
+                        title="No pudimos cargar tus espacios"
+                        description={error}
+                        onRetry={() => void fetchSpaces()}
+                    />
                 ) : filteredSpaces.length === 0 ? (
                     <div className="px-2 py-8 md:py-12">
                         <EmptyState
@@ -460,18 +457,11 @@ function SpacesPageInner() {
                 onOpenChange={setPendingDialogOpen}
                 actions={pending.pendingActions}
                 loading={pending.loading}
+                error={pending.error}
+                onRetry={() => void pending.fetchPendingActions()}
                 currentUserId={currentUserId}
                 onAcceptInvite={(action) => void handleInviteResponse(action, 'accepted')}
                 onRejectInvite={(action) => void handleInviteResponse(action, 'declined')}
-                onReviewConfirmation={handleReviewConfirmation}
-                onRejectConfirmation={(action) => void handleRejectConfirmation(action)}
-            />
-
-            <ConfirmSpaceEntryDialog
-                open={confirmDialogOpen}
-                onOpenChange={setConfirmDialogOpen}
-                entry={selectedPendingEntry}
-                onSubmit={handleConfirmPendingEntry}
             />
         </>
     )

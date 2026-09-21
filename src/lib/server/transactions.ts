@@ -1,4 +1,4 @@
-import { Account, Category, Transaction, TransactionRule, User } from '@/lib/models'
+import { Account, Category, InstallmentPlan, Transaction, TransactionRule, User } from '@/lib/models'
 import { transactionSchema, type TransactionFormData } from '@/lib/validations'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
@@ -14,6 +14,7 @@ import { evaluateRules, previewRuleActions } from '@/lib/utils/rules'
 import { getTextSimilarity } from '@/lib/utils/category-ranking'
 import { parseOperationalStartDate } from '@/lib/utils/operational-start'
 import { ServiceError } from '@/lib/server/errors'
+import { Types, type ClientSession } from 'mongoose'
 import type {
     CreatedFrom,
     ImportSourceType,
@@ -45,6 +46,37 @@ type CreateTransactionOptions = {
 }
 
 export type CreateTransactionInput = TransactionFormData | Record<string, unknown>
+
+type SpaceTransactionBase = {
+    userId: string
+    spaceId: string
+    spaceEntryId: string
+    spaceImpactId: string
+    spaceOperationId: string
+    amount: number
+    operationalAmount: number
+    currency: ITransaction['currency']
+    date: Date
+    description: string
+    categoryId?: string
+    spaceNameSnapshot?: string
+}
+
+export type SpaceInstallmentPlanInput = {
+    installmentCount: number
+    firstClosingMonth: string
+}
+
+export type CreateInternalSpaceTransactionInput = SpaceTransactionBase & (
+    | {
+        variant: 'payer_expense' | 'advance'
+        sourceAccountId: string
+        installmentPlan?: SpaceInstallmentPlanInput
+    }
+    | { variant: 'participant_expense'; sourceAccountId?: never }
+    | { variant: 'settlement_paid'; sourceAccountId: string }
+    | { variant: 'settlement_received'; destinationAccountId: string }
+)
 
 type PreparedTransaction = {
     data: TransactionFormData
@@ -517,6 +549,169 @@ export async function createTransactionForUser(
     }
 
     return populated
+}
+
+/**
+ * Variante interna y discriminada para Espacios v2. Es el único camino que
+ * admite un gasto operacional sin cuenta: representa la parte propia de quien
+ * no pagó y no queda disponible para formularios o payloads HTTP generales.
+ */
+export async function createInternalSpaceTransaction(
+    input: CreateInternalSpaceTransactionInput,
+    session: ClientSession
+) {
+    const objectIdFields = [
+        input.userId,
+        input.spaceId,
+        input.spaceEntryId,
+        input.spaceImpactId,
+        input.spaceOperationId,
+        input.categoryId,
+        'sourceAccountId' in input ? input.sourceAccountId : undefined,
+        'destinationAccountId' in input ? input.destinationAccountId : undefined,
+    ].filter((value): value is string => Boolean(value))
+    if (objectIdFields.some((value) => !Types.ObjectId.isValid(value))) {
+        throw new ServiceError(400, 'INVALID_SPACE_TRANSACTION_REFERENCE', 'La procedencia del movimiento no es válida.')
+    }
+    if (
+        !Number.isFinite(input.amount) ||
+        input.amount <= 0 ||
+        !Number.isFinite(input.operationalAmount) ||
+        input.operationalAmount < 0
+    ) {
+        throw new ServiceError(400, 'INVALID_SPACE_TRANSACTION_AMOUNT', 'Los montos del impacto personal no son válidos.')
+    }
+    if (input.variant === 'participant_expense' && input.operationalAmount !== input.amount) {
+        throw new ServiceError(
+            400,
+            'INVALID_SPACE_OPERATIONAL_AMOUNT',
+            'La parte sin salida de cuenta debe coincidir con el gasto operacional.'
+        )
+    }
+    if (input.variant === 'advance' && input.operationalAmount !== 0) {
+        throw new ServiceError(400, 'INVALID_SPACE_ADVANCE', 'Un adelanto puro no tiene gasto operacional.')
+    }
+    if (
+        (input.variant === 'settlement_paid' || input.variant === 'settlement_received') &&
+        input.operationalAmount !== 0
+    ) {
+        throw new ServiceError(400, 'INVALID_SPACE_SETTLEMENT', 'Una liquidación no tiene impacto operacional.')
+    }
+
+    const sourceAccountId = 'sourceAccountId' in input ? input.sourceAccountId : undefined
+    const destinationAccountId = 'destinationAccountId' in input ? input.destinationAccountId : undefined
+    const accountId = sourceAccountId ?? destinationAccountId
+    let accountType: IAccount['type'] | undefined
+    if (accountId) {
+        const account = await Account.findOne({ _id: accountId, userId: input.userId }).session(session)
+        if (!account) {
+            throw new ServiceError(404, 'SPACE_ACCOUNT_NOT_FOUND', 'La cuenta no existe o no pertenece al usuario.')
+        }
+        if (account.isActive === false) {
+            throw new ServiceError(400, 'ACCOUNT_INACTIVE', 'La cuenta seleccionada está inactiva.')
+        }
+        const isSpaceCardExpense =
+            account.type === 'credit_card' &&
+            sourceAccountId === accountId &&
+            (input.variant === 'payer_expense' || input.variant === 'advance')
+        if (!isSimpleTransactionAccountType(account.type) && !isSpaceCardExpense) {
+            throw new ServiceError(400, 'SPECIAL_ACCOUNT_REQUIRES_FULL_FLOW', 'La cuenta seleccionada requiere otro flujo.')
+        }
+        if (!supportsCurrency(account, input.currency)) {
+            throw new ServiceError(400, 'SPACE_ACCOUNT_CURRENCY_UNSUPPORTED', 'La cuenta no opera en la moneda del impacto.')
+        }
+        accountType = account.type
+    }
+
+    const requiresInstallmentPlan =
+        accountType === 'credit_card' &&
+        (input.variant === 'payer_expense' || input.variant === 'advance')
+    const installmentPlan = 'installmentPlan' in input ? input.installmentPlan : undefined
+    if (requiresInstallmentPlan && !installmentPlan) {
+        throw new ServiceError(
+            400,
+            'SPACE_CARD_PLAN_REQUIRED',
+            'Configurá las cuotas y el mes de la primera cuota.'
+        )
+    }
+    if (installmentPlan) {
+        if (!requiresInstallmentPlan) {
+            throw new ServiceError(
+                400,
+                'SPACE_CARD_PLAN_NOT_ALLOWED',
+                'La configuración de cuotas sólo corresponde a una tarjeta de crédito.'
+            )
+        }
+        if (
+            !Number.isInteger(installmentPlan.installmentCount) ||
+            installmentPlan.installmentCount < 1 ||
+            !/^\d{4}-(0[1-9]|1[0-2])$/.test(installmentPlan.firstClosingMonth)
+        ) {
+            throw new ServiceError(
+                400,
+                'SPACE_CARD_PLAN_INVALID',
+                'La cantidad de cuotas o el mes de la primera cuota no son válidos.'
+            )
+        }
+    }
+
+    if (input.categoryId) {
+        const category = await Category.findOne({ _id: input.categoryId, userId: input.userId }).session(session)
+        if (!category || category.isArchived || category.type !== 'expense') {
+            throw new ServiceError(404, 'SPACE_CATEGORY_NOT_FOUND', 'La categoría no es válida para este gasto.')
+        }
+    }
+
+    const type: ITransaction['type'] = input.variant === 'settlement_paid'
+        ? 'personal_debt_payment'
+        : input.variant === 'settlement_received'
+            ? 'personal_debt_collect'
+            : accountType === 'credit_card'
+                ? 'credit_card_expense'
+                : 'expense'
+    let installmentPlanId: Types.ObjectId | undefined
+    if (installmentPlan) {
+        const installmentCount = installmentPlan.installmentCount
+        const [plan] = await InstallmentPlan.create([{
+            userId: input.userId,
+            accountId: sourceAccountId,
+            categoryId: input.categoryId,
+            description: input.description.trim(),
+            currency: input.currency,
+            totalAmount: input.amount,
+            operationalTotalAmount: input.operationalAmount,
+            installmentCount,
+            installmentAmount: input.amount / installmentCount,
+            operationalInstallmentAmount: input.operationalAmount / installmentCount,
+            purchaseDate: input.date,
+            firstClosingMonth: installmentPlan.firstClosingMonth,
+        }], { session })
+        installmentPlanId = plan._id
+    }
+
+    const [transaction] = await Transaction.create([{
+        userId: input.userId,
+        type,
+        amount: input.amount,
+        operationalAmount: input.operationalAmount,
+        currency: input.currency,
+        date: input.date,
+        description: input.description.trim(),
+        categoryId: input.categoryId,
+        sourceAccountId,
+        destinationAccountId,
+        status: 'confirmed',
+        createdFrom: 'space',
+        spaceId: input.spaceId,
+        spaceEntryId: input.spaceEntryId,
+        spaceImpactId: input.spaceImpactId,
+        spaceOperationId: input.spaceOperationId,
+        spaceContractVersion: 2,
+        spaceNameSnapshot: input.spaceNameSnapshot,
+        installmentPlanId,
+    }], { session })
+
+    return transaction
 }
 
 /** Tipos que el motor de reglas puede evaluar. */

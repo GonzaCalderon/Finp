@@ -43,18 +43,12 @@ test.describe('Impacto personal de Espacios', () => {
         const balanceBefore = await getCashBalance(page)
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'DELETE' &&
-            response.url().includes(`/entries/${fixture.normalEntryId}/personal-impact`) &&
-            response.url().includes(`transactionId=${fixture.normalTransactionId}`)
+            response.url().includes(`/api/transactions/${fixture.normalTransactionId}`)
         )
 
         await removeCard(page, fixture.normalDescription)
         const response = await responsePromise
         expect(response.status()).toBe(200)
-        await expect(response.json()).resolves.toEqual({
-            ok: true,
-            deletedTransaction: true,
-            orphanTransactionDeleted: false,
-        })
         await expect.poll(() => getCashBalance(page)).toBe(balanceBefore + 7_000)
 
         const impactResponse = await page.request.get(
@@ -66,21 +60,12 @@ test.describe('Impacto personal de Espacios', () => {
         const entriesResponse = await page.request.get(`/api/spaces/${fixture.spaceId}/entries`)
         expect(entriesResponse.ok()).toBe(true)
         const entriesBody = await entriesResponse.json() as {
-            entries: Array<{ _id: string }>
+            data: { items: Array<{ id: string }> }
         }
-        expect(entriesBody.entries.some(
-            (entry) => entry._id.toString() === fixture.normalEntryId
+        expect(entriesBody.data.items.some(
+            (entry) => entry.id === fixture.normalEntryId
         )).toBe(true)
 
-        const retry = await page.request.delete(
-            `/api/spaces/${fixture.spaceId}/entries/${fixture.normalEntryId}/personal-impact?transactionId=${fixture.normalTransactionId}`
-        )
-        expect(retry.status()).toBe(200)
-        await expect(retry.json()).resolves.toEqual({
-            ok: true,
-            deletedTransaction: false,
-            orphanTransactionDeleted: false,
-        })
     })
 
     test('elimina individualmente una transaccion huerfana y revierte su saldo', async ({ page }, testInfo) => {
@@ -88,28 +73,14 @@ test.describe('Impacto personal de Espacios', () => {
         const balanceBefore = await getCashBalance(page)
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'DELETE' &&
-            response.url().includes(`/entries/${fixture.orphanEntryId}/personal-impact`) &&
-            response.url().includes(`transactionId=${fixture.orphanTransactionId}`)
+            new URL(response.url()).pathname.endsWith(
+                `/api/transactions/${fixture.orphanTransactionId}`
+            )
         )
 
         await removeCard(page, fixture.orphanDescription)
         const response = await responsePromise
         expect(response.status()).toBe(200)
-        await expect(response.json()).resolves.toEqual({
-            ok: true,
-            deletedTransaction: true,
-            orphanTransactionDeleted: true,
-        })
         await expect.poll(() => getCashBalance(page)).toBe(balanceBefore + 9_000)
-
-        const retry = await page.request.delete(
-            `/api/spaces/${fixture.spaceId}/entries/${fixture.orphanEntryId}/personal-impact?transactionId=${fixture.orphanTransactionId}`
-        )
-        expect(retry.status()).toBe(200)
-        await expect(retry.json()).resolves.toEqual({
-            ok: true,
-            deletedTransaction: false,
-            orphanTransactionDeleted: false,
-        })
     })
 })

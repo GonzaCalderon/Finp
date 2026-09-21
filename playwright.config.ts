@@ -66,6 +66,9 @@ export default defineConfig({
             // Auth.js exige confianza explícita al ejecutar el build con next start.
             // assertE2EBaseUrl restringe este host al puerto local exclusivo de E2E.
             AUTH_TRUST_HOST: 'true',
+            // El adapter real se cubre por contrato; el navegador usa almacenamiento
+            // efímero sólo dentro de la base E2E aislada.
+            SPACE_ATTACHMENT_STORAGE_MODE: 'memory',
         },
     },
 })

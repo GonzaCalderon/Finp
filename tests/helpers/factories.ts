@@ -131,7 +131,6 @@ export function buildSpaceEntry(overrides?: DeepPartial<ISpaceEntry>): ISpaceEnt
         paidByParticipantId: payerId,
         sharedWithParticipantIds: [payerId],
         splitMode: 'equal',
-        confirmationRequired: false,
         createdAt: now(),
         updatedAt: now(),
     }, overrides)

@@ -5,12 +5,37 @@ import {
     SPACE_ENTRY_TYPES,
     SPACE_SPLIT_MODES,
 } from '@/lib/constants'
+import { conversionSnapshotSchema, moneySchema } from '@/lib/models/space-money.schemas'
 
 const splitAllocationSchema = new Schema(
     {
         participantId: { type: Schema.Types.ObjectId, ref: 'SpaceParticipant', required: true },
         percentage: { type: Number },
         amount: { type: Number },
+    },
+    { _id: false }
+)
+
+const settlementApplicationSchema = new Schema(
+    {
+        debtId: { type: Schema.Types.ObjectId, ref: 'Debt' },
+        debtCurrency: { type: String, required: true, uppercase: true },
+        paidMoney: { type: moneySchema, required: true },
+        appliedMoney: { type: moneySchema, required: true },
+        conversionSnapshot: { type: conversionSnapshotSchema },
+    },
+    { _id: false }
+)
+
+const settlementLegSchema = new Schema(
+    {
+        legId: { type: String, required: true },
+        paidMoney: { type: moneySchema, required: true },
+        reportingMoney: { type: moneySchema, required: true },
+        accountId: { type: Schema.Types.ObjectId, ref: 'Account' },
+        linkedTransactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
+        conversionSnapshot: { type: conversionSnapshotSchema },
+        applications: { type: [settlementApplicationSchema], required: true, default: [] },
     },
     { _id: false }
 )
@@ -25,7 +50,12 @@ const entrySnapshotSchema = new Schema(
         currency: { type: String, required: true },
         reportingAmount: { type: Number, required: true },
         exchangeRate: { type: Number },
+        originalMoney: { type: moneySchema },
+        reportingMoney: { type: moneySchema },
+        conversionSnapshot: { type: conversionSnapshotSchema },
         date: { type: Date, required: true },
+        dateKey: { type: String, trim: true },
+        timezone: { type: String, trim: true },
         spaceCategoryId: { type: Schema.Types.ObjectId },
         paidByParticipantId: { type: Schema.Types.ObjectId },
         sharedWithParticipantIds: [{ type: Schema.Types.ObjectId }],
@@ -44,6 +74,7 @@ const attachmentSchema = new Schema(
         size: { type: Number, required: true },
         storageProvider: { type: String, required: true, default: 'vercel_blob' },
         storageKey: { type: String, required: true, trim: true },
+        contentSha256: { type: String, minlength: 64, maxlength: 64 },
         createdAt: { type: Date, required: true, default: () => new Date() },
     },
     { _id: true }
@@ -61,13 +92,20 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
             required: true,
             default: SPACE_ENTRY_STATUSES.RECORDED,
         },
+        contractVersion: { type: Number, enum: [2] },
         title: { type: String, required: true, trim: true },
         description: { type: String, trim: true },
         amount: { type: Number, required: true },
         currency: { type: String, required: true },
         reportingAmount: { type: Number, required: true },
         exchangeRate: { type: Number },
+        originalMoney: { type: moneySchema },
+        reportingMoney: { type: moneySchema },
+        conversionSnapshot: { type: conversionSnapshotSchema },
+        settlementLegs: { type: [settlementLegSchema], default: undefined },
         date: { type: Date, required: true },
+        dateKey: { type: String, trim: true },
+        timezone: { type: String, trim: true },
         categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
         spaceCategoryId: { type: Schema.Types.ObjectId, ref: 'SpaceCategory' },
         paidByParticipantId: { type: Schema.Types.ObjectId, ref: 'SpaceParticipant' },
@@ -80,11 +118,6 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         },
         splitAllocations: [splitAllocationSchema],
         notes: { type: String, trim: true },
-        linkedTransactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
-        confirmationRequired: { type: Boolean, required: true, default: false },
-        confirmedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
-        confirmedAt: { type: Date },
-        rejectedAt: { type: Date },
         attachments: [attachmentSchema],
         // Anulación lógica
         isVoided: { type: Boolean, required: true, default: false },
@@ -96,13 +129,14 @@ const SpaceEntrySchema = new Schema<ISpaceEntry>(
         editedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
         editCount: { type: Number, required: true, default: 0 },
         previousVersions: { type: [entrySnapshotSchema], default: undefined },
+        revision: { type: Number, min: 0, default: 0 },
+        operationId: { type: Schema.Types.ObjectId, ref: 'SpaceOperation' },
     },
     { timestamps: true }
 )
 
 SpaceEntrySchema.index({ spaceId: 1, date: -1, createdAt: -1 })
 SpaceEntrySchema.index({ paidByParticipantId: 1, status: 1, createdAt: -1 })
-SpaceEntrySchema.index({ linkedTransactionId: 1 })
 SpaceEntrySchema.index({ spaceId: 1, isVoided: 1, date: -1 })
 
 const existingSpaceEntryModel = mongoose.models.SpaceEntry as mongoose.Model<ISpaceEntry> | undefined
@@ -110,9 +144,16 @@ const existingSpaceEntryModel = mongoose.models.SpaceEntry as mongoose.Model<ISp
 const currentStatusEnum = existingSpaceEntryModel?.schema.path('status')?.options?.enum as string[] | undefined
 const needsSchemaRefresh =
     !!existingSpaceEntryModel &&
-    (!existingSpaceEntryModel.schema.path('confirmationRequired') ||
-        !existingSpaceEntryModel.schema.path('confirmedByUserId') ||
-        !currentStatusEnum?.includes(SPACE_ENTRY_STATUSES.CONFIRMED))
+    (!currentStatusEnum?.includes(SPACE_ENTRY_STATUSES.CONFIRMED) ||
+        !currentStatusEnum?.includes('voided') ||
+        !existingSpaceEntryModel.schema.path('contractVersion') ||
+        !existingSpaceEntryModel.schema.path('dateKey') ||
+        !existingSpaceEntryModel.schema.path('timezone') ||
+        !existingSpaceEntryModel.schema.path('revision') ||
+        !existingSpaceEntryModel.schema.path('operationId') ||
+        !existingSpaceEntryModel.schema.path('originalMoney') ||
+        !existingSpaceEntryModel.schema.path('settlementLegs') ||
+        !existingSpaceEntryModel.schema.path('attachments.contentSha256'))
 
 if (needsSchemaRefresh) {
     delete mongoose.models.SpaceEntry

@@ -50,12 +50,6 @@ export const MOTION_CARD = {
     transition: springButton,
 } as const
 
-export const MOTION_CHIP = {
-    whileHover: { scale: 1.015 },
-    whileTap: { scale: 0.99 },
-    transition: springButton,
-} as const
-
 // ─── Type surfaces ────────────────────────────────────────────────────────────
 
 export function getTypeSurface(type: TransactionFormInput['type'], isExpense: boolean) {
@@ -133,24 +127,19 @@ export function CategoryChip({
     category,
     selected,
     onClick,
-    animateOnMount = true,
 }: {
     category: ICategory
     selected: boolean
     onClick: () => void
-    animateOnMount?: boolean
 }) {
     const categoryColor = category.color || (category.type === 'income' ? '#059669' : '#DC2626')
 
     return (
-        <motion.button
+        <button
             type="button"
             onClick={onClick}
             aria-pressed={selected}
             className="rounded-full border px-3 py-2 text-sm font-medium transition-colors"
-            variants={animateOnMount ? staggerItem : undefined}
-            initial={animateOnMount ? undefined : false}
-            {...MOTION_CHIP}
             style={{
                 background: selected ? categoryColor : `color-mix(in srgb, ${categoryColor} 11%, transparent)`,
                 color: selected ? '#fff' : 'var(--foreground)',
@@ -177,7 +166,7 @@ export function CategoryChip({
                     </span>
                 ) : null}
             </span>
-        </motion.button>
+        </button>
     )
 }
 

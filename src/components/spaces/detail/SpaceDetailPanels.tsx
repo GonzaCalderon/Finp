@@ -21,9 +21,11 @@ import { SpaceAmountInline, SpaceCurrencyBadge, SpaceCurrencyStack, SpaceEntrySt
 import { Badge } from '@/components/ui/badge'
 import { SPACE_SPLIT_MODE_LABELS, SPACE_TYPE_LABELS, extractId, formatSpaceDate, formatSpaceDateRange } from '@/lib/utils/spaces'
 import { cn } from '@/lib/utils'
-import type { ISpace, ISpaceEntry, ISpaceEntryPersonalImpact, ISpaceEntryPersonalImpactByEntry, ISpaceParticipant, SpaceSummarySnapshot } from '@/types'
+import type { ISpace, ISpaceEntry, ISpaceEntryPersonalImpact, ISpaceEntryPersonalImpactByEntry, ISpaceParticipant, SpaceEntryDraftDto, SpaceSummarySnapshot } from '@/types'
 import type { SpaceFormData } from '@/lib/validations'
 import type { SpaceParticipantRole } from '@/lib/constants'
+import type { SpaceMovementFilters } from '@/hooks/useSpaceEntries'
+import { moneyToNumber, type MoneyDto } from '@/lib/utils/money'
 
 export type SpaceEntryFilter = 'all' | ISpaceEntry['type']
 type SpaceEntrySort = 'recent' | 'amount' | 'status'
@@ -37,6 +39,9 @@ function getUserShare(entry: ISpaceEntry, currentParticipantId: string | null): 
     if (entry.type === 'settlement') return null
     if (entry.isVoided) return null
     if (entry.splitMode === 'none') return null
+
+    const resolved = entry.resolvedShares?.find((share) => share.participantId === currentParticipantId)
+    if (resolved) return resolved.amount
 
     const sharedWith = (entry.sharedWithParticipantIds ?? []).map((id) => extractId(id))
     if (!sharedWith.includes(currentParticipantId)) return null
@@ -97,12 +102,14 @@ function resolveCategoryInfo(entry: ISpaceEntry) {
 
 function MovementCard({
     entry,
+    reportingCurrency,
     hidden,
     participants,
     currentUserId,
     personalImpact,
+    pendingImpact,
     reviewImpact,
-    canManage,
+    capabilities,
     highlighted,
     onEntryClick,
     onEdit,
@@ -116,8 +123,9 @@ function MovementCard({
     participants: ISpaceParticipant[]
     currentUserId?: string
     personalImpact?: ISpaceEntryPersonalImpact
+    pendingImpact?: ISpaceEntryPersonalImpact
     reviewImpact?: ISpaceEntryPersonalImpact
-    canManage?: boolean
+    capabilities?: Array<'edit' | 'void'>
     highlighted?: boolean
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
@@ -132,14 +140,12 @@ function MovementCard({
     const category = resolveCategoryInfo(entry)
     const clickable = Boolean(onEntryClick)
     const includedCount = entry.sharedWithParticipantIds?.length ?? 0
-    const legacyImpactsCurrentUser = Boolean(
-        entry.linkedTransactionId &&
-        currentUserId &&
-        payer &&
-        (extractId(entry.confirmedByUserId) === currentUserId || extractId(payer.userId) === currentUserId)
-    )
-    const impactsCurrentUser = personalImpact?.status === 'linked' || legacyImpactsCurrentUser
+    const impactsCurrentUser = personalImpact?.status === 'linked'
     const needsReview = Boolean(reviewImpact) && !entry.isVoided
+    // Sin un pending v2 no hay decisión que enviar: escrituras legacy están
+    // retiradas server-side (ver docs/producto/espacios.md #14), y sin un
+    // impacto propio el movimiento no afecta el Finp de este usuario.
+    const canRegisterPersonalImpact = entry.contractVersion === 2 && Boolean(pendingImpact)
     const settlementReceiverId = entry.type === 'settlement'
         ? extractId(entry.sharedWithParticipantIds?.[0])
         : null
@@ -151,10 +157,8 @@ function MovementCard({
     const isEdited = (entry.editCount ?? 0) > 0
 
     // Permission to edit/void per entry
-    const entryCreatorId = extractId(entry.createdByUserId)
-    const isCreator = Boolean(currentUserId && entryCreatorId && entryCreatorId === currentUserId)
-    const canEditEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onEdit)
-    const canVoidEntry = !isVoided && (isCreator || Boolean(canManage)) && Boolean(onVoid)
+    const canEditEntry = !isVoided && Boolean(capabilities?.includes('edit')) && Boolean(onEdit)
+    const canVoidEntry = !isVoided && Boolean(capabilities?.includes('void')) && Boolean(onVoid)
     const hasActions = canEditEntry || canVoidEntry
 
     const currentParticipant = currentUserId
@@ -271,12 +275,37 @@ function MovementCard({
             </div>
             {/* Right: amount (top) + badges & quick actions on the same row (bottom) */}
             <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
-                <SpaceAmountInline
-                    amount={entry.amount}
-                    currency={entry.currency}
-                    hidden={hidden}
-                    className={cn('text-sm font-semibold tabular-nums', isVoided ? 'text-muted-foreground line-through' : '')}
-                />
+                {entry.type === 'settlement' && (entry.settlementLegs?.length ?? 0) > 1 ? (
+                    <div className="space-y-0.5 text-right">
+                        {entry.settlementLegs!.map((leg) => (
+                            <SpaceAmountInline
+                                key={leg.legId}
+                                amount={moneyToNumber(leg.paidMoney)}
+                                currency={leg.paidMoney.currency}
+                                hidden={hidden}
+                                className={cn('block text-sm font-semibold tabular-nums', isVoided ? 'text-muted-foreground line-through' : '')}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <SpaceAmountInline
+                        amount={entry.amount}
+                        currency={entry.currency}
+                        hidden={hidden}
+                        className={cn('text-sm font-semibold tabular-nums', isVoided ? 'text-muted-foreground line-through' : '')}
+                    />
+                )}
+                {entry.currency !== reportingCurrency || (entry.settlementLegs?.length ?? 0) > 1 ? (
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <span>equivale a</span>
+                        <SpaceAmountInline
+                            amount={entry.reportingAmount}
+                            currency={reportingCurrency}
+                            hidden={hidden}
+                            className="font-medium"
+                        />
+                    </div>
+                ) : null}
                 {userShare !== null ? (
                     <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                         <span>tu parte</span>
@@ -290,14 +319,14 @@ function MovementCard({
                 ) : null}
                 {/* Badges + desktop quick actions + mobile tap affordance — single row */}
                 <div className="flex items-center gap-1.5">
-                    {!isVoided && !impactsCurrentUser && currentParticipant && onPersonalImpact ? (
+                    {!isVoided && !impactsCurrentUser && !needsReview && currentParticipant && onPersonalImpact && canRegisterPersonalImpact ? (
                         <button
                             type="button"
                             onClick={(event) => {
                                 event.stopPropagation()
                                 onPersonalImpact(entry)
                             }}
-                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/8 px-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/8 px-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
                         >
                             <Plus className="h-3.5 w-3.5" />
                             Registrar en Mi Finp
@@ -379,18 +408,80 @@ function MovementCard({
     )
 }
 
+function SpaceEntryDraftCard({
+    draft,
+    hidden,
+    reportingCurrency,
+    onContinue,
+}: {
+    draft: SpaceEntryDraftDto
+    hidden: boolean
+    reportingCurrency: string
+    onContinue?: () => void
+}) {
+    const amount = draft.fields.amount ?? 0
+    const currency = draft.fields.currency ?? reportingCurrency
+
+    return (
+        <div className="rounded-[22px] border border-dashed border-primary/30 bg-primary/[0.045] p-4" data-testid="space-entry-draft-card">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="rounded-full border border-primary/15 bg-primary/10 text-primary">
+                            <FileBadge2 className="h-3.5 w-3.5" />
+                            Borrador privado
+                        </Badge>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <Lock className="h-3 w-3" />
+                            Sólo vos podés verlo
+                        </span>
+                    </div>
+                    <div>
+                        <p className="truncate font-medium text-foreground">
+                            {draft.fields.title?.trim() || 'Nuevo gasto sin descripción'}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Último cambio {formatSpaceDate(new Date(draft.updatedAt))} · Paso {draft.step} de 3
+                        </p>
+                    </div>
+                </div>
+                {amount > 0 ? (
+                    <SpaceAmountInline
+                        amount={amount}
+                        currency={currency}
+                        hidden={hidden}
+                        className="shrink-0 text-sm font-semibold"
+                    />
+                ) : null}
+            </div>
+            {onContinue ? (
+                <Button type="button" variant="outline" size="sm" className="mt-3 rounded-full" onClick={onContinue}>
+                    Continuar borrador
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+            ) : null}
+        </div>
+    )
+}
+
 export function SpaceMovementsPanel({
     entries,
+    draft,
     participants,
     currentUserId,
     personalImpactsByEntryId = {},
-    canManage,
+    entryCapabilitiesById = {},
     entryFilter,
     onFilterChange,
     reportingCurrency,
     hidden,
+    currencies,
+    currencyFilters,
+    subtotalByCurrency,
+    onCurrencyFiltersChange,
     focusEntryId,
     onCreate,
+    onDraftContinue,
     onEntryClick,
     onEdit,
     onVoid,
@@ -398,16 +489,22 @@ export function SpaceMovementsPanel({
     onPersonalImpact,
 }: {
     entries: ISpaceEntry[]
+    draft?: SpaceEntryDraftDto
     participants: ISpaceParticipant[]
     currentUserId?: string
     personalImpactsByEntryId?: Record<string, ISpaceEntryPersonalImpactByEntry>
-    canManage?: boolean
+    entryCapabilitiesById?: Record<string, Array<'edit' | 'void'>>
     entryFilter: SpaceEntryFilter
     onFilterChange: (filter: SpaceEntryFilter) => void
     reportingCurrency: string
     hidden: boolean
+    currencies: string[]
+    currencyFilters: SpaceMovementFilters
+    subtotalByCurrency?: Record<string, MoneyDto>
+    onCurrencyFiltersChange: (filters: SpaceMovementFilters) => void
     focusEntryId?: string | null
-    onCreate: () => void
+    onCreate?: () => void
+    onDraftContinue?: () => void
     onEntryClick?: (entry: ISpaceEntry) => void
     onEdit?: (entry: ISpaceEntry) => void
     onVoid?: (entry: ISpaceEntry) => void
@@ -431,12 +528,13 @@ export function SpaceMovementsPanel({
             return (b.reportingAmount ?? b.amount) - (a.reportingAmount ?? a.amount)
         }
         if (sort === 'status') {
-            const order = ['pending_confirmation', 'confirmed', 'linked', 'rejected']
+            const order = ['confirmed', 'linked', 'rejected']
             return order.indexOf(a.status) - order.indexOf(b.status)
         }
 
         return new Date(b.date).getTime() - new Date(a.date).getTime()
     })
+    const showDraft = Boolean(draft && (entryFilter === 'all' || entryFilter === 'expense'))
 
     return (
         <SpaceSurface>
@@ -488,13 +586,63 @@ export function SpaceMovementsPanel({
                 </div>
             </div>
 
+            <div className="mt-3 grid gap-2 rounded-2xl border border-foreground/[0.07] bg-muted/20 p-3 sm:grid-cols-3">
+                {([
+                    ['originalCurrencies', 'Moneda original'],
+                    ['paidCurrencies', 'Moneda pagada'],
+                    ['debtCurrencies', 'Moneda de deuda'],
+                ] as const).map(([key, label]) => (
+                    <div key={key} className="space-y-1">
+                        <label className="text-[11px] font-medium text-muted-foreground">{label}</label>
+                        <Select
+                            value={currencyFilters[key]?.[0] ?? 'all'}
+                            onValueChange={(value) => onCurrencyFiltersChange({
+                                ...currencyFilters,
+                                [key]: value === 'all' ? undefined : [value],
+                            })}
+                        >
+                            <SelectTrigger size="sm" className="w-full rounded-xl bg-background/80">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todas</SelectItem>
+                                {currencies.map((currency) => (
+                                    <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                ))}
+                {Object.keys(subtotalByCurrency ?? {}).length > 0 ? (
+                    <div className="sm:col-span-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-2 text-xs text-muted-foreground" aria-live="polite">
+                        <span className="font-medium">Subtotal filtrado</span>
+                        {Object.values(subtotalByCurrency ?? {}).map((money) => (
+                            <SpaceAmountInline
+                                key={money.currency}
+                                amount={moneyToNumber(money)}
+                                currency={money.currency}
+                                hidden={hidden}
+                            />
+                        ))}
+                    </div>
+                ) : null}
+            </div>
+
             <div className="mt-5 space-y-2">
-                {sortedEntries.length === 0 ? (
+                {draft && showDraft ? (
+                    <SpaceEntryDraftCard
+                        draft={draft}
+                        hidden={hidden}
+                        reportingCurrency={reportingCurrency}
+                        onContinue={onDraftContinue}
+                    />
+                ) : null}
+                {sortedEntries.length === 0 && !showDraft ? (
                     <EmptyState
                         icon={Sparkles}
                         title="Todavía no hay movimientos"
                         description="Registrá el primero para empezar a ver balances, evolución y distribución."
-                        actionLabel="Nuevo movimiento"
+                        actionLabel={onCreate ? 'Nuevo movimiento' : undefined}
                         onAction={onCreate}
                     />
                 ) : (
@@ -507,8 +655,9 @@ export function SpaceMovementsPanel({
                             participants={participants}
                             currentUserId={currentUserId}
                             personalImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.linkedImpact}
+                            pendingImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.pendingActions[0]}
                             reviewImpact={personalImpactsByEntryId[extractId(entry._id) ?? '']?.reviewImpact}
-                            canManage={canManage}
+                            capabilities={entryCapabilitiesById[extractId(entry._id) ?? '']}
                             highlighted={Boolean(focusEntryId && extractId(entry._id) === focusEntryId)}
                             onEntryClick={onEntryClick}
                             onEdit={onEdit}
@@ -997,9 +1146,6 @@ export function SpaceClosurePanel({
                             </SpaceMetaBadge>
                             <SpaceMetaBadge icon={Users}>
                                 {summary.participantCount} participante{summary.participantCount === 1 ? '' : 's'}
-                            </SpaceMetaBadge>
-                            <SpaceMetaBadge icon={Plus}>
-                                {summary.pendingEntryCount} pendiente{summary.pendingEntryCount === 1 ? '' : 's'}
                             </SpaceMetaBadge>
                         </div>
                     </div>

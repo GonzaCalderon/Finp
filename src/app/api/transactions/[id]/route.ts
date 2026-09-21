@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { connectDB } from '@/lib/db'
-import { Transaction, Account, InstallmentPlan } from '@/lib/models'
+import { Transaction, Account, InstallmentPlan, SpaceEntryPersonalImpact } from '@/lib/models'
 import { transactionSchema } from '@/lib/validations'
 import { isNonOperationalTransactionType } from '@/lib/utils/operational-amount'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
@@ -31,6 +31,8 @@ type DeleteTransaction = {
     categoryId?: unknown
     paymentGroupId?: string | null
     installmentPlanId?: unknown
+    spaceId?: { toString(): string } | string
+    spaceEntryId?: { toString(): string } | string
     updatedAt?: Date
 }
 
@@ -420,9 +422,17 @@ export async function DELETE(
         const { id } = await params
         const searchParams = new URL(request.url).searchParams
         const scope = searchParams.get('scope') ?? 'single'
+        const spaceId = searchParams.get('spaceId')?.trim()
+        const spaceEntryId = searchParams.get('spaceEntryId')?.trim()
         if (scope !== 'single' && scope !== 'group') {
             return NextResponse.json(
                 { error: 'El alcance de borrado debe ser single o group.' },
+                { status: 400 }
+            )
+        }
+        if (Boolean(spaceId) !== Boolean(spaceEntryId) || (scope === 'group' && spaceId)) {
+            return NextResponse.json(
+                { error: 'La referencia al Espacio no es válida para este alcance.' },
                 { status: 400 }
             )
         }
@@ -435,7 +445,52 @@ export async function DELETE(
         }).lean<DeleteTransaction | null>()
 
         if (!existing) {
+            if (spaceId && spaceEntryId) {
+                const activeImpact = await SpaceEntryPersonalImpact.exists({
+                    userId: session.user.id,
+                    spaceId,
+                    entryId: spaceEntryId,
+                    status: { $in: ['linked', 'needs_review'] },
+                })
+                if (activeImpact) {
+                    return NextResponse.json(
+                        {
+                            error: 'El impacto personal sigue vinculado a otra transacción.',
+                            code: 'SPACE_TRANSACTION_DELETE_CONFLICT',
+                        },
+                        { status: 409 }
+                    )
+                }
+                return NextResponse.json({
+                    message: 'La transacción ya estaba eliminada',
+                    deletedCount: 0,
+                    scope: 'single',
+                    reverted: {
+                        commitment: null,
+                        installmentPlan: null,
+                        personalImpact: false,
+                        notifications: 0,
+                        orphanPaymentSiblingId: null,
+                    },
+                })
+            }
             return NextResponse.json({ error: 'Transacción no encontrada' }, { status: 404 })
+        }
+        if (
+            spaceId &&
+            spaceEntryId &&
+            (
+                existing.spaceId?.toString() !== spaceId ||
+                existing.spaceEntryId?.toString() !== spaceEntryId
+            )
+        ) {
+            return NextResponse.json(
+                {
+                    error: 'La transacción no pertenece al movimiento indicado.',
+                    code: 'SPACE_TRANSACTION_DELETE_CONFLICT',
+                },
+                { status: 409 }
+            )
         }
 
         const targets: DeleteTransaction[] =
@@ -458,7 +513,12 @@ export async function DELETE(
 
         const deletion = await deleteAuthorizedPersonalTransactions(
             session.user.id,
-            targets.map((target) => ({ transactionId: target._id.toString() }))
+            targets.map((target) => ({
+                transactionId: target._id.toString(),
+                ...(spaceId && spaceEntryId
+                    ? { spaceId, spaceEntryId }
+                    : {}),
+            }))
         )
         const deletedTransactions = deletion.deletedTransactions as DeleteTransaction[]
         const teardowns = deletion.teardowns

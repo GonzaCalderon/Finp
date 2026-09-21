@@ -22,7 +22,7 @@ import {
 import { DatePickerField } from '@/components/shared/transaction-dialog/fields/DatePickerField'
 import { CurrencyMultiSelector } from '@/components/shared/CurrencyMultiSelector'
 import { CurrencySelector } from '@/components/shared/CurrencySelector'
-import { COMMON_CURRENCIES } from '@/lib/constants'
+import { ISO_CURRENCIES } from '@/lib/constants/iso-currencies'
 import { spaceSchema, type SpaceFormData } from '@/lib/validations'
 import {
     SPACE_MODE_LABELS,
@@ -79,29 +79,35 @@ export function EditSpaceSettingsDialog({
     participants = [],
     onInvite,
     onSubmit,
+    reportingCurrencyLocked = false,
+    lockedCurrencies = [],
 }: DialogProps & {
     spaceId: string
     initialValues: SpaceFormData
     participants?: ISpaceParticipant[]
     onInvite?: () => void
     onSubmit: (data: SpaceFormData) => Promise<unknown>
+    reportingCurrencyLocked?: boolean
+    lockedCurrencies?: string[]
 }) {
     const [form, setForm] = useState<SpaceFormData>(buildForm(initialValues))
-    const [customCurrency, setCustomCurrency] = useState('')
     const [startDateOpen, setStartDateOpen] = useState(false)
     const [endDateOpen, setEndDateOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     const availableCurrencies = useMemo(
-        () => Array.from(new Set([...COMMON_CURRENCIES, ...form.currencies, form.reportingCurrency])),
+        () => Array.from(new Set([
+            ...ISO_CURRENCIES.map((currency) => currency.code),
+            ...form.currencies,
+            form.reportingCurrency,
+        ])),
         [form.currencies, form.reportingCurrency]
     )
 
     useEffect(() => {
         if (!open) return
         setForm(buildForm(initialValues))
-        setCustomCurrency('')
         setSubmitting(false)
         setError(null)
     }, [initialValues, open])
@@ -115,19 +121,6 @@ export function EditSpaceSettingsDialog({
             return next
         })
         setError(null)
-    }
-
-    const addCustomCurrency = () => {
-        const code = customCurrency.trim().toUpperCase()
-        if (!/^[A-Z]{2,6}$/.test(code)) return
-        setForm((previous) => ({
-            ...previous,
-            currencies: previous.currencies.includes(code)
-                ? previous.currencies
-                : [...previous.currencies, code],
-            reportingCurrency: previous.reportingCurrency || code,
-        }))
-        setCustomCurrency('')
     }
 
     const handleSubmit = async () => {
@@ -354,31 +347,22 @@ export function EditSpaceSettingsDialog({
                                         }))
                                     }
                                     label="Monedas del espacio"
+                                    lockedValues={lockedCurrencies}
+                                    helperText={lockedCurrencies.length
+                                        ? `Con historia: ${lockedCurrencies.join(', ')}. No se pueden retirar.`
+                                        : undefined}
                                 />
-                                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.5fr)]">
-                                    <div className="flex gap-2">
-                                        <Input
-                                            value={customCurrency}
-                                            onChange={(event) => setCustomCurrency(event.target.value.toUpperCase().slice(0, 6))}
-                                            onKeyDown={(event) => {
-                                                if (event.key === 'Enter') {
-                                                    event.preventDefault()
-                                                    addCustomCurrency()
-                                                }
-                                            }}
-                                            placeholder="Agregar moneda"
-                                            className="uppercase"
-                                            maxLength={6}
-                                        />
-                                        <Button type="button" variant="outline" className="rounded-full" onClick={addCustomCurrency}>
-                                            Agregar
-                                        </Button>
-                                    </div>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <p className="self-center text-xs leading-relaxed text-muted-foreground">
+                                        Podés agregar monedas ISO activas. Una moneda usada conserva su historia y ya no puede retirarse.
+                                    </p>
                                     <CurrencySelector
                                         value={form.reportingCurrency}
                                         options={form.currencies}
                                         onValueChange={(currency) => setField('reportingCurrency', currency)}
                                         label="Moneda de reporte"
+                                        readOnly={reportingCurrencyLocked}
+                                        helperText={reportingCurrencyLocked ? 'Quedó fijada al registrar el primer movimiento.' : undefined}
                                     />
                                 </div>
                             </SettingSection>
