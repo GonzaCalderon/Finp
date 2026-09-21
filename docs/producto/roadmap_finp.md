@@ -60,7 +60,9 @@ Orden:
 1. conservar la suite E2E global local y la documentación como gates verdes;
 2. corregir la exactitud de Espacios con Mi Finp y Deudas;
 3. rediseñar y estabilizar los recorridos principales de Espacios, mobile primero;
-4. obtener la primera ejecución E2E verde en CI antes de promover;
+4. activar la primera ejecución E2E real en CI; hasta disponer de la credencial
+   aislada, una promoción exige matriz global local sobre build de producción y
+   aprobación explícita del prompter;
 5. ampliar colaboración sólo después de cerrar la base de Espacios;
 6. revisar el criterio de producto de Escenarios antes de retomar Proyección;
 7. retomar la orientación por dominio después de esa revisión;
@@ -474,9 +476,14 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 - Requiere: entorno o datos reales.
 - Disponible: workflow activo con preflight, seed, build, Playwright
   mobile/desktop, secretos de aplicación efímeros y artefactos ante fallos. Sin
-  `MONGODB_URI_TEST` informa el bloqueo y no conecta.
+  `MONGODB_URI_TEST` informa el bloqueo y no conecta; ese job exitoso no cuenta
+  como ejecución E2E verde.
 - Pendiente externo: cargar en GitHub una URI limitada a `finp-e2e` y obtener la
   primera ejecución verde.
+- Excepción de promoción aceptada el 2026-09-21: el PR 39 puede avanzar con
+  aprobación del prompter y evidencia local de 82/82 E2E sobre build de
+  producción en desktop/mobile. No cierra este ítem ni convierte el skip remoto
+  en evidencia de ejecución.
 - Criterio: flujos críticos ejecutan en CI con secretos y base aislada; reportes se conservan ante fallos.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
@@ -695,7 +702,7 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 ### FINP-P1-016 — Plan privado de tarjeta y baja robusta desde Espacios
 
 - Estado: `cerrado` el 2026-09-21 sobre
-  `codex/fix-spaces-v2-autosave-loop`; pendiente sólo de integración a `dev`.
+  `codex/fix-spaces-v2-autosave-loop`.
 - Decisión: [`0015 — Plan privado de cuotas para un impacto de Espacio`](../decisiones/0015-plan-privado-cuotas-impacto-espacio.md).
 - Alcance: configurar cuotas y primer cierre en las dos altas privadas, separar
   deuda real de gasto operacional, persistir el plan de forma atómica y unificar

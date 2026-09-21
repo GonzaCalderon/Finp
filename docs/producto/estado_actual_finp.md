@@ -611,7 +611,7 @@ Cada limitación priorizada tiene un único registro en el roadmap.
 ## 12. Último bloque entregado
 
 Cierre de FINP-P1-016, 2026-09-21
-(`codex/fix-spaces-v2-autosave-loop`, listo para integrar a `dev`):
+(`codex/fix-spaces-v2-autosave-loop`):
 
 - plan privado de tarjeta con cantidad de cuotas y primer cierre explícitos en
   las dos altas desde Espacios, persistido atómicamente con el impacto personal;
