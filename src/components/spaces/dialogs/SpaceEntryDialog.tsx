@@ -56,6 +56,7 @@ import { clientDateToDateKey, dateKeyToClientDate } from '@/lib/client/space-api
 import { fetchLinkCandidatesForNewEntry } from '@/lib/client/space-personal-impact'
 import { moneyFromDecimal } from '@/lib/utils/money'
 import { supportsCurrency } from '@/lib/utils/accounts'
+import { getDefaultFirstClosingMonth } from '@/lib/utils/installments'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -202,6 +203,9 @@ function buildDefaultForm({
         notes: '',
         personalAccountId: undefined,
         linkedTransactionId: undefined,
+        installmentCount: undefined,
+        firstClosingMonth: undefined,
+        installmentQuoteAmount: undefined,
     }
 }
 
@@ -277,6 +281,8 @@ function draftPayloadFromDto(draft: SpaceEntryDraftDto): EntryDraftPayload {
         personalAccountId: draft.fields.personalImpact?.accountId,
         categoryId: draft.fields.personalImpact?.categoryId,
         linkedTransactionId: draft.fields.personalImpact?.linkedTransactionId,
+        installmentCount: draft.fields.personalImpact?.installmentPlan?.installmentCount,
+        firstClosingMonth: draft.fields.personalImpact?.installmentPlan?.firstClosingMonth,
     }
 }
 
@@ -322,6 +328,10 @@ function draftFieldsFromForm(
             categoryId: form.categoryId,
             description: form.title,
             linkedTransactionId: form.linkedTransactionId,
+            installmentPlan: form.installmentCount && form.firstClosingMonth ? {
+                installmentCount: form.installmentCount,
+                firstClosingMonth: form.firstClosingMonth,
+            } : undefined,
         } : undefined,
     }
 }
@@ -478,6 +488,9 @@ export function SpaceEntryDialog({
     const [candidatesRetryNonce, setCandidatesRetryNonce] = useState(0)
     const [draftHydrated, setDraftHydrated] = useState(false)
     const [discardDraftOpen, setDiscardDraftOpen] = useState(false)
+    const [cancelDraftOpen, setCancelDraftOpen] = useState(false)
+    const [cancelDraftPending, setCancelDraftPending] = useState(false)
+    const [cancelDraftError, setCancelDraftError] = useState<string | null>(null)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
     const stepHeadingRef = useRef<HTMLHeadingElement>(null)
     // Cada intento rechazado incrementa el contador; el hook compartido lleva el
@@ -492,6 +505,7 @@ export function SpaceEntryDialog({
     })
     const previousCurrencyRef = useRef(form.currency)
     const draftBaselineRef = useRef<string | null>(null)
+    const draftExistedAtOpenRef = useRef(false)
     const initializedOpenRef = useRef(false)
     const hydrationRunRef = useRef(0)
 
@@ -535,6 +549,10 @@ export function SpaceEntryDialog({
         setCandidatesError(null)
         setCandidatesExcludedCount(0)
         setDiscardDraftOpen(false)
+        setCancelDraftOpen(false)
+        setCancelDraftPending(false)
+        setCancelDraftError(null)
+        draftExistedAtOpenRef.current = false
 
         // Edit mode: pre-populate form from initialData
         if (mode === 'edit' && initialData) {
@@ -603,6 +621,7 @@ export function SpaceEntryDialog({
         void loadDraft()
             .then((serverDraft) => {
                 if (hydrationRunRef.current !== hydrationRun) return
+                draftExistedAtOpenRef.current = Boolean(serverDraft)
                 let nextForm = defaults
                 let nextStep: 1 | 2 | 3 | 4 = 1
 
@@ -737,6 +756,9 @@ export function SpaceEntryDialog({
             currency: spaceCurrencies[0] ?? reportingCurrency,
             personalAccountId: undefined,
             categoryId: undefined,
+            installmentCount: undefined,
+            firstClosingMonth: undefined,
+            installmentQuoteAmount: undefined,
         }))
     }, [form.currency, reportingCurrency, spaceCurrencies])
 
@@ -787,6 +809,9 @@ export function SpaceEntryDialog({
             ...previous,
             personalAccountId: undefined,
             categoryId: undefined,
+            installmentCount: undefined,
+            firstClosingMonth: undefined,
+            installmentQuoteAmount: undefined,
         }))
     }, [accountsLoading, form.personalAccountId, selectedPersonalAccount])
     const filteredCategories = useMemo(
@@ -838,6 +863,9 @@ export function SpaceEntryDialog({
             personalAccountId: next === 'create_transaction' ? previous.personalAccountId : undefined,
             categoryId: next === 'create_transaction' ? previous.categoryId : undefined,
             linkedTransactionId: next === 'link_existing' ? previous.linkedTransactionId : undefined,
+            installmentCount: next === 'create_transaction' ? previous.installmentCount : undefined,
+            firstClosingMonth: next === 'create_transaction' ? previous.firstClosingMonth : undefined,
+            installmentQuoteAmount: next === 'create_transaction' ? previous.installmentQuoteAmount : undefined,
         }))
     }
 
@@ -1153,14 +1181,18 @@ export function SpaceEntryDialog({
         })
     }
 
-    const clearDraftCaches = useCallback(() => {
+    const clearLocalDraftCopies = useCallback(() => {
         if (typeof window !== 'undefined') {
             if (legacyDraftStorageKey) window.sessionStorage.removeItem(legacyDraftStorageKey)
             if (fallbackDraftStorageKey) window.localStorage.removeItem(fallbackDraftStorageKey)
         }
+    }, [fallbackDraftStorageKey, legacyDraftStorageKey])
+
+    const clearDraftCaches = useCallback(() => {
+        clearLocalDraftCopies()
         setPersistedDraft(null)
         onDraftChange?.(null)
-    }, [fallbackDraftStorageKey, legacyDraftStorageKey, onDraftChange, setPersistedDraft])
+    }, [clearLocalDraftCopies, onDraftChange, setPersistedDraft])
 
     const persistDraftSnapshot = useCallback(async (
         snapshot: SpaceEntryFormData = form,
@@ -1195,6 +1227,7 @@ export function SpaceEntryDialog({
                 if (fallbackDraftStorageKey) window.localStorage.removeItem(fallbackDraftStorageKey)
                 if (legacyDraftStorageKey) window.sessionStorage.removeItem(legacyDraftStorageKey)
             }
+            draftBaselineRef.current = fingerprint
             onDraftChange?.(saved)
             if (notify) success('Borrador guardado')
             return saved
@@ -1222,33 +1255,44 @@ export function SpaceEntryDialog({
         success,
     ])
 
-    useEffect(() => {
-        if (!open || mode !== 'create' || contractVersion !== 2 || !draftHydrated || submitting) return
-        const fingerprint = formFingerprint(form, step)
-        if (!persistedDraft && draftBaselineRef.current === fingerprint) return
-
-        const timer = window.setTimeout(() => {
-            void persistDraftSnapshot().catch(() => undefined)
-        }, 700)
-        return () => window.clearTimeout(timer)
-    }, [
-        contractVersion,
-        draftHydrated,
-        form,
-        mode,
-        open,
-        persistedDraft,
-        persistDraftSnapshot,
-        step,
-        submitting,
-    ])
-
     const handleSaveDraft = async () => {
+        setCancelDraftPending(true)
+        setCancelDraftError(null)
         try {
             await persistDraftSnapshot(form, step, true)
+            setCancelDraftOpen(false)
             onOpenChange(false)
+        } catch (cause) {
+            setCancelDraftError(cause instanceof Error ? cause.message : 'No pudimos guardar el borrador.')
+        } finally {
+            setCancelDraftPending(false)
+        }
+    }
+
+    const handleRetryDraftSave = async () => {
+        try {
+            await persistDraftSnapshot(form, step)
         } catch {
-            // El estado visible del borrador conserva el error y permite reintentar.
+            // El hook mantiene el error visible y el fallback local conserva los datos.
+        }
+    }
+
+    const handleExitWithoutSaving = async () => {
+        setCancelDraftPending(true)
+        setCancelDraftError(null)
+        try {
+            if (!draftExistedAtOpenRef.current) {
+                if (persistedDraft) await discardDraft()
+                clearDraftCaches()
+            } else {
+                clearLocalDraftCopies()
+            }
+            setCancelDraftOpen(false)
+            onOpenChange(false)
+        } catch (cause) {
+            setCancelDraftError(cause instanceof Error ? cause.message : 'No pudimos salir sin guardar.')
+        } finally {
+            setCancelDraftPending(false)
         }
     }
 
@@ -1257,10 +1301,18 @@ export function SpaceEntryDialog({
             onOpenChange(true)
             return
         }
-        if (mode === 'create' && draftHydrated) {
-            void persistDraftSnapshot().catch(() => undefined)
+        if (mode !== 'create' || contractVersion !== 2 || !draftHydrated) {
+            onOpenChange(false)
+            return
         }
-        onOpenChange(false)
+        const hasLocalChanges = draftBaselineRef.current !== formFingerprint(form, step)
+        const createdDraftDuringThisOpen = !draftExistedAtOpenRef.current && Boolean(persistedDraft)
+        if (!hasLocalChanges && !createdDraftDuringThisOpen) {
+            onOpenChange(false)
+            return
+        }
+        setCancelDraftError(null)
+        setCancelDraftOpen(true)
     }
 
     const handleDiscardDraft = async () => {
@@ -1297,6 +1349,7 @@ export function SpaceEntryDialog({
             setPersonalIntent(personalIntentFromForm(nextForm))
             setStep(latest.step)
             draftBaselineRef.current = formFingerprint(nextForm, latest.step)
+            draftExistedAtOpenRef.current = true
         } catch {
             // loadDraft ya expone el error recuperable en el panel.
         }
@@ -1473,6 +1526,9 @@ export function SpaceEntryDialog({
             if (!form.personalAccountId) {
                 return { personalIntent: 'Elegí la cuenta o tarjeta desde la que pagaste.' }
             }
+            if (selectedPersonalAccount?.type === 'credit_card' && !form.firstClosingMonth) {
+                return { personalIntent: 'Elegí el mes de la primera cuota.' }
+            }
             return null
         }
         if (personalIntent === 'link_existing' && !form.linkedTransactionId) {
@@ -1627,7 +1683,9 @@ export function SpaceEntryDialog({
                 : 'Se vinculará con una transacción existente de tu Finp.'
             : personalIntent === 'create_transaction'
                 ? selectedPersonalAccount
-                    ? `Se creará una transacción en ${selectedPersonalAccount.name}.`
+                    ? selectedPersonalAccount.type === 'credit_card'
+                        ? `Se creará un plan de ${form.installmentCount ?? 1} cuota${(form.installmentCount ?? 1) === 1 ? '' : 's'} en ${selectedPersonalAccount.name}.`
+                        : `Se creará una transacción en ${selectedPersonalAccount.name}.`
                     : 'Se registrará como gasto operacional en tu Finp, sin mover una cuenta.'
                 : 'Queda sólo en el Espacio; podés decidir tu Finp después.'
 
@@ -1658,6 +1716,9 @@ export function SpaceEntryDialog({
                     currency,
                     personalAccountId: undefined,
                     categoryId: undefined,
+                    installmentCount: undefined,
+                    firstClosingMonth: undefined,
+                    installmentQuoteAmount: undefined,
                 }))
                 clearFieldError('currency')
             }}
@@ -1691,6 +1752,9 @@ export function SpaceEntryDialog({
                             ? [value]
                             : previous.sharedWithParticipantIds,
                         personalAccountId: nextIsCurrentUser ? previous.personalAccountId : undefined,
+                        installmentCount: nextIsCurrentUser ? previous.installmentCount : undefined,
+                        firstClosingMonth: nextIsCurrentUser ? previous.firstClosingMonth : undefined,
+                        installmentQuoteAmount: nextIsCurrentUser ? previous.installmentQuoteAmount : undefined,
                     }
                 })
             }}
@@ -1745,11 +1809,6 @@ export function SpaceEntryDialog({
             previewError={previewError}
             showFinancialReview={mode === 'create' || contractVersion === 2}
             onPreviewRetry={() => setPreviewRetryNonce((current) => current + 1)}
-            onSaveDraftAndClose={
-                mode === 'create' && contractVersion === 2 ? () => void handleSaveDraft() : undefined
-            }
-            saveDraftDisabled={submitting || draftLoading || draftSaveState === 'saving'}
-            saveDraftBusy={draftSaveState === 'saving'}
         />
     )
 
@@ -1766,6 +1825,11 @@ export function SpaceEntryDialog({
                 linkedTransactionId={form.linkedTransactionId}
                 currency={form.currency}
                 amount={Number.isFinite(form.amount) ? form.amount : 0}
+                operationalAmount={preview?.operationalAmount}
+                purchaseDate={form.date instanceof Date ? form.date : new Date(form.date)}
+                installmentCount={form.installmentCount ?? 1}
+                firstClosingMonth={form.firstClosingMonth ?? ''}
+                installmentQuoteAmount={form.installmentQuoteAmount}
                 requiresPersonalAccount={requiresPersonalAccount}
                 accounts={filteredAccounts}
                 personalCategories={personalExpenseCategories}
@@ -1780,10 +1844,22 @@ export function SpaceEntryDialog({
                 onIntentChange={handlePersonalIntentChange}
                 onPersonalAccountChange={(personalAccountId) => {
                     clearFieldError('personalIntent')
+                    const selectedAccount = filteredAccounts.find(
+                        (account) => extractId(account._id) === personalAccountId
+                    )
                     setForm((previous) => ({
                         ...previous,
                         personalAccountId,
                         linkedTransactionId: undefined,
+                        installmentCount: selectedAccount?.type === 'credit_card'
+                            ? previous.installmentCount ?? 1
+                            : undefined,
+                        firstClosingMonth: selectedAccount?.type === 'credit_card'
+                            ? previous.firstClosingMonth ?? getDefaultFirstClosingMonth(previous.date)
+                            : undefined,
+                        installmentQuoteAmount: selectedAccount?.type === 'credit_card'
+                            ? previous.installmentQuoteAmount
+                            : undefined,
                     }))
                 }}
                 onCategoryChange={(categoryId) => setForm((previous) => ({ ...previous, categoryId }))}
@@ -1794,8 +1870,22 @@ export function SpaceEntryDialog({
                         linkedTransactionId,
                         personalAccountId: undefined,
                         categoryId: undefined,
+                        installmentCount: undefined,
+                        firstClosingMonth: undefined,
+                        installmentQuoteAmount: undefined,
                     }))
                 }}
+                onInstallmentCountChange={(installmentCount) =>
+                    setForm((previous) => ({ ...previous, installmentCount }))
+                }
+                onFirstClosingMonthChange={(firstClosingMonth) => {
+                    clearFieldError('personalIntent')
+                    setForm((previous) => ({ ...previous, firstClosingMonth }))
+                }}
+                onInstallmentQuoteAmountChange={(installmentQuoteAmount) =>
+                    setForm((previous) => ({ ...previous, installmentQuoteAmount }))
+                }
+                onTotalAmountChange={(amount) => setForm((previous) => ({ ...previous, amount }))}
                 onCandidatesRetry={() => setCandidatesRetryNonce((current) => current + 1)}
                 onAttachmentUpload={handleDraftAttachmentUpload}
                 onAttachmentRemove={async (attachmentId) => {
@@ -1839,7 +1929,12 @@ export function SpaceEntryDialog({
                                 onSelectStep={goToStep}
                             />
                         ) : null}
-                        {mode === 'create' && contractVersion === 2 && draftHydrated ? (
+                        {mode === 'create' && contractVersion === 2 && (
+                            draftLoading ||
+                            Boolean(persistedDraft) ||
+                            draftSaveState === 'saving' ||
+                            Boolean(draftError)
+                        ) ? (
                             <div className="mt-3 space-y-2">
                                 <p
                                     className="flex items-center gap-2 text-xs text-muted-foreground"
@@ -1856,12 +1951,12 @@ export function SpaceEntryDialog({
                                         : draftSaveState === 'saving'
                                             ? 'Guardando…'
                                             : draftSaveState === 'saved'
-                                                ? 'Guardado de forma privada'
+                                                ? 'Borrador guardado de forma privada'
                                                 : draftSaveState === 'conflict'
                                                     ? 'Hay una versión más reciente'
                                                     : draftSaveState === 'error'
                                                         ? 'No se pudo guardar; conservamos una copia en este dispositivo'
-                                                        : 'Se guardará automáticamente al empezar'}
+                                                        : 'Borrador privado guardado'}
                                 </p>
                                 {draftError ? (
                                     <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
@@ -1875,6 +1970,16 @@ export function SpaceEntryDialog({
                                                 onClick={() => void handleReloadDraft()}
                                             >
                                                 Cargar la versión más reciente
+                                            </Button>
+                                        ) : draftSaveState === 'error' ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="mt-2 h-7 rounded-full px-2"
+                                                onClick={() => void handleRetryDraftSave()}
+                                            >
+                                                Reintentar guardado
                                             </Button>
                                         ) : null}
                                     </div>
@@ -1927,7 +2032,12 @@ export function SpaceEntryDialog({
                     </div>
 
                     {/* ── Body ── */}
-                    <div ref={scrollContainerRef} className="relative min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                    <div
+                        ref={scrollContainerRef}
+                        tabIndex={0}
+                        aria-label="Contenido del movimiento"
+                        className="relative min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6"
+                    >
                         {mode === 'create' && contractVersion === 2 && !draftHydrated ? (
                             <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/90 backdrop-blur-sm" aria-live="polite">
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2026,6 +2136,49 @@ export function SpaceEntryDialog({
                             Cancelar
                         </Button>
                     </DialogFooter>
+
+                    <AlertDialog
+                        open={cancelDraftOpen}
+                        onOpenChange={(nextOpen) => {
+                            if (!cancelDraftPending) setCancelDraftOpen(nextOpen)
+                        }}
+                    >
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Querés guardar este movimiento para después?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Podés conservarlo como borrador privado, salir sin guardar estos cambios o seguir editando.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            {cancelDraftError ? (
+                                <p className="text-sm text-destructive" role="alert">
+                                    {cancelDraftError}
+                                </p>
+                            ) : null}
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={cancelDraftPending}>
+                                    Seguir editando
+                                </AlertDialogCancel>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={cancelDraftPending}
+                                    onClick={() => void handleExitWithoutSaving()}
+                                >
+                                    Salir sin guardar
+                                </Button>
+                                <AlertDialogAction
+                                    disabled={cancelDraftPending}
+                                    onClick={(event) => {
+                                        event.preventDefault()
+                                        void handleSaveDraft()
+                                    }}
+                                >
+                                    {cancelDraftPending ? 'Guardando…' : 'Guardar borrador'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </div>
             </DialogContent>
         </Dialog>

@@ -5,7 +5,7 @@ import { assertAccessibleSurface } from './helpers/accessibility'
 import { SPACE_V2_E2E } from './helpers/spaces-v2'
 
 test.describe('Espacios v2 — recorrido financiero', () => {
-    test('crea desde inicio con contrato v2 y registra la tarjeta como un pago', async ({ page }, testInfo) => {
+    test('crea desde inicio con contrato v2 y registra el plan privado de tarjeta', async ({ page }, testInfo) => {
         testInfo.setTimeout(60_000)
         const description = `Tarjeta desde inicio ${testInfo.project.name}`
         await loginAsTestUser(page)
@@ -20,7 +20,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await picker.getByRole('button', { name: new RegExp(SPACE_V2_E2E.name) }).click()
 
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
-        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toHaveCount(0)
         await dialog.locator('#entry-amount').fill('80,01')
         await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
         await dialog.getByRole('button', { name: 'Continuar' }).click()
@@ -29,7 +29,10 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await dialog.getByRole('radio', { name: 'Crear en Mi Finp' }).click()
         await dialog.getByRole('combobox', { name: 'Cuenta o tarjeta' }).click()
         await page.getByRole('option', { name: /^Tarjeta E2E Tarjeta de crédito/ }).click()
-        await expect(dialog.getByText(/consumo en un pago por/)).toBeVisible()
+        await expect(dialog.getByText('Plan de la tarjeta')).toBeVisible()
+        await dialog.getByRole('button', { name: 'Aumentar cuotas' }).click()
+        await dialog.getByRole('button', { name: 'Aumentar cuotas' }).click()
+        await expect(dialog.getByText(/3 cuotas ×/)).toBeVisible()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
 
         const responsePromise = page.waitForResponse((response) =>
@@ -71,7 +74,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             type: 'credit_card_expense',
             amount: 80.01,
         })
-        expect(transactionBody.transaction.installmentPlanId).toBeUndefined()
+        expect(transactionBody.transaction.installmentPlanId).toBeTruthy()
     })
 
     test('revisa el impacto exacto y crea el gasto también en Mi Finp', async ({ page }, testInfo) => {
@@ -90,7 +93,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             await page.getByRole('button', { name: 'Agregar movimiento' }).click()
         }
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
-        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toHaveCount(0)
         await expect(dialog.getByLabel('Pasos del gasto')).toContainText('Paso 1 de 4 · Datos')
         await assertAccessibleSurface(page, testInfo, 'new-entry-data')
         if (testInfo.project.name === 'mobile-chromium') {
@@ -174,17 +177,21 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         }
 
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
-        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toHaveCount(0)
+        await dialog.locator('#entry-amount').fill('345,67')
+        await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
+        await dialog.getByRole('button', { name: 'Cancelar' }).click()
+        const cancelPrompt = page.getByRole('alertdialog', {
+            name: '¿Querés guardar este movimiento para después?',
+        })
+        await expect(cancelPrompt).toBeVisible()
         const saveResponse = page.waitForResponse((response) =>
             response.request().method() === 'PUT' &&
             response.url().endsWith(`/api/spaces/${SPACE_V2_E2E.spaceId}/entry-draft`) &&
             response.status() === 200
         )
-        await dialog.locator('#entry-amount').fill('345,67')
-        await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
+        await cancelPrompt.getByRole('button', { name: 'Guardar borrador' }).click()
         await saveResponse
-        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText('Guardado de forma privada')
-        await dialog.getByRole('button', { name: 'Cancelar' }).click()
         await expect(dialog).not.toBeVisible()
 
         await page.getByRole('button', { name: 'Movimientos' }).first().click()
@@ -231,8 +238,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
         await dialog.getByRole('button', { name: 'Continuar' }).click()
         await dialog.getByRole('button', { name: 'Continuar' }).click()
-        await expect(dialog.getByTestId('space-entry-draft-save-status'))
-            .toContainText('Guardado de forma privada', { timeout: 15_000 })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toHaveCount(0)
 
         await page.route('**/entry-draft/attachments', async (route) => {
             await new Promise((resolve) => setTimeout(resolve, 1_000))
@@ -256,6 +262,8 @@ test.describe('Espacios v2 — recorrido financiero', () => {
         await expect(dialog.getByText(/ · Listo$/)).toBeVisible()
 
         await dialog.getByRole('button', { name: 'Cancelar' }).click()
+        await page.getByRole('alertdialog').getByRole('button', { name: 'Guardar borrador' }).click()
+        await expect(dialog).not.toBeVisible()
         await page.getByRole('button', { name: 'Movimientos' }).first().click()
         await page.getByRole('button', { name: 'Continuar borrador' }).click()
         await expect(dialog.getByText('ticket-e2e.png', { exact: true })).toBeVisible()
@@ -383,7 +391,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             await page.getByRole('button', { name: 'Agregar movimiento' }).click()
         }
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
-        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toHaveCount(0)
         await dialog.locator('#entry-amount').fill('500')
         await dialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
         await dialog.getByRole('button', { name: 'Continuar' }).click()
@@ -450,7 +458,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             await page.getByRole('button', { name: 'Agregar movimiento' }).click()
         }
         const createDialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
-        await expect(createDialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        await expect(createDialog.getByTestId('space-entry-draft-save-status')).toHaveCount(0)
         await createDialog.locator('#entry-amount').fill('10000')
         await createDialog.getByPlaceholder('Ej. Almuerzo equipo en Santiago').fill(description)
         await createDialog.getByRole('button', { name: 'Continuar' }).click()
@@ -531,7 +539,7 @@ test.describe('Espacios v2 — recorrido financiero', () => {
             await page.getByRole('button', { name: 'Agregar movimiento' }).click()
         }
         const dialog = page.getByRole('dialog', { name: 'Nuevo gasto' })
-        await expect(dialog.getByTestId('space-entry-draft-save-status')).toContainText(/Se guardará automáticamente|Guardado de forma privada/, { timeout: 15_000 })
+        await expect(dialog.getByTestId('space-entry-draft-save-status')).toHaveCount(0)
 
         if (testInfo.project.name === 'mobile-chromium') {
             await page.setViewportSize({ width: 412, height: 600 })

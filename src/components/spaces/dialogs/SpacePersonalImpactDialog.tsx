@@ -7,9 +7,11 @@ import { CheckCircle2, Link2, WalletCards } from 'lucide-react'
 import { apiJson } from '@/lib/client/auth-client'
 import {
     invalidateData,
-    SPACE_INVALIDATION_TAGS,
 } from '@/lib/client/data-sync'
-import { fetchLinkCandidatesForImpact } from '@/lib/client/space-personal-impact'
+import {
+    fetchLinkCandidatesForImpact,
+    PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS,
+} from '@/lib/client/space-personal-impact'
 import { fadeInFast, staggerContainer, staggerItem } from '@/lib/utils/animations'
 import { extractId } from '@/lib/utils/spaces'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -34,6 +36,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { SpaceAmountInline } from '@/components/spaces/SpaceUi'
+import { SpaceCreditCardPlanFields } from '@/components/spaces/dialogs/SpaceCreditCardPlanFields'
+import { getDefaultFirstClosingMonth } from '@/lib/utils/installments'
 import {
     DialogProps,
     SpaceDialogChoice,
@@ -76,6 +80,8 @@ export function SpacePersonalImpactDialog({
     const [categoryId, setCategoryId] = useState<string | undefined>()
     const [linkedTransactionId, setLinkedTransactionId] = useState<string | undefined>()
     const [amount, setAmount] = useState('')
+    const [installmentCount, setInstallmentCount] = useState(1)
+    const [firstClosingMonth, setFirstClosingMonth] = useState('')
     const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
     const [existingImpact, setExistingImpact] = useState<ISpaceEntryPersonalImpact | null>(null)
     const [linkCandidates, setLinkCandidates] = useState<SpaceLinkCandidateDto[]>([])
@@ -101,6 +107,9 @@ export function SpacePersonalImpactDialog({
         () => categories.filter((category) => !category.isArchived),
         [categories]
     )
+    const selectedAccount = compatibleAccounts.find(
+        (account) => extractId(account._id) === accountId
+    )
     const requiresPersonalAccount = entry?.contractVersion === 2
         ? (initialImpact?.accountImpactAmount ?? 0) > 0
         : true
@@ -119,6 +128,8 @@ export function SpacePersonalImpactDialog({
             setAccountId(undefined)
             setCategoryId(undefined)
             setLinkedTransactionId(undefined)
+            setInstallmentCount(1)
+            setFirstClosingMonth(getDefaultFirstClosingMonth(currentEntry.date))
             setExistingImpact(null)
             setLinkCandidates([])
             setLinkCandidatesError(null)
@@ -210,6 +221,13 @@ export function SpacePersonalImpactDialog({
                 // hay decisión válida que enviar.
                 throw new Error('Este movimiento no tiene un impacto personal para registrar.')
             }
+            if (
+                mode === 'create_transaction' &&
+                selectedAccount?.type === 'credit_card' &&
+                !firstClosingMonth
+            ) {
+                throw new Error('Elegí el mes de la primera cuota.')
+            }
             const response = await apiJson<{
                 data?: { impactId: string; status: 'linked' }
             }>(`/api/spaces/${spaceId}/entries/${entryId}/personal-impact`, {
@@ -228,6 +246,9 @@ export function SpacePersonalImpactDialog({
                             accountId,
                             categoryId,
                             description: entry.title,
+                            installmentPlan: selectedAccount?.type === 'credit_card'
+                                ? { installmentCount, firstClosingMonth }
+                                : undefined,
                         },
                 }),
             })
@@ -236,7 +257,7 @@ export function SpacePersonalImpactDialog({
                 status: response.data?.status ?? 'linked',
                 revision: (initialImpact.revision ?? 0) + 1,
             } as ISpaceEntryPersonalImpact
-            invalidateData(SPACE_INVALIDATION_TAGS)
+            invalidateData(PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS)
             onCreated?.(impact)
             onOpenChange(false)
         } catch (err) {
@@ -377,7 +398,15 @@ export function SpacePersonalImpactDialog({
                                                         <SpaceDialogField id="personal-impact-account" label="Cuenta">
                                                             <Select
                                                                 value={accountId ?? ''}
-                                                                onValueChange={setAccountId}
+                                                                onValueChange={(nextAccountId) => {
+                                                                    setAccountId(nextAccountId)
+                                                                    const nextAccount = compatibleAccounts.find(
+                                                                        (account) => extractId(account._id) === nextAccountId
+                                                                    )
+                                                                    if (nextAccount?.type === 'credit_card' && !firstClosingMonth && entry) {
+                                                                        setFirstClosingMonth(getDefaultFirstClosingMonth(entry.date))
+                                                                    }
+                                                                }}
                                                             >
                                                                 <SelectTrigger id="personal-impact-account" className="w-full">
                                                                     <SelectValue placeholder="Elegi una cuenta" />
@@ -408,6 +437,20 @@ export function SpacePersonalImpactDialog({
                                                         />
                                                     </SpaceDialogField>
                                                 )}
+
+                                                {mode === 'create_transaction' && selectedAccount?.type === 'credit_card' && entry ? (
+                                                    <SpaceCreditCardPlanFields
+                                                        idPrefix="personal-impact-card"
+                                                        purchaseDate={entry.date}
+                                                        currency={entry.currency}
+                                                        totalAmount={Number(amount) || suggestion?.amount || entry.amount}
+                                                        operationalAmount={initialImpact?.operationalAmount}
+                                                        installmentCount={installmentCount}
+                                                        firstClosingMonth={firstClosingMonth}
+                                                        onInstallmentCountChange={setInstallmentCount}
+                                                        onFirstClosingMonthChange={setFirstClosingMonth}
+                                                    />
+                                                ) : null}
 
                                                 <FormattedAmountInput
                                                     id="personal-impact-amount"

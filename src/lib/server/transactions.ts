@@ -1,4 +1,4 @@
-import { Account, Category, Transaction, TransactionRule, User } from '@/lib/models'
+import { Account, Category, InstallmentPlan, Transaction, TransactionRule, User } from '@/lib/models'
 import { transactionSchema, type TransactionFormData } from '@/lib/validations'
 import { calculateAccountBalancesByCurrency } from '@/lib/utils/balance'
 import { CREDIT_CARD_PAYMENT_TYPES, normalizeLegacyTransactionType } from '@/lib/utils/credit-card'
@@ -62,8 +62,17 @@ type SpaceTransactionBase = {
     spaceNameSnapshot?: string
 }
 
+export type SpaceInstallmentPlanInput = {
+    installmentCount: number
+    firstClosingMonth: string
+}
+
 export type CreateInternalSpaceTransactionInput = SpaceTransactionBase & (
-    | { variant: 'payer_expense' | 'advance'; sourceAccountId: string }
+    | {
+        variant: 'payer_expense' | 'advance'
+        sourceAccountId: string
+        installmentPlan?: SpaceInstallmentPlanInput
+    }
     | { variant: 'participant_expense'; sourceAccountId?: never }
     | { variant: 'settlement_paid'; sourceAccountId: string }
     | { variant: 'settlement_received'; destinationAccountId: string }
@@ -614,6 +623,38 @@ export async function createInternalSpaceTransaction(
         accountType = account.type
     }
 
+    const requiresInstallmentPlan =
+        accountType === 'credit_card' &&
+        (input.variant === 'payer_expense' || input.variant === 'advance')
+    const installmentPlan = 'installmentPlan' in input ? input.installmentPlan : undefined
+    if (requiresInstallmentPlan && !installmentPlan) {
+        throw new ServiceError(
+            400,
+            'SPACE_CARD_PLAN_REQUIRED',
+            'Configurá las cuotas y el mes de la primera cuota.'
+        )
+    }
+    if (installmentPlan) {
+        if (!requiresInstallmentPlan) {
+            throw new ServiceError(
+                400,
+                'SPACE_CARD_PLAN_NOT_ALLOWED',
+                'La configuración de cuotas sólo corresponde a una tarjeta de crédito.'
+            )
+        }
+        if (
+            !Number.isInteger(installmentPlan.installmentCount) ||
+            installmentPlan.installmentCount < 1 ||
+            !/^\d{4}-(0[1-9]|1[0-2])$/.test(installmentPlan.firstClosingMonth)
+        ) {
+            throw new ServiceError(
+                400,
+                'SPACE_CARD_PLAN_INVALID',
+                'La cantidad de cuotas o el mes de la primera cuota no son válidos.'
+            )
+        }
+    }
+
     if (input.categoryId) {
         const category = await Category.findOne({ _id: input.categoryId, userId: input.userId }).session(session)
         if (!category || category.isArchived || category.type !== 'expense') {
@@ -628,6 +669,26 @@ export async function createInternalSpaceTransaction(
             : accountType === 'credit_card'
                 ? 'credit_card_expense'
                 : 'expense'
+    let installmentPlanId: Types.ObjectId | undefined
+    if (installmentPlan) {
+        const installmentCount = installmentPlan.installmentCount
+        const [plan] = await InstallmentPlan.create([{
+            userId: input.userId,
+            accountId: sourceAccountId,
+            categoryId: input.categoryId,
+            description: input.description.trim(),
+            currency: input.currency,
+            totalAmount: input.amount,
+            operationalTotalAmount: input.operationalAmount,
+            installmentCount,
+            installmentAmount: input.amount / installmentCount,
+            operationalInstallmentAmount: input.operationalAmount / installmentCount,
+            purchaseDate: input.date,
+            firstClosingMonth: installmentPlan.firstClosingMonth,
+        }], { session })
+        installmentPlanId = plan._id
+    }
+
     const [transaction] = await Transaction.create([{
         userId: input.userId,
         type,
@@ -647,6 +708,7 @@ export async function createInternalSpaceTransaction(
         spaceOperationId: input.spaceOperationId,
         spaceContractVersion: 2,
         spaceNameSnapshot: input.spaceNameSnapshot,
+        installmentPlanId,
     }], { session })
 
     return transaction

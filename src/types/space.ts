@@ -276,6 +276,7 @@ export interface ISpaceEntryDraft {
         categoryId?: Types.ObjectId
         description?: string
         linkedTransactionId?: Types.ObjectId
+        installmentPlan?: { installmentCount: number; firstClosingMonth: string }
     }
     attachments?: ISpaceEntryDraftAttachment[]
     publishedEntryId?: Types.ObjectId

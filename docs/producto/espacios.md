@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-09-10
+> Última actualización: 2026-09-16
 > Fuente de verdad: reglas funcionales y experiencia esperada de Espacios
 
 ## Índice
@@ -225,12 +225,12 @@ Contrato exacto:
 - un fallo parcial no puede dejar una transacción huérfana ni un vínculo sin
   transacción.
 
-### Gasto pagado con tarjeta en un pago
+### Gasto pagado con tarjeta privada
 
 Si el usuario autenticado es el pagador, puede elegir una tarjeta propia para
 registrar su impacto personal. El movimiento del Espacio sigue siendo un gasto
-compartido común; Mi Finp crea un `credit_card_expense` privado sin
-`InstallmentPlan`:
+compartido común; Mi Finp crea un `credit_card_expense` y un `InstallmentPlan`
+privados:
 
 - el cargo real de la tarjeta es el total pagado;
 - el gasto operacional es la parte propia vigente;
@@ -240,11 +240,15 @@ compartido común; Mi Finp crea un `credit_card_expense` privado sin
 - el día financiero coincide con el `dateKey` civil del movimiento;
 - sólo se ofrecen tarjetas propias en ARS o USD, que son las monedas vigentes de
   Mi Finp; no existe conversión implícita desde otra moneda del Espacio.
+- el plan conserva el total real para deuda y una parte propia proporcional para
+  reporting, sin convertir el adelanto recuperable en gasto;
+- cantidad y primer mes de cuota se confirman explícitamente tanto en el alta
+  como desde el detalle.
 
-Este recorrido es exclusivamente `1/1`: no muestra ni acepta cantidad de cuotas.
-Las cuotas en Espacios requieren un contrato futuro separado. La decisión
-completa vive en
-[`0012 — Gasto de Espacio pagado con tarjeta en un pago`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
+La configuración de cuotas pertenece sólo a Mi Finp y no divide ni periodiza el
+movimiento compartido. Las cuotas como estado propio del Espacio requieren un
+contrato futuro separado. La decisión completa vive en
+[`0015 — Plan privado de cuotas para un impacto de Espacio`](../decisiones/0015-plan-privado-cuotas-impacto-espacio.md).
 
 Estados privados relevantes:
 
@@ -403,9 +407,13 @@ diálogo, navegación, sesión y cambio de dispositivo.
 - publicar valida la última revisión y es atómico e idempotente; un fallo
   conserva el borrador y sus adjuntos para reintentar.
 
-El diálogo comunica `Guardando…`, `Guardado` y `No se pudo guardar`, conserva
-los cambios locales recuperables y resuelve conflictos entre clientes sin
-sobrescribir una versión más nueva. La decisión completa vive en
+Abrir o editar no guarda por sí solo. Al cancelar una creación con cambios, el
+diálogo ofrece guardar el borrador, salir sin guardar o seguir editando. Un alta
+intacta cierra sin crear un borrador; un borrador reanudado conserva su última
+versión persistida si se sale sin guardar cambios nuevos. El diálogo comunica
+`Guardando…`, `Guardado` y `No se pudo guardar`, conserva los cambios locales
+ante un fallo y resuelve conflictos entre clientes sin sobrescribir una versión
+más nueva. La decisión completa vive en
 [`0013 — Borrador privado persistente de movimiento de Espacio`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 
 Un archivo `Subiendo…` o con error impide confirmar y explica si hay que esperar,
@@ -579,11 +587,11 @@ aislamiento por usuario y Espacio. La matriz mínima incluye:
 - pagador que adelanta por otras personas;
 - participante que debe su parte pero no pagó;
 - pagador con parte propia cero y adelanto recuperable;
-- pagador con tarjeta ARS y USD, total real distinto de la parte propia y sin
-  `InstallmentPlan`;
+- pagador con tarjeta ARS y USD, una o varias cuotas, primer cierre y total real
+  distinto de la parte propia;
 - pago parcial y total de esa tarjeta sin alterar el gasto ni el balance del
   Espacio;
-- rechazo temprano de tarjeta incompatible y de cualquier cantidad de cuotas;
+- rechazo temprano de tarjeta incompatible o configuración de cuotas inválida;
 - no pagador con parte propia cero y sin acción financiera;
 - reparto igual, único, porcentual y por monto;
 - liquidación parcial y total iniciada desde Espacios y desde Deudas;
@@ -601,8 +609,8 @@ aislamiento por usuario y Espacio. La matriz mínima incluye:
   básica;
 - borrador único que sobrevive a cierre, sesión y cambio de dispositivo, sólo
   visible al autor y reemplazado por un único movimiento al publicar;
-- autosave fallido, conflicto entre clientes, adjunto recuperable, descarte y
-  limpieza idempotente;
+- guardado al cancelar, salida sin guardar, conflicto entre clientes, adjunto
+  recuperable, descarte y limpieza idempotente;
 - fecha civil y monto exacto iguales en cada paso, preview y resultado final;
 - edición histórica con participantes inactivos preservados.
 
@@ -624,8 +632,8 @@ Decisiones consolidadas:
 - un Espacio usa deuda directa o simplificada, no ambas a la vez;
 - adjuntos y datos privados requieren autenticación y autorización;
 - edición y anulación conservan historia y disparan revisión cuando corresponde;
-- una tarjeta privada registra un consumo `1/1` por el total real y reporting
-  por la parte propia, sin crear un plan de cuotas;
+- una tarjeta privada registra un plan por el total real y reporting por la
+  parte propia proporcional, sin cambiar el movimiento compartido;
 - el borrador de nuevo gasto es privado, persistente y no tiene efectos
   compartidos antes de publicarse;
 - la deuda conserva autoridad por moneda y toda conversión aplicada tiene un

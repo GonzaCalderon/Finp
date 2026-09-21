@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, desarrollo, calidad y agentes
-> Última actualización: 2026-09-10
+> Última actualización: 2026-09-21
 > Fuente de verdad: prioridades, pendientes y criterios de cierre
 
 ## Índice
@@ -60,7 +60,7 @@ Orden:
 1. conservar la suite E2E global local y la documentación como gates verdes;
 2. corregir la exactitud de Espacios con Mi Finp y Deudas;
 3. rediseñar y estabilizar los recorridos principales de Espacios, mobile primero;
-4. antes de promover a producción, rotar la credencial remota y activar E2E en CI;
+4. obtener la primera ejecución E2E verde en CI antes de promover;
 5. ampliar colaboración sólo después de cerrar la base de Espacios;
 6. revisar el criterio de producto de Escenarios antes de retomar Proyección;
 7. retomar la orientación por dominio después de esa revisión;
@@ -80,14 +80,15 @@ backlog paralelo:
 0. **Contratos y documentación — completada el 2026-08-30.** Decisiones 0012 y
    0013 aceptadas; especificación, dominio, arquitectura, diseño, calidad,
    estado y roadmap alineados.
-1. **Exactitud financiera — completada el 2026-08-30 dentro de FINP-P0-006.**
-   Tarjeta `1/1`, fecha civil, dinero exacto por escala, una sola alta v2 desde
-   portada o detalle, monto final sin abreviar y preservación de participantes
-   históricos inactivos.
+1. **Exactitud financiera — completada el 2026-08-30 dentro de FINP-P0-006 y
+   ampliada el 2026-09-16.** Tarjeta privada con plan `1/1` o múltiple, fecha
+   civil, dinero exacto por escala, separación entre cargo real y parte propia,
+   una sola alta v2 desde portada o detalle, monto final sin abreviar y
+   preservación de participantes históricos inactivos.
 2. **Borrador privado persistente — completada el 2026-09-09 dentro de
-   FINP-P1-013.** Un recurso activo por usuario y Espacio, autosave serializado,
-   revisión optimista, card privada en Movimientos, descarte confirmado y
-   publicación atómica e idempotente.
+   FINP-P1-013.** Un recurso activo por usuario y Espacio, guardado elegido al
+   cancelar, revisión optimista, card privada en Movimientos, descarte confirmado
+   y publicación atómica e idempotente.
 3. **Adjuntos recuperables — completada el 2026-09-09 dentro de
    FINP-P1-013.** Preparación privada sobre el borrador, cinco archivos de hasta
    10 MB, validación real, reintento, transferencia transaccional de metadata y
@@ -108,8 +109,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 - Estado: `cerrado` el 2026-09-10 — PR 38, `codex/spaces-p0-006-closure` →
   `dev` (`418b4b5`), con la matriz de verificación completa registrada abajo.
-  Producción sigue sin escritura v2: exige una decisión propia equivalente a la
-  0011.
+  El cutover productivo fue confirmado y registrado el 2026-09-21 en la
+  decisión 0016; una promoción de código no vuelve a migrar datos.
 - Decisiones:
   - [`0007 — Autoridad entre Espacios, Mi Finp y Deudas`](../decisiones/0007-autoridad-espacios-finp-deudas.md);
   - [`0008 — Modelo y consistencia financiera de Espacios`](../decisiones/0008-modelo-consistencia-financiera-espacios.md);
@@ -117,6 +118,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   - [`0010 — Migración progresiva de Espacios v2`](../decisiones/0010-migracion-progresiva-espacios-v2.md);
   - [`0011 — Cutover de Espacios v2 en development`](../decisiones/0011-cutover-espacios-v2-en-development.md);
   - [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
+  - [`0015 — Plan privado de cuotas para un impacto de Espacio`](../decisiones/0015-plan-privado-cuotas-impacto-espacio.md);
+  - [`0016 — Cutover productivo de Espacios v2`](../decisiones/0016-cutover-productivo-espacios-v2.md).
 - Regla de entrega: es un cierre indivisible. Puede avanzar mediante commits y
   verificaciones internas, pero no pasa a `validación` ni se presenta como
   terminado hasta completar dominio, datos, API, UI afectada, migración,
@@ -154,10 +157,11 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     distinguiendo dinero pagado, dinero aplicado y diferencia de cambio;
   - mostrar composición, referencias y filtros multimoneda sin reemplazar la
     autoridad histórica por la cotización actual;
-  - registrar para el pagador un consumo privado de tarjeta `1/1` por el total
-    real, con parte propia operacional y sin `InstallmentPlan`;
-  - mantener ARS/USD como límite de Mi Finp, rechazar cuotas y monedas de tarjeta
-    incompatibles antes de confirmar, sin impedir el gasto autónomo del Espacio;
+  - registrar para el pagador un consumo privado de tarjeta por el total real,
+    con parte propia operacional y plan privado desde una cuota;
+  - mantener ARS/USD como límite de Mi Finp y rechazar monedas de tarjeta o
+    configuración de cuotas incompatibles antes de confirmar, sin impedir el
+    gasto autónomo del Espacio;
   - unificar portada y detalle sobre la misma alta v2, con `MoneyDto`, escala ISO,
     `dateKey`, cotizaciones, preview e idempotencia;
   - conservar participantes históricos inactivos en edición y mostrar sin
@@ -215,7 +219,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
     contenido financiero libre; las notificaciones se reconcilian después del
     commit desde pendientes persistidos;
   - 10 índices compatibles aplicados y reaplicados únicamente sobre `finp-e2e`;
-    development fue validado sólo en `dry-run` y producción permanece rechazada;
+    en ese checkpoint development fue validado sólo en `dry-run` y producción
+    permanecía rechazada;
   - 37 casos unitarios focales y 6 recorridos de integración con sesión MongoDB
     real cubren exactitud, rollback, retry simultáneo, conflictos, historia,
     liquidaciones, permisos e índices parciales;
@@ -292,8 +297,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   - el criterio de elegibilidad por Espacio exige cero manuales pendientes,
     dinero y deuda exactos por moneda, privacidad, replay estable y rollback
     probado; un Espacio no elegible queda en sólo lectura sin totales parciales;
-  - producción no recibió escrituras, backfill ni cutover; el `NO-GO` productivo
-    no cambia;
+  - en ese checkpoint producción no recibió escrituras, backfill ni cutover; el
+    límite fue levantado posteriormente por la decisión 0016;
   - reproducido de punta a punta el 2026-08-29 por Gonzalo Calderon en un
     entorno local, fuera de la máquina del checkpoint original: plan (11
     Espacios; 56 automáticos, 33 de revisión y 8 manuales, idéntico),
@@ -465,14 +470,13 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 ### FINP-P0-004 — Activar E2E crítico en CI
 
-- Estado: `bloqueado`.
-- Bloqueado por: FINP-P1-011.
+- Estado: `pendiente`.
 - Requiere: entorno o datos reales.
 - Disponible: workflow activo con preflight, seed, build, Playwright
   mobile/desktop, secretos de aplicación efímeros y artefactos ante fallos. Sin
   `MONGODB_URI_TEST` informa el bloqueo y no conecta.
-- Pendiente externo: rotar la credencial, limitarla a `finp-e2e`, cargar la URI
-  nueva en GitHub y obtener la primera ejecución verde.
+- Pendiente externo: cargar en GitHub una URI limitada a `finp-e2e` y obtener la
+  primera ejecución verde.
 - Criterio: flujos críticos ejecutan en CI con secretos y base aislada; reportes se conservan ante fallos.
 
 ## 4. Prioridad P1 — deuda técnica y UX bloqueante
@@ -688,17 +692,22 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
   caminos sin recuperación ni una superficie secundaria pendiente de alinear.
 - Absorbe: FINP-P1-014 y FINP-P1-015.
 
-### FINP-P1-011 — Rotar credenciales remotas expuestas
+### FINP-P1-016 — Plan privado de tarjeta y baja robusta desde Espacios
 
-- Estado: `pendiente`.
-- Momento acordado: antes de configurar E2E en CI o promover a producción; no
-  bloquea la estabilización local ni la documentación.
-- Alcance: rotar la credencial del usuario de MongoDB, revocar la anterior y
-  actualizar los entornos locales autorizados y `MONGODB_URI_TEST` en GitHub.
-- Restricción: la credencial actual no se copia a CI ni a otros servicios; la
-  rotación debe completarse antes de configurar los secretos de FINP-P0-004.
-- Criterio: credencial anterior inválida, aplicación conectando con la nueva y
-  ausencia de secretos en logs, commits y artefactos.
+- Estado: `cerrado` el 2026-09-21 sobre
+  `codex/fix-spaces-v2-autosave-loop`; pendiente sólo de integración a `dev`.
+- Decisión: [`0015 — Plan privado de cuotas para un impacto de Espacio`](../decisiones/0015-plan-privado-cuotas-impacto-espacio.md).
+- Alcance: configurar cuotas y primer cierre en las dos altas privadas, separar
+  deuda real de gasto operacional, persistir el plan de forma atómica y unificar
+  `Quitar de mi Finp` sobre el teardown autorizado de la transacción.
+- Criterio: mobile/desktop, borrador, idempotencia, plan y transacción sin
+  huérfanos, baja exacta sin cambiar el movimiento compartido, pruebas de
+  componente, unidad, integración y build con la ruta dinámica registrada.
+- Evidencia: typecheck, lint, build y documentación verdes; 962 pruebas
+  unitarias, 20 recorridos de integración MongoDB de Espacios v2 y 82 de 82 E2E
+  sobre build de producción en Chromium desktop y Pixel 7. El alta con tarjeta
+  conserva el plan privado, la baja normal y la huérfana revierten sólo Mi Finp,
+  y borrador, adjuntos, foco y accesibilidad pasan en ambas superficies.
 
 ## 5. Prioridad P2 — recurrencia, proyección y análisis
 
@@ -835,7 +844,8 @@ completar y verificar las etapas 1 a 4 en mobile y desktop.
 
 - Estado: `en discovery`.
 - Dependencias satisfechas: FINP-P0-006 y FINP-P1-013 (2026-09-16).
-- Límite: no incluye el consumo privado `1/1` de la decisión 0012.
+- Límite: no incluye el plan privado de Mi Finp de la decisión 0015; trata sólo
+  una eventual periodización compartida del movimiento del Espacio.
 - Criterio previo: definir plan compartido, reconocimiento por período,
   balances, edición, settlements e impacto personal antes de admitir más de una
   cuota.

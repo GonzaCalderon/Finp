@@ -46,9 +46,11 @@ Ejemplo:
 Si el pago se hizo con una tarjeta privada, la misma separación se conserva: el
 cargo real es $100.000, el gasto operacional es $40.000 y $60.000 son
 recuperables. Los pagos posteriores de la tarjeta reducen su pendiente, no el
-gasto histórico ni el balance del Espacio. En un consumo `1/1` no hace falta un
-plan de cuotas; el contrato exacto vive en la decisión
-[`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md).
+gasto histórico ni el balance del Espacio. Una alta nueva crea un plan privado
+con el total real y una magnitud operacional proporcional por cuota; el
+movimiento compartido no se convierte en plan. El contrato exacto vive en la
+decisión
+[`0015`](../decisiones/0015-plan-privado-cuotas-impacto-espacio.md).
 
 ## 2. Espacios
 

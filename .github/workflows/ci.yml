@@ -79,8 +79,8 @@ jobs:
 
   # ─── E2E crítico ─────────────────────────────────────────────────────────────
   # El job queda operativo apenas MONGODB_URI_TEST apunte a finp-e2e con un
-  # usuario de alcance mínimo. Mientras la rotación está pendiente, informa el
-  # bloqueo y termina sin conectar. Los secretos de aplicación son efímeros.
+  # usuario de alcance mínimo. Si el secreto falta, informa la configuración
+  # pendiente y termina sin conectar. Los secretos de aplicación son efímeros.
   e2e:
     name: E2E Critical
     runs-on: ubuntu-latest
@@ -103,7 +103,7 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::E2E pendiente hasta configurar MONGODB_URI_TEST después de rotar la credencial."
+            echo "::notice::E2E pendiente hasta configurar MONGODB_URI_TEST."
           fi
 
       - uses: actions/checkout@v4

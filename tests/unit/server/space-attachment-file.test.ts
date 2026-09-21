@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { validateSpaceAttachmentFile } from '@/lib/server/space-attachment-file'
+import { isMemorySpaceAttachmentStorageAllowed } from '@/lib/server/space-attachment-storage'
 import { sanitizeFileName } from '@/lib/utils/space-categories'
 
 describe('space attachment validation', () => {
@@ -30,5 +31,14 @@ describe('space attachment validation', () => {
         const sanitized = sanitizeFileName(`${'a'.repeat(200)}.pdf`)
         expect(sanitized).toHaveLength(160)
         expect(sanitized.endsWith('.pdf')).toBe(true)
+    })
+
+    it('permite memoria sólo con una base marcada como E2E, test o CI', () => {
+        expect(isMemorySpaceAttachmentStorageAllowed('finp-e2e')).toBe(true)
+        expect(isMemorySpaceAttachmentStorageAllowed('finp_test')).toBe(true)
+        expect(isMemorySpaceAttachmentStorageAllowed('finp-ci')).toBe(true)
+        expect(isMemorySpaceAttachmentStorageAllowed('finm')).toBe(false)
+        expect(isMemorySpaceAttachmentStorageAllowed('production')).toBe(false)
+        expect(isMemorySpaceAttachmentStorageAllowed('production-testing')).toBe(false)
     })
 })

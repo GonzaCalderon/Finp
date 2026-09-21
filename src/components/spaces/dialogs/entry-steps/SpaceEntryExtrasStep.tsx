@@ -28,9 +28,9 @@ import {
     SpaceLinkCandidateList,
 } from '@/components/spaces/dialogs/SpaceDialogPrimitives'
 import { SpaceDraftAttachmentsUploader } from '@/components/spaces/dialogs/SpaceDraftAttachmentsUploader'
+import { SpaceCreditCardPlanFields } from '@/components/spaces/dialogs/SpaceCreditCardPlanFields'
 import { SpaceEntryNotesPanel } from './SpaceEntryNotesPanel'
 import { extractId } from '@/lib/utils/spaces'
-import { formatCurrencyAmount } from '@/lib/utils/currency-format'
 import type { AccountType } from '@/lib/constants'
 import type {
     IAccount,
@@ -77,6 +77,11 @@ export function SpaceEntryExtrasStep({
     linkedTransactionId,
     currency,
     amount,
+    operationalAmount,
+    purchaseDate,
+    installmentCount,
+    firstClosingMonth,
+    installmentQuoteAmount,
     requiresPersonalAccount,
     accounts,
     personalCategories,
@@ -92,6 +97,10 @@ export function SpaceEntryExtrasStep({
     onPersonalAccountChange,
     onCategoryChange,
     onLinkedTransactionChange,
+    onInstallmentCountChange,
+    onFirstClosingMonthChange,
+    onInstallmentQuoteAmountChange,
+    onTotalAmountChange,
     onCandidatesRetry,
     onAttachmentUpload,
     onAttachmentRemove,
@@ -106,6 +115,11 @@ export function SpaceEntryExtrasStep({
     linkedTransactionId?: string
     currency: string
     amount: number
+    operationalAmount?: number
+    purchaseDate: Date
+    installmentCount: number
+    firstClosingMonth: string
+    installmentQuoteAmount?: number
     requiresPersonalAccount: boolean
     accounts: IAccount[]
     personalCategories: ICategory[]
@@ -121,6 +135,10 @@ export function SpaceEntryExtrasStep({
     onPersonalAccountChange: (accountId: string) => void
     onCategoryChange: (categoryId: string | undefined) => void
     onLinkedTransactionChange: (transactionId: string) => void
+    onInstallmentCountChange: (count: number) => void
+    onFirstClosingMonthChange: (value: string) => void
+    onInstallmentQuoteAmountChange: (amount: number | undefined) => void
+    onTotalAmountChange: (amount: number) => void
     onCandidatesRetry: () => void
     onAttachmentUpload: (file: File, idempotencyKey: string, attachmentId?: string) => Promise<void>
     onAttachmentRemove: (attachmentId: string) => Promise<void>
@@ -271,11 +289,22 @@ export function SpaceEntryExtrasStep({
                                     ) : null}
 
                                     {selectedAccount?.type === 'credit_card' ? (
-                                        <p className="text-xs text-muted-foreground">
-                                            Se registrará un consumo en un pago por{' '}
-                                            {formatCurrencyAmount(amount, currency)} en la tarjeta. Tu gasto
-                                            personal seguirá siendo tu parte.
-                                        </p>
+                                        <SpaceCreditCardPlanFields
+                                            idPrefix="entry-personal-card"
+                                            purchaseDate={purchaseDate}
+                                            currency={currency}
+                                            totalAmount={amount}
+                                            operationalAmount={operationalAmount}
+                                            installmentCount={installmentCount}
+                                            firstClosingMonth={firstClosingMonth}
+                                            installmentQuoteAmount={installmentQuoteAmount}
+                                            allowTotalCalculation
+                                            error={intentError && !firstClosingMonth ? intentError : undefined}
+                                            onInstallmentCountChange={onInstallmentCountChange}
+                                            onFirstClosingMonthChange={onFirstClosingMonthChange}
+                                            onInstallmentQuoteAmountChange={onInstallmentQuoteAmountChange}
+                                            onTotalAmountChange={onTotalAmountChange}
+                                        />
                                     ) : null}
                                 </>
                             )

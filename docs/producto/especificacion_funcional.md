@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Última actualización: 2026-08-30
+> Última actualización: 2026-09-16
 > Fuente de verdad: propósito, conceptos y comportamiento funcional esperado
 
 ## Índice
@@ -480,11 +480,12 @@ crea una transacción privada cuyo gasto operacional es la parte propia exacta:
   persona.
 
 Si el usuario autenticado es el pagador y elige una tarjeta propia, Mi Finp
-registra un consumo privado `1/1` sin plan de cuotas. El cargo de la tarjeta usa
-el total real pagado y el gasto operacional conserva la parte propia; los pagos
-de tarjeta reducen el pendiente de la tarjeta, no el gasto histórico ni el
-balance compartido. Mi Finp mantiene ARS/USD y no convierte implícitamente un
-movimiento de otra moneda. Espacios no admite todavía varias cuotas.
+exige cantidad de cuotas y primer mes de cuota y crea un plan privado. El cargo
+de la tarjeta usa el total real pagado y el gasto operacional conserva la parte
+propia proporcional por período; los pagos de tarjeta reducen el pendiente de
+la tarjeta, no el gasto histórico ni el balance compartido. Mi Finp mantiene
+ARS/USD y no convierte implícitamente un movimiento de otra moneda. El
+movimiento compartido no se divide en cuotas ni expone la configuración privada.
 
 Si el movimiento compartido cambia materialmente, el impacto personal pasa a revisión.
 Quitar el movimiento de Mi Finp elimina su transacción personal vinculada y
@@ -512,10 +513,13 @@ privado y visible en Movimientos sólo para su autor con una etiqueta clara. No
 participa en balances, actividad, deudas, impactos ni notificaciones hasta que
 una publicación atómica e idempotente crea el movimiento compartido.
 
-Cerrar el diálogo conserva el borrador. Abrir `Nuevo gasto` lo reanuda; el autor
-puede descartarlo de forma explícita. Autosave, revisión optimista y adjuntos
-recuperables evitan pérdida o sobrescritura silenciosa. Guardado, preview y
-publicación usan el mismo contrato exacto de dinero, fecha y reparto.
+Abrir o completar `Nuevo gasto` no persiste un borrador automáticamente. Si el
+autor cancela con cambios locales, elige entre guardarlos como borrador, salir
+sin guardarlos o continuar editando. Abrir `Nuevo gasto` reanuda el borrador que
+el autor guardó previamente; puede descartarlo de forma explícita. Revisión
+optimista y adjuntos recuperables evitan pérdida o sobrescritura silenciosa.
+Guardado, preview y publicación usan el mismo contrato exacto de dinero, fecha y
+reparto.
 
 El contrato completo de autoridad, recorridos y verificación vive en
 [`espacios.md`](espacios.md) y en la decisión
@@ -525,8 +529,8 @@ técnica integral se define en la decisión
 La autoridad por moneda, las cotizaciones y las liquidaciones multitramos se
 definen en la decisión
 [`0009`](../decisiones/0009-autoridad-multimoneda-espacios.md).
-El consumo privado de tarjeta `1/1` y el borrador persistente se definen en las
-decisiones [`0012`](../decisiones/0012-gasto-espacio-tarjeta-un-pago.md) y
+El plan privado de tarjeta y el borrador persistente se definen en las
+decisiones [`0015`](../decisiones/0015-plan-privado-cuotas-impacto-espacio.md) y
 [`0013`](../decisiones/0013-borrador-privado-persistente-movimiento-espacio.md).
 
 ## 12. Deudas

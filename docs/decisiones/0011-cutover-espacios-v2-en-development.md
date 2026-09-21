@@ -6,7 +6,7 @@
 > Fuente de verdad: decisión 0011
 > Responsables: Gonzalo Calderon (prompter)
 > Ámbito: datos y operaciones
-> Relación: autoriza la etapa que [`0010`](0010-migracion-progresiva-espacios-v2.md) dejó pendiente
+> Relación: autoriza la etapa que [`0010`](0010-migracion-progresiva-espacios-v2.md) dejó pendiente; su límite productivo fue levantado por [`0016`](0016-cutover-productivo-espacios-v2.md)
 
 ## Índice
 
@@ -54,8 +54,9 @@ que confirma que no hay Espacio padre que reconstruir.
   respaldo externo posible es un volcado local con MongoDB Database Tools.
 - El ledger personal, las cuentas y el reporting personal deben quedar
   invariantes, verificados por fingerprint antes y después.
-- Producción sigue fuera de alcance y los nombres de base productivos siguen
-  rechazados por `isProductionLikeDatabaseName`.
+- En esta decisión producción quedó fuera de alcance y los nombres de base
+  productivos permanecieron rechazados por `isProductionLikeDatabaseName`; la
+  decisión 0016 levantó posteriormente ese límite operativo.
 - La sanitización de la copia de ensayo es un invariante de privacidad: la base
   de ensayo migrada está anonimizada por diseño y nunca puede promoverse a
   development.
@@ -118,7 +119,8 @@ explícita y ninguna relajando la del ensayo:
 El resolutor de destino reutiliza `resolveDevelopmentAuditTarget`, que ya exige
 nombre exacto, rechaza bases productivas y rechaza la ejecución desde CI.
 
-Esta decisión **no** autoriza producción, y **no** autoriza el retiro global del
+Esta decisión **no** autorizó producción en 2026-08-29; ese límite fue levantado
+posteriormente por la decisión 0016. Tampoco autoriza el retiro global del
 fallback legacy: eso sigue condicionado por 0010 §7 a una ventana observada sin
 usos legacy, que hoy no puede medirse porque el cruce de
 `enterLegacySpaceWriteFacade` no está instrumentado. El fallback se retira por

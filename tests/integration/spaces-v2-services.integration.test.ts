@@ -245,7 +245,7 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
             .rejects.toMatchObject({ code: 'IDEMPOTENCY_PAYLOAD_CONFLICT' })
     })
 
-    it('registra un gasto compartido con tarjeta como consumo único y sin plan de cuotas', async () => {
+    it('registra tarjeta del pagador con plan privado y magnitudes real y operacional separadas', async () => {
         const cardSpace = await Space.create({
             contractVersion: 2,
             ownerUserId,
@@ -288,6 +288,10 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
                 actorPersonalImpact: {
                     accountId: ownerCreditCardId,
                     categoryId: ownerCategoryId,
+                    installmentPlan: {
+                        installmentCount: 3,
+                        firstClosingMonth: '2026-09',
+                    },
                 },
             })
             const transaction = await Transaction.findOne({
@@ -301,8 +305,14 @@ describe.sequential('spaces v2 application services — Mongo transaction integr
                 operationalAmount: 80,
                 createdFrom: 'space',
             })
-            expect(transaction?.installmentPlanId).toBeUndefined()
-            expect(await InstallmentPlan.countDocuments({ accountId: ownerCreditCardId })).toBe(0)
+            expect(transaction?.installmentPlanId).toBeTruthy()
+            expect(await InstallmentPlan.findById(transaction?.installmentPlanId).lean()).toMatchObject({
+                accountId: new Types.ObjectId(ownerCreditCardId),
+                totalAmount: 80,
+                operationalTotalAmount: 80,
+                installmentCount: 3,
+                firstClosingMonth: '2026-09',
+            })
         } finally {
             await Promise.all([
                 SpaceActivityEvent.deleteMany({ spaceId: cardSpace._id }),

@@ -4,12 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
     accountFindOne: vi.fn(),
     categoryFindOne: vi.fn(),
+    installmentCreate: vi.fn(),
     transactionCreate: vi.fn(),
 }))
 
 vi.mock('@/lib/models', () => ({
     Account: { findOne: mocks.accountFindOne },
     Category: { findOne: mocks.categoryFindOne },
+    InstallmentPlan: { create: mocks.installmentCreate },
     Transaction: { create: mocks.transactionCreate },
     TransactionRule: {},
     User: {},
@@ -54,6 +56,9 @@ describe('internal space transaction v2', () => {
         }))
         mocks.categoryFindOne.mockReturnValue(sessionResult(null))
         mocks.transactionCreate.mockImplementation(async ([data]: [Record<string, unknown>]) => [{
+            _id: new Types.ObjectId(), ...data,
+        }])
+        mocks.installmentCreate.mockImplementation(async ([data]: [Record<string, unknown>]) => [{
             _id: new Types.ObjectId(), ...data,
         }])
     })
@@ -103,7 +108,7 @@ describe('internal space transaction v2', () => {
         ], { session })
     })
 
-    it('registra tarjeta del pagador como consumo 1/1 por el total y sin plan', async () => {
+    it('registra tarjeta del pagador con plan privado y separa total de parte propia', async () => {
         mocks.accountFindOne.mockReturnValue(sessionResult({
             _id: references.accountId,
             type: 'credit_card',
@@ -118,17 +123,49 @@ describe('internal space transaction v2', () => {
             sourceAccountId: references.accountId,
             amount: 100,
             operationalAmount: 40,
+            installmentPlan: {
+                installmentCount: 3,
+                firstClosingMonth: '2026-09',
+            },
         }, session)
 
+        expect(mocks.installmentCreate).toHaveBeenCalledWith([
+            expect.objectContaining({
+                totalAmount: 100,
+                operationalTotalAmount: 40,
+                installmentCount: 3,
+                installmentAmount: 100 / 3,
+                operationalInstallmentAmount: 40 / 3,
+                firstClosingMonth: '2026-09',
+            }),
+        ], { session })
         expect(mocks.transactionCreate).toHaveBeenCalledWith([
             expect.objectContaining({
                 type: 'credit_card_expense',
                 amount: 100,
                 operationalAmount: 40,
                 sourceAccountId: references.accountId,
+                installmentPlanId: expect.any(Types.ObjectId),
             }),
         ], { session })
-        expect(mocks.transactionCreate.mock.calls[0]?.[0]?.[0]).not.toHaveProperty('installmentPlanId')
+    })
+
+    it('rechaza una tarjeta sin configuración de cuotas', async () => {
+        mocks.accountFindOne.mockReturnValue(sessionResult({
+            _id: references.accountId,
+            type: 'credit_card',
+            currency: 'ARS',
+            supportedCurrencies: ['ARS'],
+            isActive: true,
+        }))
+
+        await expect(createInternalSpaceTransaction({
+            ...base(),
+            variant: 'payer_expense',
+            sourceAccountId: references.accountId,
+        }, session)).rejects.toMatchObject({ code: 'SPACE_CARD_PLAN_REQUIRED' })
+        expect(mocks.installmentCreate).not.toHaveBeenCalled()
+        expect(mocks.transactionCreate).not.toHaveBeenCalled()
     })
 
     it('no usa una tarjeta como cuenta de liquidación', async () => {

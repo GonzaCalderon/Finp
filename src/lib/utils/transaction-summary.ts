@@ -68,7 +68,7 @@ export function buildTransactionPeriodSummary({
 
     const creditCardExpense = creditCardMonthlySummary.reduce((totals, cardSummary) => {
         cardSummary.items.forEach((charge) => {
-            addCurrencyAmount(totals, charge.currency, charge.amount)
+            addCurrencyAmount(totals, charge.currency, charge.operationalAmount)
         })
         return totals
     }, emptyCurrencyTotals())

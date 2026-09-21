@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, arquitectura y desarrollo
-> Última actualización: 2026-09-10
+> Última actualización: 2026-09-16
 > Fuente de verdad: registro de decisiones duraderas
 
 ## Índice
@@ -108,11 +108,18 @@ La referencia informa; la decisión sigue siendo propia de Finp.
   los 11 Espacios, respaldo local y límites frente a producción y al fallback
   global.
 - [`0012 — Gasto de Espacio pagado con tarjeta en un pago`](0012-gasto-espacio-tarjeta-un-pago.md):
-  cargo privado por el total real, parte propia operacional, clasificación
-  `1/1`, ARS/USD y separación explícita de las cuotas compartidas futuras.
+  antecedente histórico del cargo privado por total real y parte propia; su
+  restricción sin plan fue reemplazada por la decisión 0015.
 - [`0013 — Borrador privado persistente de movimiento de Espacio`](0013-borrador-privado-persistente-movimiento-espacio.md):
-  recurso por autor y Espacio, autosave, listado privado, adjuntos recuperables
-  y publicación atómica e idempotente.
+  recurso por autor y Espacio, guardado elegido al cancelar, listado privado,
+  adjuntos recuperables y publicación atómica e idempotente.
 - [`0014 — @axe-core/playwright en los recorridos E2E de Espacios`](0014-axe-core-playwright-en-recorridos-de-espacios.md):
   evaluación de dependencia, alcance por superficie, umbral de fallo por
   impacto y complemento de las aserciones dirigidas.
+- [`0015 — Plan privado de cuotas para un impacto de Espacio`](0015-plan-privado-cuotas-impacto-espacio.md):
+  plan privado por tarjeta, separación entre cargo real y parte propia,
+  creación atómica y remoción conjunta sin convertir el movimiento compartido
+  en un plan.
+- [`0016 — Cutover productivo de Espacios v2`](0016-cutover-productivo-espacios-v2.md):
+  reconoce el cutover productivo ejecutado, levanta el límite de la decisión
+  0011 y separa la promoción de código de una migración ya realizada.

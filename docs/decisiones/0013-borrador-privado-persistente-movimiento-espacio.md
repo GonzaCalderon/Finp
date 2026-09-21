@@ -2,7 +2,7 @@
 
 > Estado: aceptada
 > Fecha: 2026-08-30
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-16
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
 > Fuente de verdad: decisión 0013
 > Responsables: prompter y equipo Finp
@@ -84,8 +84,10 @@ Se adopta la opción C.
    no se incluye en totales, filtros financieros ni actividad.
 5. Abrir `Nuevo gasto` cuando ya existe uno activo lo reanuda. El usuario puede
    descartarlo con confirmación y empezar otro; no se crean dos en paralelo.
-6. Cerrar el diálogo conserva el borrador. Publicar o descartarlo termina su
-   estado activo de forma explícita; no hay vencimiento ni borrado silencioso.
+6. Abrir o editar no persiste por sí solo. Cancelar una creación con cambios
+   ofrece guardar el borrador, salir sin guardar o continuar editando. Un
+   borrador ya existente conserva su última versión persistida si se sale sin
+   guardar; publicar o descartarlo termina su estado activo de forma explícita.
 
 ## 5. Modelo y ciclo de vida
 
@@ -235,8 +237,8 @@ rechaza con conflicto tipado si hay adjuntos sin resolver.
 Una mutación equivalente con la misma `idempotencyKey` devuelve el resultado ya
 creado y no consume otro lugar. Una clave reutilizada con contenido distinto se
 rechaza. Toda mutación de metadata incrementa `revision`; el cliente coordina
-autosave, carga, reintento y eliminación mediante una única cola y siempre adopta
-la revisión devuelta por el servidor.
+guardado explícito, carga, reintento y eliminación mediante una única cola y
+siempre adopta la revisión devuelta por el servidor.
 
 Errores distinguibles:
 
@@ -375,10 +377,11 @@ pisarse o si no existe forma verificable de reconciliar residuos.
 
 - El diálogo muestra `Guardando…`, `Guardado` o `No se pudo guardar` sin ocultar
   los datos locales todavía editables.
-- El autosave agrupa cambios razonablemente y nunca bloquea escritura por cada
-  tecla. Cambiar de paso y cerrar fuerza un intento final seguro.
-- Ante un fallo, ofrece reintentar y conserva la última versión local hasta
-  confirmar la persistida.
+- Abrir y editar no escriben por cada cambio. Cancelar con cambios ofrece
+  `Guardar borrador`, `Salir sin guardar` y `Seguir editando`; un formulario
+  intacto cierra sin crear un recurso.
+- Ante un fallo al guardar, ofrece reintentar y conserva la última versión local
+  hasta confirmar la persistida.
 - La card privada de Movimientos muestra descripción disponible, importe si es
   válido, última edición y acción `Continuar`.
 - Si falta permiso para publicar porque el Espacio se pausó, cerró o cambió la
@@ -414,8 +417,9 @@ mostrar borradores en una futura bandeja diaria, pero no es dependencia ni
 fuente de verdad de este recorrido.
 
 La persistencia base se implementó el 2026-09-09: modelo separado, unicidad,
-aislamiento por autor, autosave con revisión, reanudación, card privada,
-descarte y publicación transaccional. Ese mismo día la etapa 3 retiró la carga
+aislamiento por autor, revisión optimista, reanudación, card privada, descarte y
+publicación transaccional. El 2026-09-16 el guardado automático durante la
+edición se reemplazó por una elección al cancelar. La etapa 3 retiró la carga
 posterior del alta: el borrador prepara binarios privados mediante el adapter,
 publica metadata `ready` en la transacción financiera y conserva revocación,
 limpieza y reconciliación idempotentes.
@@ -443,8 +447,8 @@ pero no aprende ni completa monto, moneda, fecha, pagador, reparto o impacto.
   conflicto de revisión, publicación y borrado físico.
 - Seguridad: firma real, límites, nombre saneado, DTO sin `storageKey`, descarga
   privada y no enumeración horizontal.
-- Componentes: autosave, error recuperable, reanudación, descarte, foco, labels
-  y estados anunciados accesiblemente.
+- Componentes: elección al cancelar, salida sin guardado, error recuperable,
+  reanudación, descarte, foco, labels y estados anunciados accesiblemente.
 - E2E mobile y desktop: cerrar y volver, cerrar sesión, cambiar de dispositivo,
   conflicto entre clientes, ver sólo el borrador propio y reemplazarlo por un
   único movimiento al publicar.

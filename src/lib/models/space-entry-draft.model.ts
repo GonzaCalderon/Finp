@@ -24,6 +24,10 @@ const draftPersonalImpactSchema = new Schema(
         categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
         description: { type: String, trim: true, maxlength: 200 },
         linkedTransactionId: { type: Schema.Types.ObjectId, ref: 'Transaction' },
+        installmentPlan: {
+            installmentCount: { type: Number, min: 1 },
+            firstClosingMonth: { type: String, match: /^\d{4}-(0[1-9]|1[0-2])$/ },
+        },
     },
     { _id: false }
 )
