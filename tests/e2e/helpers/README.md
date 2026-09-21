@@ -132,5 +132,5 @@ siete días.
   deterministas para no depender de esos movimientos.
 - Si el puerto 3001 está ocupado, la ejecución falla y debe revisarse el proceso
   existente.
-- La credencial vigente no se copia a GitHub; `MONGODB_URI_TEST` se configura
-  únicamente después de rotarla.
+- La credencial de `MONGODB_URI_TEST` debe quedar limitada a `finp-e2e` y no se
+  copia en commits, logs ni artefactos.

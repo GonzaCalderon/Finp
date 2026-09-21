@@ -42,13 +42,13 @@ test.describe('Impacto personal de Espacios', () => {
         const fixture = getSpaceImpactFixture(testInfo.project.name)
         const balanceBefore = await getCashBalance(page)
         const responsePromise = page.waitForResponse((response) =>
-            response.request().method() === 'POST' &&
-            response.url().includes(`/entries/${fixture.normalEntryId}/personal-impact`)
+            response.request().method() === 'DELETE' &&
+            response.url().includes(`/api/transactions/${fixture.normalTransactionId}`)
         )
 
         await removeCard(page, fixture.normalDescription)
         const response = await responsePromise
-        expect(response.status()).toBe(201)
+        expect(response.status()).toBe(200)
         await expect.poll(() => getCashBalance(page)).toBe(balanceBefore + 7_000)
 
         const impactResponse = await page.request.get(
@@ -73,7 +73,9 @@ test.describe('Impacto personal de Espacios', () => {
         const balanceBefore = await getCashBalance(page)
         const responsePromise = page.waitForResponse((response) =>
             response.request().method() === 'DELETE' &&
-            response.url().endsWith(`/api/transactions/${fixture.orphanTransactionId}`)
+            new URL(response.url()).pathname.endsWith(
+                `/api/transactions/${fixture.orphanTransactionId}`
+            )
         )
 
         await removeCard(page, fixture.orphanDescription)

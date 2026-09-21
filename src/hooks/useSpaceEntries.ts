@@ -19,6 +19,7 @@ import {
     clientDateToDateKey,
 } from '@/lib/client/space-api-adapter'
 import { moneyFromDecimal } from '@/lib/utils/money'
+import { PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS } from '@/lib/client/space-personal-impact'
 
 export type SpaceMovementFilters = {
     type?: string
@@ -185,6 +186,12 @@ export function useSpaceEntries(
                     categoryId: body.categoryId,
                     description: body.title,
                     linkedTransactionId: body.linkedTransactionId,
+                    installmentPlan: body.personalAccountId && body.installmentCount && body.firstClosingMonth
+                        ? {
+                            installmentCount: body.installmentCount,
+                            firstClosingMonth: body.firstClosingMonth,
+                        }
+                        : undefined,
                 } : undefined,
             }
             let result: SpaceMutationResultDto<{ entryId?: string; spaceEntryId?: string }>
@@ -207,7 +214,11 @@ export function useSpaceEntries(
                 throw error
             }
             pendingKeys.current.delete(intention)
-            invalidateData(SPACE_INVALIDATION_TAGS)
+            invalidateData(
+                body.personalAccountId || body.linkedTransactionId
+                    ? PERSONAL_SPACE_TRANSACTION_INVALIDATION_TAGS
+                    : SPACE_INVALIDATION_TAGS
+            )
             return {
                 _id: result.data.entryId ?? result.data.spaceEntryId,
             } as unknown as ISpaceEntry

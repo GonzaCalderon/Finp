@@ -86,29 +86,15 @@ export async function removePersonalSpaceTransaction(input: {
     spaceEntryId: string
 }): Promise<RemovePersonalSpaceTransactionResponse> {
     const transactionId = input.transactionId.trim()
-    const impactUrl = `/api/spaces/${input.spaceId}/entries/${input.spaceEntryId}/personal-impact`
-    const current = await apiJson<{
-        impact: { _id: string; revision?: number } | null
-    }>(impactUrl)
-
-    if (current.impact) {
-        await apiJson(impactUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Idempotency-Key': crypto.randomUUID(),
-            },
-            body: JSON.stringify({
-                impactId: current.impact._id,
-                expectedRevision: current.impact.revision ?? 0,
-                decision: { type: 'remove_transaction' },
-            }),
-        })
-        return { ok: true, orphanTransactionDeleted: false }
+    const query = new URLSearchParams({
+        spaceId: input.spaceId,
+        spaceEntryId: input.spaceEntryId,
+    })
+    const response = await apiJson<{
+        reverted?: { personalImpact?: boolean }
+    }>(`/api/transactions/${transactionId}?${query.toString()}`, { method: 'DELETE' })
+    return {
+        ok: true,
+        orphanTransactionDeleted: response.reverted?.personalImpact !== true,
     }
-
-    // Una transacción sin impacto persistido ya no tiene un contrato de Espacios
-    // que resolver. Se elimina por su recurso personal sin tocar el movimiento.
-    await apiJson(`/api/transactions/${transactionId}`, { method: 'DELETE' })
-    return { ok: true, orphanTransactionDeleted: true }
 }

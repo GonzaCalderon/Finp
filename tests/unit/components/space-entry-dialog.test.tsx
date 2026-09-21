@@ -199,4 +199,20 @@ describe('SpaceEntryDialog — alta guiada', () => {
         ).toBeInTheDocument()
         expect(screen.getByTestId('space-entry-step-extras')).toBeInTheDocument()
     })
+
+    it('muestra cuotas y primera cuota al elegir una tarjeta', async () => {
+        renderDialog({ spaceMode: 'solo' })
+        fillDataStep()
+        fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
+
+        const group = await screen.findByRole('radiogroup', { name: 'Efecto en tu Finp personal' })
+        fireEvent.click(within(group).getByRole('radio', { name: 'Crear en Mi Finp' }))
+        fireEvent.click(screen.getByRole('combobox', { name: 'Cuenta o tarjeta' }))
+        fireEvent.click(await screen.findByRole('option', { name: /Tarjeta/ }))
+
+        expect(await screen.findByText('Plan de la tarjeta')).toBeInTheDocument()
+        expect(screen.getByLabelText('Cuotas')).toHaveValue(1)
+        expect(screen.getByText('Primera cuota')).toBeInTheDocument()
+        expect(screen.getByText(/1 cuota ×/)).toBeInTheDocument()
+    })
 })

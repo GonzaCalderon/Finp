@@ -73,6 +73,7 @@ export interface CreateSpaceEntryV2Input {
         categoryId?: string
         description?: string
         linkedTransactionId?: string
+        installmentPlan?: { installmentCount: number; firstClosingMonth: string }
     }
     draftPublication?: {
         draftId: string
@@ -283,6 +284,9 @@ async function createPersonalImpactsForEntry(input: {
             description: input.actorPersonalImpact?.description?.trim() || input.entry.title,
             categoryId: input.actorPersonalImpact?.categoryId,
             spaceNameSnapshot: input.spaceName,
+            ...(input.actorPersonalImpact?.installmentPlan
+                ? { installmentPlan: input.actorPersonalImpact.installmentPlan }
+                : {}),
             ...(variant === 'participant_expense'
                 ? {}
                 : variant === 'settlement_received'

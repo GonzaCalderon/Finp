@@ -71,6 +71,7 @@ export function toSpaceEntryDraftDto(draft: ISpaceEntryDraft): SpaceEntryDraftDt
                 categoryId: extractId(draft.actorPersonalImpact.categoryId),
                 description: draft.actorPersonalImpact.description,
                 linkedTransactionId: extractId(draft.actorPersonalImpact.linkedTransactionId),
+                installmentPlan: draft.actorPersonalImpact.installmentPlan,
             } : undefined,
         },
         attachments: visibleDraftAttachments(draft),
@@ -160,6 +161,7 @@ function persistenceSnapshot(fields: SpaceEntryDraftFieldsInput) {
             linkedTransactionId: fields.personalImpact.linkedTransactionId
                 ? new Types.ObjectId(fields.personalImpact.linkedTransactionId)
                 : undefined,
+            installmentPlan: fields.personalImpact.installmentPlan,
         } : undefined,
     }
 }
@@ -391,6 +393,7 @@ export async function publishSpaceEntryDraftV2(input: {
             categoryId: extractId(draft.actorPersonalImpact.categoryId),
             description: draft.actorPersonalImpact.description,
             linkedTransactionId: extractId(draft.actorPersonalImpact.linkedTransactionId),
+            installmentPlan: draft.actorPersonalImpact.installmentPlan,
         } : undefined,
         draftPublication: {
             draftId: draft._id.toString(),

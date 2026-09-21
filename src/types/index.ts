@@ -275,8 +275,12 @@ export interface IInstallmentPlan {
     merchant?: string
     currency: Currency
     totalAmount: number
+    /** Parte propia total para reporting; si falta, coincide con totalAmount. */
+    operationalTotalAmount?: number
     installmentCount: number
     installmentAmount: number
+    /** Parte propia por cuota; si falta, coincide con installmentAmount. */
+    operationalInstallmentAmount?: number
     purchaseDate: Date
     firstClosingMonth: string
     createdAt: Date

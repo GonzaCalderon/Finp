@@ -3,6 +3,7 @@ import { Types } from 'mongoose'
 import {
     SpaceEntry,
     SpaceEntryPersonalImpact,
+    InstallmentPlan,
     Transaction,
 } from '@/lib/models'
 import { ServiceError } from '@/lib/server/errors'
@@ -29,10 +30,16 @@ import {
     derivePersonalImpactAmountsV2,
 } from '@/lib/utils/space-financial-v2'
 import { extractId } from '@/lib/utils/spaces'
-import type { ISpaceEntry, ISpaceEntryPersonalImpact, ITransaction } from '@/types'
+import type { IInstallmentPlan, ISpaceEntry, ISpaceEntryPersonalImpact, ITransaction } from '@/types'
 
 type PersonalImpactDecisionV2 =
-    | { type: 'create_transaction'; accountId?: string; categoryId?: string; description?: string }
+    | {
+        type: 'create_transaction'
+        accountId?: string
+        categoryId?: string
+        description?: string
+        installmentPlan?: { installmentCount: number; firstClosingMonth: string }
+    }
     | { type: 'link_existing'; transactionId: string }
     | { type: 'ignore' }
     | { type: 'keep_review' }
@@ -234,6 +241,34 @@ export async function resolveSpacePersonalImpactV2(input: {
                 if (transactionUpdate.modifiedCount !== 1) {
                     throw new ServiceError(409, 'SPACE_TRANSACTION_UPDATE_CONFLICT', 'La transacción cambió antes de actualizarse.')
                 }
+                const installmentPlanId = extractId(transaction.installmentPlanId)
+                if (installmentPlanId) {
+                    const plan = await InstallmentPlan.findOne({
+                        _id: installmentPlanId,
+                        userId: input.actorUserId,
+                    }).session(session).lean<IInstallmentPlan | null>()
+                    if (!plan) {
+                        throw new ServiceError(409, 'SPACE_INSTALLMENT_PLAN_MISSING', 'El plan de cuotas vinculado ya no existe.')
+                    }
+                    const planUpdate = await InstallmentPlan.updateOne(
+                        { _id: plan._id, userId: input.actorUserId },
+                        {
+                            $set: {
+                                totalAmount: transactionAmount,
+                                operationalTotalAmount: amounts.operationalAmount,
+                                installmentAmount: transactionAmount / plan.installmentCount,
+                                operationalInstallmentAmount: amounts.operationalAmount / plan.installmentCount,
+                                purchaseDate: entry.date,
+                                description: entry.title,
+                                ...(transaction.categoryId ? { categoryId: transaction.categoryId } : {}),
+                            },
+                        },
+                        { session }
+                    )
+                    if (planUpdate.matchedCount !== 1) {
+                        throw new ServiceError(409, 'SPACE_INSTALLMENT_PLAN_CONFLICT', 'El plan de cuotas cambió antes de actualizarse.')
+                    }
+                }
                 const impactUpdate = await SpaceEntryPersonalImpact.updateOne(
                     { _id: impact._id, contractVersion: 2, status: 'needs_review', revision: input.expectedRevision },
                     {
@@ -264,16 +299,34 @@ export async function resolveSpacePersonalImpactV2(input: {
                     throw new ServiceError(409, 'SPACE_IMPACT_NOT_LINKED', 'El impacto no tiene una transacción activa.')
                 }
                 if (impact.transactionId) {
-                    const deletion = await Transaction.deleteOne({
+                    const linkedTransaction = await Transaction.findOne({
                         _id: impact.transactionId,
                         userId: input.actorUserId,
                         spaceId: input.spaceId,
                         spaceEntryId: input.entryId,
                         spaceImpactId: impact._id,
                         spaceContractVersion: 2,
+                    }).session(session).lean<ITransaction | null>()
+                    if (!linkedTransaction) {
+                        throw new ServiceError(409, 'SPACE_TRANSACTION_DELETE_CONFLICT', 'La transacción vinculada cambió o ya no coincide.')
+                    }
+                    const deletion = await Transaction.deleteOne({
+                        _id: linkedTransaction._id,
+                        userId: input.actorUserId,
+                        spaceImpactId: impact._id,
                     }, { session })
                     if (deletion.deletedCount !== 1) {
                         throw new ServiceError(409, 'SPACE_TRANSACTION_DELETE_CONFLICT', 'La transacción vinculada cambió o ya no coincide.')
+                    }
+                    const installmentPlanId = extractId(linkedTransaction.installmentPlanId)
+                    if (installmentPlanId) {
+                        const planDeletion = await InstallmentPlan.deleteOne({
+                            _id: installmentPlanId,
+                            userId: input.actorUserId,
+                        }, { session })
+                        if (planDeletion.deletedCount !== 1) {
+                            throw new ServiceError(409, 'SPACE_INSTALLMENT_PLAN_DELETE_CONFLICT', 'El plan de cuotas vinculado cambió o ya no coincide.')
+                        }
                     }
                 }
                 const update = await SpaceEntryPersonalImpact.updateOne(
@@ -386,6 +439,9 @@ export async function resolveSpacePersonalImpactV2(input: {
                     description: input.decision.description?.trim() || entry.title,
                     categoryId: input.decision.categoryId,
                     spaceNameSnapshot: context.space.name,
+                    ...(input.decision.installmentPlan
+                        ? { installmentPlan: input.decision.installmentPlan }
+                        : {}),
                     ...(variant === 'participant_expense'
                         ? {}
                         : variant === 'settlement_received'

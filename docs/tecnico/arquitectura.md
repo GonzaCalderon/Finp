@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, arquitectura, calidad y agentes
-> Última actualización: 2026-09-10
+> Última actualización: 2026-09-21
 > Fuente de verdad: estructura técnica, límites y fuentes de datos
 
 ## Índice
@@ -383,17 +383,18 @@ de otros participantes. `owner` y `admin` no adquieren acceso por su rol. Los
 estados terminales `published` y `discarded` impiden reactivación o segunda
 publicación.
 
-El cliente serializa los autosaves para que una respuesta anterior no pueda
-pisar una revisión posterior. La base es la autoridad; `localStorage` conserva
-una copia versionada únicamente cuando falla la persistencia y se elimina al
-confirmarse el siguiente guardado. Publicar detiene nuevos autosaves, espera la
-cola vigente y envía la revisión persistida al ejecutor transaccional.
+El cliente no persiste mientras la persona completa el formulario. Al cancelar
+con cambios ofrece guardar, salir sin guardar o continuar. El guardado elegido,
+las mutaciones de adjuntos y la preparación previa a publicar se serializan para
+que una respuesta anterior no pueda pisar una revisión posterior. La base es la
+autoridad; `localStorage` conserva una copia versionada únicamente cuando falla
+un guardado explícito y se elimina al confirmarse el siguiente.
 
 Las mutaciones de adjuntos participan de esa misma cola cliente. Cada reserva,
 confirmación, reintento o eliminación incrementa la revisión del borrador y su
 respuesta reemplaza la revisión local. Un archivo `preparing` o `upload_failed`
-bloquea publicar, pero no bloquea editar campos; el siguiente autosave espera la
-operación en curso y conserva los cambios locales.
+bloquea publicar, pero no bloquea editar campos; el siguiente guardado explícito
+espera la operación en curso y conserva los cambios locales.
 
 La ejecución operativa canónica es
 `npm run reconcile:space-draft-attachments`; usa `finp-e2e`, inspecciona en
@@ -434,9 +435,11 @@ falla, el borrador y su metadata siguen disponibles para reintentar.
 
 Cuando el pagador registra una tarjeta propia, la transacción privada es
 `credit_card_expense`, `amount` conserva el total real y `operationalAmount` la
-parte propia. No crea `InstallmentPlan`; los pagos de tarjeta reducen el resumen
-derivado por tarjeta, período y moneda. Tarjeta, cuenta y estado del resumen no
-se copian a `SpaceEntry`.
+parte propia. Crea en la misma sesión un `InstallmentPlan`, incluso para `1/1`:
+`installmentAmount` alimenta deuda y resumen, mientras
+`operationalInstallmentAmount` distribuye sólo la parte propia en reporting.
+Los planes históricos sin estas magnitudes conservan el total como fallback.
+Tarjeta, cuenta, cuotas y estado del resumen no se copian a `SpaceEntry`.
 
 Las notificaciones son presentación posterior al commit: se derivan de impactos
 `pending` o `needs_review`, admiten reconciliación observable y no repiten la
@@ -665,8 +668,9 @@ Compatibilidad conocida:
 Los campos monetarios exactos y los índices multimoneda rigen sobre
 `contractVersion: 2` en `finp-e2e` y, desde el cutover del 2026-08-29
 ([`decisión 0011`](../decisiones/0011-cutover-espacios-v2-en-development.md)),
-en `finm`. FINP-P0-006 cerró el 2026-09-10; producción permanece fuera de
-alcance hasta una decisión propia equivalente a la 0011.
+en `finm`. FINP-P0-006 cerró el 2026-09-10 y la
+[`decisión 0016`](../decisiones/0016-cutover-productivo-espacios-v2.md)
+registró el cutover productivo ya ejecutado el 2026-09-21.
 
 El roadmap contiene la prioridad de limpieza.
 

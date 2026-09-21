@@ -153,6 +153,7 @@ export interface SpaceEntryDraftDto {
             categoryId?: string
             description?: string
             linkedTransactionId?: string
+            installmentPlan?: { installmentCount: number; firstClosingMonth: string }
         }
     }
     attachments: SpaceEntryDraftAttachmentDto[]

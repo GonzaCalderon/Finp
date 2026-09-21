@@ -157,10 +157,11 @@ equivalente de reporte como movimiento personal.
 
 ## 8. Rollout
 
-Los campos, índices y escrituras multimoneda se habilitan exclusivamente para
-fixtures `contractVersion: 2` conectados a `finp-e2e`. Development continúa sin
-cutover y producción sin backfill. Esta decisión no modifica el `NO-GO` de la
-decisión 0008 ni cierra FINP-P0-006.
+En este checkpoint los campos, índices y escrituras multimoneda se habilitaron
+exclusivamente para fixtures `contractVersion: 2` conectados a `finp-e2e`.
+Development todavía no tenía cutover y producción no tenía backfill. Las
+decisiones 0011 y 0016 levantaron después esos límites sin cambiar la autoridad
+multimoneda definida acá.
 
 ## 9. Consecuencias
 

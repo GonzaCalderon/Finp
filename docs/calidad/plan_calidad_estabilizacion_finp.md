@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: desarrollo, calidad, producto y agentes
-> Última actualización: 2026-09-16
+> Última actualización: 2026-09-21
 > Fuente de verdad: verificación y criterios de calidad
 
 ## Índice
@@ -170,10 +170,12 @@ Casos especializados:
 - liquidación con varios componentes y tramos, pagos parciales, sobrepago,
   rollback, replay y reversión;
 - composición histórica y revaluación actual sin presentar totales parciales;
-- gasto de Espacio pagado con tarjeta `1/1`: cargo total real, parte propia
-  operacional, adelanto, ARS/USD, pago parcial/total y ausencia de plan;
-- borrador privado único: autosave, reanudación, aislamiento, revisión
-  optimista, publicación idempotente y adjuntos recuperables.
+- gasto de Espacio pagado con tarjeta: cargo total real, parte propia
+  operacional por cuota, adelanto, ARS/USD, primer cierre, pago parcial/total y
+  eliminación atómica del plan;
+- borrador privado único: elección al cancelar, salida sin guardado, reanudación,
+  aislamiento, revisión optimista, publicación idempotente y adjuntos
+  recuperables.
 
 ## 7. APIs y seguridad
 
@@ -261,7 +263,8 @@ Un flujo no está cerrado si sólo funciona en desktop.
 - liquidación propia o representada y continuidad hacia Mi Finp;
 - nuevo gasto desde portada y detalle con el mismo contrato v2, fecha civil,
   dinero exacto y revisión completa;
-- consumo de tarjeta `1/1` con total distinto de parte propia y pago posterior;
+- consumo privado de tarjeta en una o varias cuotas, con total distinto de parte
+  propia, primer cierre y pago posterior;
 - borrador que sobrevive a cierre y sesión, sólo visible al autor, con conflicto,
   adjunto, descarte y reemplazo por un único movimiento al publicar.
 
@@ -411,31 +414,26 @@ Una versión puede promoverse cuando:
 ## 15. Estado actual
 
 Checks base, contratos y recorridos financieros de Espacios verificados hasta
-el 2026-09-16 sobre `codex/spaces-p1-013-experience`:
+el 2026-09-21 sobre `codex/fix-spaces-v2-autosave-loop`:
 
 - FINP-P1-013 etapa 4: nueve checkpoints de axe más aserciones dirigidas de
   foco, teclado, áreas táctiles y `safe area`, aprobados 9/9 en Chromium desktop
   y Pixel 7; un control sin nombre inyectado fue bloqueado como crítico y luego
   revertido.
 
-- 906 pruebas unitarias aprobadas en 123 archivos;
-- 17 recorridos de integración de Espacios v2 aprobados contra bases E2E con
+- 962 pruebas unitarias aprobadas en 130 archivos;
+- 20 recorridos de integración de Espacios v2 aprobados contra bases E2E con
   sesiones MongoDB reales: replay, concurrencia, rollback, revisión histórica,
   deuda por moneda, configuración monetaria, lifecycle, ownership, participantes
   inactivos, borrador privado, impacto personal y liquidaciones propias o
   representadas; los recorridos de migración agregan apply, replay, verify,
   rollback, resolución huérfana y una historia de 1.000 movimientos;
-- typecheck, lint y validación documental aprobados; `docs:check` cierra válido
-  sobre 35 archivos activos;
-- 80 de 80 E2E globales aprobados en Chromium desktop y Pixel 7; de tres
-  corridas globales del día, la intermedia cerró en 79 de 80 por
-  `quick-capture.spec.ts:591` en Pixel 7. Investigado y corregido el
-  2026-09-10 sobre `codex/spaces-p1-013-experience`: la causa era del test, no
-  de Espacios ni de la orientación de Captura rápida — esa aserción usaba el
-  timeout por defecto (~5 s) mientras el resto del archivo usa 8-10 s, y su
-  intercept hacía un `route.fetch()` real que agregaba un round-trip
-  innecesario. Corregido con payload prefetcheado y timeout alineado;
-  verificado 10/10 en aislado y en dos corridas limpias de la matriz global;
+- typecheck, lint, build y validación documental aprobados; `docs:check` cierra
+  válido sobre 38 archivos activos;
+- 82 de 82 E2E globales aprobados contra el build de producción en Chromium
+  desktop y Pixel 7. La intermitencia histórica de
+  `quick-capture.spec.ts:591` quedó corregida el 2026-09-10 con payload
+  prefetcheado y timeout alineado; no reapareció en esta matriz;
 - el conteo previo de 895 unitarias y 68 E2E quedaba corto por la suite, no por
   regresión; el de 923 unitarias que la rama declaró en su primer registro nunca
   existió: eran 902, dos de ellas en rojo contra el contrato que la propia rama
@@ -485,8 +483,9 @@ el 2026-09-16 sobre `codex/spaces-p1-013-experience`:
 - el apply real del ensayo quedó por debajo de 30 segundos y verify alrededor
   de 3,3 segundos; una integración sintética de 1.000 movimientos ejecutó
   apply, verify y rollback por debajo de 30 segundos por fase;
-- development y producción no recibieron escrituras, backfill ni cutover; la
-  evidencia mantiene el `NO-GO` productivo hasta revisar el checkpoint.
+- en ese checkpoint development y producción no recibieron escrituras, backfill
+  ni cutover; la decisión 0016 registró posteriormente el cutover productivo ya
+  ejecutado.
 
 Los pendientes se administran únicamente en [`../producto/roadmap_finp.md`](../producto/roadmap_finp.md).
 

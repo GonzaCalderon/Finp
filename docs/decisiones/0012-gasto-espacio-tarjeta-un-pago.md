@@ -1,9 +1,9 @@
 # 0012 — Gasto de Espacio pagado con tarjeta en un pago
 
-> Estado: aceptada
+> Estado: reemplazada parcialmente por la decisión 0015
 > Fecha: 2026-08-30
 > Audiencia: producto, diseño, desarrollo, calidad y agentes
-> Fuente de verdad: decisión 0012
+> Fuente de verdad: antecedente histórico; para altas nuevas con tarjeta prevalece la decisión 0015
 > Responsables: prompter y equipo Finp
 > Ámbito: producto, arquitectura, datos, privacidad y experiencia
 
@@ -17,6 +17,11 @@
 6. [Consecuencias](#6-consecuencias)
 7. [Verificación](#7-verificación)
 8. [Referencias](#8-referencias)
+
+La separación entre total real, parte propia y estado compartido continúa
+vigente. La restricción `1/1` sin plan de las secciones 2–7 fue reemplazada el
+2026-09-16 por
+[`0015 — Plan privado de cuotas para un impacto de Espacio`](0015-plan-privado-cuotas-impacto-espacio.md).
 
 ## 1. Contexto y problema
 

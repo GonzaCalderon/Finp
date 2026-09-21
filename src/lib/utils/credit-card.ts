@@ -23,6 +23,7 @@ export interface MonthlyCardChargeItem {
     cardColor?: string
     cardDueDay?: number
     amount: number
+    operationalAmount: number
     currency: string
     description: string
     categoryId?: string
@@ -339,6 +340,7 @@ export function buildMonthlyCardPaymentSummary(params: {
             cardColor: summary.cardColor,
             cardDueDay: summary.cardDueDay,
             amount: plan.installmentAmount,
+            operationalAmount: plan.operationalInstallmentAmount ?? plan.installmentAmount,
             currency: plan.currency,
             description: plan.description,
             categoryId: getRefId(plan.categoryId),
@@ -376,6 +378,7 @@ export function buildMonthlyCardPaymentSummary(params: {
                 cardColor: summary.cardColor,
                 cardDueDay: summary.cardDueDay,
                 amount: transaction.amount,
+                operationalAmount: transaction.operationalAmount ?? transaction.amount,
                 currency: transaction.currency,
                 description: transaction.description,
                 categoryId: getRefId(transaction.categoryId),

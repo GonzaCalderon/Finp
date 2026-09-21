@@ -106,10 +106,14 @@ export function createMemorySpaceAttachmentStorage(): SpaceAttachmentStorage {
     }
 }
 
+export function isMemorySpaceAttachmentStorageAllowed(databaseName: string) {
+    return /(^|[-_])(e2e|test|ci)([-_]|$)/i.test(databaseName)
+}
+
 export function resolveSpaceAttachmentStorage(): SpaceAttachmentStorage {
     if (process.env.SPACE_ATTACHMENT_STORAGE_MODE === 'memory') {
         const databaseName = mongoose.connection.name
-        if (process.env.NODE_ENV === 'production' || !/(e2e|test|ci)/i.test(databaseName)) {
+        if (!isMemorySpaceAttachmentStorageAllowed(databaseName)) {
             throw new ServiceError(503, 'STORAGE_UNAVAILABLE', 'El almacenamiento de archivos no está disponible.')
         }
         return createMemorySpaceAttachmentStorage()

@@ -42,6 +42,10 @@ const spaceEntryV2RequestSchema = z.object({
         categoryId: z.string().optional(),
         description: z.string().trim().max(200).optional(),
         linkedTransactionId: z.string().optional(),
+        installmentPlan: z.object({
+            installmentCount: z.number().int().min(1),
+            firstClosingMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+        }).strict().optional(),
     }).strict().superRefine((impact, context) => {
         if (impact.accountId && impact.linkedTransactionId) {
             context.addIssue({

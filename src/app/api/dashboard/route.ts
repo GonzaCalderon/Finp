@@ -476,7 +476,7 @@ export async function GET(request: Request) {
                     }
                 }
 
-                addCurrencyAmount(expenseByCategory[key], item.currency, item.amount)
+                addCurrencyAmount(expenseByCategory[key], item.currency, item.operationalAmount)
             })
         })
 

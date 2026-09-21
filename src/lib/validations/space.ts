@@ -181,6 +181,12 @@ export const spaceEntrySchema = z
         ),
         personalAccountId: optionalObjectIdString,
         linkedTransactionId: optionalObjectIdString,
+        installmentCount: z.number().int().min(1, 'Mínimo 1 cuota').optional(),
+        firstClosingMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'El mes de la primera cuota no es válido').optional(),
+        installmentQuoteAmount: optionalAmountSchema.refine(
+            (value) => value === undefined || value > 0,
+            'El valor de cuota debe ser mayor a 0'
+        ),
     })
     .superRefine((data, ctx) => {
         if (data.splitMode !== 'none') {

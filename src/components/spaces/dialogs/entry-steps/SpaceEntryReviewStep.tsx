@@ -1,7 +1,6 @@
 'use client'
 
-import { AlertTriangle, CalendarRange, Coins, Loader2, Save } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { AlertTriangle, CalendarRange, Coins } from 'lucide-react'
 import { ErrorState } from '@/components/shared/ErrorState'
 import {
     SpaceAmountInline,
@@ -34,9 +33,6 @@ export function SpaceEntryReviewStep({
     previewError,
     showFinancialReview,
     onPreviewRetry,
-    onSaveDraftAndClose,
-    saveDraftDisabled,
-    saveDraftBusy,
 }: {
     entryType: React.ComponentProps<typeof SpaceEntryTypeBadge>['type']
     amount: number
@@ -52,9 +48,6 @@ export function SpaceEntryReviewStep({
     /** La edición legacy no tiene revisión financiera del servidor que mostrar. */
     showFinancialReview: boolean
     onPreviewRetry: () => void
-    onSaveDraftAndClose?: () => void
-    saveDraftDisabled?: boolean
-    saveDraftBusy?: boolean
 }) {
     return (
         <div className="space-y-5">
@@ -155,28 +148,6 @@ export function SpaceEntryReviewStep({
             </SpaceDialogPanel>
             ) : null}
 
-            {onSaveDraftAndClose ? (
-                <SpaceDialogPanel>
-                    <div className="space-y-3">
-                        <SpaceDialogSectionEyebrow>Borrador</SpaceDialogSectionEyebrow>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start rounded-full text-muted-foreground"
-                            onClick={onSaveDraftAndClose}
-                            disabled={saveDraftDisabled}
-                        >
-                            {saveDraftBusy ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Save className="h-4 w-4" />
-                            )}
-                            Guardar borrador y cerrar
-                        </Button>
-                    </div>
-                </SpaceDialogPanel>
-            ) : null}
         </div>
     )
 }

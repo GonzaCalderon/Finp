@@ -2,7 +2,7 @@
 
 > Estado: vigente
 > Audiencia: producto, diseño, frontend y agentes
-> Última actualización: 2026-09-10
+> Última actualización: 2026-09-16
 > Fuente de verdad: experiencia visual e interacción
 
 ## Índice
@@ -290,7 +290,12 @@ presenta igual en todos los pasos y no cambia de formato o día al revisar.
 
 ### Borradores recuperables
 
-Un formulario financiero que persiste borrador comunica su estado junto al
+Abrir o editar un formulario financiero no crea ni actualiza un borrador por sí
+solo. Si una creación tiene cambios locales y la persona intenta cerrarla, la
+acción de salida ofrece `Guardar borrador`, `Salir sin guardar` y `Seguir
+editando`. Un formulario nuevo sin cambios cierra sin crear recursos.
+
+Cuando la persona elige guardar, el formulario comunica su estado junto al
 encabezado o la acción de cierre, sin competir con el CTA:
 
 - `Guardando…`: cambio local pendiente de confirmación;
@@ -298,14 +303,33 @@ encabezado o la acción de cierre, sin competir con el CTA:
 - `No se pudo guardar`: conserva la edición y ofrece reintento;
 - `Conflicto`: existe una versión más nueva y debe revisarse antes de continuar.
 
-Cerrar no equivale a descartar. El descarte es una acción separada, explícita y
-confirmada. Al reanudar, el formulario vuelve al último paso útil y restaura el
-foco sin saltar directamente sobre un error antiguo.
+`Salir sin guardar` no elimina un borrador que ya existía al abrir: conserva su
+última versión persistida y descarta sólo los cambios locales. Si el formulario
+nuevo tuvo que preparar un borrador técnico para adjuntos, salir sin guardar lo
+descarta y revoca esos archivos. El descarte de un borrador ya persistido sigue
+siendo una acción separada, explícita y confirmada. Al reanudar, el formulario
+vuelve al último paso útil y restaura el foco sin saltar directamente sobre un
+error antiguo.
 
 En Movimientos, un borrador usa una card diferenciada por etiqueta y texto, no
 sólo por color. Muestra información parcial disponible, última edición y
 `Continuar`, pero no usa iconos o copy de movimiento confirmado ni participa en
 totales. Sólo su autor puede verlo.
+
+### Tarjeta privada desde Espacios
+
+Cuando `Crear en Mi Finp` usa una tarjeta de crédito, el mismo bloque de cuenta
+muestra cantidad de cuotas, primera cuota, valor por cuota y resumen de
+períodos. La propuesta inicial es una cuota en el mes calendario siguiente a la
+compra, siempre editable. La ayuda para calcular el total desde el valor de una
+cuota sólo aparece durante `Nuevo gasto`, donde el total compartido todavía se
+está definiendo.
+
+El bloque explica que el plan es privado y no divide el movimiento compartido.
+Si el total cargado en la tarjeta difiere de la parte propia, la revisión muestra
+ambas magnitudes y la parte propia por cuota. Mobile usa una sola columna y
+controles táctiles de al menos 44 px; desktop puede disponer cuotas y primer mes
+en dos columnas sin cambiar el orden de lectura.
 
 ### Adjuntos recuperables
 

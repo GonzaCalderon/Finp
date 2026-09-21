@@ -30,6 +30,10 @@ const personalImpactDecisionV2Schema = z.object({
             accountId: z.string().optional(),
             categoryId: z.string().optional(),
             description: z.string().trim().max(200).optional(),
+            installmentPlan: z.object({
+                installmentCount: z.number().int().min(1),
+                firstClosingMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+            }).strict().optional(),
         }).strict(),
         z.object({ type: z.literal('link_existing'), transactionId: z.string().min(1) }).strict(),
         z.object({ type: z.literal('ignore') }).strict(),
